@@ -1,0 +1,12 @@
+[project]
+name = "codeonboard"
+version = "0.1.0"
+description = "AI-powered codebase onboarding"
+requires-python = ">=3.14"
+dependencies = [
+    "anthropic>=0.97.0",
+    "fastapi>=0.136.1",
+    "pydantic>=2.13.3",
+    "python-dotenv>=1.2.2",
+    "uvicorn>=0.46.0",
+]

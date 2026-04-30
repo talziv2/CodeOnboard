@@ -60,8 +60,31 @@ These provide a contrast between complex and lightweight architectures.
 
 ---
 
-## Tech Stack (Planned)
-- Python
-- LLM API
-- Vector Database
-- GitHub API
+## Tech Stack
+- Python 3.14 + uv
+- FastAPI + uvicorn
+- Anthropic API (claude-haiku-4-5, claude-sonnet-4-6)
+- Voyage AI voyage-code-2 (embeddings)
+- ChromaDB (vector store)
+- tree-sitter (AST parsing)
+- Next.js + Tailwind (frontend)
+
+---
+
+## Setup
+
+```bash
+# Install dependencies
+uv sync
+
+# Copy env file and fill in your keys
+cp .env.example .env
+
+# Run backend
+uvicorn backend.api:app --reload
+
+# Run frontend (Week 5+)
+cd frontend && npm run dev
+```
+
+Required env vars: `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`, `GITHUB_TOKEN` (optional)
