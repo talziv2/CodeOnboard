@@ -10,7 +10,7 @@ End-to-end pipeline: user provides a GitHub repo URL + goal → system returns a
 
 ### Week 1 — Scaffolding + Goal Agent
 
-**Scaffolding**
+**Scaffolding** ✓
 - Init Python project with `uv`
 - Install: `anthropic`, `fastapi`, `uvicorn`, `pydantic`, `python-dotenv`
 - Create directory structure (see CLAUDE.md)
