@@ -27,3 +27,7 @@
 - Scalable
 - Repository-aware
 - Learning-first
+
+---
+
+For the full end-to-end Mermaid diagram (all phases), see [`docs/diagram.md`](diagram.md).
