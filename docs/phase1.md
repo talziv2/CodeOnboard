@@ -8,9 +8,33 @@ End-to-end pipeline: user provides a GitHub repo URL + goal → system returns a
 
 ## Build order
 
-### Week 1 — Scaffolding + Goal Agent
+```mermaid
+graph TB
+    P1["Scaffolding + Goal Agent<br/>/goal/start · /goal/answer"]
+    P2["Code Structure Agent<br/>cloner · parser · chunker · module_map"]
+    P3["RAG Pipeline<br/>embedder · ChromaDB store"]
+    P4["Pedagogical Agent + Runner<br/>/onboard · learning path"]
+    P5["Next.js UI<br/>onboarding form · learning path display"]
 
-**Scaffolding** ✓
+    P1 -->|"goal JSON"| P2
+    P2 -->|"module_map + chunks"| P3
+    P3 -->|"embeddings stored"| P4
+    P4 -->|"learning_path JSON"| P5
+
+    style P1 fill:#c8e6c9,stroke:#388e3c
+    style P2 fill:#f5f5f5,stroke:#9e9e9e
+    style P3 fill:#f5f5f5,stroke:#9e9e9e
+    style P4 fill:#f5f5f5,stroke:#9e9e9e
+    style P5 fill:#f5f5f5,stroke:#9e9e9e
+```
+
+> Green = done · Grey = pending
+
+---
+
+### Part 1 — Scaffolding + Goal Agent ✓
+
+**Scaffolding**
 - Init Python project with `uv`
 - Install: `anthropic`, `fastapi`, `uvicorn`, `pydantic`, `python-dotenv`
 - Create directory structure (see CLAUDE.md)
@@ -33,7 +57,7 @@ End-to-end pipeline: user provides a GitHub repo URL + goal → system returns a
 
 ---
 
-### Week 2 — Code Structure Agent
+### Part 2 — Code Structure Agent
 
 Install: `gitpython`, `tree-sitter`, `tree-sitter-python`
 
@@ -58,7 +82,7 @@ Install: `gitpython`, `tree-sitter`, `tree-sitter-python`
 
 ---
 
-### Week 3 — RAG Pipeline
+### Part 3 — RAG Pipeline
 
 Install: `chromadb`, `voyageai`
 
@@ -80,7 +104,7 @@ Install: `chromadb`, `voyageai`
 
 ---
 
-### Week 4 — Pedagogical Agent + wire pipeline
+### Part 4 — Pedagogical Agent + Pipeline
 
 **`backend/agents/pedagogical_agent.py`**
 - Retrieve top-10 chunks from ChromaDB using `goal.primary_goal` as query text
@@ -106,7 +130,7 @@ Install: `chromadb`, `voyageai`
 
 ---
 
-### Week 5 — Minimal Next.js UI
+### Part 5 — Minimal Next.js UI
 
 Init: `npx create-next-app frontend --typescript --tailwind`
 
