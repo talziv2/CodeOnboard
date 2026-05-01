@@ -59,7 +59,6 @@ Layer 5 — LLM (Anthropic API)
 
 ## Phase 1 — Core pipeline
 
-**Timeline:** Weeks 1–5  
 **Detail:** `docs/phase1.md`
 
 **Goal:** Working end-to-end pipeline on one real repo before anything else.
@@ -79,7 +78,6 @@ Layer 5 — LLM (Anthropic API)
 
 ## Phase 2 — Quality and richness
 
-**Timeline:** Weeks 6–10  
 **Prerequisite:** Phase 1 done and tested on both target repos
 
 ### Documentation Agent
@@ -112,7 +110,6 @@ Layer 5 — LLM (Anthropic API)
 
 ## Phase 3 — Multimedia
 
-**Timeline:** Weeks 11–14 (if time permits)  
 **Prerequisite:** Phase 2 done
 
 ### Audio narration (TTS)
@@ -127,7 +124,7 @@ Layer 5 — LLM (Anthropic API)
 - Stored at `data/video/{session_id}/step_{n}.mp4`
 - UI: video player in each step card
 
-**Risk:** Puppeteer + ffmpeg pipeline is the most technically uncertain part of the project. If time is short, TTS alone (without video) is already a strong differentiator.
+**Risk:** Puppeteer + ffmpeg pipeline is the most technically uncertain part of the project. TTS alone (without video) is already a strong differentiator.
 
 **Done when (minimum):** Audio narration works for all steps  
 **Done when (stretch):** Video walkthrough works for single-file steps
@@ -136,8 +133,7 @@ Layer 5 — LLM (Anthropic API)
 
 ## Phase 4 — VS Code extension
 
-**Timeline:** Weeks 14–16 (stretch goal only)  
-**Prerequisite:** Phase 1–2 solid, time available
+**Prerequisite:** Phase 1–2 solid
 
 ### What it does
 - Sidebar panel showing the current learning step
@@ -150,24 +146,7 @@ Layer 5 — LLM (Anthropic API)
 - Extension stores session state locally (current step, completed steps)
 - Q&A uses a new `POST /ask` endpoint: highlighted code + question → Haiku answers in context
 
-**Risk:** Most impressive demo feature, most work. Only prioritize if Phases 1–2 are fully solid.
-
----
-
-## Timeline
-
-```
-Month 1   Phase 1 — Core pipeline (Weeks 1–5)
-          Goal + CodeStructure + Pedagogical + FastAPI + Next.js UI
-
-Month 2   Phase 2 — Quality and richness (Weeks 6–10)
-          Docs Agent + Prioritization + LangGraph migration
-
-Month 3   Phase 3 — Multimedia (Weeks 11–14, if time allows)
-          TTS audio + code walkthrough video
-
-          Phase 4 — VS Code extension (Weeks 14–16, stretch only)
-```
+**Risk:** Most impressive demo feature, most work. Phases 1–2 must be fully solid before starting.
 
 ---
 
