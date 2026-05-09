@@ -21,7 +21,7 @@ graph TB
         CSA["Code Structure Agent<br/>Haiku"]
         PRA["Prioritization Agent<br/>Haiku"]
         DA["Documentation Agent<br/>Haiku"]
-        PA["Pedagogical Agent<br/>Sonnet"]
+        PA["Mentor Agent<br/>Sonnet"]
         MA["Multimedia Agent<br/>ElevenLabs · ffmpeg"]
     end
 
@@ -77,11 +77,11 @@ graph TB
 | Orchestrator | runner.py → LangGraph | Plain chain in Phase 1; migrated to LangGraph for conditional routing + retries |
 | Agent | Goal Agent | Multi-turn dialogue → goal JSON; Haiku |
 | Agent | Code Structure Agent | Clone + parse → module map + embed repo; Haiku |
-| Agent | Prioritization Agent | Filter irrelevant modules before Pedagogical Agent; Haiku |
+| Agent | Prioritization Agent | Filter irrelevant modules before Mentor Agent; Haiku |
 | Agent | Documentation Agent | Extract README/docstrings, enrich steps with real quotes; Haiku |
-| Agent | Pedagogical Agent | Goal + filtered map + RAG → learning path; Sonnet (one call) |
+| Agent | Mentor Agent | Goal + filtered map + RAG → learning path; Sonnet (one call) |
 | Agent | Multimedia Agent | Learning path text → TTS audio + code walkthrough video |
 | RAG | Cloner | `git clone --depth 1` |
 | RAG | Parser + Chunker | tree-sitter AST; chunks by function/class, never by line window |
 | RAG | Embedder + Store | Voyage AI `voyage-code-2` → ChromaDB; skip if collection exists |
-| RAG | Retriever | Query by `goal.primary_goal`; return top-k to Pedagogical Agent |
+| RAG | Retriever | Query by `goal.primary_goal`; return top-k to Mentor Agent |

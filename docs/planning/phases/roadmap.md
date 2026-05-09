@@ -30,7 +30,7 @@ Layer 3 — Orchestrator
   ├─── Phase 1 Agents          ├─── Phase 2 Agents
   │    Goal                    │    Documentation
   │    Code Structure           │    Prioritization
-  │    Pedagogical              │
+  │    Mentor                   │
   │
   ▼
 Layer 4 — RAG pipeline
@@ -50,7 +50,7 @@ Layer 5 — LLM (Anthropic API)
 |---|---|---|---|
 | Goal Agent | 1 | Dialogue → structured goal JSON | Haiku |
 | Code Structure Agent | 1 | Clone + parse → module map + RAG store | Haiku |
-| Pedagogical Agent | 1 | Goal + map + RAG → learning path | Sonnet |
+| Mentor Agent | 1 | Goal + map + RAG → learning path | Sonnet |
 | Documentation Agent | 2 | Extract README/docstrings, enrich steps | Haiku |
 | Prioritization Agent | 2 | Filter irrelevant modules for the goal | Haiku |
 | Multimedia Agent | 3 | Learning path text → TTS audio + video | External APIs |
@@ -63,7 +63,7 @@ Layer 5 — LLM (Anthropic API)
 
 **Goal:** Working end-to-end pipeline on one real repo before anything else.
 
-- Goal Agent → Code Structure Agent → Pedagogical Agent
+- Goal Agent → Code Structure Agent → Mentor Agent
 - Stack: Python + FastAPI + ChromaDB + Voyage AI + Anthropic API
 - Output: JSON learning path with file + line references
 - UI: repo URL input + goal dialogue + step list display
@@ -89,7 +89,7 @@ Layer 5 — LLM (Anthropic API)
 ### Prioritization Agent
 - Takes full module map + goal, decides what to skip
 - Critical for large repos — fastapi has 50+ modules, most irrelevant for most goals
-- Runs before Pedagogical Agent, hands it a filtered map
+- Runs before Mentor Agent, hands it a filtered map
 - Side effect: reduces Sonnet input token count → saves budget + improves output quality
 
 ### LangGraph migration

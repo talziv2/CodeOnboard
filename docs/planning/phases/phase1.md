@@ -13,7 +13,7 @@ graph TB
     P1["Scaffolding + Goal Agent<br/>/goal/start · /goal/answer"]
     P2["Code Structure Agent<br/>cloner · parser · chunker · module_map"]
     P3["RAG Pipeline<br/>embedder · ChromaDB store"]
-    P4["Pedagogical Agent + Runner<br/>/onboard · learning path"]
+    P4["Mentor Agent + Runner<br/>/onboard · learning path"]
     P5["Next.js UI<br/>onboarding form · learning path display"]
 
     P1 -->|"goal JSON"| P2
@@ -113,9 +113,9 @@ Install: `chromadb`, `voyageai`
 
 ---
 
-### Part 4 — Pedagogical Agent + Pipeline
+### Part 4 — Mentor Agent + Pipeline
 
-**`backend/agents/pedagogical_agent.py`**
+**`backend/agents/mentor_agent.py`**
 - Retrieve top-10 chunks from ChromaDB using `goal.primary_goal` as query text
 - Build prompt: goal JSON + module_map + retrieved chunks
 - Ask Sonnet to generate ordered 5–8 step learning path
@@ -125,7 +125,7 @@ Install: `chromadb`, `voyageai`
 
 **`backend/pipeline/runner.py`**
 - `run_pipeline(repo_url, goal) → OnboardState`
-- Sequential: Goal (already done) → Code Structure → Pedagogical
+- Sequential: Goal (already done) → Code Structure → Mentor
 - Write errors to `state.errors`, never raise unless unrecoverable
 
 **FastAPI endpoint**
@@ -164,7 +164,7 @@ Init: `npx create-next-app frontend --typescript --tailwind`
 |---|---|---|---|
 | Goal Agent | `claude-haiku-4-5` | ~500 | ~$0.0004 |
 | Code Structure Agent | `claude-haiku-4-5` | ~3,000 | ~$0.002 |
-| Pedagogical Agent | `claude-sonnet-4-6` | ~5,000 | ~$0.07 |
+| Mentor Agent | `claude-sonnet-4-6` | ~5,000 | ~$0.07 |
 | **Total** | | ~8,500 | **~$0.07/run** |
 
 ---

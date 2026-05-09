@@ -17,7 +17,7 @@ Every agent follows the same contract:
 | **LLM client** | Injected as a parameter (`client: anthropic.Anthropic \| None = None`), not instantiated at module level — keeps unit tests simple |
 | **Output validation** | LLM responses are validated through a Pydantic `BaseModel` before being written to state |
 | **Error handling** | Errors are appended to `state.errors` and the function returns early — never raises |
-| **Model** | `claude-haiku-4-5` for all agents except Pedagogical (uses `claude-sonnet-4-6`) |
+| **Model** | `claude-haiku-4-5` for all agents except Mentor (uses `claude-sonnet-4-6`) |
 
 ---
 
@@ -45,7 +45,7 @@ Pydantic model before writing to state.
 - LLM calls: 1
 - See [`docs/design/code-structure-agent.md`](code-structure-agent.md) for full detail.
 
-### Pedagogical Agent  `backend/agents/pedagogical/`  _(Phase 1 Part 3 — pending)_
+### Mentor Agent  `backend/agents/mentor/`  _(Phase 1 Part 3 — pending)_
 
 Turns the goal + module map + RAG results into an ordered learning path. The only
 agent that uses `claude-sonnet-4-6` — called once.
@@ -80,7 +80,7 @@ Goal Agent          → state.goal
 Code Structure Agent → state.repo_path, state.module_map
     │
     ▼
-Pedagogical Agent    → state.learning_path, state.confidence
+Mentor Agent         → state.learning_path, state.confidence
     │
     ▼
 FastAPI response     → { learning_path, module_map, confidence }

@@ -51,7 +51,7 @@ CodeOnBoard uses multiple specialized agents coordinated by an orchestrator:
 - Code structure analysis
 - Documentation understanding
 - Task mapping
-- Pedagogical planning
+- Mentor planning
 
 ---
 

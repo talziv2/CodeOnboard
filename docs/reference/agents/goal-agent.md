@@ -2,7 +2,7 @@
 
 The Goal Agent is the entry point to the pipeline. It runs a short dialogue with
 the user, collects their answers, and produces a structured `GoalOutput` JSON object
-that all downstream agents (Code Structure, Pedagogical) use as their input.
+that all downstream agents (Code Structure, Mentor) use as their input.
 
 ---
 
