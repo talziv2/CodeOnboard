@@ -22,17 +22,19 @@ graph TB
     P4 -->|"learning_path JSON"| P5
 
     style P1 fill:#c8e6c9,stroke:#388e3c
-    style P2 fill:#f5f5f5,stroke:#9e9e9e
+    style P2 fill:#fff9c4,stroke:#f9a825
     style P3 fill:#f5f5f5,stroke:#9e9e9e
     style P4 fill:#f5f5f5,stroke:#9e9e9e
     style P5 fill:#f5f5f5,stroke:#9e9e9e
 ```
 
-> Green = done · Grey = pending
+> Green = done · Yellow = in progress · Grey = pending
 
 ---
 
-### Part 1 — Scaffolding + Goal Agent ✓
+### Part 1 — Scaffolding + Goal Agent ✓ (done)
+
+### Part 2 — Code Structure Agent 🚧 (in progress)
 
 **Scaffolding**
 - Init Python project with `uv`
@@ -59,20 +61,27 @@ graph TB
 
 ### Part 2 — Code Structure Agent
 
-Install: `gitpython`, `tree-sitter`, `tree-sitter-python`
+#### Progress
+- `backend/pipeline/state.py` ✅
+- `backend/rag/cloner.py` ✅
+- `backend/rag/chunker.py` ✅
+- `backend/agents/code_structure_agent.py` ✅
+- Manual test on `psf/requests` ⬜
 
-**`backend/rag/cloner.py`**
-- `git clone --depth 1 <url> tmp/<repo_name>`
+Install: `gitpython`, `tree-sitter`, `tree-sitter-python` ✅ (added to pyproject.toml)
+
+**`backend/rag/cloner.py`** ✅
+- `git clone --depth 1 <url> data/repos/<repo_name>`
 - Return local path
 
-**`backend/rag/chunker.py`**
+**`backend/rag/chunker.py`** ✅
 - Walk `.py` files in cloned repo
 - tree-sitter parse each file
 - Extract: function defs, class defs, top-level imports
 - Each chunk: `{ file, start_line, end_line, type, name, language, content }`
 - Phase 1: Python only
 
-**`backend/agents/code_structure_agent.py`**
+**`backend/agents/code_structure_agent.py`** ✅
 - Input: list of chunks
 - Ask Haiku to summarize the module map: "Given these modules and their exports, describe the architecture in 200 words and identify the key entry points"
 - Output: `module_map` dict — `{ module_name: { purpose, key_files, exports, dependencies } }`
