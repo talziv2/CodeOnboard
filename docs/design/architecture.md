@@ -30,4 +30,4 @@
 
 ---
 
-For the full end-to-end Mermaid diagram (all phases), see [`docs/diagram.md`](diagram.md).
+For the full end-to-end Mermaid diagram (all phases), see [`docs/design/diagram.md`](diagram.md).

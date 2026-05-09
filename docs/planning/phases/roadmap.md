@@ -59,7 +59,7 @@ Layer 5 — LLM (Anthropic API)
 
 ## Phase 1 — Core pipeline
 
-**Detail:** `docs/phase1.md`
+**Detail:** [`docs/planning/phases/phase1.md`](phase1.md)
 
 **Goal:** Working end-to-end pipeline on one real repo before anything else.
 

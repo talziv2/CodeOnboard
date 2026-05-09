@@ -8,9 +8,9 @@ This is a final-year CS project. Prefer working code over perfect architecture. 
 
 ## Project phases
 
-Full end-to-end roadmap: `docs/roadmap.md`
+Full end-to-end roadmap: `docs/planning/phases/roadmap.md`
 
-- **Phase 1 (current):** Goal Agent → Code Structure Agent → Pedagogical Agent → FastAPI → minimal Next.js UI → see `docs/phase1.md`
+- **Phase 1 (current):** Goal Agent → Code Structure Agent → Pedagogical Agent → FastAPI → minimal Next.js UI → see `docs/planning/phases/phase1.md`
 - **Phase 2:** Documentation Agent, Prioritization Agent, LangGraph migration
 - **Phase 3:** TTS audio narration, code walkthrough video
 - **Phase 4 (stretch):** VS Code extension
