@@ -130,8 +130,8 @@ class OnboardState:
 
 - Chunk by AST unit (function, class) via tree-sitter — never by arbitrary line windows
 - Chunk metadata must include: `file`, `start_line`, `end_line`, `type`, `name`, `language`
-- ChromaDB collection key: `{owner}/{repo}@{commit_sha}` — skip re-embedding if exists
-- Embedding model: `voyage-code-2` (Voyage AI)
+- ChromaDB collection name: sanitized `{owner}_{repo}_{commit_sha[:12]}` (lowercased, non-alphanumeric → `_`); skip re-embedding if collection exists
+- Embedding model: `nomic-ai/nomic-embed-text-v1.5` via `sentence-transformers` — runs locally, no API key. Apply `search_document: ` prefix when indexing and `search_query: ` prefix when searching.
 - Phase 1: Python files only. Add languages one at a time.
 
 ---
@@ -159,7 +159,6 @@ cd frontend && npm run dev
 See `.env.example`. Required:
 ```
 ANTHROPIC_API_KEY=
-VOYAGE_API_KEY=
 GITHUB_TOKEN=        # optional, increases rate limit
 ```
 

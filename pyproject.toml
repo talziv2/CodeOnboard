@@ -18,10 +18,10 @@ dependencies = [
     # AST parsing
     "tree-sitter>=0.23.0",
     "tree-sitter-python>=0.23.0",
-    # Embeddings
-    "voyageai>=0.3.0",
-    # Vector store — added in Part 3 (requires Python <=3.13)
-    # "chromadb>=0.6.0",
+    # Embeddings (nomic-embed-text-v1.5 via sentence-transformers, runs locally)
+    "sentence-transformers>=5.4.1",
+    # Vector store
+    "chromadb>=1.5.9",
 ]
 
 [dependency-groups]
