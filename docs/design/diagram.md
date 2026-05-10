@@ -28,13 +28,12 @@ graph TB
     subgraph L5["Layer 5 — RAG Pipeline"]
         Cln["Cloner<br/>git clone --depth 1"]
         Parse["Parser + Chunker<br/>tree-sitter AST units"]
-        Embed["Embedder + Store<br/>Voyage AI → ChromaDB"]
+        Embed["Embedder + Store<br/>nomic-embed-text-v1.5 (local) → ChromaDB"]
         Ret["Retriever<br/>top-k by goal"]
     end
 
     subgraph Ext["External Services"]
         Anth["Anthropic API"]
-        Voy["Voyage AI"]
         GH["GitHub API"]
     end
 
@@ -49,7 +48,6 @@ graph TB
     Cln --> GH
     Cln --> Parse
     Parse --> Embed
-    Embed --> Voy
 
     Orch --> PRA
     PRA --> Anth
@@ -83,5 +81,5 @@ graph TB
 | Agent | Multimedia Agent | Learning path text → TTS audio + code walkthrough video |
 | RAG | Cloner | `git clone --depth 1` |
 | RAG | Parser + Chunker | tree-sitter AST; chunks by function/class, never by line window |
-| RAG | Embedder + Store | Voyage AI `voyage-code-2` → ChromaDB; skip if collection exists |
+| RAG | Embedder + Store | `nomic-embed-text-v1.5` via sentence-transformers (local) → ChromaDB; skip if collection exists |
 | RAG | Retriever | Query by `goal.primary_goal`; return top-k to Mentor Agent |

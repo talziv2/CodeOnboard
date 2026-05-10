@@ -36,13 +36,15 @@ structured `GoalOutput` Pydantic object.
 
 ### Code Structure Agent  `backend/agents/code_structure/`
 
-Clones the repo, parses all Python files into AST chunks (tree-sitter), and calls
-Haiku once to summarise the module map. Validates each entry through a `ModuleEntry`
-Pydantic model before writing to state.
+Clones the repo, parses all Python files into AST chunks (tree-sitter), embeds
+non-import chunks into a per-commit ChromaDB collection (cached — skipped on
+re-runs), and calls Haiku once to summarise the module map. Validates each
+entry through a `ModuleEntry` Pydantic model before writing to state.
 
 - Input: `state.repo_url`
-- Output: `state.repo_path`, `state.module_map`
+- Output: `state.repo_path`, `state.module_map`, `state.chunks_embedded`
 - LLM calls: 1
+- Embedding model: `nomic-ai/nomic-embed-text-v1.5` via sentence-transformers (local)
 - See [`docs/design/code-structure-agent.md`](code-structure-agent.md) for full detail.
 
 ### Mentor Agent  `backend/agents/mentor/`  _(Phase 1 Part 3 — pending)_
@@ -77,7 +79,7 @@ OnboardState
 Goal Agent          → state.goal
     │
     ▼
-Code Structure Agent → state.repo_path, state.module_map
+Code Structure Agent → state.repo_path, state.module_map, state.chunks_embedded
     │
     ▼
 Mentor Agent         → state.learning_path, state.confidence

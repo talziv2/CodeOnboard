@@ -22,9 +22,9 @@ graph TB
     P4 -->|"learning_path JSON"| P5
 
     style P1 fill:#c8e6c9,stroke:#388e3c
-    style P2 fill:#fff9c4,stroke:#f9a825
-    style P3 fill:#f5f5f5,stroke:#9e9e9e
-    style P4 fill:#f5f5f5,stroke:#9e9e9e
+    style P2 fill:#c8e6c9,stroke:#388e3c
+    style P3 fill:#c8e6c9,stroke:#388e3c
+    style P4 fill:#fff9c4,stroke:#f9a825
     style P5 fill:#f5f5f5,stroke:#9e9e9e
 ```
 
@@ -34,7 +34,7 @@ graph TB
 
 ### Part 1 — Scaffolding + Goal Agent ✓ (done)
 
-### Part 2 — Code Structure Agent 🚧 (in progress)
+### Part 2 — Code Structure Agent ✓ (done)
 
 **Scaffolding**
 - Init Python project with `uv`
@@ -65,7 +65,7 @@ graph TB
 - `backend/pipeline/state.py` ✅
 - `backend/rag/cloner.py` ✅
 - `backend/rag/chunker.py` ✅
-- `backend/agents/code_structure_agent.py` ✅
+- `backend/agents/code_structure/agent.py` ✅
 - Manual test on `psf/requests` ⬜
 
 Install: `gitpython`, `tree-sitter`, `tree-sitter-python` ✅ (added to pyproject.toml)
@@ -91,25 +91,28 @@ Install: `gitpython`, `tree-sitter`, `tree-sitter-python` ✅ (added to pyprojec
 
 ---
 
-### Part 3 — RAG Pipeline
+### Part 3 — RAG Pipeline ✓ (done)
 
-Install: `chromadb`, `voyageai`
+Install: `sentence-transformers`, `chromadb` ✅ (added to pyproject.toml)
 
-**`backend/rag/embedder.py`**
-- Embed chunk list using `voyage-code-2`
-- Batch embed (Voyage AI supports batch calls)
+**`backend/rag/embedder.py`** ✅
+- Embeds chunks using `nomic-ai/nomic-embed-text-v1.5` via sentence-transformers (runs locally, no API key)
+- `embed_documents(texts)` applies `search_document: ` prefix; `embed_query(text)` applies `search_query: ` prefix
+- Model lazy-loaded once via `@lru_cache`; first call downloads ~550 MB from Hugging Face
 
-**`backend/rag/store.py`**
+**`backend/rag/store.py`** ✅
 - ChromaDB persistent store at `./data/chroma/`
-- Collection key: `{owner}/{repo}@{commit_sha}`
-- `upsert_chunks(chunks, embeddings)` — skip if collection exists
-- `query(text, k=10)` → top-k chunks with metadata
+- Collection name: sanitized `{owner}_{repo}_{commit_sha[:12]}` (lowercased, non-alphanumeric → `_`)
+- `add_chunks(name, chunks, embeddings)` writes id + document + metadata `{file, start_line, end_line, type, name, language}`
+- `collection_exists(name)` → caching check
+- `query(name, query_embedding, top_k)` → ready for Mentor Agent
 
-**Wire into Code Structure Agent**
-- After parsing: embed chunks → store in ChromaDB
-- Set `state.chunks_embedded = True`
+**Wire into Code Structure Agent** ✅
+- `_embed_chunks()` runs after chunking; skips on cache hit, embeds + stores otherwise
+- Sets `state.chunks_embedded = True`
+- Wrapped in try/except so embedding failures don't block the module-map LLM call
 
-**Test:** Embed `psf/requests`. Query `"how does authentication work"`. Confirm top-10 results include chunks from `auth.py`.
+**Test:** Embed `psf/requests`. Query `"how does authentication work"`. Confirm top-10 results include chunks from `auth.py`. ⬜ (pending — needs Mentor Agent or a manual script)
 
 ---
 

@@ -35,7 +35,7 @@ Layer 3 — Orchestrator
   ▼
 Layer 4 — RAG pipeline
   Clone → AST chunk → embed → store → retrieve
-  ChromaDB + Voyage AI voyage-code-2
+  ChromaDB + nomic-embed-text-v1.5 (local, via sentence-transformers)
   │
   ▼
 Layer 5 — LLM (Anthropic API)
@@ -64,7 +64,7 @@ Layer 5 — LLM (Anthropic API)
 **Goal:** Working end-to-end pipeline on one real repo before anything else.
 
 - Goal Agent → Code Structure Agent → Mentor Agent
-- Stack: Python + FastAPI + ChromaDB + Voyage AI + Anthropic API
+- Stack: Python + FastAPI + ChromaDB + sentence-transformers (nomic) + Anthropic API
 - Output: JSON learning path with file + line references
 - UI: repo URL input + goal dialogue + step list display
 
@@ -159,7 +159,7 @@ Layer 5 — LLM (Anthropic API)
 | Backend | FastAPI | |
 | Orchestrator | Plain Python → LangGraph (Phase 2) | Migrate only when branching is needed |
 | LLM | Anthropic API | Haiku for loops, Sonnet for synthesis |
-| Embeddings | Voyage AI voyage-code-2 | Code-specific, free tier: 50M tokens/month |
+| Embeddings | `nomic-ai/nomic-embed-text-v1.5` via sentence-transformers | Runs locally, no API key, ~550 MB one-time download |
 | Vector store | ChromaDB (local) | Free, no infra needed |
 | Code parser | tree-sitter | AST-based, language-aware |
 | UI | Next.js + Tailwind | |
@@ -187,4 +187,4 @@ Layer 5 — LLM (Anthropic API)
 | Large repos hit token limits | Limit Code Structure Agent to top-level files first; go deeper on retrieval |
 | Phase 3 video pipeline too complex | Ship TTS only if time is short |
 | LangGraph migration breaks Phase 1 | Keep runner.py working; migrate with tests |
-| Voyage AI / ElevenLabs API changes | Wrap behind thin adapter functions so swapping is one-file change |
+| ElevenLabs API changes (Phase 3) | Wrap behind thin adapter functions so swapping is one-file change |

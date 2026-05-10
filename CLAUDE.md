@@ -40,7 +40,7 @@ backend/
   rag/
     cloner.py               # git clone --depth 1
     chunker.py              # tree-sitter → code chunks with metadata
-    embedder.py             # Voyage AI voyage-code-2
+    embedder.py             # nomic-embed-text-v1.5 via sentence-transformers
     store.py                # ChromaDB read/write
   tools/
     github.py               # GitHub REST API helpers
