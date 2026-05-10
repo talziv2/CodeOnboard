@@ -33,6 +33,7 @@ from backend.agents.goal import (
     process_answer,
     start_session,
 )
+from backend.pipeline.runner import run_pipeline
 
 load_dotenv()
 app = FastAPI(title="CodeOnboard API")
@@ -104,4 +105,30 @@ def goal_answer(body: AnswerRequest) -> AnswerResponse:
     return AnswerResponse(
         done=False,
         question=QuestionOut(text=next_q.text, options=next_q.options),
+    )
+
+
+# ── /onboard ──────────────────────────────────────────────────────────────────
+
+class OnboardRequest(BaseModel):
+    repo_url: str
+    goal: dict
+
+
+class OnboardResponse(BaseModel):
+    learning_path: list | None
+    module_map: dict | None
+    confidence: str
+    errors: list
+
+
+@app.post("/onboard", response_model=OnboardResponse)
+def onboard(body: OnboardRequest) -> OnboardResponse:
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    state = run_pipeline(body.repo_url, body.goal, client=client)
+    return OnboardResponse(
+        learning_path=state.learning_path,
+        module_map=state.module_map,
+        confidence=state.confidence,
+        errors=state.errors,
     )

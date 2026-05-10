@@ -100,6 +100,25 @@ def test_run_handles_markdown_fenced_json(mock_clone, mock_chunk, mock_sha, mock
     assert "sessions" in result.module_map
 
 
+@patch("backend.agents.code_structure.agent.store.add_chunks")
+@patch("backend.agents.code_structure.agent.store.collection_exists", return_value=False)
+@patch("backend.agents.code_structure.agent.embedder.embed_documents", return_value=FAKE_EMBEDDINGS)
+@patch("backend.agents.code_structure.agent.get_commit_sha", return_value=FAKE_COMMIT_SHA)
+@patch("backend.agents.code_structure.agent.chunk_repo", return_value=FAKE_CHUNKS)
+@patch("backend.agents.code_structure.agent.clone_repo", return_value=FAKE_REPO_PATH)
+def test_run_handles_prose_preamble_then_fenced_json(mock_clone, mock_chunk, mock_sha, mock_embed, mock_exists, mock_add):
+    response = (
+        "# Architecture Analysis\n\n"
+        "This codebase is the requests library...\n\n"
+        f"```json\n{json.dumps(FAKE_MODULE_MAP)}\n```\n"
+    )
+    client = _make_mock_client(response)
+    result = run(_make_state(), client=client)
+    assert result.module_map is not None
+    assert "sessions" in result.module_map
+    assert "auth" in result.module_map
+
+
 # ── embedding behavior ────────────────────────────────────────────────────────
 
 @patch("backend.agents.code_structure.agent.store.add_chunks")

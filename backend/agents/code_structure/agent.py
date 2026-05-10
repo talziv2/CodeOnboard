@@ -61,12 +61,27 @@ Return ONLY valid JSON. No explanation before or after it."""
 
 
 def _parse_module_map(raw: str) -> dict[str, ModuleEntry]:
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-    data = json.loads(raw.strip())
+    raw = _extract_json_object(raw)
+    data = json.loads(raw)
     return {name: ModuleEntry(**entry) for name, entry in data.items()}
+
+
+def _extract_json_object(raw: str) -> str:
+    raw = raw.strip()
+    # Prefer content inside a ```json fence, then any ``` fence, otherwise
+    # fall back to the substring from the first { onward.
+    if "```json" in raw:
+        raw = raw.split("```json", 1)[1].split("```", 1)[0]
+    elif "```" in raw:
+        parts = raw.split("```")
+        if len(parts) >= 2:
+            raw = parts[1]
+    start = raw.find("{")
+    if start < 0:
+        raise ValueError("no JSON object found in response")
+    # raw_decode parses one JSON value and ignores any trailing text.
+    decoded, _ = json.JSONDecoder().raw_decode(raw[start:])
+    return json.dumps(decoded)
 
 
 def _embed_chunks(state: OnboardState, chunks: list[dict]) -> None:

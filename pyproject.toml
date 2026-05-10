@@ -20,6 +20,8 @@ dependencies = [
     "tree-sitter-python>=0.23.0",
     # Embeddings (nomic-embed-text-v1.5 via sentence-transformers, runs locally)
     "sentence-transformers>=5.4.1",
+    # Required transitively by nomic-embed-text-v1.5's modeling code
+    "einops>=0.8.0",
     # Vector store
     "chromadb>=1.5.9",
 ]
