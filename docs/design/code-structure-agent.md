@@ -1,8 +1,9 @@
 # Code Structure Agent
 
 The Code Structure Agent is the second step in the pipeline. It clones the target
-repo, parses all Python files into AST chunks, and calls Haiku once to produce a
-validated module map that describes the codebase's architecture.
+repo, parses all Python files into AST chunks, embeds those chunks into a
+per-commit ChromaDB collection, and calls Haiku once to produce a validated
+module map describing the codebase's architecture.
 
 ---
 
@@ -11,25 +12,55 @@ validated module map that describes the codebase's architecture.
 ```
 backend/agents/code_structure/
     __init__.py      re-exports the public API (run, ModuleEntry)
-    agent.py         run(), _build_prompt(), _parse_module_map(), ModuleEntry
+    agent.py         run(), _embed_chunks(), _build_prompt(), _parse_module_map(), ModuleEntry
 backend/rag/
-    cloner.py        git clone --depth 1 into data/repos/<name>
+    cloner.py        git clone --depth 1; parse_repo_url; get_commit_sha
     chunker.py       tree-sitter AST parse → list of chunk dicts
+    embedder.py      nomic-embed-text-v1.5 wrapper (sentence-transformers)
+    store.py         ChromaDB persistent client at data/chroma/
 ```
 
 ---
 
 ## What it does
 
-1. **Clone** — calls `clone_repo(state.repo_url)` which runs `git clone --depth 1`.
+1. **Clone** — `clone_repo(state.repo_url)` runs `git clone --depth 1`.
    If `data/repos/<name>` already exists, it skips the clone.
-2. **Chunk** — calls `chunk_repo(repo_path)` which walks all `.py` files and extracts
-   functions, classes, and imports as individual chunk dicts via tree-sitter.
-3. **Sample** — takes the first `MAX_CHUNKS = 80` non-import chunks (enough context
-   for Haiku without hitting the token limit).
-4. **Summarise** — sends the chunk list to Haiku with a prompt asking for a JSON
-   module map. Parses and validates the response through `ModuleEntry`.
-5. **Write** — stores the validated map as `state.module_map`.
+2. **Chunk** — `chunk_repo(repo_path)` walks all `.py` files and extracts
+   functions, classes, and imports as chunk dicts via tree-sitter.
+3. **Embed** — `_embed_chunks(state, chunks)` filters out import chunks, derives
+   a per-commit collection name, and either skips (cache hit) or embeds via
+   `embedder.embed_documents()` and writes to ChromaDB via `store.add_chunks()`.
+   Sets `state.chunks_embedded = True` on success. Wrapped in its own
+   try/except so embedding failures don't block the module-map step.
+4. **Sample** — takes the first `MAX_CHUNKS = 80` non-import chunks (enough
+   context for Haiku without hitting the token limit).
+5. **Summarise** — sends the chunk list to Haiku with a prompt asking for a
+   JSON module map. Parses and validates the response through `ModuleEntry`.
+6. **Write** — stores the validated map as `state.module_map`.
+
+---
+
+## Embedding step
+
+| Item | Value |
+|---|---|
+| Model | `nomic-ai/nomic-embed-text-v1.5` |
+| Runtime | Local CPU via `sentence-transformers` (no API key) |
+| Vector dim | 768 |
+| Indexing prefix | `search_document: ` |
+| Query prefix (used by Mentor Agent) | `search_query: ` |
+| Vector store | ChromaDB persistent client at `data/chroma/` |
+| Collection name | `{owner}_{repo}_{commit_sha[:12]}`, lowercased, non-alphanumeric → `_`, capped at 63 chars |
+| Caching rule | If a collection with that name already exists, skip both embedding and store writes |
+
+The first run downloads the nomic weights (~550 MB) from Hugging Face. After
+that, the model is cached on disk and loaded once per process via
+`@lru_cache(maxsize=1)`.
+
+Each chunk is stored with metadata `{file, start_line, end_line, type, name,
+language}` and an id of `{file}:{start_line}-{end_line}:{name}` so retrieval
+results carry exact source coordinates.
 
 ---
 
@@ -78,9 +109,10 @@ class ModuleEntry(BaseModel):
 from backend.agents.code_structure import run
 
 state = run(state, client=anthropic.Anthropic())
-# state.repo_path  → "data/repos/requests"
-# state.module_map → { "sessions": {...}, "auth": {...}, ... }
-# state.errors     → [] on success, ["cloner failed: ..."] etc. on failure
+# state.repo_path        → "data/repos/requests"
+# state.module_map       → { "sessions": {...}, "auth": {...}, ... }
+# state.chunks_embedded  → True if the ChromaDB collection was written or already cached
+# state.errors           → [] on success; ["cloner failed: ..."] etc. on failure
 ```
 
 `client` defaults to `None` — when omitted, the agent constructs one using
@@ -106,18 +138,20 @@ Each chunk produced by `chunker.py` has this shape:
 
 `type` is one of: `function` · `class` · `import`
 
-Import chunks are excluded from the prompt (too noisy) but are retained in the
-full chunk list for the embedder (Phase 1 Part 3).
+Import chunks are excluded both from the LLM prompt (too noisy) and from the
+embedding step (too short to carry meaning).
 
 ---
 
 ## Error handling
 
-Errors are appended to `state.errors` and the agent returns early. The module map
-is left as `None` so downstream agents can detect the failure.
+Each phase has its own try/except. Errors are appended to `state.errors`; the
+agent only returns early on cloner or chunker failure (since later steps depend
+on those outputs).
 
-| Error prefix | Cause |
-|---|---|
-| `cloner failed:` | Network error or invalid repo URL during `git clone` |
-| `chunker failed:` | tree-sitter parse error on the cloned repo |
-| `code_structure_agent LLM call failed:` | API error, malformed JSON, or `ModuleEntry` validation failure |
+| Error prefix | Cause | Effect |
+|---|---|---|
+| `cloner failed:` | Network error or invalid repo URL during `git clone` | Returns early — module map and embeddings skipped |
+| `chunker failed:` | tree-sitter parse error | Returns early |
+| `embedding failed:` | sentence-transformers/ChromaDB error during `_embed_chunks` | Logged; module-map step still runs |
+| `code_structure_agent LLM call failed:` | API error, malformed JSON, or `ModuleEntry` validation failure | Module map left as `None` |

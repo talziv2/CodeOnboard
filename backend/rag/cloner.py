@@ -17,3 +17,13 @@ def clone_repo(repo_url: str) -> str:
     git.Repo.clone_from(repo_url, str(repo_path), depth=1)
 
     return str(repo_path)
+
+
+def parse_repo_url(repo_url: str) -> tuple[str, str]:
+    cleaned = repo_url.rstrip("/").removesuffix(".git")
+    parts = cleaned.split("/")
+    return parts[-2], parts[-1]
+
+
+def get_commit_sha(repo_path: str) -> str:
+    return git.Repo(repo_path).head.commit.hexsha

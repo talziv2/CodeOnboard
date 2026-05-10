@@ -30,12 +30,12 @@ Layer 3 — Orchestrator
   ├─── Phase 1 Agents          ├─── Phase 2 Agents
   │    Goal                    │    Documentation
   │    Code Structure           │    Prioritization
-  │    Pedagogical              │
+  │    Mentor                   │
   │
   ▼
 Layer 4 — RAG pipeline
   Clone → AST chunk → embed → store → retrieve
-  ChromaDB + Voyage AI voyage-code-2
+  ChromaDB + nomic-embed-text-v1.5 (local, via sentence-transformers)
   │
   ▼
 Layer 5 — LLM (Anthropic API)
@@ -50,7 +50,7 @@ Layer 5 — LLM (Anthropic API)
 |---|---|---|---|
 | Goal Agent | 1 | Dialogue → structured goal JSON | Haiku |
 | Code Structure Agent | 1 | Clone + parse → module map + RAG store | Haiku |
-| Pedagogical Agent | 1 | Goal + map + RAG → learning path | Sonnet |
+| Mentor Agent | 1 | Goal + map + RAG → learning path | Sonnet |
 | Documentation Agent | 2 | Extract README/docstrings, enrich steps | Haiku |
 | Prioritization Agent | 2 | Filter irrelevant modules for the goal | Haiku |
 | Multimedia Agent | 3 | Learning path text → TTS audio + video | External APIs |
@@ -63,8 +63,8 @@ Layer 5 — LLM (Anthropic API)
 
 **Goal:** Working end-to-end pipeline on one real repo before anything else.
 
-- Goal Agent → Code Structure Agent → Pedagogical Agent
-- Stack: Python + FastAPI + ChromaDB + Voyage AI + Anthropic API
+- Goal Agent → Code Structure Agent → Mentor Agent
+- Stack: Python + FastAPI + ChromaDB + sentence-transformers (nomic) + Anthropic API
 - Output: JSON learning path with file + line references
 - UI: repo URL input + goal dialogue + step list display
 
@@ -89,7 +89,7 @@ Layer 5 — LLM (Anthropic API)
 ### Prioritization Agent
 - Takes full module map + goal, decides what to skip
 - Critical for large repos — fastapi has 50+ modules, most irrelevant for most goals
-- Runs before Pedagogical Agent, hands it a filtered map
+- Runs before Mentor Agent, hands it a filtered map
 - Side effect: reduces Sonnet input token count → saves budget + improves output quality
 
 ### LangGraph migration
@@ -159,7 +159,7 @@ Layer 5 — LLM (Anthropic API)
 | Backend | FastAPI | |
 | Orchestrator | Plain Python → LangGraph (Phase 2) | Migrate only when branching is needed |
 | LLM | Anthropic API | Haiku for loops, Sonnet for synthesis |
-| Embeddings | Voyage AI voyage-code-2 | Code-specific, free tier: 50M tokens/month |
+| Embeddings | `nomic-ai/nomic-embed-text-v1.5` via sentence-transformers | Runs locally, no API key, ~550 MB one-time download |
 | Vector store | ChromaDB (local) | Free, no infra needed |
 | Code parser | tree-sitter | AST-based, language-aware |
 | UI | Next.js + Tailwind | |
@@ -187,4 +187,4 @@ Layer 5 — LLM (Anthropic API)
 | Large repos hit token limits | Limit Code Structure Agent to top-level files first; go deeper on retrieval |
 | Phase 3 video pipeline too complex | Ship TTS only if time is short |
 | LangGraph migration breaks Phase 1 | Keep runner.py working; migrate with tests |
-| Voyage AI / ElevenLabs API changes | Wrap behind thin adapter functions so swapping is one-file change |
+| ElevenLabs API changes (Phase 3) | Wrap behind thin adapter functions so swapping is one-file change |

@@ -13,7 +13,7 @@ graph TB
     P1["Scaffolding + Goal Agent<br/>/goal/start · /goal/answer"]
     P2["Code Structure Agent<br/>cloner · parser · chunker · module_map"]
     P3["RAG Pipeline<br/>embedder · ChromaDB store"]
-    P4["Pedagogical Agent + Runner<br/>/onboard · learning path"]
+    P4["Mentor Agent + Runner<br/>/onboard · learning path"]
     P5["Next.js UI<br/>onboarding form · learning path display"]
 
     P1 -->|"goal JSON"| P2
@@ -22,9 +22,9 @@ graph TB
     P4 -->|"learning_path JSON"| P5
 
     style P1 fill:#c8e6c9,stroke:#388e3c
-    style P2 fill:#fff9c4,stroke:#f9a825
-    style P3 fill:#f5f5f5,stroke:#9e9e9e
-    style P4 fill:#f5f5f5,stroke:#9e9e9e
+    style P2 fill:#c8e6c9,stroke:#388e3c
+    style P3 fill:#c8e6c9,stroke:#388e3c
+    style P4 fill:#fff9c4,stroke:#f9a825
     style P5 fill:#f5f5f5,stroke:#9e9e9e
 ```
 
@@ -34,7 +34,7 @@ graph TB
 
 ### Part 1 — Scaffolding + Goal Agent ✓ (done)
 
-### Part 2 — Code Structure Agent 🚧 (in progress)
+### Part 2 — Code Structure Agent ✓ (done)
 
 **Scaffolding**
 - Init Python project with `uv`
@@ -65,7 +65,7 @@ graph TB
 - `backend/pipeline/state.py` ✅
 - `backend/rag/cloner.py` ✅
 - `backend/rag/chunker.py` ✅
-- `backend/agents/code_structure_agent.py` ✅
+- `backend/agents/code_structure/agent.py` ✅
 - Manual test on `psf/requests` ⬜
 
 Install: `gitpython`, `tree-sitter`, `tree-sitter-python` ✅ (added to pyproject.toml)
@@ -91,31 +91,34 @@ Install: `gitpython`, `tree-sitter`, `tree-sitter-python` ✅ (added to pyprojec
 
 ---
 
-### Part 3 — RAG Pipeline
+### Part 3 — RAG Pipeline ✓ (done)
 
-Install: `chromadb`, `voyageai`
+Install: `sentence-transformers`, `chromadb` ✅ (added to pyproject.toml)
 
-**`backend/rag/embedder.py`**
-- Embed chunk list using `voyage-code-2`
-- Batch embed (Voyage AI supports batch calls)
+**`backend/rag/embedder.py`** ✅
+- Embeds chunks using `nomic-ai/nomic-embed-text-v1.5` via sentence-transformers (runs locally, no API key)
+- `embed_documents(texts)` applies `search_document: ` prefix; `embed_query(text)` applies `search_query: ` prefix
+- Model lazy-loaded once via `@lru_cache`; first call downloads ~550 MB from Hugging Face
 
-**`backend/rag/store.py`**
+**`backend/rag/store.py`** ✅
 - ChromaDB persistent store at `./data/chroma/`
-- Collection key: `{owner}/{repo}@{commit_sha}`
-- `upsert_chunks(chunks, embeddings)` — skip if collection exists
-- `query(text, k=10)` → top-k chunks with metadata
+- Collection name: sanitized `{owner}_{repo}_{commit_sha[:12]}` (lowercased, non-alphanumeric → `_`)
+- `add_chunks(name, chunks, embeddings)` writes id + document + metadata `{file, start_line, end_line, type, name, language}`
+- `collection_exists(name)` → caching check
+- `query(name, query_embedding, top_k)` → ready for Mentor Agent
 
-**Wire into Code Structure Agent**
-- After parsing: embed chunks → store in ChromaDB
-- Set `state.chunks_embedded = True`
+**Wire into Code Structure Agent** ✅
+- `_embed_chunks()` runs after chunking; skips on cache hit, embeds + stores otherwise
+- Sets `state.chunks_embedded = True`
+- Wrapped in try/except so embedding failures don't block the module-map LLM call
 
-**Test:** Embed `psf/requests`. Query `"how does authentication work"`. Confirm top-10 results include chunks from `auth.py`.
+**Test:** Embed `psf/requests`. Query `"how does authentication work"`. Confirm top-10 results include chunks from `auth.py`. ⬜ (pending — needs Mentor Agent or a manual script)
 
 ---
 
-### Part 4 — Pedagogical Agent + Pipeline
+### Part 4 — Mentor Agent + Pipeline
 
-**`backend/agents/pedagogical_agent.py`**
+**`backend/agents/mentor_agent.py`**
 - Retrieve top-10 chunks from ChromaDB using `goal.primary_goal` as query text
 - Build prompt: goal JSON + module_map + retrieved chunks
 - Ask Sonnet to generate ordered 5–8 step learning path
@@ -125,7 +128,7 @@ Install: `chromadb`, `voyageai`
 
 **`backend/pipeline/runner.py`**
 - `run_pipeline(repo_url, goal) → OnboardState`
-- Sequential: Goal (already done) → Code Structure → Pedagogical
+- Sequential: Goal (already done) → Code Structure → Mentor
 - Write errors to `state.errors`, never raise unless unrecoverable
 
 **FastAPI endpoint**
@@ -164,7 +167,7 @@ Init: `npx create-next-app frontend --typescript --tailwind`
 |---|---|---|---|
 | Goal Agent | `claude-haiku-4-5` | ~500 | ~$0.0004 |
 | Code Structure Agent | `claude-haiku-4-5` | ~3,000 | ~$0.002 |
-| Pedagogical Agent | `claude-sonnet-4-6` | ~5,000 | ~$0.07 |
+| Mentor Agent | `claude-sonnet-4-6` | ~5,000 | ~$0.07 |
 | **Total** | | ~8,500 | **~$0.07/run** |
 
 ---

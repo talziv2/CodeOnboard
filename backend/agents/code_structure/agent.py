@@ -1,9 +1,11 @@
-# Code Structure Agent — clones repo, chunks it, and builds a module map.
+# Code Structure Agent — clones repo, chunks it, embeds chunks into ChromaDB,
+# and builds a module map.
 #
 # Entry point:
-#   run(state, client)  → clones repo, chunks Python files, calls Haiku once
-#                         to produce a validated ModuleEntry map, writes it to
-#                         state.module_map, and returns the updated state.
+#   run(state, client)  → clones repo, chunks Python files, embeds chunks into
+#                         ChromaDB (cached per commit), calls Haiku once to
+#                         produce a validated ModuleEntry map, writes everything
+#                         to state, and returns it.
 #
 # Mirrors the Goal Agent pattern: client is injected rather than module-level,
 # making unit tests simple (no patching of globals required).
@@ -15,8 +17,9 @@ import anthropic
 from pydantic import BaseModel
 
 from backend.pipeline.state import OnboardState
-from backend.rag.cloner import clone_repo
+from backend.rag.cloner import clone_repo, get_commit_sha, parse_repo_url
 from backend.rag.chunker import chunk_repo
+from backend.rag import embedder, store
 
 MODEL = "claude-haiku-4-5"
 MAX_CHUNKS = 80
@@ -58,12 +61,46 @@ Return ONLY valid JSON. No explanation before or after it."""
 
 
 def _parse_module_map(raw: str) -> dict[str, ModuleEntry]:
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-    data = json.loads(raw.strip())
+    raw = _extract_json_object(raw)
+    data = json.loads(raw)
     return {name: ModuleEntry(**entry) for name, entry in data.items()}
+
+
+def _extract_json_object(raw: str) -> str:
+    raw = raw.strip()
+    # Prefer content inside a ```json fence, then any ``` fence, otherwise
+    # fall back to the substring from the first { onward.
+    if "```json" in raw:
+        raw = raw.split("```json", 1)[1].split("```", 1)[0]
+    elif "```" in raw:
+        parts = raw.split("```")
+        if len(parts) >= 2:
+            raw = parts[1]
+    start = raw.find("{")
+    if start < 0:
+        raise ValueError("no JSON object found in response")
+    # raw_decode parses one JSON value and ignores any trailing text.
+    decoded, _ = json.JSONDecoder().raw_decode(raw[start:])
+    return json.dumps(decoded)
+
+
+def _embed_chunks(state: OnboardState, chunks: list[dict]) -> None:
+    embeddable = [c for c in chunks if c["type"] != "import"]
+    if not embeddable:
+        return
+
+    owner, repo = parse_repo_url(state.repo_url)
+    commit_sha = get_commit_sha(state.repo_path)
+    name = store.collection_name(owner, repo, commit_sha)
+
+    if store.collection_exists(name):
+        state.chunks_embedded = True
+        return
+
+    texts = [c["content"] for c in embeddable]
+    vectors = embedder.embed_documents(texts)
+    store.add_chunks(name, embeddable, vectors)
+    state.chunks_embedded = True
 
 
 def run(
@@ -85,6 +122,11 @@ def run(
     except Exception as e:
         state.errors.append(f"chunker failed: {e}")
         return state
+
+    try:
+        _embed_chunks(state, chunks)
+    except Exception as e:
+        state.errors.append(f"embedding failed: {e}")
 
     sampled = [c for c in chunks if c["type"] != "import"][:MAX_CHUNKS]
 

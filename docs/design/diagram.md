@@ -21,20 +21,19 @@ graph TB
         CSA["Code Structure Agent<br/>Haiku"]
         PRA["Prioritization Agent<br/>Haiku"]
         DA["Documentation Agent<br/>Haiku"]
-        PA["Pedagogical Agent<br/>Sonnet"]
+        PA["Mentor Agent<br/>Sonnet"]
         MA["Multimedia Agent<br/>ElevenLabs · ffmpeg"]
     end
 
     subgraph L5["Layer 5 — RAG Pipeline"]
         Cln["Cloner<br/>git clone --depth 1"]
         Parse["Parser + Chunker<br/>tree-sitter AST units"]
-        Embed["Embedder + Store<br/>Voyage AI → ChromaDB"]
+        Embed["Embedder + Store<br/>nomic-embed-text-v1.5 (local) → ChromaDB"]
         Ret["Retriever<br/>top-k by goal"]
     end
 
     subgraph Ext["External Services"]
         Anth["Anthropic API"]
-        Voy["Voyage AI"]
         GH["GitHub API"]
     end
 
@@ -49,7 +48,6 @@ graph TB
     Cln --> GH
     Cln --> Parse
     Parse --> Embed
-    Embed --> Voy
 
     Orch --> PRA
     PRA --> Anth
@@ -77,11 +75,11 @@ graph TB
 | Orchestrator | runner.py → LangGraph | Plain chain in Phase 1; migrated to LangGraph for conditional routing + retries |
 | Agent | Goal Agent | Multi-turn dialogue → goal JSON; Haiku |
 | Agent | Code Structure Agent | Clone + parse → module map + embed repo; Haiku |
-| Agent | Prioritization Agent | Filter irrelevant modules before Pedagogical Agent; Haiku |
+| Agent | Prioritization Agent | Filter irrelevant modules before Mentor Agent; Haiku |
 | Agent | Documentation Agent | Extract README/docstrings, enrich steps with real quotes; Haiku |
-| Agent | Pedagogical Agent | Goal + filtered map + RAG → learning path; Sonnet (one call) |
+| Agent | Mentor Agent | Goal + filtered map + RAG → learning path; Sonnet (one call) |
 | Agent | Multimedia Agent | Learning path text → TTS audio + code walkthrough video |
 | RAG | Cloner | `git clone --depth 1` |
 | RAG | Parser + Chunker | tree-sitter AST; chunks by function/class, never by line window |
-| RAG | Embedder + Store | Voyage AI `voyage-code-2` → ChromaDB; skip if collection exists |
-| RAG | Retriever | Query by `goal.primary_goal`; return top-k to Pedagogical Agent |
+| RAG | Embedder + Store | `nomic-embed-text-v1.5` via sentence-transformers (local) → ChromaDB; skip if collection exists |
+| RAG | Retriever | Query by `goal.primary_goal`; return top-k to Mentor Agent |

@@ -64,7 +64,7 @@ These provide a contrast between complex and lightweight architectures.
 - Python 3.14 + uv
 - FastAPI + uvicorn
 - Anthropic API (claude-haiku-4-5, claude-sonnet-4-6)
-- Voyage AI voyage-code-2 (embeddings)
+- nomic-embed-text-v1.5 via sentence-transformers (embeddings, runs locally)
 - ChromaDB (vector store)
 - tree-sitter (AST parsing)
 - Next.js + Tailwind (frontend)
@@ -87,4 +87,4 @@ uvicorn backend.api:app --reload
 cd frontend && npm run dev
 ```
 
-Required env vars: `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`, `GITHUB_TOKEN` (optional)
+Required env vars: `ANTHROPIC_API_KEY`, `GITHUB_TOKEN` (optional)
