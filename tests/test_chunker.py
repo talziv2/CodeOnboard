@@ -167,3 +167,63 @@ def test_chunk_repo_still_chunks_library_files(tmp_path):
 
     assert "A" in names
     assert "standalone" in names
+
+
+# ── method-level chunking inside classes ──────────────────────────────────────
+
+def test_chunk_repo_emits_method_chunks_inside_classes(tmp_path):
+    _write(
+        tmp_path / "src" / "core.py",
+        "class Submarine:\n"
+        "    def __init__(self, x):\n"
+        "        self.x = x\n\n"
+        "    def dive(self):\n"
+        "        return self.x\n\n"
+        "    def surface(self):\n"
+        "        return 0\n",
+    )
+
+    chunks = chunk_repo(str(tmp_path))
+    by_type = {c["type"]: [c["name"] for c in chunks if c["type"] == c["type"]] for c in chunks}
+    class_names = [c["name"] for c in chunks if c["type"] == "class"]
+    func_names = [c["name"] for c in chunks if c["type"] == "function"]
+
+    assert "Submarine" in class_names
+    assert "__init__" in func_names
+    assert "dive" in func_names
+    assert "surface" in func_names
+
+
+def test_chunk_repo_method_chunks_have_inner_line_ranges(tmp_path):
+    _write(
+        tmp_path / "src" / "core.py",
+        "class Submarine:\n"
+        "    def dive(self):\n"
+        "        return 1\n",
+    )
+
+    chunks = chunk_repo(str(tmp_path))
+    cls = next(c for c in chunks if c["type"] == "class")
+    fn = next(c for c in chunks if c["type"] == "function" and c["name"] == "dive")
+
+    # method's range must be strictly inside the class's range
+    assert cls["start_line"] <= fn["start_line"]
+    assert fn["end_line"] <= cls["end_line"]
+
+
+def test_chunk_repo_handles_nested_classes(tmp_path):
+    _write(
+        tmp_path / "src" / "core.py",
+        "class Outer:\n"
+        "    class Inner:\n"
+        "        def method(self):\n"
+        "            return 1\n",
+    )
+
+    chunks = chunk_repo(str(tmp_path))
+    class_names = [c["name"] for c in chunks if c["type"] == "class"]
+    func_names = [c["name"] for c in chunks if c["type"] == "function"]
+
+    assert "Outer" in class_names
+    assert "Inner" in class_names
+    assert "method" in func_names

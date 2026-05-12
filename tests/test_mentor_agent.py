@@ -14,9 +14,12 @@ from backend.agents.mentor.agent import (
     _build_retrieval_query,
     _build_understand_component_prompt,
     _build_understand_system_prompt,
+    _drop_redundant_class_chunks,
+    _find_duplicate_anchors,
     _parse_output,
     _retrieve_chunks,
 )
+from backend.agents.mentor.agent import MentorOutput
 
 
 FAKE_REPO_URL = "https://github.com/psf/requests"
@@ -116,6 +119,32 @@ FAKE_LEARNING_PATH_OUTPUT = {
         },
     ],
     "confidence": "high",
+}
+
+
+# A learning path where step 1 and step 2 reuse the SAME (file, line_range).
+FAKE_LEARNING_PATH_OUTPUT_WITH_DUPES = {
+    "steps": [
+        {
+            "step": 1,
+            "title": "Understand HTTPBasicAuth — first look",
+            "file": "requests/auth.py",
+            "line_range": [72, 100],
+            "why": "Establishes the auth handler interface",
+            "understand": "How __call__ modifies the PreparedRequest",
+            "concepts": ["callable classes"],
+        },
+        {
+            "step": 2,
+            "title": "Understand HTTPBasicAuth — second look (duplicate anchor!)",
+            "file": "requests/auth.py",
+            "line_range": [72, 100],
+            "why": "Same chunk, used again",
+            "understand": "Same as before",
+            "concepts": ["request signing"],
+        },
+    ],
+    "confidence": "medium",
 }
 
 
@@ -348,6 +377,181 @@ def test_run_dispatches_to_correct_builder(mock_sha, mock_embed, mock_query):
     user_msg = client.messages.create.call_args.kwargs["messages"][0]["content"]
     # debug_issue builder must surface the error_description in the prompt
     assert FAKE_GOAL_DEBUG_ISSUE["error_description"] in user_msg
+
+
+# ── redundant class-chunk filter ──────────────────────────────────────────────
+
+def test_drop_redundant_class_chunks_removes_class_when_method_present():
+    chunks = [
+        {"file": "submarine.py", "start_line": 12, "end_line": 116,
+         "type": "class", "name": "GateSubmarineProblem", "content": "class ..."},
+        {"file": "submarine.py", "start_line": 47, "end_line": 68,
+         "type": "function", "name": "actions", "content": "def actions ..."},
+    ]
+    result = _drop_redundant_class_chunks(chunks)
+    names = [c["name"] for c in result]
+    assert "GateSubmarineProblem" not in names
+    assert "actions" in names
+
+
+def test_drop_redundant_class_chunks_keeps_class_when_no_method_present():
+    chunks = [
+        {"file": "submarine.py", "start_line": 12, "end_line": 116,
+         "type": "class", "name": "GateSubmarineProblem", "content": "class ..."},
+        {"file": "other.py", "start_line": 5, "end_line": 20,
+         "type": "function", "name": "unrelated", "content": "def unrelated ..."},
+    ]
+    result = _drop_redundant_class_chunks(chunks)
+    names = [c["name"] for c in result]
+    assert "GateSubmarineProblem" in names
+    assert "unrelated" in names
+
+
+def test_drop_redundant_class_chunks_handles_multiple_methods():
+    chunks = [
+        {"file": "submarine.py", "start_line": 12, "end_line": 116,
+         "type": "class", "name": "Cls", "content": "class ..."},
+        {"file": "submarine.py", "start_line": 20, "end_line": 30,
+         "type": "function", "name": "m1", "content": "def m1 ..."},
+        {"file": "submarine.py", "start_line": 40, "end_line": 50,
+         "type": "function", "name": "m2", "content": "def m2 ..."},
+    ]
+    result = _drop_redundant_class_chunks(chunks)
+    names = [c["name"] for c in result]
+    assert "Cls" not in names
+    assert "m1" in names and "m2" in names
+
+
+def test_drop_redundant_class_chunks_does_not_match_across_files():
+    # Function with same line range but different file should NOT trigger removal
+    chunks = [
+        {"file": "a.py", "start_line": 12, "end_line": 116,
+         "type": "class", "name": "Cls", "content": "class ..."},
+        {"file": "b.py", "start_line": 20, "end_line": 30,
+         "type": "function", "name": "m1", "content": "def m1 ..."},
+    ]
+    result = _drop_redundant_class_chunks(chunks)
+    names = [c["name"] for c in result]
+    assert "Cls" in names
+    assert "m1" in names
+
+
+def test_drop_redundant_class_chunks_preserves_top_level_functions():
+    chunks = [
+        {"file": "x.py", "start_line": 1, "end_line": 5,
+         "type": "function", "name": "top_level", "content": "def top_level ..."},
+        {"file": "x.py", "start_line": 10, "end_line": 50,
+         "type": "class", "name": "Cls", "content": "class ..."},
+        {"file": "x.py", "start_line": 20, "end_line": 30,
+         "type": "function", "name": "method", "content": "def method ..."},
+    ]
+    result = _drop_redundant_class_chunks(chunks)
+    names = [c["name"] for c in result]
+    # top_level is outside the class range → kept
+    # Cls's range covers method → Cls dropped, method kept
+    assert "top_level" in names
+    assert "method" in names
+    assert "Cls" not in names
+
+
+def test_drop_redundant_class_chunks_empty_input():
+    assert _drop_redundant_class_chunks([]) == []
+
+
+# ── distinct-anchor validation + retry ────────────────────────────────────────
+
+def test_find_duplicate_anchors_empty_when_distinct():
+    output = MentorOutput(**FAKE_LEARNING_PATH_OUTPUT)
+    assert _find_duplicate_anchors(output) == []
+
+
+def test_find_duplicate_anchors_detects_same_file_and_range():
+    output = MentorOutput(**FAKE_LEARNING_PATH_OUTPUT_WITH_DUPES)
+    dupes = _find_duplicate_anchors(output)
+    assert dupes == [("requests/auth.py", (72, 100))]
+
+
+def test_find_duplicate_anchors_ignores_same_range_different_files():
+    payload = {
+        "steps": [
+            {**FAKE_LEARNING_PATH_OUTPUT["steps"][0], "file": "a.py"},
+            {**FAKE_LEARNING_PATH_OUTPUT["steps"][0], "file": "b.py"},
+        ],
+        "confidence": "low",
+    }
+    output = MentorOutput(**payload)
+    assert _find_duplicate_anchors(output) == []
+
+
+@patch("backend.agents.mentor.agent.store.query", return_value=FAKE_CHROMA_RESULT)
+@patch("backend.agents.mentor.agent.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
+@patch("backend.agents.mentor.agent.get_commit_sha", return_value=FAKE_COMMIT_SHA)
+def test_run_retries_when_llm_returns_duplicate_anchors(mock_sha, mock_embed, mock_query):
+    # First call: duplicate anchors. Second call (retry): clean output.
+    bad = MagicMock()
+    bad.content = [MagicMock(text=json.dumps(FAKE_LEARNING_PATH_OUTPUT_WITH_DUPES))]
+    good = MagicMock()
+    good.content = [MagicMock(text=json.dumps(FAKE_LEARNING_PATH_OUTPUT))]
+    client = MagicMock()
+    client.messages.create.side_effect = [bad, good]
+
+    result = run(_make_state(), client=client)
+
+    assert client.messages.create.call_count == 2
+    assert result.learning_path is not None
+    # Final learning_path should be the retry's clean output
+    assert result.learning_path[0]["title"] == "Understand HTTPBasicAuth"
+    assert result.learning_path[1]["title"] == "Trace Session.send to the auth handler"
+
+
+@patch("backend.agents.mentor.agent.store.query", return_value=FAKE_CHROMA_RESULT)
+@patch("backend.agents.mentor.agent.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
+@patch("backend.agents.mentor.agent.get_commit_sha", return_value=FAKE_COMMIT_SHA)
+def test_run_keeps_original_when_retry_still_has_duplicates(mock_sha, mock_embed, mock_query):
+    # Both calls return duplicates → keep original output, log warning.
+    bad = MagicMock()
+    bad.content = [MagicMock(text=json.dumps(FAKE_LEARNING_PATH_OUTPUT_WITH_DUPES))]
+    client = MagicMock()
+    client.messages.create.side_effect = [bad, bad]
+
+    result = run(_make_state(), client=client)
+
+    assert client.messages.create.call_count == 2
+    assert result.learning_path is not None  # We accept partial output
+    assert any("duplicate anchors persisted" in e for e in result.errors)
+
+
+@patch("backend.agents.mentor.agent.store.query", return_value=FAKE_CHROMA_RESULT)
+@patch("backend.agents.mentor.agent.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
+@patch("backend.agents.mentor.agent.get_commit_sha", return_value=FAKE_COMMIT_SHA)
+def test_run_does_not_retry_when_output_is_clean(mock_sha, mock_embed, mock_query):
+    client = _make_mock_client(json.dumps(FAKE_LEARNING_PATH_OUTPUT))
+    result = run(_make_state(), client=client)
+    assert client.messages.create.call_count == 1
+    assert result.learning_path is not None
+    # No duplicate-related error
+    assert not any("duplicate" in e.lower() for e in result.errors)
+
+
+@patch("backend.agents.mentor.agent.store.query", return_value=FAKE_CHROMA_RESULT)
+@patch("backend.agents.mentor.agent.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
+@patch("backend.agents.mentor.agent.get_commit_sha", return_value=FAKE_COMMIT_SHA)
+def test_retry_message_includes_duplicate_chunk_identifier(mock_sha, mock_embed, mock_query):
+    bad = MagicMock()
+    bad.content = [MagicMock(text=json.dumps(FAKE_LEARNING_PATH_OUTPUT_WITH_DUPES))]
+    good = MagicMock()
+    good.content = [MagicMock(text=json.dumps(FAKE_LEARNING_PATH_OUTPUT))]
+    client = MagicMock()
+    client.messages.create.side_effect = [bad, good]
+
+    run(_make_state(), client=client)
+
+    # The retry call (second invocation) should mention the duplicate file/range
+    retry_messages = client.messages.create.call_args_list[1].kwargs["messages"]
+    # Last message is the correction prompt
+    correction = retry_messages[-1]["content"]
+    assert "requests/auth.py" in correction
+    assert "72" in correction and "100" in correction
 
 
 # ── parsing ───────────────────────────────────────────────────────────────────

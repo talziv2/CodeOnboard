@@ -48,6 +48,13 @@ def _chunk_file(file_path: Path, repo_path: str) -> list[dict]:
                 "language": "python",
                 "content": content,
             })
+            # For classes, keep recursing so methods become their own chunks.
+            # The class chunk is kept too (whole-class context), and the
+            # retrieval layer drops it when narrower method chunks land in
+            # the same result set.
+            if node.type == "class_definition":
+                for child in node.children:
+                    traverse(child)
             return
 
         if node.type in IMPORT_NODE_TYPES:
