@@ -11,6 +11,7 @@ from backend.agents.mentor.agent import (
     _PROMPT_BUILDERS,
     _build_contribute_code_prompt,
     _build_debug_issue_prompt,
+    _build_retrieval_query,
     _build_understand_component_prompt,
     _build_understand_system_prompt,
     _parse_output,
@@ -206,9 +207,69 @@ def test_retrieve_chunks_returns_flattened_dicts(mock_sha, mock_embed, mock_quer
 @patch("backend.agents.mentor.agent.store.query", return_value=FAKE_CHROMA_RESULT)
 @patch("backend.agents.mentor.agent.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
 @patch("backend.agents.mentor.agent.get_commit_sha", return_value=FAKE_COMMIT_SHA)
-def test_retrieve_chunks_uses_primary_goal_as_query(mock_sha, mock_embed, mock_query):
+def test_retrieve_chunks_focused_understand_component_query(mock_sha, mock_embed, mock_query):
     _retrieve_chunks(_make_state())
-    mock_embed.assert_called_once_with(FAKE_GOAL_UNDERSTAND_COMPONENT["primary_goal"])
+    query_text = mock_embed.call_args.args[0]
+    assert FAKE_GOAL_UNDERSTAND_COMPONENT["primary_goal"] in query_text
+    assert FAKE_GOAL_UNDERSTAND_COMPONENT["focus_area"] in query_text
+
+
+@patch("backend.agents.mentor.agent.store.query", return_value=FAKE_CHROMA_RESULT)
+@patch("backend.agents.mentor.agent.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
+@patch("backend.agents.mentor.agent.get_commit_sha", return_value=FAKE_COMMIT_SHA)
+def test_retrieve_chunks_focused_contribute_code_query(mock_sha, mock_embed, mock_query):
+    _retrieve_chunks(_make_state(goal=FAKE_GOAL_CONTRIBUTE_CODE))
+    query_text = mock_embed.call_args.args[0]
+    assert FAKE_GOAL_CONTRIBUTE_CODE["primary_goal"] in query_text
+    assert FAKE_GOAL_CONTRIBUTE_CODE["contribution_context"] in query_text
+
+
+@patch("backend.agents.mentor.agent.store.query", return_value=FAKE_CHROMA_RESULT)
+@patch("backend.agents.mentor.agent.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
+@patch("backend.agents.mentor.agent.get_commit_sha", return_value=FAKE_COMMIT_SHA)
+def test_retrieve_chunks_focused_debug_issue_query(mock_sha, mock_embed, mock_query):
+    _retrieve_chunks(_make_state(goal=FAKE_GOAL_DEBUG_ISSUE))
+    query_text = mock_embed.call_args.args[0]
+    assert FAKE_GOAL_DEBUG_ISSUE["primary_goal"] in query_text
+    assert FAKE_GOAL_DEBUG_ISSUE["error_description"] in query_text
+    assert FAKE_GOAL_DEBUG_ISSUE["tried_so_far"] in query_text
+
+
+def test_build_retrieval_query_falls_back_when_optional_fields_missing():
+    goal = {
+        "primary_goal": "add OAuth2 support",
+        "goal_type": "contribute_code",
+        # no contribution_context
+    }
+    query = _build_retrieval_query(goal)
+    assert query == "add OAuth2 support"
+
+
+@patch("backend.agents.mentor.agent.store.query", return_value=FAKE_CHROMA_RESULT)
+@patch("backend.agents.mentor.agent.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
+@patch("backend.agents.mentor.agent.get_commit_sha", return_value=FAKE_COMMIT_SHA)
+def test_retrieve_chunks_per_module_calls_query_once_per_module(mock_sha, mock_embed, mock_query):
+    _retrieve_chunks(_make_state(goal=FAKE_GOAL_UNDERSTAND_SYSTEM))
+    # FAKE_MODULE_MAP has 2 entries → 2 embed/query calls
+    assert mock_embed.call_count == len(FAKE_MODULE_MAP)
+    assert mock_query.call_count == len(FAKE_MODULE_MAP)
+    embed_texts = [call.args[0] for call in mock_embed.call_args_list]
+    # Each module's purpose and one of its exports should appear in some query
+    assert any(FAKE_MODULE_MAP["sessions"]["purpose"] in t for t in embed_texts)
+    assert any("Session" in t for t in embed_texts)
+    assert any(FAKE_MODULE_MAP["auth"]["purpose"] in t for t in embed_texts)
+    assert any("HTTPBasicAuth" in t for t in embed_texts)
+
+
+@patch("backend.agents.mentor.agent.store.query", return_value=FAKE_CHROMA_RESULT)
+@patch("backend.agents.mentor.agent.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
+@patch("backend.agents.mentor.agent.get_commit_sha", return_value=FAKE_COMMIT_SHA)
+def test_retrieve_chunks_per_module_dedupes(mock_sha, mock_embed, mock_query):
+    # Both modules return the same two chunks → final list should still contain 2
+    chunks = _retrieve_chunks(_make_state(goal=FAKE_GOAL_UNDERSTAND_SYSTEM))
+    keys = [(c["file"], c["start_line"], c["end_line"]) for c in chunks]
+    assert len(keys) == len(set(keys))
+    assert len(chunks) == 2
 
 
 @patch("backend.agents.mentor.agent.store.query", return_value=FAKE_CHROMA_RESULT)

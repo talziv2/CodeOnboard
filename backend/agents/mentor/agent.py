@@ -25,6 +25,7 @@ from backend.rag.cloner import get_commit_sha, parse_repo_url
 MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 4096
 TOP_K = 20
+PER_MODULE_TOP_K = 2
 
 
 class LearningPathStep(BaseModel):
@@ -160,28 +161,77 @@ _PROMPT_BUILDERS: dict[str, Callable[[dict, dict, list[dict]], str]] = {
 }
 
 
-def _retrieve_chunks(state: OnboardState) -> list[dict]:
+def _collection_name(state: OnboardState) -> str:
     owner, repo = parse_repo_url(state.repo_url)
     commit_sha = get_commit_sha(state.repo_path)
-    name = store.collection_name(owner, repo, commit_sha)
+    return store.collection_name(owner, repo, commit_sha)
 
-    embedding = embedder.embed_query(state.goal["primary_goal"])
+
+def _flatten_chunk(doc: str, meta: dict) -> dict:
+    return {
+        "file": meta["file"],
+        "start_line": meta["start_line"],
+        "end_line": meta["end_line"],
+        "type": meta["type"],
+        "name": meta["name"],
+        "content": doc,
+    }
+
+
+def _build_retrieval_query(goal: dict) -> str:
+    primary = goal["primary_goal"]
+    goal_type = goal["goal_type"]
+    if goal_type == "understand_component":
+        focus = goal.get("focus_area", "")
+        return f"{primary}. Focus area: {focus}" if focus else primary
+    if goal_type == "contribute_code":
+        contribution = goal.get("contribution_context", "")
+        return f"{primary}. Contribution: {contribution}" if contribution else primary
+    if goal_type == "debug_issue":
+        error = goal.get("error_description", "")
+        tried = goal.get("tried_so_far", "")
+        parts = [primary]
+        if error:
+            parts.append(f"Error: {error}")
+        if tried:
+            parts.append(f"Tried: {tried}")
+        return ". ".join(parts)
+    return primary
+
+
+def _retrieve_chunks_focused(state: OnboardState) -> list[dict]:
+    name = _collection_name(state)
+    query_text = _build_retrieval_query(state.goal)
+    embedding = embedder.embed_query(query_text)
     result = store.query(name, embedding, top_k=TOP_K)
-
-    documents = result["documents"][0]
-    metadatas = result["metadatas"][0]
-
     return [
-        {
-            "file": meta["file"],
-            "start_line": meta["start_line"],
-            "end_line": meta["end_line"],
-            "type": meta["type"],
-            "name": meta["name"],
-            "content": doc,
-        }
-        for doc, meta in zip(documents, metadatas)
+        _flatten_chunk(doc, meta)
+        for doc, meta in zip(result["documents"][0], result["metadatas"][0])
     ]
+
+
+def _retrieve_chunks_per_module(state: OnboardState) -> list[dict]:
+    name = _collection_name(state)
+    seen: set[tuple[str, int, int]] = set()
+    results: list[dict] = []
+    for entry in state.module_map.values():
+        exports = ", ".join(entry.get("exports", []))
+        query_text = f"{entry['purpose']}. Exports: {exports}" if exports else entry["purpose"]
+        embedding = embedder.embed_query(query_text)
+        result = store.query(name, embedding, top_k=PER_MODULE_TOP_K)
+        for doc, meta in zip(result["documents"][0], result["metadatas"][0]):
+            key = (meta["file"], meta["start_line"], meta["end_line"])
+            if key in seen:
+                continue
+            seen.add(key)
+            results.append(_flatten_chunk(doc, meta))
+    return results[:TOP_K]
+
+
+def _retrieve_chunks(state: OnboardState) -> list[dict]:
+    if state.goal["goal_type"] == "understand_system":
+        return _retrieve_chunks_per_module(state)
+    return _retrieve_chunks_focused(state)
 
 
 def _parse_output(raw: str) -> MentorOutput:
