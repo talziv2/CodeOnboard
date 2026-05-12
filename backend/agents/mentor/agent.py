@@ -63,6 +63,15 @@ Each step is an object with exactly these keys:
 Rules:
 - Use only files that appear in the retrieved chunks. Never invent file paths.
 - 5–8 steps total. Order matters: each step builds on the previous one.
+- Prefer the narrowest chunk that answers the step. When both an enclosing
+  class and one of its methods are retrieved, anchor on the method's
+  line_range — a whole class is rarely the right teaching unit.
+- Each step must anchor on a distinct chunk. Do not reuse the same
+  (file, line_range) pair across multiple steps; if the most relevant
+  chunk has already been used, move to a sibling chunk instead.
+- Only describe inheritance, imports, or call relationships that are
+  visible in the retrieved chunks. Do not infer relationships from class
+  names alone.
 - Self-rate confidence:
     high   — retrieved chunks clearly cover the user's goal and the path is concrete
     medium — chunks partially cover the goal, some steps required interpolation
