@@ -4,7 +4,7 @@ Run with: uv run pytest tests/test_chunker.py -v
 """
 from pathlib import Path
 
-from backend.rag.chunker import _is_excluded, chunk_repo
+from backend.rag.chunker import _is_excluded, _is_test_filename, chunk_repo
 
 
 def _write(path: Path, content: str = "def x():\n    pass\n") -> None:
@@ -50,9 +50,58 @@ def test_is_not_excluded_library_files():
 
 
 def test_is_not_excluded_filename_containing_test_substring():
-    # filename contains "test" but isn't an excluded dir or conftest.py
+    # filename contains "test" but isn't an excluded dir, conftest, or test_*/x_test pattern
     assert not _is_excluded(Path("src/testing.py"))
     assert not _is_excluded(Path("src/contest.py"))
+
+
+# ── test_*.py / *_test.py filename exclusion ──────────────────────────────────
+
+def test_is_test_filename_pytest_prefix():
+    assert _is_test_filename("test_submarine.py")
+    assert _is_test_filename("test_foo.py")
+
+
+def test_is_test_filename_underscore_suffix():
+    assert _is_test_filename("submarine_test.py")
+    assert _is_test_filename("foo_test.py")
+
+
+def test_is_test_filename_rejects_non_python():
+    assert not _is_test_filename("test_data.txt")
+    assert not _is_test_filename("submarine_test.json")
+
+
+def test_is_test_filename_rejects_lookalikes():
+    assert not _is_test_filename("testing.py")
+    assert not _is_test_filename("contest.py")
+    assert not _is_test_filename("attest.py")
+
+
+def test_is_excluded_test_prefix_at_top_level():
+    assert _is_excluded(Path("test_submarine.py"))
+
+
+def test_is_excluded_test_prefix_nested():
+    assert _is_excluded(Path("src/test_lib.py"))
+
+
+def test_is_excluded_underscore_test_suffix():
+    assert _is_excluded(Path("submarine_test.py"))
+    assert _is_excluded(Path("src/foo_test.py"))
+
+
+def test_chunk_repo_excludes_top_level_test_file(tmp_path):
+    _write(tmp_path / "submarine.py", "class Sub:\n    pass\n")
+    _write(tmp_path / "test_submarine.py", "def test_sub():\n    pass\n")
+    _write(tmp_path / "main_test.py", "def test_main():\n    pass\n")
+
+    chunks = chunk_repo(str(tmp_path))
+    files = {c["file"] for c in chunks}
+
+    assert any("submarine.py" == f for f in files)
+    assert not any("test_submarine" in f for f in files)
+    assert not any("main_test" in f for f in files)
 
 
 # ── chunk_repo integration with exclusion ─────────────────────────────────────

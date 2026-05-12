@@ -70,8 +70,17 @@ def _chunk_file(file_path: Path, repo_path: str) -> list[dict]:
     return chunks
 
 
+def _is_test_filename(name: str) -> bool:
+    if not name.endswith(".py"):
+        return False
+    return name.startswith("test_") or name.endswith("_test.py")
+
+
 def _is_excluded(relative_path: Path) -> bool:
-    if relative_path.name in EXCLUDED_FILE_NAMES:
+    name = relative_path.name
+    if name in EXCLUDED_FILE_NAMES:
+        return True
+    if _is_test_filename(name):
         return True
     return any(part in EXCLUDED_DIR_SEGMENTS for part in relative_path.parts)
 
