@@ -25,6 +25,7 @@ from backend.rag.cloner import get_commit_sha, parse_repo_url
 MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 4096
 TOP_K = 20
+PER_MODULE_TOP_K = 2
 
 
 class LearningPathStep(BaseModel):
@@ -37,9 +38,31 @@ class LearningPathStep(BaseModel):
     concepts: list[str]
 
 
+class DuplicateAnchorsError(ValueError):
+    """Raised when the LLM emits multiple steps anchored on the same chunk."""
+
+    def __init__(self, duplicates: list[tuple[str, tuple[int, int]]]) -> None:
+        self.duplicates = duplicates
+        formatted = ", ".join(f"{f}:{r[0]}-{r[1]}" for f, r in duplicates)
+        super().__init__(f"duplicate step anchors: {formatted}")
+
+
 class MentorOutput(BaseModel):
     steps: list[LearningPathStep]
     confidence: Literal["high", "medium", "low"]
+
+
+def _find_duplicate_anchors(
+    output: MentorOutput,
+) -> list[tuple[str, tuple[int, int]]]:
+    seen: set[tuple[str, tuple[int, int]]] = set()
+    duplicates: list[tuple[str, tuple[int, int]]] = []
+    for step in output.steps:
+        key = (step.file, tuple(step.line_range))
+        if key in seen and key not in duplicates:
+            duplicates.append(key)
+        seen.add(key)
+    return duplicates
 
 
 _SYSTEM_PROMPT = """\
@@ -62,6 +85,15 @@ Each step is an object with exactly these keys:
 Rules:
 - Use only files that appear in the retrieved chunks. Never invent file paths.
 - 5–8 steps total. Order matters: each step builds on the previous one.
+- Prefer the narrowest chunk that answers the step. When both an enclosing
+  class and one of its methods are retrieved, anchor on the method's
+  line_range — a whole class is rarely the right teaching unit.
+- Each step must anchor on a distinct chunk. Do not reuse the same
+  (file, line_range) pair across multiple steps; if the most relevant
+  chunk has already been used, move to a sibling chunk instead.
+- Only describe inheritance, imports, or call relationships that are
+  visible in the retrieved chunks. Do not infer relationships from class
+  names alone.
 - Self-rate confidence:
     high   — retrieved chunks clearly cover the user's goal and the path is concrete
     medium — chunks partially cover the goal, some steps required interpolation
@@ -160,28 +192,111 @@ _PROMPT_BUILDERS: dict[str, Callable[[dict, dict, list[dict]], str]] = {
 }
 
 
-def _retrieve_chunks(state: OnboardState) -> list[dict]:
+def _collection_name(state: OnboardState) -> str:
     owner, repo = parse_repo_url(state.repo_url)
     commit_sha = get_commit_sha(state.repo_path)
-    name = store.collection_name(owner, repo, commit_sha)
+    return store.collection_name(owner, repo, commit_sha)
 
-    embedding = embedder.embed_query(state.goal["primary_goal"])
-    result = store.query(name, embedding, top_k=TOP_K)
 
-    documents = result["documents"][0]
-    metadatas = result["metadatas"][0]
+def _flatten_chunk(doc: str, meta: dict) -> dict:
+    return {
+        "file": meta["file"],
+        "start_line": meta["start_line"],
+        "end_line": meta["end_line"],
+        "type": meta["type"],
+        "name": meta["name"],
+        "content": doc,
+    }
+
+
+def _drop_redundant_class_chunks(chunks: list[dict]) -> list[dict]:
+    """Drop a class chunk when any of its methods are in the same result set.
+
+    The chunker emits both whole-class chunks and per-method chunks. When
+    both land in retrieval, the class chunk is redundant — its content
+    already covers the method, but at a coarser line_range. Keeping only
+    the method chunk nudges the LLM toward narrower, more teachable anchors.
+
+    A chunk ``fn`` is considered a method of class chunk ``cls`` when:
+      - ``cls["type"] == "class"`` and ``fn["type"] == "function"``
+      - same file
+      - ``cls.start_line <= fn.start_line`` and ``fn.end_line <= cls.end_line``
+    """
+    classes = [c for c in chunks if c["type"] == "class"]
+    funcs = [c for c in chunks if c["type"] == "function"]
+
+    redundant: set[tuple[str, int, int]] = set()
+    for cls in classes:
+        for fn in funcs:
+            if (
+                fn["file"] == cls["file"]
+                and cls["start_line"] <= fn["start_line"]
+                and fn["end_line"] <= cls["end_line"]
+            ):
+                redundant.add((cls["file"], cls["start_line"], cls["end_line"]))
+                break
 
     return [
-        {
-            "file": meta["file"],
-            "start_line": meta["start_line"],
-            "end_line": meta["end_line"],
-            "type": meta["type"],
-            "name": meta["name"],
-            "content": doc,
-        }
-        for doc, meta in zip(documents, metadatas)
+        c for c in chunks
+        if (c["file"], c["start_line"], c["end_line"]) not in redundant
     ]
+
+
+def _build_retrieval_query(goal: dict) -> str:
+    primary = goal["primary_goal"]
+    goal_type = goal["goal_type"]
+    if goal_type == "understand_component":
+        focus = goal.get("focus_area", "")
+        return f"{primary}. Focus area: {focus}" if focus else primary
+    if goal_type == "contribute_code":
+        contribution = goal.get("contribution_context", "")
+        return f"{primary}. Contribution: {contribution}" if contribution else primary
+    if goal_type == "debug_issue":
+        error = goal.get("error_description", "")
+        tried = goal.get("tried_so_far", "")
+        parts = [primary]
+        if error:
+            parts.append(f"Error: {error}")
+        if tried:
+            parts.append(f"Tried: {tried}")
+        return ". ".join(parts)
+    return primary
+
+
+def _retrieve_chunks_focused(state: OnboardState) -> list[dict]:
+    name = _collection_name(state)
+    query_text = _build_retrieval_query(state.goal)
+    embedding = embedder.embed_query(query_text)
+    result = store.query(name, embedding, top_k=TOP_K)
+    chunks = [
+        _flatten_chunk(doc, meta)
+        for doc, meta in zip(result["documents"][0], result["metadatas"][0])
+    ]
+    return _drop_redundant_class_chunks(chunks)
+
+
+def _retrieve_chunks_per_module(state: OnboardState) -> list[dict]:
+    name = _collection_name(state)
+    seen: set[tuple[str, int, int]] = set()
+    results: list[dict] = []
+    for entry in state.module_map.values():
+        exports = ", ".join(entry.get("exports", []))
+        query_text = f"{entry['purpose']}. Exports: {exports}" if exports else entry["purpose"]
+        embedding = embedder.embed_query(query_text)
+        result = store.query(name, embedding, top_k=PER_MODULE_TOP_K)
+        for doc, meta in zip(result["documents"][0], result["metadatas"][0]):
+            key = (meta["file"], meta["start_line"], meta["end_line"])
+            if key in seen:
+                continue
+            seen.add(key)
+            results.append(_flatten_chunk(doc, meta))
+    return _drop_redundant_class_chunks(results[:TOP_K])
+
+
+def _retrieve_chunks(state: OnboardState) -> list[dict]:
+    if state.goal["goal_type"] == "understand_system":
+        return _retrieve_chunks_per_module(state)
+    return _retrieve_chunks_focused(state)
 
 
 def _parse_output(raw: str) -> MentorOutput:
@@ -241,9 +356,63 @@ def run(
         )
         raw = response.content[0].text
         output = _parse_output(raw)
+
+        # One retry if the LLM reused the same (file, line_range) for multiple
+        # steps. The prompt rule already forbids this, but Sonnet sometimes
+        # ignores it — showing it its own bad output is a much stronger signal.
+        duplicates = _find_duplicate_anchors(output)
+        if duplicates:
+            retry_raw, retry_output = _retry_distinct_anchors(
+                client, user_content, raw, duplicates
+            )
+            if retry_output is not None and not _find_duplicate_anchors(retry_output):
+                output = retry_output
+            else:
+                state.errors.append(
+                    f"mentor_agent: duplicate anchors persisted after retry: "
+                    f"{[f'{f}:{r[0]}-{r[1]}' for f, r in duplicates]}"
+                )
+
         state.learning_path = [step.model_dump() for step in output.steps]
         state.confidence = output.confidence
     except Exception as e:
         state.errors.append(f"mentor_agent LLM call failed: {e}")
 
     return state
+
+
+def _retry_distinct_anchors(
+    client: anthropic.Anthropic,
+    user_content: str,
+    previous_raw: str,
+    duplicates: list[tuple[str, tuple[int, int]]],
+) -> tuple[str, MentorOutput | None]:
+    """Ask the LLM to regenerate with distinct anchors.
+
+    Returns ``(raw_text, parsed_output)``. ``parsed_output`` is ``None`` if
+    the retry response failed to parse — callers should keep the original
+    output in that case.
+    """
+    dupe_str = ", ".join(f"{f} lines {r[0]}-{r[1]}" for f, r in duplicates)
+    correction = (
+        f"Your previous response reused these (file, line_range) anchors "
+        f"across multiple steps: {dupe_str}. The rules require each step "
+        f"to anchor on a DISTINCT chunk. Regenerate the JSON object with "
+        f"distinct (file, line_range) pairs for every step. Return ONLY "
+        f"the JSON object."
+    )
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=MAX_TOKENS,
+        system=_SYSTEM_PROMPT,
+        messages=[
+            {"role": "user", "content": user_content},
+            {"role": "assistant", "content": previous_raw},
+            {"role": "user", "content": correction},
+        ],
+    )
+    raw = response.content[0].text
+    try:
+        return raw, _parse_output(raw)
+    except Exception:
+        return raw, None

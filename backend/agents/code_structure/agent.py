@@ -25,6 +25,37 @@ MODEL = "claude-haiku-4-5"
 MAX_CHUNKS = 80
 
 
+def _top_level_chunks(chunks: list[dict]) -> list[dict]:
+    """Drop method chunks (functions nested inside classes).
+
+    The mentor agent's RAG retrieval benefits from method-level chunks, but
+    the module-map prompt is a high-level overview — listing every method
+    inflates the chunk count and crowds out smaller files, so files that
+    happen to come later in the walk order never reach the LLM.
+
+    A chunk is treated as a method when:
+      - its type is ``function``
+      - some class chunk in the same file covers its line range
+    """
+    classes_by_file: dict[str, list[dict]] = {}
+    for c in chunks:
+        if c["type"] == "class":
+            classes_by_file.setdefault(c["file"], []).append(c)
+
+    result: list[dict] = []
+    for c in chunks:
+        if c["type"] != "function":
+            result.append(c)
+            continue
+        is_method = any(
+            cls["start_line"] <= c["start_line"] and c["end_line"] <= cls["end_line"]
+            for cls in classes_by_file.get(c["file"], [])
+        )
+        if not is_method:
+            result.append(c)
+    return result
+
+
 class ModuleEntry(BaseModel):
     purpose: str
     key_files: list[str]
@@ -128,7 +159,8 @@ def run(
     except Exception as e:
         state.errors.append(f"embedding failed: {e}")
 
-    sampled = [c for c in chunks if c["type"] != "import"][:MAX_CHUNKS]
+    overview = _top_level_chunks(chunks)
+    sampled = [c for c in overview if c["type"] != "import"][:MAX_CHUNKS]
 
     try:
         response = client.messages.create(

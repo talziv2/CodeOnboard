@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from backend.pipeline.state import OnboardState
 from backend.agents.code_structure import run
+from backend.agents.code_structure.agent import _top_level_chunks
 
 FAKE_REPO_URL = "https://github.com/psf/requests"
 FAKE_REPO_PATH = "data/repos/requests"
@@ -169,6 +170,102 @@ def test_run_continues_when_embedding_fails(mock_clone, mock_chunk, mock_sha, mo
     assert result.module_map is not None
     assert result.chunks_embedded is False
     assert any("embedding failed" in e for e in result.errors)
+
+
+# ── top-level chunk filter for module-map prompt ──────────────────────────────
+
+def test_top_level_chunks_keeps_classes():
+    chunks = [
+        {"file": "a.py", "start_line": 1, "end_line": 20, "type": "class", "name": "C"},
+    ]
+    assert _top_level_chunks(chunks) == chunks
+
+
+def test_top_level_chunks_keeps_top_level_functions():
+    chunks = [
+        {"file": "a.py", "start_line": 1, "end_line": 5, "type": "function", "name": "f"},
+    ]
+    assert _top_level_chunks(chunks) == chunks
+
+
+def test_top_level_chunks_drops_methods_inside_classes():
+    chunks = [
+        {"file": "a.py", "start_line": 1, "end_line": 50, "type": "class", "name": "C"},
+        {"file": "a.py", "start_line": 5, "end_line": 10, "type": "function", "name": "method"},
+    ]
+    result = _top_level_chunks(chunks)
+    names = [c["name"] for c in result]
+    assert "C" in names
+    assert "method" not in names
+
+
+def test_top_level_chunks_does_not_drop_function_with_same_range_in_different_file():
+    chunks = [
+        {"file": "a.py", "start_line": 1, "end_line": 50, "type": "class", "name": "C"},
+        {"file": "b.py", "start_line": 5, "end_line": 10, "type": "function", "name": "top_fn"},
+    ]
+    result = _top_level_chunks(chunks)
+    names = [c["name"] for c in result]
+    assert "C" in names
+    assert "top_fn" in names
+
+
+def test_top_level_chunks_keeps_imports():
+    chunks = [
+        {"file": "a.py", "start_line": 1, "end_line": 1, "type": "import", "name": "import os"},
+    ]
+    assert _top_level_chunks(chunks) == chunks
+
+
+def test_top_level_chunks_handles_multiple_methods_and_top_functions():
+    chunks = [
+        {"file": "x.py", "start_line": 1, "end_line": 5, "type": "function", "name": "before"},
+        {"file": "x.py", "start_line": 10, "end_line": 60, "type": "class", "name": "C"},
+        {"file": "x.py", "start_line": 15, "end_line": 25, "type": "function", "name": "m1"},
+        {"file": "x.py", "start_line": 30, "end_line": 40, "type": "function", "name": "m2"},
+        {"file": "x.py", "start_line": 70, "end_line": 80, "type": "function", "name": "after"},
+    ]
+    result = _top_level_chunks(chunks)
+    names = [c["name"] for c in result]
+    assert names == ["before", "C", "after"]
+
+
+# ── module-map sampling actually uses _top_level_chunks ───────────────────────
+
+@patch("backend.agents.code_structure.agent.store.add_chunks")
+@patch("backend.agents.code_structure.agent.store.collection_exists", return_value=True)
+@patch("backend.agents.code_structure.agent.embedder.embed_documents", return_value=FAKE_EMBEDDINGS)
+@patch("backend.agents.code_structure.agent.get_commit_sha", return_value=FAKE_COMMIT_SHA)
+@patch("backend.agents.code_structure.agent.clone_repo", return_value=FAKE_REPO_PATH)
+def test_run_excludes_method_chunks_from_module_map_prompt(
+    mock_clone, mock_sha, mock_embed, mock_exists, mock_add
+):
+    # Build a chunk set where the first MAX_CHUNKS-equivalent slots would
+    # otherwise be eaten by big_class's methods, crowding out submarine.
+    chunks = [
+        {"file": "big.py", "start_line": 1, "end_line": 200, "type": "class", "name": "Big"},
+        *[
+            {"file": "big.py", "start_line": i, "end_line": i + 1,
+             "type": "function", "name": f"big_method_{i}"}
+            for i in range(2, 100)
+        ],
+        {"file": "submarine.py", "start_line": 1, "end_line": 50, "type": "class",
+         "name": "Submarine"},
+    ]
+
+    with patch(
+        "backend.agents.code_structure.agent.chunk_repo", return_value=chunks
+    ):
+        client = _make_mock_client(json.dumps(FAKE_MODULE_MAP))
+        run(_make_state(), client=client)
+
+    # The prompt sent to the LLM should mention submarine.py — it is no longer
+    # buried under big.py's 98 method chunks.
+    sent_prompt = client.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert "submarine.py" in sent_prompt
+    assert "Submarine" in sent_prompt
+    # And no big_method_* names should appear (they're nested in Big)
+    assert "big_method_" not in sent_prompt
 
 
 # ── error handling ────────────────────────────────────────────────────────────

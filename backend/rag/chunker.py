@@ -8,6 +8,17 @@ PY_LANGUAGE = Language(python_language())
 CHUNK_NODE_TYPES = {"function_definition", "class_definition"}
 IMPORT_NODE_TYPES = {"import_statement", "import_from_statement"}
 
+# Directories that almost never contain library source. Tour-style goals
+# (understand_system) build their module map from whatever chunks land in
+# the index, so test/doc/example modules masquerade as library modules and
+# crowd out the real ones. Filtering at the chunker keeps the index lean.
+EXCLUDED_DIR_SEGMENTS = frozenset({
+    "tests", "test", "__tests__",
+    "docs", "doc",
+    "examples", "example",
+})
+EXCLUDED_FILE_NAMES = frozenset({"conftest.py"})
+
 
 def _get_node_name(node, source: bytes) -> str:
     for child in node.children:
@@ -37,6 +48,13 @@ def _chunk_file(file_path: Path, repo_path: str) -> list[dict]:
                 "language": "python",
                 "content": content,
             })
+            # For classes, keep recursing so methods become their own chunks.
+            # The class chunk is kept too (whole-class context), and the
+            # retrieval layer drops it when narrower method chunks land in
+            # the same result set.
+            if node.type == "class_definition":
+                for child in node.children:
+                    traverse(child)
             return
 
         if node.type in IMPORT_NODE_TYPES:
@@ -59,9 +77,27 @@ def _chunk_file(file_path: Path, repo_path: str) -> list[dict]:
     return chunks
 
 
+def _is_test_filename(name: str) -> bool:
+    if not name.endswith(".py"):
+        return False
+    return name.startswith("test_") or name.endswith("_test.py")
+
+
+def _is_excluded(relative_path: Path) -> bool:
+    name = relative_path.name
+    if name in EXCLUDED_FILE_NAMES:
+        return True
+    if _is_test_filename(name):
+        return True
+    return any(part in EXCLUDED_DIR_SEGMENTS for part in relative_path.parts)
+
+
 def chunk_repo(repo_path: str) -> list[dict]:
+    repo = Path(repo_path)
     all_chunks = []
-    for py_file in Path(repo_path).rglob("*.py"):
+    for py_file in repo.rglob("*.py"):
+        if _is_excluded(py_file.relative_to(repo)):
+            continue
         try:
             all_chunks.extend(_chunk_file(py_file, repo_path))
         except Exception:

@@ -24,7 +24,7 @@ graph TB
     style P1 fill:#c8e6c9,stroke:#388e3c
     style P2 fill:#c8e6c9,stroke:#388e3c
     style P3 fill:#c8e6c9,stroke:#388e3c
-    style P4 fill:#fff9c4,stroke:#f9a825
+    style P4 fill:#c8e6c9,stroke:#388e3c
     style P5 fill:#f5f5f5,stroke:#9e9e9e
 ```
 
@@ -59,14 +59,17 @@ graph TB
 
 ---
 
-### Part 2 — Code Structure Agent
+### Part 2 — Code Structure Agent ✓ (done)
 
 #### Progress
 - `backend/pipeline/state.py` ✅
 - `backend/rag/cloner.py` ✅
 - `backend/rag/chunker.py` ✅
 - `backend/agents/code_structure/agent.py` ✅
-- Manual test on `psf/requests` ⬜
+- Manual test on `psf/requests` ✅
+- Chunker exclusion of tests/docs/examples and `test_*.py` / `*_test.py` ✅
+- Method-level chunks emitted inside classes ✅
+- `_top_level_chunks` filter to keep module-map prompt high-level ✅
 
 Install: `gitpython`, `tree-sitter`, `tree-sitter-python` ✅ (added to pyproject.toml)
 
@@ -116,29 +119,37 @@ Install: `sentence-transformers`, `chromadb` ✅ (added to pyproject.toml)
 
 ---
 
-### Part 4 — Mentor Agent + Pipeline
+### Part 4 — Mentor Agent + Pipeline ✓ (done)
 
-**`backend/agents/mentor_agent.py`**
-- Retrieve top-10 chunks from ChromaDB using `goal.primary_goal` as query text
-- Build prompt: goal JSON + module_map + retrieved chunks
-- Ask Sonnet to generate ordered 5–8 step learning path
-- Each step matches the learning path step schema (see CLAUDE.md)
-- Validate output with Pydantic
+**`backend/agents/mentor/agent.py`** ✅
+- Goal-aware retrieval: `understand_system` runs a per-module sweep across the
+  module map (`PER_MODULE_TOP_K=2` per module, capped at `TOP_K=20`); the
+  other three goal types run one focused query enriched with their goal-
+  specific fields (`focus_area`, `contribution_context`, `error_description`
+  + `tried_so_far`).
+- `_drop_redundant_class_chunks` filters out any class chunk when one of its
+  methods is also in the retrieval result — keeps the narrower anchor.
+- One Sonnet call per run, plus at most one retry when the LLM emits
+  duplicate `(file, line_range)` step anchors. `_find_duplicate_anchors` +
+  `_retry_distinct_anchors` provide the validation and retry; persistent
+  duplicates are logged to `state.errors` and the original output is kept.
+- Output validated through `MentorOutput` (Pydantic).
 - Model: `claude-sonnet-4-6`
 
-**`backend/pipeline/runner.py`**
+**`backend/pipeline/runner.py`** ✅
 - `run_pipeline(repo_url, goal) → OnboardState`
 - Sequential: Goal (already done) → Code Structure → Mentor
-- Write errors to `state.errors`, never raise unless unrecoverable
+- Errors written to `state.errors`, never raises unless unrecoverable
 
-**FastAPI endpoint**
+**FastAPI endpoint** ✅
 - `POST /onboard` — body: `{ repo_url, goal }` → returns `{ learning_path, module_map, confidence }`
 
-**Test end-to-end:**
-- POST /onboard with `psf/requests` + goal `{ goal_type: understand_component, focus_area: authentication, experience_level: intermediate }`
-- Inspect: do steps reference real files? Is the order logical?
-- Repeat with `fastapi/fastapi`
-- Check Anthropic dashboard: confirm under $0.10/run
+**Smoke tests:**
+- `scripts/smoke_onboard.py` — `psf/requests` across all 4 goal types ✅
+- `scripts/smoke_onboard_submarines.py` — submarine planner repo across all 4 goal types ✅
+
+**Reference docs:**
+- [`docs/reference/agents/mentor-agent.md`](../../reference/agents/mentor-agent.md) — full agent reference
 
 ---
 
