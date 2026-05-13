@@ -26,18 +26,24 @@ backend/rag/
 
 1. **Clone** — `clone_repo(state.repo_url)` runs `git clone --depth 1`.
    If `data/repos/<name>` already exists, it skips the clone.
-2. **Chunk** — `chunk_repo(repo_path)` walks all `.py` files and extracts
-   functions, classes, and imports as chunk dicts via tree-sitter.
+2. **Chunk** — `chunk_repo(repo_path)` walks all `.py` files (excluding test,
+   doc, and example paths — see *Chunker exclusion rules* below) and extracts
+   functions, classes, methods, and imports as chunk dicts via tree-sitter.
 3. **Embed** — `_embed_chunks(state, chunks)` filters out import chunks, derives
    a per-commit collection name, and either skips (cache hit) or embeds via
    `embedder.embed_documents()` and writes to ChromaDB via `store.add_chunks()`.
    Sets `state.chunks_embedded = True` on success. Wrapped in its own
    try/except so embedding failures don't block the module-map step.
-4. **Sample** — takes the first `MAX_CHUNKS = 80` non-import chunks (enough
-   context for Haiku without hitting the token limit).
-5. **Summarise** — sends the chunk list to Haiku with a prompt asking for a
+4. **Filter to top-level only** — `_top_level_chunks(chunks)` drops function
+   chunks whose line range falls inside a class chunk in the same file. This
+   keeps the module-map prompt high-level — only classes and top-level
+   functions are listed. Methods stay in ChromaDB for the Mentor Agent's RAG
+   retrieval; only this prompt is affected. See *Why the top-level filter*.
+5. **Sample** — takes the first `MAX_CHUNKS = 80` non-import top-level chunks
+   (enough context for Haiku without hitting the token limit).
+6. **Summarise** — sends the chunk list to Haiku with a prompt asking for a
    JSON module map. Parses and validates the response through `ModuleEntry`.
-6. **Write** — stores the validated map as `state.module_map`.
+7. **Write** — stores the validated map as `state.module_map`.
 
 ---
 
@@ -138,8 +144,49 @@ Each chunk produced by `chunker.py` has this shape:
 
 `type` is one of: `function` · `class` · `import`
 
+A class produces **both** a whole-class chunk and a separate `function` chunk
+for each method defined inside it. The line range of a method chunk is always
+strictly inside its parent class chunk's range. This gives downstream RAG
+retrieval narrower anchors than just the whole class.
+
 Import chunks are excluded both from the LLM prompt (too noisy) and from the
 embedding step (too short to carry meaning).
+
+---
+
+## Chunker exclusion rules
+
+`chunker.py` skips files that almost never carry library source. Tour-style
+goals build their module map from whatever chunks land in the index, so test
+or doc modules masquerade as library modules and crowd out the real ones.
+
+A file is skipped when **any** of these conditions hold:
+
+| Rule | Examples |
+|---|---|
+| Any path segment is in `EXCLUDED_DIR_SEGMENTS` | `tests/`, `test/`, `__tests__/`, `docs/`, `doc/`, `examples/`, `example/` |
+| Filename matches the pytest pattern | `test_foo.py`, `foo_test.py` |
+| Filename is in `EXCLUDED_FILE_NAMES` | `conftest.py` |
+
+The match is on **path segments**, not substrings — so `src/testing.py` and
+`src/contest.py` are kept (no segment equals `tests` or `test`, and the
+filename doesn't match `test_*.py` / `*_test.py`).
+
+---
+
+## Why the top-level filter
+
+The chunker emits method chunks in addition to class chunks. A class-heavy
+file (e.g. a vendored library file with dozens of classes) can balloon to
+hundreds of chunks. Without filtering, the first `MAX_CHUNKS = 80` would all
+come from that one file, leaving smaller modules entirely absent from the
+LLM prompt — and therefore absent from `state.module_map`.
+
+`_top_level_chunks(chunks)` solves this: a function chunk is dropped if any
+class chunk in the same file covers its line range. The module-map prompt
+sees only classes and standalone functions, which is the right granularity
+for "what does this module do?" Method-level chunks are still embedded in
+ChromaDB — the Mentor Agent's RAG retrieval benefits from them.
 
 ---
 

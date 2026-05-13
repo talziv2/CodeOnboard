@@ -47,13 +47,24 @@ entry through a `ModuleEntry` Pydantic model before writing to state.
 - Embedding model: `nomic-ai/nomic-embed-text-v1.5` via sentence-transformers (local)
 - See [`docs/design/code-structure-agent.md`](code-structure-agent.md) for full detail.
 
-### Mentor Agent  `backend/agents/mentor/`  _(Phase 1 Part 3 — pending)_
+### Mentor Agent  `backend/agents/mentor/`
 
-Turns the goal + module map + RAG results into an ordered learning path. The only
-agent that uses `claude-sonnet-4-6` — called once.
+Turns the goal + module map + RAG retrieval into an ordered 5–8 step learning
+path. The only agent that uses `claude-sonnet-4-6` — called once per run (plus
+at most one retry when the LLM emits duplicate `(file, line_range)` anchors).
 
-- Input: `state.goal`, `state.module_map`, RAG retrieval
+Retrieval is goal-aware: `understand_system` runs a per-module sweep across the
+module map; the other three goal types run one focused query enriched with
+their goal-specific fields (`focus_area`, `contribution_context`,
+`error_description` + `tried_so_far`). A post-retrieval filter drops any
+whole-class chunk when one of its method chunks is also in the result set,
+biasing the LLM toward narrower teaching anchors.
+
+- Input: `state.goal`, `state.module_map`, ChromaDB collection populated by
+  the Code Structure Agent
 - Output: `state.learning_path`, `state.confidence`
+- LLM calls: 1, plus at most 1 retry on duplicate anchors
+- See [`docs/reference/agents/mentor-agent.md`](../reference/agents/mentor-agent.md) for full detail.
 
 ---
 
