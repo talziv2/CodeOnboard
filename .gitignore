@@ -5,3 +5,5 @@ data/repos/
 __pycache__/
 *.pyc
 .pytest_cache/
+.idea/
+_tmp_compare/
