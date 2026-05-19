@@ -8,16 +8,15 @@ PY_LANGUAGE = Language(python_language())
 CHUNK_NODE_TYPES = {"function_definition", "class_definition"}
 IMPORT_NODE_TYPES = {"import_statement", "import_from_statement"}
 
-# Directories that almost never contain library source. Tour-style goals
-# (understand_system) build their module map from whatever chunks land in
-# the index, so test/doc/example modules masquerade as library modules and
-# crowd out the real ones. Filtering at the chunker keeps the index lean.
-EXCLUDED_DIR_SEGMENTS = frozenset({
-    "tests", "test", "__tests__",
-    "docs", "doc", "docs_src",
-    "examples", "example",
-})
-EXCLUDED_FILE_NAMES = frozenset({"conftest.py"})
+# Every Python file is indexed; each chunk carries a `role` so retrieval can
+# filter by it. Tour-style goals (understand_system) stay source-only, while
+# debug_issue / contribute_code also retrieve test chunks as evidence.
+ROLE_DIR_SEGMENTS: dict[str, frozenset[str]] = {
+    "test": frozenset({"tests", "test", "__tests__"}),
+    "doc": frozenset({"docs", "doc", "docs_src"}),
+    "example": frozenset({"examples", "example"}),
+}
+TEST_FILE_NAMES = frozenset({"conftest.py"})
 
 
 def _get_node_name(node, source: bytes) -> str:
@@ -27,12 +26,36 @@ def _get_node_name(node, source: bytes) -> str:
     return "unknown"
 
 
+def _is_test_filename(name: str) -> bool:
+    if not name.endswith(".py"):
+        return False
+    return name.startswith("test_") or name.endswith("_test.py")
+
+
+def classify_role(relative_path: Path) -> str:
+    """Tag a file by what kind of code it holds: source | test | doc | example.
+
+    A test filename anywhere wins over its directory, so a ``test_*.py`` file
+    sitting in a source package is still tagged ``test``.
+    """
+    name = relative_path.name
+    if name in TEST_FILE_NAMES or _is_test_filename(name):
+        return "test"
+    parts = set(relative_path.parts)
+    for role, segments in ROLE_DIR_SEGMENTS.items():
+        if parts & segments:
+            return role
+    return "source"
+
+
 def _chunk_file(file_path: Path, repo_path: str) -> list[dict]:
     parser = Parser(PY_LANGUAGE)
     source = file_path.read_bytes()
     tree = parser.parse(source)
 
-    relative_file = str(file_path.relative_to(repo_path))
+    relative_path = file_path.relative_to(repo_path)
+    relative_file = str(relative_path)
+    role = classify_role(relative_path)
     chunks = []
 
     def traverse(node):
@@ -46,6 +69,7 @@ def _chunk_file(file_path: Path, repo_path: str) -> list[dict]:
                 "type": "function" if node.type == "function_definition" else "class",
                 "name": name,
                 "language": "python",
+                "role": role,
                 "content": content,
             })
             # For classes, keep recursing so methods become their own chunks.
@@ -66,6 +90,7 @@ def _chunk_file(file_path: Path, repo_path: str) -> list[dict]:
                 "type": "import",
                 "name": content.split("\n")[0][:80],
                 "language": "python",
+                "role": role,
                 "content": content,
             })
             return
@@ -77,27 +102,10 @@ def _chunk_file(file_path: Path, repo_path: str) -> list[dict]:
     return chunks
 
 
-def _is_test_filename(name: str) -> bool:
-    if not name.endswith(".py"):
-        return False
-    return name.startswith("test_") or name.endswith("_test.py")
-
-
-def _is_excluded(relative_path: Path) -> bool:
-    name = relative_path.name
-    if name in EXCLUDED_FILE_NAMES:
-        return True
-    if _is_test_filename(name):
-        return True
-    return any(part in EXCLUDED_DIR_SEGMENTS for part in relative_path.parts)
-
-
 def chunk_repo(repo_path: str) -> list[dict]:
     repo = Path(repo_path)
     all_chunks = []
     for py_file in repo.rglob("*.py"):
-        if _is_excluded(py_file.relative_to(repo)):
-            continue
         try:
             all_chunks.extend(_chunk_file(py_file, repo_path))
         except Exception:

@@ -8,6 +8,10 @@ import chromadb
 CHROMA_DIR = Path("data/chroma")
 COMMIT_SHA_LEN = 12
 
+# Bumped when the chunk metadata schema changes so old collections (which
+# lack the new fields) are not reused. v2 added the per-chunk `role` field.
+SCHEMA_VERSION = "v2"
+
 
 @lru_cache(maxsize=1)
 def _get_client() -> chromadb.api.ClientAPI:
@@ -16,7 +20,7 @@ def _get_client() -> chromadb.api.ClientAPI:
 
 
 def collection_name(owner: str, repo: str, commit_sha: str) -> str:
-    raw = f"{owner}_{repo}_{commit_sha[:COMMIT_SHA_LEN]}"
+    raw = f"{owner}_{repo}_{commit_sha[:COMMIT_SHA_LEN]}_{SCHEMA_VERSION}"
     sanitized = re.sub(r"[^a-zA-Z0-9_-]", "_", raw).lower()
     return sanitized[:63]
 
@@ -50,6 +54,7 @@ def add_chunks(
             "type": c["type"],
             "name": c["name"],
             "language": c["language"],
+            "role": c.get("role", "source"),
         }
         for c in chunks
     ]
@@ -62,10 +67,15 @@ def add_chunks(
     )
 
 
-def query(name: str, query_embedding: list[float], top_k: int = 5) -> dict:
+def query(
+    name: str,
+    query_embedding: list[float],
+    top_k: int = 5,
+    where: dict | None = None,
+) -> dict:
     client = _get_client()
     collection = client.get_collection(name=name)
-    return collection.query(
-        query_embeddings=[query_embedding],
-        n_results=top_k,
-    )
+    kwargs: dict = {"query_embeddings": [query_embedding], "n_results": top_k}
+    if where:
+        kwargs["where"] = where
+    return collection.query(**kwargs)

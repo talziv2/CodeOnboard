@@ -21,6 +21,7 @@ import anthropic
 from pydantic import BaseModel
 
 from backend.pipeline.state import OnboardState
+from backend.pipeline.profiles import get_profile
 
 MODEL = "claude-haiku-4-5"
 MAX_TOKENS = 1024
@@ -46,15 +47,25 @@ Return ONLY a JSON object with exactly this key:
 
 Rules:
 - Use module names exactly as they appear in the list — do not invent names.
-- Be decisive: for a focused goal, most modules of a large repo are noise.
-  Skip tests, examples, build tooling, and modules unrelated to the goal.
-- For goal_type "understand_system" the developer wants a broad tour — keep
-  the major modules and only drop clearly peripheral ones.
-- For focused goals (understand_component, contribute_code, debug_issue),
-  prune aggressively: keep only modules on the path to that goal.
+- Follow the pruning instruction given with the goal.
 - Always keep at least one module. Never return an empty list.
 - Return ONLY the JSON object — no markdown fences, no explanation.
 """
+
+# The retrieval profile picks the pruning aggressiveness; the directive is
+# spelled out to the model so it does not have to infer it from goal_type.
+_PRUNING_DIRECTIVE: dict[str, str] = {
+    "preserve_breadth": (
+        "Pruning instruction: the developer wants a broad tour. Keep the major "
+        "modules and only drop clearly peripheral ones (tests, examples, build "
+        "tooling)."
+    ),
+    "prune": (
+        "Pruning instruction: the developer has a focused goal. Prune "
+        "aggressively — keep only the modules on the path to that goal. In a "
+        "large repo most modules are noise."
+    ),
+}
 
 
 def _format_module_list(module_map: dict) -> str:
@@ -63,7 +74,7 @@ def _format_module_list(module_map: dict) -> str:
     )
 
 
-def _build_prompt(goal: dict, module_map: dict) -> str:
+def _build_prompt(goal: dict, module_map: dict, pruning_mode: str) -> str:
     parts = [
         f"Developer goal: {goal['primary_goal']}",
         f"Goal type: {goal['goal_type']}",
@@ -71,6 +82,8 @@ def _build_prompt(goal: dict, module_map: dict) -> str:
     focus = goal.get("focus_area")
     if focus:
         parts.append(f"Focus area: {focus}")
+    parts.append("")
+    parts.append(_PRUNING_DIRECTIVE[pruning_mode])
     parts.append("")
     parts.append("Modules:")
     parts.append(_format_module_list(module_map))
@@ -112,14 +125,15 @@ def run(
     if len(state.module_map) < MIN_MODULES_TO_PRIORITIZE:
         return state
 
+    profile = get_profile(state.goal["goal_type"])
+    prompt = _build_prompt(state.goal, state.module_map, profile.prioritization_mode)
+
     try:
         response = client.messages.create(
             model=MODEL,
             max_tokens=MAX_TOKENS,
             system=_SYSTEM_PROMPT,
-            messages=[
-                {"role": "user", "content": _build_prompt(state.goal, state.module_map)}
-            ],
+            messages=[{"role": "user", "content": prompt}],
         )
         output = _parse_output(response.content[0].text)
     except Exception as e:

@@ -159,8 +159,14 @@ def run(
     except Exception as e:
         state.errors.append(f"embedding failed: {e}")
 
+    # The module map is a high-level architecture summary — test, doc, and
+    # example chunks (now indexed for goal-aware retrieval) would masquerade
+    # as library modules, so keep the prompt source-only.
     overview = _top_level_chunks(chunks)
-    sampled = [c for c in overview if c["type"] != "import"][:MAX_CHUNKS]
+    sampled = [
+        c for c in overview
+        if c["type"] != "import" and c.get("role", "source") == "source"
+    ][:MAX_CHUNKS]
 
     try:
         response = client.messages.create(

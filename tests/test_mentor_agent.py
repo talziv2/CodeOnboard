@@ -246,22 +246,41 @@ def test_retrieve_chunks_focused_understand_component_query(mock_sha, mock_embed
 @patch("backend.agents.mentor.agent.store.query", return_value=FAKE_CHROMA_RESULT)
 @patch("backend.agents.mentor.agent.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
 @patch("backend.agents.mentor.agent.get_commit_sha", return_value=FAKE_COMMIT_SHA)
-def test_retrieve_chunks_focused_contribute_code_query(mock_sha, mock_embed, mock_query):
+def test_retrieve_chunks_contribute_code_decomposes_into_subqueries(mock_sha, mock_embed, mock_query):
+    # contribute_code decomposes the goal into primary_goal + contribution_context
     _retrieve_chunks(_make_state(goal=FAKE_GOAL_CONTRIBUTE_CODE))
-    query_text = mock_embed.call_args.args[0]
-    assert FAKE_GOAL_CONTRIBUTE_CODE["primary_goal"] in query_text
-    assert FAKE_GOAL_CONTRIBUTE_CODE["contribution_context"] in query_text
+    embed_texts = [call.args[0] for call in mock_embed.call_args_list]
+    assert mock_embed.call_count == 2
+    assert any(FAKE_GOAL_CONTRIBUTE_CODE["primary_goal"] in t for t in embed_texts)
+    assert any(FAKE_GOAL_CONTRIBUTE_CODE["contribution_context"] in t for t in embed_texts)
 
 
 @patch("backend.agents.mentor.agent.store.query", return_value=FAKE_CHROMA_RESULT)
 @patch("backend.agents.mentor.agent.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
 @patch("backend.agents.mentor.agent.get_commit_sha", return_value=FAKE_COMMIT_SHA)
-def test_retrieve_chunks_focused_debug_issue_query(mock_sha, mock_embed, mock_query):
+def test_retrieve_chunks_debug_issue_decomposes_into_subqueries(mock_sha, mock_embed, mock_query):
+    # debug_issue decomposes into primary_goal + error_description + tried_so_far
     _retrieve_chunks(_make_state(goal=FAKE_GOAL_DEBUG_ISSUE))
-    query_text = mock_embed.call_args.args[0]
-    assert FAKE_GOAL_DEBUG_ISSUE["primary_goal"] in query_text
-    assert FAKE_GOAL_DEBUG_ISSUE["error_description"] in query_text
-    assert FAKE_GOAL_DEBUG_ISSUE["tried_so_far"] in query_text
+    embed_texts = [call.args[0] for call in mock_embed.call_args_list]
+    assert mock_embed.call_count == 3
+    assert any(FAKE_GOAL_DEBUG_ISSUE["primary_goal"] in t for t in embed_texts)
+    assert any(FAKE_GOAL_DEBUG_ISSUE["error_description"] in t for t in embed_texts)
+    assert any(FAKE_GOAL_DEBUG_ISSUE["tried_so_far"] in t for t in embed_texts)
+
+
+@patch("backend.agents.mentor.agent.store.query", return_value=FAKE_CHROMA_RESULT)
+@patch("backend.agents.mentor.agent.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
+@patch("backend.agents.mentor.agent.get_commit_sha", return_value=FAKE_COMMIT_SHA)
+def test_retrieve_chunks_filters_by_profile_roles(mock_sha, mock_embed, mock_query):
+    # understand_component retrieves source only; debug_issue also retrieves tests.
+    _retrieve_chunks(_make_state())  # understand_component
+    component_where = mock_query.call_args.kwargs["where"]
+    assert component_where == {"role": {"$in": ["source"]}}
+
+    mock_query.reset_mock()
+    _retrieve_chunks(_make_state(goal=FAKE_GOAL_DEBUG_ISSUE))
+    debug_where = mock_query.call_args.kwargs["where"]
+    assert debug_where == {"role": {"$in": ["source", "test"]}}
 
 
 def test_build_retrieval_query_falls_back_when_optional_fields_missing():

@@ -18,14 +18,18 @@ import anthropic
 from pydantic import BaseModel
 
 from backend.pipeline.state import OnboardState
+from backend.pipeline.profiles import RetrievalProfile, get_profile
 from backend.rag import embedder, store
 from backend.rag.cloner import get_commit_sha, parse_repo_url
 
 
 MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 4096
-TOP_K = 20
-PER_MODULE_TOP_K = 2
+
+# When a goal is decomposed into N sub-queries, each sub-query over-fetches a
+# little past its fair share of the budget so dedup losses still leave enough
+# to fill top_k.
+_MIN_SUBQUERY_K = 4
 
 
 class LearningPathStep(BaseModel):
@@ -223,6 +227,7 @@ def _flatten_chunk(doc: str, meta: dict) -> dict:
         "end_line": meta["end_line"],
         "type": meta["type"],
         "name": meta["name"],
+        "role": meta.get("role", "source"),
         "content": doc,
     }
 
@@ -281,40 +286,96 @@ def _build_retrieval_query(goal: dict) -> str:
     return primary
 
 
-def _retrieve_chunks_focused(state: OnboardState) -> list[dict]:
-    name = _collection_name(state)
-    query_text = _build_retrieval_query(state.goal)
-    embedding = embedder.embed_query(query_text)
-    result = store.query(name, embedding, top_k=TOP_K)
-    chunks = [
-        _flatten_chunk(doc, meta)
-        for doc, meta in zip(result["documents"][0], result["metadatas"][0])
-    ]
-    return _drop_redundant_class_chunks(chunks)
+def _build_retrieval_queries(goal: dict, profile: RetrievalProfile) -> list[str]:
+    """Sub-queries to embed for focused retrieval.
+
+    Without decomposition this is a single combined query. With it, each
+    goal-specific field becomes its own query so the error message and what
+    the developer already tried are matched on their own terms, not diluted
+    inside one long string.
+    """
+    if not profile.decompose_query:
+        return [_build_retrieval_query(goal)]
+
+    queries = [goal["primary_goal"]]
+    if goal["goal_type"] == "debug_issue":
+        extra_fields = ("error_description", "tried_so_far")
+    elif goal["goal_type"] == "contribute_code":
+        extra_fields = ("contribution_context",)
+    else:
+        extra_fields = ()
+    for field in extra_fields:
+        value = goal.get(field)
+        if value:
+            queries.append(value)
+    return queries
 
 
-def _retrieve_chunks_per_module(state: OnboardState) -> list[dict]:
+def _role_where(profile: RetrievalProfile) -> dict:
+    """ChromaDB metadata filter restricting retrieval to the profile's roles."""
+    return {"role": {"$in": sorted(profile.retrieval_roles)}}
+
+
+def _retrieve_chunks_focused(
+    state: OnboardState, profile: RetrievalProfile
+) -> list[dict]:
     name = _collection_name(state)
+    where = _role_where(profile)
+    queries = _build_retrieval_queries(state.goal, profile)
+
+    if len(queries) == 1:
+        per_query_k = profile.top_k
+    else:
+        per_query_k = max(profile.top_k // len(queries) + 2, _MIN_SUBQUERY_K)
+
     seen: set[tuple[str, int, int]] = set()
     results: list[dict] = []
-    for entry in _effective_module_map(state).values():
-        exports = ", ".join(entry.get("exports", []))
-        query_text = f"{entry['purpose']}. Exports: {exports}" if exports else entry["purpose"]
+    for query_text in queries:
         embedding = embedder.embed_query(query_text)
-        result = store.query(name, embedding, top_k=PER_MODULE_TOP_K)
+        result = store.query(name, embedding, top_k=per_query_k, where=where)
         for doc, meta in zip(result["documents"][0], result["metadatas"][0]):
             key = (meta["file"], meta["start_line"], meta["end_line"])
             if key in seen:
                 continue
             seen.add(key)
             results.append(_flatten_chunk(doc, meta))
-    return _drop_redundant_class_chunks(results[:TOP_K])
+
+    chunks = results[:profile.top_k]
+    if profile.drop_redundant_classes:
+        chunks = _drop_redundant_class_chunks(chunks)
+    return chunks
+
+
+def _retrieve_chunks_per_module(
+    state: OnboardState, profile: RetrievalProfile
+) -> list[dict]:
+    name = _collection_name(state)
+    where = _role_where(profile)
+    seen: set[tuple[str, int, int]] = set()
+    results: list[dict] = []
+    for entry in _effective_module_map(state).values():
+        exports = ", ".join(entry.get("exports", []))
+        query_text = f"{entry['purpose']}. Exports: {exports}" if exports else entry["purpose"]
+        embedding = embedder.embed_query(query_text)
+        result = store.query(name, embedding, top_k=profile.per_module_top_k, where=where)
+        for doc, meta in zip(result["documents"][0], result["metadatas"][0]):
+            key = (meta["file"], meta["start_line"], meta["end_line"])
+            if key in seen:
+                continue
+            seen.add(key)
+            results.append(_flatten_chunk(doc, meta))
+
+    chunks = results[:profile.top_k]
+    if profile.drop_redundant_classes:
+        chunks = _drop_redundant_class_chunks(chunks)
+    return chunks
 
 
 def _retrieve_chunks(state: OnboardState) -> list[dict]:
-    if state.goal["goal_type"] == "understand_system":
-        return _retrieve_chunks_per_module(state)
-    return _retrieve_chunks_focused(state)
+    profile = get_profile(state.goal["goal_type"])
+    if profile.retrieval_strategy == "per_module":
+        return _retrieve_chunks_per_module(state, profile)
+    return _retrieve_chunks_focused(state, profile)
 
 
 def _parse_output(raw: str) -> MentorOutput:
