@@ -192,6 +192,24 @@ _PROMPT_BUILDERS: dict[str, Callable[[dict, dict, list[dict]], str]] = {
 }
 
 
+def _effective_module_map(state: OnboardState) -> dict:
+    """Module map narrowed to the Prioritization Agent's relevant set, if any.
+
+    When the Prioritization Agent ran, ``state.relevant_modules`` holds the
+    module names worth reading for the goal; restricting retrieval and the
+    prompt to those keeps the Sonnet call focused and cheaper. When it did
+    not run (or filtering produced nothing usable), fall back to the full map.
+    """
+    if not state.relevant_modules:
+        return state.module_map
+    filtered = {
+        name: entry
+        for name, entry in state.module_map.items()
+        if name in state.relevant_modules
+    }
+    return filtered or state.module_map
+
+
 def _collection_name(state: OnboardState) -> str:
     owner, repo = parse_repo_url(state.repo_url)
     commit_sha = get_commit_sha(state.repo_path)
@@ -279,7 +297,7 @@ def _retrieve_chunks_per_module(state: OnboardState) -> list[dict]:
     name = _collection_name(state)
     seen: set[tuple[str, int, int]] = set()
     results: list[dict] = []
-    for entry in state.module_map.values():
+    for entry in _effective_module_map(state).values():
         exports = ", ".join(entry.get("exports", []))
         query_text = f"{entry['purpose']}. Exports: {exports}" if exports else entry["purpose"]
         embedding = embedder.embed_query(query_text)
@@ -345,7 +363,7 @@ def run(
         return state
 
     builder = _PROMPT_BUILDERS[goal_type]
-    user_content = builder(state.goal, state.module_map, chunks)
+    user_content = builder(state.goal, _effective_module_map(state), chunks)
 
     try:
         response = client.messages.create(

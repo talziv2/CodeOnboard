@@ -14,7 +14,7 @@ IMPORT_NODE_TYPES = {"import_statement", "import_from_statement"}
 # crowd out the real ones. Filtering at the chunker keeps the index lean.
 EXCLUDED_DIR_SEGMENTS = frozenset({
     "tests", "test", "__tests__",
-    "docs", "doc",
+    "docs", "doc", "docs_src",
     "examples", "example",
 })
 EXCLUDED_FILE_NAMES = frozenset({"conftest.py"})
