@@ -24,6 +24,8 @@ dependencies = [
     "einops>=0.8.0",
     # Vector store
     "chromadb>=1.5.9",
+    # Pipeline orchestration (graph-based, replaces plain runner.py chain)
+    "langgraph>=0.2.0",
 ]
 
 [dependency-groups]
