@@ -16,11 +16,16 @@ from langgraph.graph import END, START, StateGraph
 from backend.pipeline.state import OnboardState
 
 
-def _new_errors(prev: list, current: list) -> list:
-    # Agents mutate state.errors in place by appending. The errors field has an
-    # operator.add reducer, so we must return ONLY the newly-appended items —
-    # returning the full list would cause the reducer to duplicate prior errors.
-    return current[len(prev):]
+def _extract_new_errors(state: OnboardState, prev: list) -> list:
+    # Agents mutate state.errors in place by appending. Because LangGraph
+    # tracks the same list reference, those appends are already visible in
+    # the reducer's "current" value. If we also returned the new items, the
+    # operator.add reducer would double-count them. So we (a) compute the
+    # diff, then (b) roll state.errors back to its pre-node value, leaving
+    # the reducer as the sole accumulator.
+    new_errors = state.errors[len(prev):]
+    state.errors[:] = prev
+    return new_errors
 
 
 def code_structure_node(state: OnboardState) -> dict:
@@ -35,7 +40,7 @@ def code_structure_node(state: OnboardState) -> dict:
         "repo_path": state.repo_path,
         "module_map": state.module_map,
         "chunks_embedded": state.chunks_embedded,
-        "errors": _new_errors(prev_errors, state.errors),
+        "errors": _extract_new_errors(state, prev_errors),
     }
 
 
@@ -46,7 +51,7 @@ def prioritization_node(state: OnboardState) -> dict:
     runner.run_prioritization(state, client=state.client)
     return {
         "relevant_modules": state.relevant_modules,
-        "errors": _new_errors(prev_errors, state.errors),
+        "errors": _extract_new_errors(state, prev_errors),
     }
 
 
@@ -58,7 +63,7 @@ def mentor_node(state: OnboardState) -> dict:
     return {
         "learning_path": state.learning_path,
         "confidence": state.confidence,
-        "errors": _new_errors(prev_errors, state.errors),
+        "errors": _extract_new_errors(state, prev_errors),
     }
 
 

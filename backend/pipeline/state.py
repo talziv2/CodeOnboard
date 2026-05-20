@@ -1,9 +1,8 @@
 import operator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated
 
-if TYPE_CHECKING:
-    import anthropic
+import anthropic
 
 
 @dataclass
@@ -23,4 +22,4 @@ class OnboardState:
     # Carried through the graph so nodes can reach the Anthropic client.
     # LangGraph nodes receive only the state, so extra args like `client=`
     # can't be passed positionally — they ride along here instead.
-    client: "anthropic.Anthropic | None" = field(default=None, repr=False, compare=False)
+    client: anthropic.Anthropic | None = field(default=None, repr=False, compare=False)
