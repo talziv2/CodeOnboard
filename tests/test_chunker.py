@@ -36,6 +36,15 @@ def test_classify_role_docs_and_examples():
     assert classify_role(Path("example/demo.py")) == "example"
 
 
+def test_classify_role_tooling():
+    # scripts/ holds dev tooling (build, deploy, docs generation) that should
+    # not compete with library source in retrieval. Tagged `tooling` so no
+    # profile picks it up.
+    assert classify_role(Path("scripts/docs.py")) == "tooling"
+    assert classify_role(Path("scripts/deploy_docs_status.py")) == "tooling"
+    assert classify_role(Path("scripts/contributors.py")) == "tooling"
+
+
 def test_classify_role_source():
     assert classify_role(Path("src/foo.py")) == "source"
     assert classify_role(Path("src/pkg/util.py")) == "source"

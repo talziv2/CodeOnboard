@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 from backend.pipeline.state import OnboardState
 from backend.agents.mentor import run
 from backend.agents.mentor.agent import (
+    RRF_K,
     _PROMPT_BUILDERS,
     _build_contribute_code_prompt,
     _build_debug_issue_prompt,
@@ -18,6 +19,8 @@ from backend.agents.mentor.agent import (
     _find_duplicate_anchors,
     _parse_output,
     _retrieve_chunks,
+    _rrf_fuse,
+    _select_with_file_cap,
 )
 from backend.agents.mentor.agent import MentorOutput
 
@@ -271,16 +274,26 @@ def test_retrieve_chunks_debug_issue_decomposes_into_subqueries(mock_sha, mock_e
 @patch("backend.agents.mentor.agent.store.query", return_value=FAKE_CHROMA_RESULT)
 @patch("backend.agents.mentor.agent.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
 @patch("backend.agents.mentor.agent.get_commit_sha", return_value=FAKE_COMMIT_SHA)
-def test_retrieve_chunks_filters_by_profile_roles(mock_sha, mock_embed, mock_query):
-    # understand_component retrieves source only; debug_issue also retrieves tests.
-    _retrieve_chunks(_make_state())  # understand_component
+def test_retrieve_chunks_focused_queries_each_pool_separately(mock_sha, mock_embed, mock_query):
+    # The focused strategy now queries each role independently so RRF can fuse
+    # by rank rather than letting larger pools dominate. understand_component
+    # has one pool {source} and one sub-query → 1 call with where={"role":
+    # "source"}. debug_issue has pools {source, test} and 3 sub-queries → 6
+    # calls, one per (sub_query, role).
+    _retrieve_chunks(_make_state())  # understand_component, 1 sub-query
+    assert mock_query.call_count == 1
     component_where = mock_query.call_args.kwargs["where"]
-    assert component_where == {"role": {"$in": ["source"]}}
+    assert component_where == {"role": "source"}
 
     mock_query.reset_mock()
     _retrieve_chunks(_make_state(goal=FAKE_GOAL_DEBUG_ISSUE))
-    debug_where = mock_query.call_args.kwargs["where"]
-    assert debug_where == {"role": {"$in": ["source", "test"]}}
+    assert mock_query.call_count == 6  # 3 sub-queries × 2 roles
+    wheres = [call.kwargs["where"] for call in mock_query.call_args_list]
+    assert {"role": "source"} in wheres
+    assert {"role": "test"} in wheres
+    # Each role should appear exactly once per sub-query.
+    assert sum(1 for w in wheres if w == {"role": "source"}) == 3
+    assert sum(1 for w in wheres if w == {"role": "test"}) == 3
 
 
 def test_build_retrieval_query_falls_back_when_optional_fields_missing():
@@ -330,6 +343,87 @@ def test_retrieve_chunks_uses_correct_collection_name(mock_sha, mock_embed, mock
     assert "psf" in call_collection_name
     assert "requests" in call_collection_name
     assert FAKE_COMMIT_SHA[:12] in call_collection_name
+
+
+# ── RRF fusion + diversity cap ────────────────────────────────────────────────
+
+def _chunk(file: str, start: int, end: int, name: str = "x", **extra) -> dict:
+    return {
+        "file": file, "start_line": start, "end_line": end,
+        "type": "function", "name": name, "content": f"def {name}: ...",
+        **extra,
+    }
+
+
+def test_rrf_fuse_orders_by_summed_inverse_rank():
+    # Two pools, each ranking a different chunk first. Both #1s should fuse
+    # ahead of chunks that appear only once or only at lower ranks.
+    a = _chunk("a.py", 1, 10, "A")
+    b = _chunk("b.py", 1, 10, "B")
+    c = _chunk("c.py", 1, 10, "C")
+    pool1 = [a, b, c]  # A:rank1, B:rank2, C:rank3
+    pool2 = [c, a, b]  # C:rank1, A:rank2, B:rank3
+    fused = _rrf_fuse([pool1, pool2])
+    keys = [(ch["file"], ch["start_line"], ch["end_line"]) for ch in fused]
+    # A appears at rank 1 + rank 2 → highest combined score
+    # C appears at rank 3 + rank 1 → ties A on rank positions (1+2 vs 1+3)?
+    # Actually A: 1/(60+1) + 1/(60+2) = 0.01639+0.01613 = 0.03252
+    #         C: 1/(60+3) + 1/(60+1) = 0.01587+0.01639 = 0.03226
+    #         B: 1/(60+2) + 1/(60+3) = 0.01613+0.01587 = 0.03200
+    # So order should be A, C, B.
+    assert keys == [("a.py", 1, 10), ("c.py", 1, 10), ("b.py", 1, 10)]
+
+
+def test_rrf_fuse_dedupes_same_chunk_across_pools():
+    a = _chunk("a.py", 1, 10, "A")
+    fused = _rrf_fuse([[a], [a]])
+    assert len(fused) == 1
+    assert fused[0]["file"] == "a.py"
+
+
+def test_rrf_fuse_handles_empty_pools():
+    a = _chunk("a.py", 1, 10, "A")
+    fused = _rrf_fuse([[a], []])
+    assert len(fused) == 1
+    assert fused[0]["file"] == "a.py"
+
+
+def test_rrf_fuse_empty_returns_empty():
+    assert _rrf_fuse([]) == []
+    assert _rrf_fuse([[], []]) == []
+
+
+def test_rrf_k_constant_is_the_standard_value():
+    # 60 is the canonical RRF constant from Cormack et al. 2009. The test
+    # exists to make any change to this number deliberate, not accidental.
+    assert RRF_K == 60
+
+
+def test_select_with_file_cap_limits_per_file():
+    # Five chunks from the same big file, two from another. With max_per_file=2
+    # the selection should take 2 from the big file, then continue with the
+    # other file.
+    big = [_chunk("big.py", i * 10, i * 10 + 5, f"f{i}") for i in range(5)]
+    other = [_chunk("other.py", 1, 5, "g1"), _chunk("other.py", 10, 15, "g2")]
+    selected = _select_with_file_cap(big + other, top_k=10, max_per_file=2)
+    big_count = sum(1 for c in selected if c["file"] == "big.py")
+    other_count = sum(1 for c in selected if c["file"] == "other.py")
+    assert big_count == 2
+    assert other_count == 2
+
+
+def test_select_with_file_cap_respects_top_k():
+    chunks = [_chunk(f"f{i}.py", 1, 10, f"x{i}") for i in range(10)]
+    selected = _select_with_file_cap(chunks, top_k=4, max_per_file=3)
+    assert len(selected) == 4
+
+
+def test_select_with_file_cap_preserves_input_order():
+    a = _chunk("a.py", 1, 10, "A")
+    b = _chunk("b.py", 1, 10, "B")
+    c = _chunk("c.py", 1, 10, "C")
+    selected = _select_with_file_cap([b, a, c], top_k=3, max_per_file=1)
+    assert [s["name"] for s in selected] == ["B", "A", "C"]
 
 
 # ── goal-type branching ───────────────────────────────────────────────────────

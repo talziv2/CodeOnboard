@@ -8,9 +8,11 @@ import chromadb
 CHROMA_DIR = Path("data/chroma")
 COMMIT_SHA_LEN = 12
 
-# Bumped when the chunk metadata schema changes so old collections (which
-# lack the new fields) are not reused. v2 added the per-chunk `role` field.
-SCHEMA_VERSION = "v2"
+# Bumped when chunk metadata or role tagging changes so old collections (which
+# embed the previous schema or wrong role assignments) are not reused.
+#   v2 — added the per-chunk `role` field.
+#   v3 — scripts/ moved from `source` to a new `tooling` role.
+SCHEMA_VERSION = "v3"
 
 
 @lru_cache(maxsize=1)

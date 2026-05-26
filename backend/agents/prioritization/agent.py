@@ -15,6 +15,7 @@
 # behaviour rather than breaking the pipeline.
 
 import json
+import math
 import os
 
 import anthropic
@@ -29,6 +30,12 @@ MAX_TOKENS = 1024
 # Below this many modules, filtering is not worth an LLM call — the Mentor
 # Agent can handle a handful of modules directly.
 MIN_MODULES_TO_PRIORITIZE = 6
+
+# Floor for preserve_breadth mode: a broad-tour goal should never end up with
+# fewer than this fraction of the original module map kept. If the LLM drops
+# below the floor, treat the result as over-aggressive and fall back to the
+# full map rather than ship a tour with most modules missing.
+PRESERVE_BREADTH_KEEP_RATIO = 0.7
 
 
 class PrioritizationOutput(BaseModel):
@@ -56,9 +63,12 @@ Rules:
 # spelled out to the model so it does not have to infer it from goal_type.
 _PRUNING_DIRECTIVE: dict[str, str] = {
     "preserve_breadth": (
-        "Pruning instruction: the developer wants a broad tour. Keep the major "
-        "modules and only drop clearly peripheral ones (tests, examples, build "
-        "tooling)."
+        "Pruning instruction: the developer wants a BROAD tour. Keep at least "
+        "70% of the modules — drop ONLY obviously peripheral ones (CLI entry "
+        "points, build/tooling utilities, optional features, modules unrelated "
+        "to the main library surface). Helper modules, parameter handling, "
+        "encoders, response builders, and exception machinery are all part of "
+        "the tour and must be kept. When in doubt, KEEP the module."
     ),
     "prune": (
         "Pruning instruction: the developer has a focused goal. Prune "
@@ -148,6 +158,19 @@ def run(
     # full map unchanged.
     if not relevant or len(relevant) == len(state.module_map):
         return state
+
+    # Safety floor for preserve_breadth: a broad-tour goal should keep most of
+    # the map. The directive in the prompt asks for this, but Haiku sometimes
+    # still over-prunes, so enforce it here too.
+    if profile.prioritization_mode == "preserve_breadth":
+        floor = math.ceil(len(state.module_map) * PRESERVE_BREADTH_KEEP_RATIO)
+        if len(relevant) < floor:
+            state.errors.append(
+                f"prioritization_agent: preserve_breadth floor not met "
+                f"(kept {len(relevant)} of {len(state.module_map)}, "
+                f"floor {floor}) — falling back to full map"
+            )
+            return state
 
     state.relevant_modules = relevant
     return state
