@@ -12,6 +12,7 @@
 
 import json
 import os
+from collections import Counter
 from typing import Callable, Literal
 
 import anthropic
@@ -26,10 +27,11 @@ from backend.rag.cloner import get_commit_sha, parse_repo_url
 MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 4096
 
-# When a goal is decomposed into N sub-queries, each sub-query over-fetches a
-# little past its fair share of the budget so dedup losses still leave enough
-# to fill top_k.
-_MIN_SUBQUERY_K = 4
+# Reciprocal Rank Fusion constant. 60 is the value used in the original RRF
+# paper (Cormack et al., 2009); the choice is conventional, not tuned per repo.
+# Larger k flattens the rank-position weighting (everyone's vote counts more
+# equally); smaller k makes top ranks dominate. 60 is the well-tested middle.
+RRF_K = 60
 
 
 class LearningPathStep(BaseModel):
@@ -69,6 +71,64 @@ def _find_duplicate_anchors(
     return duplicates
 
 
+def _normalize_path(p: str) -> str:
+    """Fold Windows backslashes to forward slashes for cross-run comparison."""
+    return p.replace("\\", "/")
+
+
+def _ground_anchors(
+    output: MentorOutput, chunks: list[dict]
+) -> list[tuple[str, tuple[int, int]]]:
+    """Match every step anchor against a retrieved chunk; auto-correct prefix
+    stripping; return any anchors that still cannot be grounded.
+
+    Two kinds of grounding pass:
+      1. Exact:  (normalized step.file, start, end) is a known chunk anchor.
+      2. Suffix: line range matches a chunk's range and the step's file is a
+                 path-suffix of the chunk's file (e.g. step said ``params.py``,
+                 chunk says ``fastapi/params.py``). Treated as the LLM dropping
+                 the package prefix; auto-corrected by rewriting step.file.
+
+    Anything that doesn't ground under either rule is returned to the caller
+    so it can drive a corrective retry.
+    """
+    # Map normalized chunk paths to their canonical form, and build an index
+    # from line range → list of chunk files sharing it.
+    chunk_files_by_range: dict[tuple[int, int], list[str]] = {}
+    valid_keys: set[tuple[str, int, int]] = set()
+    for c in chunks:
+        cf = _normalize_path(c["file"])
+        valid_keys.add((cf, c["start_line"], c["end_line"]))
+        chunk_files_by_range.setdefault(
+            (c["start_line"], c["end_line"]), []
+        ).append(cf)
+
+    invalid: list[tuple[str, tuple[int, int]]] = []
+    for step in output.steps:
+        sf = _normalize_path(step.file)
+        start, end = step.line_range
+
+        if (sf, start, end) in valid_keys:
+            step.file = sf  # canonicalize separators
+            continue
+
+        # Suffix match: tolerate dropped package prefix when the line range
+        # matches a real chunk uniquely. ``sf`` may equal the chunk file
+        # exactly, or be a trailing component of it ("/params.py").
+        candidates = [
+            cf
+            for cf in chunk_files_by_range.get((start, end), [])
+            if cf == sf or cf.endswith("/" + sf) or sf.endswith("/" + cf)
+        ]
+        if len(candidates) == 1:
+            step.file = candidates[0]
+            continue
+
+        invalid.append((step.file, (start, end)))
+
+    return invalid
+
+
 _SYSTEM_PROMPT = """\
 You are a mentor guiding a developer through an unfamiliar Python codebase.
 
@@ -88,6 +148,15 @@ Each step is an object with exactly these keys:
 
 Rules:
 - Use only files that appear in the retrieved chunks. Never invent file paths.
+- Copy file paths VERBATIM from the retrieved chunk metadata, including any
+  package prefix (e.g. "fastapi/params.py", not just "params.py").
+- Copy line_range VERBATIM from the retrieved chunk's start_line/end_line —
+  do NOT pick round numbers or guess ranges.
+- Source code is the implementation truth. Tests and examples are supporting
+  behavioral evidence — anchor steps on source whenever both source and a
+  test/example chunk can answer a step. Cite a test or example only when it
+  reproduces the exact failure mode, shows a concrete usage idiom, or
+  illustrates the extension surface the user must touch.
 - 5–8 steps total. Order matters: each step builds on the previous one.
 - Prefer the narrowest chunk that answers the step. When both an enclosing
   class and one of its methods are retrieved, anchor on the method's
@@ -312,38 +381,105 @@ def _build_retrieval_queries(goal: dict, profile: RetrievalProfile) -> list[str]
 
 
 def _role_where(profile: RetrievalProfile) -> dict:
-    """ChromaDB metadata filter restricting retrieval to the profile's roles."""
+    """ChromaDB metadata filter for all of the profile's roles in one query.
+
+    Used by the per_module strategy, which is single-pool for every current
+    goal. The focused strategy queries each role independently — see
+    _retrieve_chunks_focused.
+    """
     return {"role": {"$in": sorted(profile.retrieval_roles)}}
+
+
+def _single_role_where(role: str) -> dict:
+    """ChromaDB metadata filter for one role pool."""
+    return {"role": role}
+
+
+def _rrf_fuse(ranked_lists: list[list[dict]], k: int = RRF_K) -> list[dict]:
+    """Reciprocal Rank Fusion.
+
+    Each ranked list votes for its chunks with weight ``1 / (k + rank)``,
+    where ``rank`` is the chunk's 1-indexed position in that list. Scores
+    accumulate across lists; the final ordering is by total score, highest
+    first. Because votes are based on rank position rather than raw
+    similarity scores, a large pool cannot drown out a small one — a chunk
+    that ranks #1 in its pool weighs the same as #1 in any other pool,
+    regardless of how many candidates each pool contributed.
+
+    Chunks are keyed by (file, start_line, end_line) so the same chunk
+    appearing in multiple lists is fused, not duplicated.
+    """
+    scores: dict[tuple[str, int, int], float] = {}
+    chunks_by_key: dict[tuple[str, int, int], dict] = {}
+    for ranked in ranked_lists:
+        for rank, chunk in enumerate(ranked, start=1):
+            key = (chunk["file"], chunk["start_line"], chunk["end_line"])
+            scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank)
+            chunks_by_key.setdefault(key, chunk)
+    sorted_keys = sorted(scores, key=lambda k: scores[k], reverse=True)
+    return [chunks_by_key[key] for key in sorted_keys]
+
+
+def _select_with_file_cap(
+    chunks: list[dict], top_k: int, max_per_file: int
+) -> list[dict]:
+    """Greedy select up to ``top_k`` chunks, capping any single file at
+    ``max_per_file`` contributions.
+
+    Prevents one large file (a 5,000-line ``routing.py``) from monopolising
+    the final selection just because many of its methods score well.
+    """
+    counts: Counter = Counter()
+    selected: list[dict] = []
+    for chunk in chunks:
+        f = chunk["file"]
+        if counts[f] >= max_per_file:
+            continue
+        selected.append(chunk)
+        counts[f] += 1
+        if len(selected) >= top_k:
+            break
+    return selected
 
 
 def _retrieve_chunks_focused(
     state: OnboardState, profile: RetrievalProfile
 ) -> list[dict]:
+    """Three-layer retrieval: per-pool candidates → RRF fusion → diversity cap.
+
+    Layer 1: goal-aware pool selection. profile.retrieval_roles is the
+             pedagogical whitelist of evidence sources the goal cares about.
+    Layer 2: each (sub_query, role) pair runs its own ChromaDB query and
+             returns up to per_pool_k candidates; the resulting ranked lists
+             are fused by RRF so pool-size imbalance cannot dominate.
+    Layer 3: a per-file diversity cap stops any single file from flooding
+             the final budget, then drop_redundant_classes removes class
+             chunks whose methods are already in the selection.
+    """
     name = _collection_name(state)
-    where = _role_where(profile)
     queries = _build_retrieval_queries(state.goal, profile)
+    roles = sorted(profile.retrieval_roles)
 
-    if len(queries) == 1:
-        per_query_k = profile.top_k
-    else:
-        per_query_k = max(profile.top_k // len(queries) + 2, _MIN_SUBQUERY_K)
-
-    seen: set[tuple[str, int, int]] = set()
-    results: list[dict] = []
+    ranked_lists: list[list[dict]] = []
     for query_text in queries:
         embedding = embedder.embed_query(query_text)
-        result = store.query(name, embedding, top_k=per_query_k, where=where)
-        for doc, meta in zip(result["documents"][0], result["metadatas"][0]):
-            key = (meta["file"], meta["start_line"], meta["end_line"])
-            if key in seen:
-                continue
-            seen.add(key)
-            results.append(_flatten_chunk(doc, meta))
+        for role in roles:
+            where = _single_role_where(role)
+            result = store.query(
+                name, embedding, top_k=profile.per_pool_k, where=where
+            )
+            docs = result["documents"][0]
+            metas = result["metadatas"][0]
+            ranked_lists.append(
+                [_flatten_chunk(d, m) for d, m in zip(docs, metas)]
+            )
 
-    chunks = results[:profile.top_k]
+    fused = _rrf_fuse(ranked_lists)
+    selected = _select_with_file_cap(fused, profile.top_k, profile.max_per_file)
+
     if profile.drop_redundant_classes:
-        chunks = _drop_redundant_class_chunks(chunks)
-    return chunks
+        selected = _drop_redundant_class_chunks(selected)
+    return selected
 
 
 def _retrieve_chunks_per_module(
@@ -446,10 +582,27 @@ def run(
             )
             if retry_output is not None and not _find_duplicate_anchors(retry_output):
                 output = retry_output
+                raw = retry_raw
             else:
                 state.errors.append(
                     f"mentor_agent: duplicate anchors persisted after retry: "
                     f"{[f'{f}:{r[0]}-{r[1]}' for f, r in duplicates]}"
+                )
+
+        # Ground every step anchor against the retrieved chunks. _ground_anchors
+        # silently fixes prefix-stripped paths; anything still unmatched goes
+        # through a corrective retry so the model can pick real chunks.
+        invalid = _ground_anchors(output, chunks)
+        if invalid:
+            retry_raw, retry_output = _retry_grounded_anchors(
+                client, user_content, raw, invalid, chunks
+            )
+            if retry_output is not None and not _ground_anchors(retry_output, chunks):
+                output = retry_output
+            else:
+                state.errors.append(
+                    f"mentor_agent: ungrounded anchors persisted after retry: "
+                    f"{[f'{f}:{r[0]}-{r[1]}' for f, r in invalid]}"
                 )
 
         state.learning_path = [step.model_dump() for step in output.steps]
@@ -479,6 +632,58 @@ def _retry_distinct_anchors(
         f"to anchor on a DISTINCT chunk. Regenerate the JSON object with "
         f"distinct (file, line_range) pairs for every step. Return ONLY "
         f"the JSON object."
+    )
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=MAX_TOKENS,
+        system=_SYSTEM_PROMPT,
+        messages=[
+            {"role": "user", "content": user_content},
+            {"role": "assistant", "content": previous_raw},
+            {"role": "user", "content": correction},
+        ],
+    )
+    raw = response.content[0].text
+    try:
+        return raw, _parse_output(raw)
+    except Exception:
+        return raw, None
+
+
+def _format_anchor_inventory(chunks: list[dict]) -> str:
+    """Compact list of (file, line_range) anchors the LLM is allowed to use."""
+    lines = []
+    for c in chunks:
+        lines.append(
+            f"  - {_normalize_path(c['file'])} lines {c['start_line']}-{c['end_line']}"
+        )
+    return "\n".join(lines)
+
+
+def _retry_grounded_anchors(
+    client: anthropic.Anthropic,
+    user_content: str,
+    previous_raw: str,
+    invalid: list[tuple[str, tuple[int, int]]],
+    chunks: list[dict],
+) -> tuple[str, MentorOutput | None]:
+    """Ask the LLM to regenerate using anchors that come from real chunks.
+
+    Returns ``(raw_text, parsed_output)``. ``parsed_output`` is ``None`` if
+    the retry response failed to parse — callers should keep the original
+    output in that case.
+    """
+    bad = ", ".join(f"{f} lines {r[0]}-{r[1]}" for f, r in invalid)
+    inventory = _format_anchor_inventory(chunks)
+    correction = (
+        f"Your previous response used these (file, line_range) anchors that "
+        f"are NOT in the retrieved chunks: {bad}. Every step must anchor on "
+        f"a real retrieved chunk — both the file path (copied verbatim, "
+        f"including the package prefix) and the line range (copied verbatim "
+        f"from the chunk metadata, not rounded or invented).\n\n"
+        f"The complete set of allowed anchors is:\n{inventory}\n\n"
+        f"Regenerate the JSON object using only anchors from that list. "
+        f"Return ONLY the JSON object."
     )
     response = client.messages.create(
         model=MODEL,

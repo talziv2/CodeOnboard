@@ -10,11 +10,15 @@ IMPORT_NODE_TYPES = {"import_statement", "import_from_statement"}
 
 # Every Python file is indexed; each chunk carries a `role` so retrieval can
 # filter by it. Tour-style goals (understand_system) stay source-only, while
-# debug_issue / contribute_code also retrieve test chunks as evidence.
+# debug_issue / contribute_code also retrieve test (and example) chunks as
+# evidence. `tooling` is indexed but no current profile retrieves it — the
+# bucket exists so dev-tooling scripts (build, deploy, docs generation) do
+# not masquerade as library source.
 ROLE_DIR_SEGMENTS: dict[str, frozenset[str]] = {
     "test": frozenset({"tests", "test", "__tests__"}),
     "doc": frozenset({"docs", "doc", "docs_src"}),
     "example": frozenset({"examples", "example"}),
+    "tooling": frozenset({"scripts"}),
 }
 TEST_FILE_NAMES = frozenset({"conftest.py"})
 

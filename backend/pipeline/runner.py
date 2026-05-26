@@ -1,13 +1,23 @@
-# Pipeline runner — sequential agent chain.
+# Pipeline runner — public entry point for the onboarding pipeline.
 #
-# Phase 1: plain Python function chain (no LangGraph). Each agent reads/writes
-# OnboardState; the runner short-circuits if the Code Structure Agent fails to
-# produce a module_map (without it, the Mentor Agent has nothing to ground on).
+# Phase 2: internals delegate to a LangGraph stateful graph (backend/pipeline/
+# graph.py). The function signature is unchanged from Phase 1 so api.py and
+# the existing tests keep working untouched.
+#
+# Note: run_code_structure / run_prioritization / run_mentor are re-imported
+# at module level so tests (and the graph nodes) can patch them at
+# backend.pipeline.runner.run_*.
 
 import anthropic
 
-from backend.agents import run_code_structure, run_mentor, run_prioritization
+from backend.agents import run_code_structure, run_mentor, run_prioritization  # re-exported  # noqa: F401
 from backend.pipeline.state import OnboardState
+
+# Compile the graph once at import. The graph itself imports this module
+# lazily (inside its node functions) to break the circular import.
+from backend.pipeline.graph import build_graph  # noqa: E402
+
+_graph = build_graph()
 
 
 def run_pipeline(
@@ -15,17 +25,11 @@ def run_pipeline(
     goal: dict,
     client: anthropic.Anthropic | None = None,
 ) -> OnboardState:
-    state = OnboardState(repo_url=repo_url, goal=goal)
-
-    run_code_structure(state, client=client)
-
-    if state.module_map is None:
-        return state
-
-    # Prioritization narrows the module map before the Mentor Agent runs.
-    # On failure it leaves relevant_modules None — the Mentor Agent then
-    # falls back to the full map, so this step never blocks the pipeline.
-    run_prioritization(state, client=client)
-
-    run_mentor(state, client=client)
-    return state
+    initial = OnboardState(repo_url=repo_url, goal=goal, client=client)
+    final = _graph.invoke(initial)
+    # LangGraph returns the compiled state. With a dataclass schema it's
+    # already an OnboardState in current versions; fall back to constructing
+    # one from a dict in case the runtime returns a mapping.
+    if isinstance(final, OnboardState):
+        return final
+    return OnboardState(**final)

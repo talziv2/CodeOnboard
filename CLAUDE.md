@@ -36,7 +36,8 @@ backend/
     mentor_agent.py         # goal + map + RAG → learning path
   pipeline/
     state.py                # OnboardState dataclass (shared state)
-    runner.py               # sequential chain: calls agents in order
+    graph.py                # LangGraph StateGraph: nodes, conditional edge, build_graph()
+    runner.py               # public entry point: run_pipeline() invokes the compiled graph
   rag/
     cloner.py               # git clone --depth 1
     chunker.py              # tree-sitter → code chunks with metadata
@@ -72,13 +73,15 @@ All agents read/write `OnboardState` (defined in `backend/pipeline/state.py`). N
 @dataclass
 class OnboardState:
     repo_url: str
-    goal: dict | None          # set by Goal Agent
-    repo_path: str             # set by Code Structure Agent
-    module_map: dict | None    # set by Code Structure Agent
-    chunks_embedded: bool      # set by Code Structure Agent
-    learning_path: list | None # set by Mentor Agent
-    confidence: str            # "high" / "medium" / "low"
-    errors: list
+    goal: dict | None                                # set by Goal Agent
+    repo_path: str                                   # set by Code Structure Agent
+    module_map: dict | None                          # set by Code Structure Agent
+    relevant_modules: list[str] | None               # set by Prioritization Agent
+    chunks_embedded: bool                            # set by Code Structure Agent
+    learning_path: list | None                       # set by Mentor Agent
+    confidence: str                                  # "high" / "medium" / "low"
+    errors: Annotated[list, operator.add]            # reducer: append, never replace
+    client: anthropic.Anthropic | None               # carried through the graph
 ```
 
 ---
@@ -166,7 +169,7 @@ GITHUB_TOKEN=        # optional, increases rate limit
 
 ## Design decisions
 
-- **No LangGraph in Phase 1.** Plain Python function chain in `runner.py`. Migrate to LangGraph in Phase 2 when conditional branching is actually needed.
+- **LangGraph orchestration (Phase 2).** `runner.py` keeps its public `run_pipeline(repo_url, goal, client)` signature but delegates to a compiled `StateGraph` in `backend/pipeline/graph.py`. Three nodes: `code_structure` → (conditional) → `prioritization` → `mentor`. The conditional edge short-circuits to END when `module_map` is missing. `OnboardState.errors` uses an `operator.add` reducer so future parallel nodes (e.g. Documentation Agent) can append safely. The Anthropic client rides on `OnboardState.client` because LangGraph nodes only receive state — no extra args.
 - **No MCP in Phase 1.** Agents call ChromaDB directly. Add MCP when 4+ agents share tools.
 - **Goal Agent runs first, always.** Its output JSON is the single source of truth for all downstream agents.
 - **Mentor Agent is the only Sonnet call.** Everything upstream uses Haiku.

@@ -92,10 +92,16 @@ Layer 5 — LLM (Anthropic API)
 - Runs before Mentor Agent, hands it a filtered map
 - Side effect: reduces Sonnet input token count → saves budget + improves output quality
 
-### LangGraph migration
-- Replace `runner.py` with a LangGraph stateful graph
-- Enables: conditional routing (e.g. skip Documentation Agent if repo has no README), retries on failure, parallel execution of Code Structure + Documentation agents
-- Keep `runner.py` working; migrate incrementally with tests
+### LangGraph migration ✅ done
+- `backend/pipeline/runner.py` keeps its public signature; internals delegate
+  to a compiled LangGraph (`backend/pipeline/graph.py`)
+- Three nodes: `code_structure` → (conditional) → `prioritization` → `mentor`
+- Conditional edge after `code_structure` routes to END when no `module_map`
+  (preserves the Phase 1 short-circuit)
+- `OnboardState.errors` uses an `operator.add` reducer so parallel nodes can
+  append safely (unblocks the Documentation Agent below)
+- Existing `tests/test_runner.py` passes unchanged; new `tests/test_graph.py`
+  covers routing, mocked invocation, and the errors-reducer behaviour
 
 ### Confidence indicator
 - Surface to user: "Good README + inline docs (high)" vs "sparse comments only (medium)"
