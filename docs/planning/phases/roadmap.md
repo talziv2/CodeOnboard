@@ -14,7 +14,7 @@ User
   ▼
 Layer 1 — UI (Next.js)
   Goal dialogue, learning path display,
-  audio player + video player (Phase 3)
+  audio player + video player (Phase 4)
   │
   │ REST API
   ▼
@@ -50,10 +50,13 @@ Layer 5 — LLM (Anthropic API)
 |---|---|---|---|
 | Goal Agent | 1 | Dialogue → structured goal JSON | Haiku |
 | Code Structure Agent | 1 | Clone + parse → module map + RAG store | Haiku |
-| Mentor Agent | 1 | Goal + map + RAG → learning path | Sonnet |
-| Documentation Agent | 2 | Extract README/docstrings, enrich steps | Haiku |
+| Mentor Agent | 1–2 | Goal + map + RAG → learning path (retired in Phase 3) | Sonnet |
+| Documentation Agent | 2 | Extract README/docstrings, enrich steps / feed Teaching Agent | Haiku |
 | Prioritization Agent | 2 | Filter irrelevant modules for the goal | Haiku |
-| Multimedia Agent | 3 | Learning path text → TTS audio + video | External APIs |
+| Planner Agent | 3 | Owns the learning graph; generates and mutates it from goal + signals | TBD |
+| Teaching Agent | 3 | Expands a learning node into an actual lesson (walkthrough, examples, prompts) | TBD |
+| Grader Agent | 3 | Classifies user responses (understood / partial / confused / off-topic) | Haiku |
+| Multimedia Agent | 4 | Learning path text → TTS audio + video | External APIs |
 
 ---
 
@@ -114,9 +117,76 @@ Layer 5 — LLM (Anthropic API)
 
 ---
 
-## Phase 3 — Multimedia
+## Phase 3 — Interactive learning graph
 
 **Prerequisite:** Phase 2 done
+
+This phase shifts the system from a static 5–8 step path to an **interactive, adaptive learning session**. The current Mentor Agent is retired and its responsibilities split across three new roles. The goal feel is *tutor*, not *documentation tour*.
+
+The product centerpiece is the **user's understanding graph**: a persistent, repo-anchored map of what *this* user understands about *this* codebase. The Planner's internal learning graph and the user's understanding graph are the same object — the graph is surfaced to the user as the centerpiece artifact, not hidden inside the agent. This is the project's X-factor.
+
+### Conceptual shift: lesson brief ≠ lesson
+- The step JSON (title / file / line_range / why / understand / concepts) becomes the **lesson brief** — a planning artifact and a node in the learning graph.
+- A separate Teaching Agent expands the brief into the actual lesson at delivery time, conditioned on session state.
+- The same brief can be delivered as a high-level tour, a deep walkthrough, a simplified recap, or a prerequisite-first detour.
+
+### The learning graph
+- Initial graph generated from goal + prioritized module map.
+- Mutates during the session: nodes added (prerequisites, deeper sub-topics), removed (skipped areas), reordered, or split into finer sub-nodes.
+- Session state persists: visited nodes, demonstrated understanding, weak areas, skipped areas, requested depth level, learning preferences.
+
+### Three new roles
+- **Planner Agent** — owns the graph; decides what to teach next based on session state and signals.
+- **Teaching Agent** — turns a node into an actual lesson (walkthrough, explanation, examples, architectural context, simplified explanations, active-learning prompts, "what to pay attention to," connections to prior concepts).
+- **Grader Agent** — classifies user responses to active-learning prompts: understood / partial / confused / off-topic.
+
+### The user's understanding graph (centerpiece artifact)
+
+Same data structure as the Planner's learning graph — but persisted across sessions and surfaced to the user as the product's centerpiece.
+
+**Node fields (MVP):**
+- code anchor (file + line range)
+- concept tags
+- understanding state: `not-yet` / `partial` / `understood` (driven by Grader)
+- coverage flag (visited / not)
+- weak-spot flag (Grader marked the user as `confused` here)
+- optional self-confidence (user-reported)
+
+**Derived overlay:** one readiness gauge — `understood_count / goal_relevant_count`. Heuristic, not rigorous; communicates progress without overclaiming.
+
+**Behaviors:**
+- Persists per (user, repo) across sessions; users return to *their* graph.
+- User can override the model on the graph itself (mark understood / weak / skip).
+- On return, the system uses the graph to choose the resume point.
+
+**Deliberately *not* in v1:** team-shared graphs, multi-user collaboration, repo dependency overlays, exportable reports. Single local user, repo-anchored, that's it.
+
+### Signals the graph reacts to
+Explicit (user-driven): understood, partially understood, confused, wants deeper explanation, wants examples, wants to skip, wants implementation details, wants higher-level architecture first.
+Implicit (Grader-derived): understood / partial / confused / off-topic from free-text responses.
+
+### Deferred decisions (intentionally open until designed)
+- Specific active-learning prompt forms (predict-then-reveal / free-text recall / multiple-choice / find-this-function / something else).
+- Concrete agent prompts and graph mutation rules.
+- `OnboardState` extensions for session continuity.
+- API shape: per-step endpoint, session lifecycle, persistence.
+- Budget rethink: how the single-Sonnet rule changes when Mentor splits into three loop-driven roles.
+- Staging order — smallest first cut toward this vision.
+- Understanding-graph persistence layer (SQLite vs. JSON vs. something else) and identity model (anonymous local-only vs. login).
+- Graph UI library (`react-flow` / `cytoscape` / `vis-network`) and layout strategy.
+
+**Done when:**
+- A user can run an onboarding session that streams one lesson at a time, sends signals (got it / deeper / confused / skip / etc.), and the next lesson is conditioned on those signals.
+- Free-text responses are graded and the classification influences the next lesson.
+- The graph demonstrably mutates during a session on at least one target repo.
+- The user's understanding graph persists across sessions: closing the app and returning loads the same graph, in the same state, with the system able to suggest a sensible resume point.
+- The graph is visible to the user as the central UI artifact — not hidden inside the agent.
+
+---
+
+## Phase 4 — Multimedia
+
+**Prerequisite:** Phase 3 done
 
 ### Audio narration (TTS)
 - Each learning step text → ElevenLabs TTS API → MP3
@@ -137,9 +207,9 @@ Layer 5 — LLM (Anthropic API)
 
 ---
 
-## Phase 4 — VS Code extension
+## Phase 5 — VS Code extension
 
-**Prerequisite:** Phase 1–2 solid
+**Prerequisite:** Phase 1–3 solid
 
 ### What it does
 - Sidebar panel showing the current learning step
@@ -169,9 +239,9 @@ Layer 5 — LLM (Anthropic API)
 | Vector store | ChromaDB (local) | Free, no infra needed |
 | Code parser | tree-sitter | AST-based, language-aware |
 | UI | Next.js + Tailwind | |
-| TTS (Phase 3) | ElevenLabs | Free tier: 10k chars/month |
-| Video (Phase 3) | Puppeteer + ffmpeg | Free, self-hosted |
-| IDE (Phase 4) | VS Code Extension API | TypeScript |
+| TTS (Phase 4) | ElevenLabs | Free tier: 10k chars/month |
+| Video (Phase 4) | Puppeteer + ffmpeg | Free, self-hosted |
+| IDE (Phase 5) | VS Code Extension API | TypeScript |
 
 ---
 
@@ -179,7 +249,7 @@ Layer 5 — LLM (Anthropic API)
 
 1. Paste `https://github.com/psf/requests`, say "I want to understand how authentication works"
 2. System runs (~20–30 seconds), returns a 6-step learning path
-3. Each step: title, file link, line range, explanation, (Phase 2) docstring quote, (Phase 3) audio narration
+3. Each step: title, file link, line range, explanation, (Phase 2) docstring quote, (Phase 4) audio narration
 4. Repeat with `fastapi/fastapi` to show it scales
 5. (Stretch) Open VS Code, show extension highlighting the exact lines
 
@@ -191,6 +261,6 @@ Layer 5 — LLM (Anthropic API)
 |---|---|
 | tree-sitter setup complexity | Start Python only; add languages one at a time |
 | Large repos hit token limits | Limit Code Structure Agent to top-level files first; go deeper on retrieval |
-| Phase 3 video pipeline too complex | Ship TTS only if time is short |
+| Phase 4 video pipeline too complex | Ship TTS only if time is short |
 | LangGraph migration breaks Phase 1 | Keep runner.py working; migrate with tests |
-| ElevenLabs API changes (Phase 3) | Wrap behind thin adapter functions so swapping is one-file change |
+| ElevenLabs API changes (Phase 4) | Wrap behind thin adapter functions so swapping is one-file change |

@@ -2,7 +2,7 @@
 
 AI-powered codebase onboarding. User provides a GitHub repo URL + goal → system generates a personalized, ordered learning path with file and line references.
 
-This is a final-year CS project. Prefer working code over perfect architecture. Flag Phase 2/3 scope creep.
+This is a final-year CS project. Prefer working code over perfect architecture. Flag scope creep into later phases.
 
 ---
 
@@ -10,12 +10,13 @@ This is a final-year CS project. Prefer working code over perfect architecture. 
 
 Full end-to-end roadmap: `docs/planning/phases/roadmap.md`
 
-- **Phase 1 (current):** Goal Agent → Code Structure Agent → Mentor Agent → FastAPI → minimal Next.js UI → see `docs/planning/phases/phase1.md`
-- **Phase 2:** Documentation Agent, Prioritization Agent, LangGraph migration
-- **Phase 3:** TTS audio narration, code walkthrough video
-- **Phase 4 (stretch):** VS Code extension
+- **Phase 1:** Goal Agent → Code Structure Agent → Mentor Agent → FastAPI → minimal Next.js UI → see `docs/planning/phases/phase1.md`
+- **Phase 2 (current):** Documentation Agent, Prioritization Agent, LangGraph migration
+- **Phase 3:** Interactive learning graph — Mentor splits into Planner + Teaching + Grader; static path becomes an adaptive, stateful learning session
+- **Phase 4:** TTS audio narration, code walkthrough video
+- **Phase 5 (stretch):** VS Code extension
 
-Do not implement Phase 2+ features until Phase 1 works end-to-end on both target repos.
+Do not implement later-phase features until the current phase works end-to-end on both target repos.
 
 ---
 
@@ -173,4 +174,4 @@ GITHUB_TOKEN=        # optional, increases rate limit
 - **No MCP in Phase 1.** Agents call ChromaDB directly. Add MCP when 4+ agents share tools.
 - **Goal Agent runs first, always.** Its output JSON is the single source of truth for all downstream agents.
 - **Mentor Agent is the only Sonnet call.** Everything upstream uses Haiku.
-- **Progressive output** (future): generate one learning step at a time with user checkpoint, not full path upfront.
+- **Interactive learning graph (Phase 3, future).** The current Mentor Agent will retire; its responsibilities split across a Planner Agent (owns and mutates the learning graph), a Teaching Agent (expands a node into the actual lesson), and a Grader Agent (classifies user responses). The current step JSON becomes the *lesson brief*, not the lesson itself. The Planner's learning graph is also the **user's understanding graph** — the same object, persisted across sessions and surfaced to the user as the product's centerpiece artifact (this is the project's X-factor). See `docs/planning/phases/roadmap.md` for the full Phase 3 description and the deferred design decisions.
