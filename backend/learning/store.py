@@ -1,0 +1,261 @@
+# SQLite persistence for the learning graph.
+#
+# One file (data/sessions.db) with three tables: sessions, nodes, edges.
+# Standard-library sqlite3 only — no new dependency.
+#
+# Schema versioning: the sessions row carries `schema_version`. A mismatch
+# means the row was written by a different schema; load_graph treats it as
+# missing (returns None) rather than trying to migrate. Bump SCHEMA_VERSION
+# when the on-disk shape changes; old rows become invisible to the new code.
+#
+# Phase 3 Part 1 scope: single-user, repo URLs stored as-is. Multi-user
+# identity and URL normalization are deferred to Part 7 — they belong with
+# the resume flow that actually needs them.
+
+import json
+import sqlite3
+from contextlib import contextmanager
+from pathlib import Path
+
+from backend.learning.graph import (
+    CodeAnchor,
+    LearningEdge,
+    LearningGraph,
+    LearningNode,
+)
+
+
+SCHEMA_VERSION = 1
+DEFAULT_DB_PATH = Path("data/sessions.db")
+
+
+_CREATE_SESSIONS = """
+CREATE TABLE IF NOT EXISTS sessions (
+    session_id      TEXT PRIMARY KEY,
+    repo_url        TEXT NOT NULL,
+    goal_json       TEXT NOT NULL,
+    current_node_id TEXT,
+    schema_version  INTEGER NOT NULL,
+    created_at      TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+    updated_at      TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+)
+"""
+
+_CREATE_SESSIONS_INDEX = """
+CREATE INDEX IF NOT EXISTS idx_sessions_repo ON sessions (repo_url)
+"""
+
+_CREATE_NODES = """
+CREATE TABLE IF NOT EXISTS nodes (
+    node_id              TEXT NOT NULL,
+    session_id           TEXT NOT NULL,
+    title                TEXT NOT NULL,
+    file                 TEXT NOT NULL,
+    line_start           INTEGER NOT NULL,
+    line_end             INTEGER NOT NULL,
+    concept_tags_json    TEXT NOT NULL,
+    lesson_brief_json    TEXT NOT NULL,
+    understanding_state  TEXT NOT NULL,
+    visited              INTEGER NOT NULL,
+    weak_spot            INTEGER NOT NULL,
+    user_override        TEXT,
+    cached_lesson_json   TEXT,
+    PRIMARY KEY (node_id),
+    FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+)
+"""
+
+_CREATE_NODES_INDEX = """
+CREATE INDEX IF NOT EXISTS idx_nodes_session ON nodes (session_id)
+"""
+
+_CREATE_EDGES = """
+CREATE TABLE IF NOT EXISTS edges (
+    session_id   TEXT NOT NULL,
+    from_node_id TEXT NOT NULL,
+    to_node_id   TEXT NOT NULL,
+    kind         TEXT NOT NULL,
+    PRIMARY KEY (session_id, from_node_id, to_node_id, kind),
+    FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+)
+"""
+
+
+@contextmanager
+def _connect(db_path: Path):
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
+    with _connect(db_path) as conn:
+        conn.execute(_CREATE_SESSIONS)
+        conn.execute(_CREATE_SESSIONS_INDEX)
+        conn.execute(_CREATE_NODES)
+        conn.execute(_CREATE_NODES_INDEX)
+        conn.execute(_CREATE_EDGES)
+
+
+def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
+    init_db(db_path)
+    with _connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO sessions
+                (session_id, repo_url, goal_json, current_node_id, schema_version)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(session_id) DO UPDATE SET
+                repo_url        = excluded.repo_url,
+                goal_json       = excluded.goal_json,
+                current_node_id = excluded.current_node_id,
+                schema_version  = excluded.schema_version,
+                updated_at      = strftime('%Y-%m-%d %H:%M:%f', 'now')
+            """,
+            (
+                graph.session_id,
+                graph.repo_url,
+                json.dumps(graph.goal),
+                graph.current_node_id,
+                SCHEMA_VERSION,
+            ),
+        )
+        # Nodes and edges: replace wholesale rather than diff. Sessions are
+        # small (under a hundred nodes) and writes happen at human cadence
+        # (one per user action), so the simplicity wins over efficiency.
+        conn.execute("DELETE FROM nodes WHERE session_id = ?", (graph.session_id,))
+        conn.execute("DELETE FROM edges WHERE session_id = ?", (graph.session_id,))
+        conn.executemany(
+            """
+            INSERT INTO nodes (
+                node_id, session_id, title, file, line_start, line_end,
+                concept_tags_json, lesson_brief_json, understanding_state,
+                visited, weak_spot, user_override, cached_lesson_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [_node_row(graph.session_id, n) for n in graph.nodes.values()],
+        )
+        conn.executemany(
+            "INSERT INTO edges (session_id, from_node_id, to_node_id, kind) VALUES (?, ?, ?, ?)",
+            [(graph.session_id, e.from_node_id, e.to_node_id, e.kind) for e in graph.edges],
+        )
+
+
+def load_graph(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> LearningGraph | None:
+    if not db_path.exists():
+        return None
+    with _connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        session_row = conn.execute(
+            "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
+        ).fetchone()
+        if session_row is None:
+            return None
+        if session_row["schema_version"] != SCHEMA_VERSION:
+            # Different schema — treat as missing. No silent migration.
+            return None
+        graph = LearningGraph(
+            repo_url=session_row["repo_url"],
+            goal=json.loads(session_row["goal_json"]),
+            session_id=session_row["session_id"],
+            current_node_id=session_row["current_node_id"],
+        )
+        for node_row in conn.execute(
+            "SELECT * FROM nodes WHERE session_id = ?", (session_id,)
+        ):
+            graph.nodes[node_row["node_id"]] = _row_to_node(node_row)
+        for edge_row in conn.execute(
+            "SELECT * FROM edges WHERE session_id = ?", (session_id,)
+        ):
+            graph.edges.append(
+                LearningEdge(
+                    from_node_id=edge_row["from_node_id"],
+                    to_node_id=edge_row["to_node_id"],
+                    kind=edge_row["kind"],
+                )
+            )
+        return graph
+
+
+def list_sessions_for_repo(
+    repo_url: str,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> list[dict]:
+    # Lightweight summaries for the future resume UX (Part 7). Exact repo_url
+    # match for now — URL normalization is a Part 7 concern.
+    if not db_path.exists():
+        return []
+    with _connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT session_id, goal_json, current_node_id, created_at, updated_at
+            FROM sessions
+            WHERE repo_url = ? AND schema_version = ?
+            ORDER BY updated_at DESC
+            """,
+            (repo_url, SCHEMA_VERSION),
+        ).fetchall()
+        return [
+            {
+                "session_id": r["session_id"],
+                "goal": json.loads(r["goal_json"]),
+                "current_node_id": r["current_node_id"],
+                "created_at": r["created_at"],
+                "updated_at": r["updated_at"],
+            }
+            for r in rows
+        ]
+
+
+def delete_session(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> None:
+    if not db_path.exists():
+        return
+    with _connect(db_path) as conn:
+        conn.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
+
+
+def _node_row(session_id: str, node: LearningNode) -> tuple:
+    return (
+        node.id,
+        session_id,
+        node.title,
+        node.code_anchor.file,
+        node.code_anchor.line_start,
+        node.code_anchor.line_end,
+        json.dumps(node.concept_tags),
+        json.dumps(node.lesson_brief),
+        node.understanding_state,
+        1 if node.visited else 0,
+        1 if node.weak_spot else 0,
+        node.user_override,
+        json.dumps(node.cached_lesson) if node.cached_lesson is not None else None,
+    )
+
+
+def _row_to_node(row: sqlite3.Row) -> LearningNode:
+    return LearningNode(
+        id=row["node_id"],
+        title=row["title"],
+        code_anchor=CodeAnchor(
+            file=row["file"],
+            line_start=row["line_start"],
+            line_end=row["line_end"],
+        ),
+        concept_tags=json.loads(row["concept_tags_json"]),
+        lesson_brief=json.loads(row["lesson_brief_json"]),
+        understanding_state=row["understanding_state"],
+        visited=bool(row["visited"]),
+        weak_spot=bool(row["weak_spot"]),
+        user_override=row["user_override"],
+        cached_lesson=(
+            json.loads(row["cached_lesson_json"])
+            if row["cached_lesson_json"] is not None
+            else None
+        ),
+    )

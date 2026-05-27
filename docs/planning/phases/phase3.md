@@ -44,30 +44,31 @@ graph TB
 
 ---
 
-### Part 1 — Graph schema + persistence
+### Part 1 — Graph schema + persistence ✓ (done)
 
-Lock the data model before any agent code. Everything downstream reads and writes through this.
+Skeleton data model + persistence for future steps. No agent code yet; no user flow yet.
 
-**`backend/learning/graph.py`** — pure dataclasses, no LLM, no IO.
-- `LearningNode`: `id`, `title`, `code_anchor: {file, line_range}`, `concept_tags: list[str]`, `lesson_brief: dict` (the old step JSON: `why` / `understand` / `concepts`), `understanding_state: "not-yet" | "partial" | "understood"`, `visited: bool`, `weak_spot: bool`, `user_override: Optional[str]`.
-- `LearningGraph`: `nodes: dict[id, LearningNode]`, `edges: list[(from_id, to_id, kind)]` where `kind ∈ {"sequence", "prerequisite", "deeper"}`, `current_node_id: Optional[str]`, `repo_url`, `goal: GoalOutput`, `session_id`.
-- Derived: `readiness()` → `understood_count / goal_relevant_count`.
-- Pure functions only — mutation methods (`mark_visited`, `mark_understood`, `insert_prerequisite`) return new objects or mutate in place; pick one and stick with it.
+**`backend/learning/graph.py`** ✅ — pure dataclasses, no LLM, no IO.
+- `LearningNode`: `id` (auto-generated uuid4 hex), `title`, `code_anchor: CodeAnchor`, `concept_tags`, `lesson_brief`, `understanding_state` (`"not-yet" | "partial" | "understood"`), `visited`, `weak_spot` (sticky once set), `user_override`, `cached_lesson`.
+- `LearningGraph`: `session_id` (auto-generated), `repo_url`, `goal`, `nodes`, `edges`, `current_node_id`.
+- Edge kinds: `sequence` / `prerequisite` / `deeper`.
+- Mutation style: in-place (matches `OnboardState`). Methods: `add_node`, `add_edge`, `set_current`, `mark_visited`, `mark_understanding`, `override`, `insert_before` (reroutes sequence edges), `insert_after` (hangs a deeper detour without disturbing sequence).
+- Derived: `readiness()` → `understood / total`.
 
-**`backend/learning/store.py`** — persistence layer.
-- SQLite at `data/sessions.db`. One table per top-level object: `sessions`, `nodes`, `edges`.
-- `save_graph(graph) → None` / `load_graph(session_id) → LearningGraph | None`.
-- Identity: anonymous local for now — `user_id` defaults to `"local"`. Schema includes the column so we don't have to migrate later.
-- Schema versioning: `schema_version` column on `sessions`; mismatched versions are treated as missing (no migration logic yet).
+**`backend/learning/store.py`** ✅ — SQLite persistence.
+- `data/sessions.db`, three tables: `sessions`, `nodes`, `edges` (with `ON DELETE CASCADE`).
+- `save_graph(graph)` / `load_graph(session_id)` / `list_sessions_for_repo(repo_url)` / `delete_session(session_id)`.
+- Schema versioning: `schema_version` column; mismatched versions return `None` (no migration logic).
+- Millisecond-precision timestamps (`strftime('%Y-%m-%d %H:%M:%f', 'now')`) so session ordering by `updated_at` is stable.
 
-**`OnboardState` extensions.**
-- Add `graph: LearningGraph | None` and `current_lesson: dict | None`.
-- Keep `errors` reducer behavior intact.
+**`OnboardState`** ✅ — added `graph: LearningGraph | None` and `current_lesson: dict | None`. `errors` reducer intact.
 
-**Test:**
-- Construct a small graph in code, save, reload, assert equality.
-- Mutate state on a loaded graph, save, reload, assert mutation persisted.
-- Schema-version mismatch → returns `None` cleanly.
+**Tests** ✅ — 32 tests across `tests/test_learning_graph.py` (mutation behaviour, readiness math, edge rerouting) and `tests/test_learning_store.py` (save/reload roundtrip, mutation persistence, schema-version mismatch, ordering, cascade delete, cached-lesson roundtrip).
+
+**Deliberately deferred — to revisit when needed:**
+- **User identity / multi-user.** Single anonymous user for now. When Part 7 (resume) or Phase 5 (extension) actually needs multiple users, add a `user_id` column + index and a parameter to `list_sessions_for_repo`.
+- **Repo URL normalization.** Stored as-is. When Part 7 needs to match `GitHub.com/x/y.git` to `github.com/x/y` for resume lookups, add `normalize_repo_url` at the store boundary.
+- **Identity helpers module.** Skipped a separate `ids.py`; UUID generation lives inline in `graph.py` as `_new_id()`. If identity grows beyond UUIDs (user IDs, repo fingerprints, anchor signatures) it can be promoted to its own module then.
 
 ---
 
