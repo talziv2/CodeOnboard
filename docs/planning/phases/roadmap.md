@@ -50,11 +50,10 @@ Layer 5 — LLM (Anthropic API)
 |---|---|---|---|
 | Goal Agent | 1 | Dialogue → structured goal JSON | Haiku |
 | Code Structure Agent | 1 | Clone + parse → module map + RAG store | Haiku |
-| Mentor Agent | 1–2 | Goal + map + RAG → learning path (retired in Phase 3) | Sonnet |
+| Mentor Agent | 1–3 | Owns the learning graph. Phase 1: emits a flat path. Phase 3: emits a graph (Part 2); gains a mutator that reacts to user signals (Part 6) — inserts prerequisites, hangs deeper detours, reorders. | Sonnet |
 | Documentation Agent | 2 | Extract README/docstrings, enrich steps / feed Teaching Agent | Haiku |
 | Prioritization Agent | 2 | Filter irrelevant modules for the goal | Haiku |
-| Planner Agent | 3 | Owns the learning graph; generates and mutates it from goal + signals | TBD |
-| Teaching Agent | 3 | Expands a learning node into an actual lesson (walkthrough, examples, prompts) | TBD |
+| Teaching Agent | 3 | Expands a learning node into an actual lesson (walkthrough, examples, prompts) | Haiku |
 | Grader Agent | 3 | Classifies user responses (understood / partial / confused / off-topic) | Haiku |
 | Multimedia Agent | 4 | Learning path text → TTS audio + video | External APIs |
 
@@ -121,9 +120,9 @@ Layer 5 — LLM (Anthropic API)
 
 **Prerequisite:** Phase 2 done
 
-This phase shifts the system from a static 5–8 step path to an **interactive, adaptive learning session**. The current Mentor Agent is retired and its responsibilities split across three new roles. The goal feel is *tutor*, not *documentation tour*.
+This phase shifts the system from a static 5–8 step path to an **interactive, adaptive learning session**. The **Mentor Agent evolves**: its output changes from a flat list to a learning graph (Part 2), and in Part 6 it gains a mutator that reacts to user signals. Two new sibling agents join — **Teaching** and **Grader**. The goal feel is *tutor*, not *documentation tour*.
 
-The product centerpiece is the **user's understanding graph**: a persistent, repo-anchored map of what *this* user understands about *this* codebase. The Planner's internal learning graph and the user's understanding graph are the same object — the graph is surfaced to the user as the centerpiece artifact, not hidden inside the agent. This is the project's X-factor.
+The product centerpiece is the **user's understanding graph**: a persistent, repo-anchored map of what the user understands about this codebase. The Mentor's internal learning graph and the user's understanding graph are the same object — the graph is surfaced to the user as the centerpiece artifact, not hidden inside the agent. This is the project's X-factor.
 
 ### Conceptual shift: lesson brief ≠ lesson
 - The step JSON (title / file / line_range / why / understand / concepts) becomes the **lesson brief** — a planning artifact and a node in the learning graph.
@@ -135,14 +134,14 @@ The product centerpiece is the **user's understanding graph**: a persistent, rep
 - Mutates during the session: nodes added (prerequisites, deeper sub-topics), removed (skipped areas), reordered, or split into finer sub-nodes.
 - Session state persists: visited nodes, demonstrated understanding, weak areas, skipped areas, requested depth level, learning preferences.
 
-### Three new roles
-- **Planner Agent** — owns the graph; decides what to teach next based on session state and signals.
-- **Teaching Agent** — turns a node into an actual lesson (walkthrough, explanation, examples, architectural context, simplified explanations, active-learning prompts, "what to pay attention to," connections to prior concepts).
-- **Grader Agent** — classifies user responses to active-learning prompts: understood / partial / confused / off-topic.
+### The three agent roles
+- **Mentor Agent (evolved)** — owns the graph; generates the initial structure (Part 2) and mutates it on user signals (Part 6).
+- **Teaching Agent** (new) — turns a node into an actual lesson (walkthrough, explanation, examples, architectural context, simplified explanations, active-learning prompts, "what to pay attention to," connections to prior concepts).
+- **Grader Agent** (new) — classifies user responses to active-learning prompts: understood / partial / confused / off-topic.
 
 ### The user's understanding graph (centerpiece artifact)
 
-Same data structure as the Planner's learning graph — but persisted across sessions and surfaced to the user as the product's centerpiece.
+Same data structure as the Mentor's learning graph — but persisted across sessions and surfaced to the user as the product's centerpiece.
 
 **Node fields (MVP):**
 - code anchor (file + line range)
@@ -264,3 +263,4 @@ Implicit (Grader-derived): understood / partial / confused / off-topic from free
 | Phase 4 video pipeline too complex | Ship TTS only if time is short |
 | LangGraph migration breaks Phase 1 | Keep runner.py working; migrate with tests |
 | ElevenLabs API changes (Phase 4) | Wrap behind thin adapter functions so swapping is one-file change |
+| Rigid `(file, line_start, line_end)` anchor too narrow for many concepts — misses imports, callers/callees, inheritance, cross-file flows | Phase 3: Teaching Agent pulls 1–2 supporting RAG chunks into the lesson prompt. Future phase: evolve the anchor schema (primary + supporting anchors, or sub-graphs of related code regions). |

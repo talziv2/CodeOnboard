@@ -1,6 +1,6 @@
 # Phase 3 — Interactive Learning Graph
 
-The static 5–8 step path becomes an **interactive, adaptive learning session**. The Mentor Agent retires; its work splits across **Planner**, **Teaching**, and **Grader**. The Planner's learning graph is also the **user's understanding graph** — persisted per (user, repo) and surfaced as the product's centerpiece UI artifact.
+The static 5–8 step path becomes an **interactive, adaptive learning session**. The **Mentor Agent evolves**: it stops producing a flat list and starts owning a learning graph (initial generation in Part 2, mutation in Part 6). Two new sibling agents join — **Teaching** (Part 3) and **Grader** (Part 5). The Mentor's learning graph is also the **user's understanding graph** — persisted per repo and surfaced as the product's centerpiece UI artifact.
 
 Vision detail and rationale live in [`roadmap.md`](roadmap.md#phase-3--interactive-learning-graph). This doc is the build plan.
 
@@ -20,11 +20,11 @@ Vision detail and rationale live in [`roadmap.md`](roadmap.md#phase-3--interacti
 ```mermaid
 graph TB
     P1["Part 1 — Graph schema + persistence<br/>LearningGraph dataclass · SQLite store · session model"]
-    P2["Part 2 — Planner Agent (static)<br/>goal + map + RAG → initial graph"]
+    P2["Part 2 — Mentor emits a graph<br/>goal + map + RAG → initial graph (sequence edges only)"]
     P3["Part 3 — Teaching Agent<br/>node → lesson (walkthrough + active prompt)"]
     P4["Part 4 — Vertical slice API + UI<br/>one lesson at a time · 'understood / next' only"]
     P5["Part 5 — Grader Agent<br/>classify free-text response → signal"]
-    P6["Part 6 — Graph mutations<br/>Planner reacts to signals · add prerequisites · reorder · split"]
+    P6["Part 6 — Mentor mutator<br/>react to signals · add prerequisites · reorder · split"]
     P7["Part 7 — Persistence + resume<br/>session save/load · resume point heuristic"]
     P8["Part 8 — Graph UI<br/>visible centerpiece artifact · click-to-jump · understanding overlay"]
 
@@ -69,29 +69,36 @@ Skeleton data model + persistence for future steps. No agent code yet; no user f
 - **User identity / multi-user.** Single anonymous user for now. When Part 7 (resume) or Phase 5 (extension) actually needs multiple users, add a `user_id` column + index and a parameter to `list_sessions_for_repo`.
 - **Repo URL normalization.** Stored as-is. When Part 7 needs to match `GitHub.com/x/y.git` to `github.com/x/y` for resume lookups, add `normalize_repo_url` at the store boundary.
 - **Identity helpers module.** Skipped a separate `ids.py`; UUID generation lives inline in `graph.py` as `_new_id()`. If identity grows beyond UUIDs (user IDs, repo fingerprints, anchor signatures) it can be promoted to its own module then.
+- **Rich code anchors (cross-file context, callers/callees, imports).** A `LearningNode` currently anchors on one contiguous `(file, line_start, line_end)` range. Real-world teaching often needs more surrounding context — the imports at the top of the file, the caller that invokes a function, the parent class in the inheritance chain, related cross-file flows ("this is called from `sessions.py:200`, defined here, dispatches to `adapters.py:50`"). Phase 3 keeps the single-range anchor and works around the gap by having the Teaching Agent pull 1–2 supporting chunks from RAG into its prompt. **Treat this as an initial anchor strategy, not the final retrieval/teaching model.** A future phase should evolve the schema toward a richer anchor — primary range + a list of supporting anchors, or a small sub-graph of related code regions.
 
 ---
 
-### Part 2 — Planner Agent (static, no mutation yet)
+### Part 2 — Mentor emits a graph ✓ (done)
 
-Generates the **initial** graph from `goal + module_map + relevant_modules + RAG`. Equivalent in scope to the Phase 1 Mentor Agent — same inputs, but the output is a graph object instead of a flat step list.
+The Mentor evolves: same inputs (`goal + module_map + relevant_modules + RAG`), same single Sonnet call, but the output is now a `LearningGraph` instead of a flat step list. The Phase 1 `learning_path` field is **derived** from the graph (walk sequence edges, render each node as the old step JSON), so `/onboard` returns the same shape without a second LLM call.
 
-**`backend/agents/planner/agent.py`**
-- Reuses the retrieval logic from Mentor (RetrievalProfile, query decomposition, role filtering, redundant-class drop). Lift it into `backend/rag/retrieval.py` rather than copy-pasting — Mentor and Planner both need it.
-- One Sonnet call. Prompt asks for nodes + edges with `kind="sequence"` covering the goal. 6–10 nodes typical (room above the Phase 1 cap of 8 because the graph can also encode prerequisites later).
-- Output validated through a `PlannerOutput` Pydantic model that mirrors the `LearningGraph` shape (minus session-state fields, which the agent fills with defaults).
-- No mutation logic yet — that lands in Part 6.
+**`backend/rag/retrieval.py`** ✅ — lifted from Mentor in a pure refactor.
+- Public entry: `retrieve_chunks(state)`. Internal helpers (`rrf_fuse`, `select_with_file_cap`, `drop_redundant_class_chunks`, query builders, per-module/per-pool strategies) exposed for direct testing.
+- Mentor + future Teaching Agent both use this module — no copy-paste.
 
-**Note on model choice.** Phase 1's rule was "Sonnet only in Mentor, once per run." Phase 3 has three new agents, two of which run in loops. The single-Sonnet rule must be revised:
-- **Planner** — Sonnet, called once at session start, and again on each mutation event (rare-ish). Risk: cost.
-- **Teaching** — Haiku per lesson (called in a loop). Risk: quality.
-- **Grader** — Haiku per user response (called in a loop). Risk: low — classification is easy.
+**`backend/agents/mentor/agent.py`** ✅ — output shape evolved.
+- New `MentorOutput` Pydantic shape: `{nodes: [NodeWire], edges: [EdgeWire], confidence}`. `NodeWire` has `id` (local, e.g. `"n1"`), `title`, `file`, `line_start`, `line_end`, `why`, `understand`, `concept_tags`. `EdgeWire` has `from_id`, `to_id`, `kind` (always `"sequence"` in Part 2).
+- System prompt updated: asks for 5–8 nodes anchored on distinct chunks, plus N−1 sequence edges forming one ordered chain. Edge `kind` field is permissive (`sequence | prerequisite | deeper`) so the Part 6 mutator can reuse the same wire format.
+- Retries unchanged in spirit: duplicate-anchor retry + grounding retry, both rewritten to operate on `output.nodes`.
+- Wire IDs → UUIDs translation lives in `_build_learning_graph`. Sonnet works with simple `"n1"/"n2"` identifiers; the LearningNode gets a fresh uuid4 hex.
+- Picks `current_node_id` as the head of the sequence (node with no incoming sequence edge).
+- `_flatten_to_learning_path` walks sequence edges to produce the legacy step JSON for `/onboard`.
+
+**`backend/pipeline/graph.py`** ✅ — the `mentor_node` returns `graph` alongside `learning_path` and `confidence`.
+
+**Tests** ✅ — 34 mentor tests + 23 retrieval tests. New coverage: wire-id remapping, lesson_brief assembly, sequence-head detection, learning_path derivation, graph/repo_url/goal carried through. All 163 tests pass.
+
+**Note on model choice.** Phase 1's rule was "Sonnet only in Mentor, once per run." Phase 3 broadens but doesn't break this:
+- **Mentor** — Sonnet, one call at session start (Part 2 ✓). Adds one Sonnet call per mutation event in Part 6 (rare-ish, mostly triggered by `confused`/`deeper`/`simpler`).
+- **Teaching** (Part 3) — Haiku per lesson (called in a loop). Risk: quality.
+- **Grader** (Part 5) — Haiku per user response (called in a loop). Risk: low — classification is easy.
 
 See the **Open design decisions** section for the budget rethink — this is a real decision that affects cost.
-
-**Test:**
-- On `psf/requests` with an `understand_component` goal, planner emits a coherent graph; manually inspect nodes anchor on real files and edges form a sensible sequence.
-- Token cost on initial-graph generation alone is under $0.05.
 
 ---
 
@@ -101,9 +108,9 @@ Expands a single node's lesson brief into the **actual lesson**: walkthrough, ex
 
 **`backend/agents/teaching/agent.py`**
 - Input: `node`, `graph` (for prior-context awareness — which nodes are already understood), `goal`, RAG handle.
-- Pulls the actual source for the node's `code_anchor` from disk (not RAG — we already know the file/lines), plus 1–2 supporting chunks from RAG for cross-references.
+- Pulls the actual source for the node's `code_anchor` from disk (not RAG — we already know the file/lines), plus 1–2 supporting chunks from RAG for cross-references. The supporting chunks are the **workaround for the rigid single-range anchor** (see Part 1's deferred block — "Rich code anchors"): they let Teaching reach for imports / callers / related flows even though the node's anchor itself is one contiguous range.
 - One Haiku call. System prompt: "you're tutoring a developer at experience-level X, the user already understands these nodes, this node's lesson brief is Y, the source code is Z. Output: walkthrough markdown + one active-learning prompt + prompt_kind."
-- Output validated through `LessonOutput` Pydantic model: `walkthrough: str (markdown)`, `prompt: str`, `prompt_kind: "predict-then-reveal" | "free-text-recall" | "find-this"` (pick one form for v1 — see Open decisions).
+- Output validated through `LessonOutput` Pydantic model: `walkthrough: str (markdown)`, `prompt: str`, `expected_answer: str` (used later by the Grader), `prompt_kind: "predict-then-reveal"` (locked to one form for v1 — see Open decisions).
 
 **Test:**
 - On a known node from the `requests` graph, generate a lesson. Manually verify: walkthrough references the real code, the prompt is answerable from the walkthrough, no hallucinated file paths.
@@ -116,7 +123,7 @@ Expands a single node's lesson brief into the **actual lesson**: walkthrough, ex
 **This is the integration gate.** By the end of Part 4 you can run an end-to-end session with no mutation, no grading, no persistence — just *one lesson at a time, click "next."* If this doesn't feel right, fix it here before adding adaptivity.
 
 **API (additions to `backend/api.py`):**
-- `POST /session/start` — body: `{ repo_url, goal }` → runs Code Structure + Prioritization + Planner. Returns `{ session_id, graph }`.
+- `POST /session/start` — body: `{ repo_url, goal }` → runs Code Structure + Prioritization + Mentor. Returns `{ session_id, graph }`.
 - `GET /session/{id}/lesson` — runs Teaching on `graph.current_node`. Returns `{ lesson, node_id }`.
 - `POST /session/{id}/advance` — body: `{ signal: "next" }`. Marks current node visited, advances `current_node_id` along the sequence, returns next lesson or `{ done: true }`.
 
@@ -148,18 +155,18 @@ Classifies **free-text** user responses to active-learning prompts.
 
 ---
 
-### Part 6 — Graph mutations
+### Part 6 — Mentor gains a mutator
 
-Planner stops being one-shot. On each signal, it decides whether to mutate.
+The Mentor stops being one-shot. On each user signal, it decides whether to mutate the graph.
 
 **Signals that can trigger mutation:**
 - Explicit user actions: *deeper*, *simpler*, *skip*, *go to architecture first*.
 - Grader-derived: `confused` → consider inserting a prerequisite node; `understood` repeatedly → consider raising depth.
 
-**`backend/agents/planner/mutator.py`** (separate from initial-graph generator):
+**`backend/agents/mentor/mutator.py`** (separate from initial-graph generator, same module):
 - Input: `graph`, `signal`, optionally `current_node`.
 - Decides one of: `no-op` / `insert_prerequisite(before=node_id, new_node=...)` / `insert_deeper(after=node_id, new_node=...)` / `reorder(...)` / `skip(node_id)`.
-- One Sonnet call **only when the signal is ambiguous or requires generating a new node**. Cheap signals (`skip`, explicit `next`) bypass the LLM and mutate via pure-Python rules.
+- One Sonnet call **only when the signal is ambiguous or requires generating a new node**. Cheap signals (`skip`, explicit `next`) bypass the LLM and mutate via pure-Python rules using `LearningGraph.insert_before` / `insert_after` / `override`.
 - Returns a mutated `LearningGraph`.
 
 **API additions:**
@@ -216,9 +223,9 @@ These were deferred in the roadmap. **Lock each one before it blocks its part.**
 | # | Decision | Default for now | Blocks |
 |---|---|---|---|
 | 1 | Active-learning prompt form for v1 | `predict-then-reveal` (lowest grading complexity) | Part 3 |
-| 2 | Mentor → Planner: keep Sonnet for initial graph? | Yes, once per session. Mutator uses Haiku when possible, Sonnet only when generating new node content | Part 2 |
-| 3 | Persistence: SQLite vs JSON files | SQLite — queries by `(user_id, repo)` are awkward in JSON, and we'll want them in Phase 5 | Part 1 |
-| 4 | Identity model | Anonymous local-only (`user_id="local"`). Schema has the column for later. | Part 1 |
+| 2 | Mentor: keep Sonnet for initial graph? | Yes, once per session (locked in Part 2). Mutator uses Haiku when possible, Sonnet only when generating new node content | Part 2 ✓ |
+| 3 | Persistence: SQLite vs JSON files | SQLite — queries by repo are awkward in JSON, and we'll want them in Phase 5 (locked in Part 1) | Part 1 ✓ |
+| 4 | Identity model | Anonymous, repo-scoped, no `user_id` column yet. Add when Part 7 / Phase 5 actually need it. | Part 1 ✓ |
 | 5 | Graph UI library | `react-flow` (React-native, good docs, custom nodes) | Part 8 |
 | 6 | Mutator: rule-based vs LLM-driven | Hybrid. Cheap signals (`skip`, `next`) → pure Python. Signals that need new content (`deeper`, `confused`-needs-prerequisite) → Sonnet | Part 6 |
 | 7 | Lesson regeneration on revisit | Cache the rendered lesson on first generation; regenerate only on user request (`/lesson?refresh=true`) | Part 4 |
@@ -234,14 +241,14 @@ Anything else uncovered during build that needs a call: append here with a defau
 | Goal Agent | Haiku | 1× at start | ~$0.0004 |
 | Code Structure Agent | Haiku | 1× at start | ~$0.002 |
 | Prioritization Agent | Haiku | 1× at start | ~$0.001 |
-| Planner (initial) | Sonnet | 1× at start | ~$0.07 |
+| Mentor (initial graph) | Sonnet | 1× at start | ~$0.07 |
 | Teaching | Haiku | per lesson, 6–10× | ~$0.03 |
 | Grader | Haiku | per response, 6–10× | ~$0.01 |
-| Planner (mutator) | Sonnet | ~2× per session (avg) | ~$0.04 |
+| Mentor (mutator) | Sonnet | ~2× per session (avg) | ~$0.04 |
 | **Total** | | | **~$0.15/session** |
 
 **This breaks the Phase 1 $0.10 budget.** Two mitigations to evaluate during Part 6:
-- Cache Planner mutator decisions for common signal patterns (`confused` on the same node twice → same prerequisite).
+- Cache Mentor mutator decisions for common signal patterns (`confused` on the same node twice → same prerequisite).
 - Try Haiku for the mutator entirely; only fall back to Sonnet when Haiku's output fails validation.
 
 Document the realized per-session cost in the recap once Parts 1–4 are running.
