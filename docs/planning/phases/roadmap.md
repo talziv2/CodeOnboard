@@ -124,6 +124,8 @@ This phase shifts the system from a static 5–8 step path to an **interactive, 
 
 The product centerpiece is the **user's understanding graph**: a persistent, repo-anchored map of what the user understands about this codebase. The Mentor's internal learning graph and the user's understanding graph are the same object — the graph is surfaced to the user as the centerpiece artifact, not hidden inside the agent. This is the project's X-factor.
 
+**Strategic positioning.** CodeOnboard complements AI code generation rather than competing with it. In the AI-assisted era, onboarding's value shifts from "learn to write this code" to *training the human ability to understand, critique, and direct AI-generated changes* inside a real codebase. This shapes Grader scope and unlocks an AI-Assisted Development Mode (below).
+
 ### Conceptual shift: lesson brief ≠ lesson
 - The step JSON (title / file / line_range / why / understand / concepts) becomes the **lesson brief** — a planning artifact and a node in the learning graph.
 - A separate Teaching Agent expands the brief into the actual lesson at delivery time, conditioned on session state.
@@ -137,7 +139,7 @@ The product centerpiece is the **user's understanding graph**: a persistent, rep
 ### The three agent roles
 - **Mentor Agent (evolved)** — owns the graph; generates the initial structure (Part 2) and mutates it on user signals (Part 6).
 - **Teaching Agent** (new) — turns a node into an actual lesson (walkthrough, explanation, examples, architectural context, simplified explanations, active-learning prompts, "what to pay attention to," connections to prior concepts).
-- **Grader Agent** (new) — classifies user responses to active-learning prompts: understood / partial / confused / off-topic.
+- **Grader Agent** (new) — classifies user responses to active-learning prompts: understood / partial / confused / off-topic. Scope extends beyond comprehension to *critique-of-AI-output* tasks: spotting bugs in AI-generated snippets, reasoning about trade-offs, suggesting tests, identifying risks. The Grader is LLM-based, not deterministic test-passing — accepted trade-off for admitting these task types.
 
 ### The user's understanding graph (centerpiece artifact)
 
@@ -164,6 +166,17 @@ Same data structure as the Mentor's learning graph — but persisted across sess
 Explicit (user-driven): understood, partially understood, confused, wants deeper explanation, wants examples, wants to skip, wants implementation details, wants higher-level architecture first.
 Implicit (Grader-derived): understood / partial / confused / off-topic from free-text responses.
 
+### AI-Assisted Development Mode (new flow)
+
+Alongside the standard learn → quiz → grade flow, an alternative mode operationalizes the strategic positioning above:
+
+1. System picks a real task or hotspot in the repo (chosen via the learning graph and goal).
+2. AI proposes a change or solution to that task.
+3. User must explain what changed, identify risks/bugs, and suggest tests.
+4. Grader validates real understanding vs. "user just rubber-stamped AI output."
+
+This mode is what makes the Grader's expanded scope visible to the user. It also reframes the learning graph as a **trust map** — where the user can confidently direct AI at the codebase, and where they still need to learn before trusting AI output.
+
 ### Deferred decisions (intentionally open until designed)
 - Specific active-learning prompt forms (predict-then-reveal / free-text recall / multiple-choice / find-this-function / something else).
 - Concrete agent prompts and graph mutation rules.
@@ -180,6 +193,7 @@ Implicit (Grader-derived): understood / partial / confused / off-topic from free
 - The graph demonstrably mutates during a session on at least one target repo.
 - The user's understanding graph persists across sessions: closing the app and returning loads the same graph, in the same state, with the system able to suggest a sensible resume point.
 - The graph is visible to the user as the central UI artifact — not hidden inside the agent.
+- AI-Assisted Development Mode is available on at least one target repo: AI proposes a change, the user critiques it, and the Grader distinguishes real understanding from passive acceptance.
 
 ---
 
