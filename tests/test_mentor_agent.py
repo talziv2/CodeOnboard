@@ -5,7 +5,8 @@ Run with: uv run pytest tests/test_mentor_agent.py -v
 Retrieval-layer tests (RRF fusion, file-diversity cap, per-pool queries,
 query decomposition, redundant-class drop) live in tests/test_retrieval.py.
 This file covers what stays in the Mentor: prompt builders, output parsing,
-grounding, duplicate-anchor retry, the run() flow.
+grounding, duplicate-anchor retry, the run() flow, the wire→LearningGraph
+translation, and the derived learning_path.
 """
 import json
 from unittest.mock import MagicMock, patch
@@ -13,6 +14,7 @@ from unittest.mock import MagicMock, patch
 from backend.pipeline.state import OnboardState
 from backend.agents.mentor import run
 from backend.agents.mentor.agent import (
+    MentorOutput,
     _PROMPT_BUILDERS,
     _build_contribute_code_prompt,
     _build_debug_issue_prompt,
@@ -21,7 +23,6 @@ from backend.agents.mentor.agent import (
     _find_duplicate_anchors,
     _parse_output,
 )
-from backend.agents.mentor.agent import MentorOutput
 
 
 FAKE_REPO_URL = "https://github.com/psf/requests"
@@ -99,52 +100,69 @@ FAKE_CHROMA_RESULT = {
 }
 
 
-FAKE_LEARNING_PATH_OUTPUT = {
-    "steps": [
+# ── Wire-format fixtures ──────────────────────────────────────────────────────
+#
+# These are nodes + edges in the new MentorOutput shape. The agent's job is to
+# translate them into a LearningGraph with UUID node IDs and a derived
+# learning_path.
+
+
+FAKE_MENTOR_OUTPUT = {
+    "nodes": [
         {
-            "step": 1,
+            "id": "n1",
             "title": "Understand HTTPBasicAuth",
             "file": "requests/auth.py",
-            "line_range": [72, 100],
+            "line_start": 72,
+            "line_end": 100,
             "why": "Simplest auth scheme — establishes the auth handler interface",
             "understand": "How __call__ modifies the PreparedRequest",
-            "concepts": ["callable classes", "request signing"],
+            "concept_tags": ["callable classes", "request signing"],
         },
         {
-            "step": 2,
+            "id": "n2",
             "title": "Trace Session.send to the auth handler",
             "file": "requests/sessions.py",
-            "line_range": [394, 470],
+            "line_start": 394,
+            "line_end": 470,
             "why": "Shows where auth is invoked during request prep",
             "understand": "Order of merge_environment_settings and prepare_request",
-            "concepts": ["request lifecycle"],
+            "concept_tags": ["request lifecycle"],
         },
+    ],
+    "edges": [
+        {"from_id": "n1", "to_id": "n2", "kind": "sequence"},
     ],
     "confidence": "high",
 }
 
 
-# A learning path where step 1 and step 2 reuse the SAME (file, line_range).
-FAKE_LEARNING_PATH_OUTPUT_WITH_DUPES = {
-    "steps": [
+# Two nodes anchored on the SAME chunk → duplicate-anchor failure path.
+FAKE_MENTOR_OUTPUT_WITH_DUPES = {
+    "nodes": [
         {
-            "step": 1,
+            "id": "n1",
             "title": "Understand HTTPBasicAuth — first look",
             "file": "requests/auth.py",
-            "line_range": [72, 100],
+            "line_start": 72,
+            "line_end": 100,
             "why": "Establishes the auth handler interface",
             "understand": "How __call__ modifies the PreparedRequest",
-            "concepts": ["callable classes"],
+            "concept_tags": ["callable classes"],
         },
         {
-            "step": 2,
+            "id": "n2",
             "title": "Understand HTTPBasicAuth — second look (duplicate anchor!)",
             "file": "requests/auth.py",
-            "line_range": [72, 100],
+            "line_start": 72,
+            "line_end": 100,
             "why": "Same chunk, used again",
             "understand": "Same as before",
-            "concepts": ["request signing"],
+            "concept_tags": ["request signing"],
         },
+    ],
+    "edges": [
+        {"from_id": "n1", "to_id": "n2", "kind": "sequence"},
     ],
     "confidence": "medium",
 }
@@ -172,19 +190,45 @@ def _make_state(goal: dict | None = FAKE_GOAL_UNDERSTAND_COMPONENT) -> OnboardSt
 @patch("backend.rag.retrieval.store.query", return_value=FAKE_CHROMA_RESULT)
 @patch("backend.rag.retrieval.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
 @patch("backend.rag.retrieval.get_commit_sha", return_value=FAKE_COMMIT_SHA)
-def test_run_sets_learning_path(mock_sha, mock_embed, mock_query):
-    client = _make_mock_client(json.dumps(FAKE_LEARNING_PATH_OUTPUT))
+def test_run_sets_graph(mock_sha, mock_embed, mock_query):
+    client = _make_mock_client(json.dumps(FAKE_MENTOR_OUTPUT))
+    result = run(_make_state(), client=client)
+    assert result.graph is not None
+    assert len(result.graph.nodes) == 2
+    assert len(result.graph.edges) == 1
+    assert result.graph.edges[0].kind == "sequence"
+
+
+@patch("backend.rag.retrieval.store.query", return_value=FAKE_CHROMA_RESULT)
+@patch("backend.rag.retrieval.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
+@patch("backend.rag.retrieval.get_commit_sha", return_value=FAKE_COMMIT_SHA)
+def test_run_sets_current_node_to_sequence_head(mock_sha, mock_embed, mock_query):
+    client = _make_mock_client(json.dumps(FAKE_MENTOR_OUTPUT))
+    result = run(_make_state(), client=client)
+    head = result.graph.nodes[result.graph.current_node_id]
+    # n1 has no incoming sequence edge — it's the head.
+    assert head.title == "Understand HTTPBasicAuth"
+
+
+@patch("backend.rag.retrieval.store.query", return_value=FAKE_CHROMA_RESULT)
+@patch("backend.rag.retrieval.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
+@patch("backend.rag.retrieval.get_commit_sha", return_value=FAKE_COMMIT_SHA)
+def test_run_derives_learning_path_from_graph(mock_sha, mock_embed, mock_query):
+    client = _make_mock_client(json.dumps(FAKE_MENTOR_OUTPUT))
     result = run(_make_state(), client=client)
     assert result.learning_path is not None
     assert len(result.learning_path) == 2
+    assert result.learning_path[0]["step"] == 1
     assert result.learning_path[0]["title"] == "Understand HTTPBasicAuth"
+    assert result.learning_path[1]["step"] == 2
+    assert result.learning_path[1]["title"] == "Trace Session.send to the auth handler"
 
 
 @patch("backend.rag.retrieval.store.query", return_value=FAKE_CHROMA_RESULT)
 @patch("backend.rag.retrieval.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
 @patch("backend.rag.retrieval.get_commit_sha", return_value=FAKE_COMMIT_SHA)
 def test_run_sets_confidence(mock_sha, mock_embed, mock_query):
-    client = _make_mock_client(json.dumps(FAKE_LEARNING_PATH_OUTPUT))
+    client = _make_mock_client(json.dumps(FAKE_MENTOR_OUTPUT))
     result = run(_make_state(), client=client)
     assert result.confidence == "high"
 
@@ -193,7 +237,7 @@ def test_run_sets_confidence(mock_sha, mock_embed, mock_query):
 @patch("backend.rag.retrieval.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
 @patch("backend.rag.retrieval.get_commit_sha", return_value=FAKE_COMMIT_SHA)
 def test_run_steps_have_expected_keys(mock_sha, mock_embed, mock_query):
-    client = _make_mock_client(json.dumps(FAKE_LEARNING_PATH_OUTPUT))
+    client = _make_mock_client(json.dumps(FAKE_MENTOR_OUTPUT))
     result = run(_make_state(), client=client)
     step = result.learning_path[0]
     for key in ("step", "title", "file", "line_range", "why", "understand", "concepts"):
@@ -204,9 +248,10 @@ def test_run_steps_have_expected_keys(mock_sha, mock_embed, mock_query):
 @patch("backend.rag.retrieval.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
 @patch("backend.rag.retrieval.get_commit_sha", return_value=FAKE_COMMIT_SHA)
 def test_run_handles_markdown_fenced_json(mock_sha, mock_embed, mock_query):
-    fenced = f"```json\n{json.dumps(FAKE_LEARNING_PATH_OUTPUT)}\n```"
+    fenced = f"```json\n{json.dumps(FAKE_MENTOR_OUTPUT)}\n```"
     client = _make_mock_client(fenced)
     result = run(_make_state(), client=client)
+    assert result.graph is not None
     assert result.learning_path is not None
 
 
@@ -214,9 +259,45 @@ def test_run_handles_markdown_fenced_json(mock_sha, mock_embed, mock_query):
 @patch("backend.rag.retrieval.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
 @patch("backend.rag.retrieval.get_commit_sha", return_value=FAKE_COMMIT_SHA)
 def test_run_uses_sonnet_model(mock_sha, mock_embed, mock_query):
-    client = _make_mock_client(json.dumps(FAKE_LEARNING_PATH_OUTPUT))
+    client = _make_mock_client(json.dumps(FAKE_MENTOR_OUTPUT))
     run(_make_state(), client=client)
     assert client.messages.create.call_args.kwargs["model"] == "claude-sonnet-4-6"
+
+
+# ── wire → LearningGraph translation ──────────────────────────────────────────
+
+@patch("backend.rag.retrieval.store.query", return_value=FAKE_CHROMA_RESULT)
+@patch("backend.rag.retrieval.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
+@patch("backend.rag.retrieval.get_commit_sha", return_value=FAKE_COMMIT_SHA)
+def test_wire_ids_get_remapped_to_uuids(mock_sha, mock_embed, mock_query):
+    # Sonnet emits ids like "n1"/"n2"; the LearningGraph must hold UUIDs.
+    client = _make_mock_client(json.dumps(FAKE_MENTOR_OUTPUT))
+    result = run(_make_state(), client=client)
+    for node_id in result.graph.nodes:
+        assert node_id not in {"n1", "n2"}
+        # uuid4 hex is 32 chars, all lowercase hex
+        assert len(node_id) == 32
+
+
+@patch("backend.rag.retrieval.store.query", return_value=FAKE_CHROMA_RESULT)
+@patch("backend.rag.retrieval.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
+@patch("backend.rag.retrieval.get_commit_sha", return_value=FAKE_COMMIT_SHA)
+def test_lesson_brief_assembled_from_wire_fields(mock_sha, mock_embed, mock_query):
+    client = _make_mock_client(json.dumps(FAKE_MENTOR_OUTPUT))
+    result = run(_make_state(), client=client)
+    first_node = next(iter(result.graph.nodes.values()))
+    assert "why" in first_node.lesson_brief
+    assert "understand" in first_node.lesson_brief
+
+
+@patch("backend.rag.retrieval.store.query", return_value=FAKE_CHROMA_RESULT)
+@patch("backend.rag.retrieval.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
+@patch("backend.rag.retrieval.get_commit_sha", return_value=FAKE_COMMIT_SHA)
+def test_graph_repo_url_and_goal_match_state(mock_sha, mock_embed, mock_query):
+    client = _make_mock_client(json.dumps(FAKE_MENTOR_OUTPUT))
+    result = run(_make_state(), client=client)
+    assert result.graph.repo_url == FAKE_REPO_URL
+    assert result.graph.goal == FAKE_GOAL_UNDERSTAND_COMPONENT
 
 
 # ── goal-type branching ───────────────────────────────────────────────────────
@@ -277,7 +358,7 @@ def test_prompt_includes_retrieved_chunk_files():
 @patch("backend.rag.retrieval.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
 @patch("backend.rag.retrieval.get_commit_sha", return_value=FAKE_COMMIT_SHA)
 def test_run_dispatches_to_correct_builder(mock_sha, mock_embed, mock_query):
-    client = _make_mock_client(json.dumps(FAKE_LEARNING_PATH_OUTPUT))
+    client = _make_mock_client(json.dumps(FAKE_MENTOR_OUTPUT))
     run(_make_state(goal=FAKE_GOAL_DEBUG_ISSUE), client=client)
     user_msg = client.messages.create.call_args.kwargs["messages"][0]["content"]
     assert FAKE_GOAL_DEBUG_ISSUE["error_description"] in user_msg
@@ -286,22 +367,23 @@ def test_run_dispatches_to_correct_builder(mock_sha, mock_embed, mock_query):
 # ── distinct-anchor validation + retry ────────────────────────────────────────
 
 def test_find_duplicate_anchors_empty_when_distinct():
-    output = MentorOutput(**FAKE_LEARNING_PATH_OUTPUT)
+    output = MentorOutput(**FAKE_MENTOR_OUTPUT)
     assert _find_duplicate_anchors(output) == []
 
 
 def test_find_duplicate_anchors_detects_same_file_and_range():
-    output = MentorOutput(**FAKE_LEARNING_PATH_OUTPUT_WITH_DUPES)
+    output = MentorOutput(**FAKE_MENTOR_OUTPUT_WITH_DUPES)
     dupes = _find_duplicate_anchors(output)
     assert dupes == [("requests/auth.py", (72, 100))]
 
 
 def test_find_duplicate_anchors_ignores_same_range_different_files():
     payload = {
-        "steps": [
-            {**FAKE_LEARNING_PATH_OUTPUT["steps"][0], "file": "a.py"},
-            {**FAKE_LEARNING_PATH_OUTPUT["steps"][0], "file": "b.py"},
+        "nodes": [
+            {**FAKE_MENTOR_OUTPUT["nodes"][0], "file": "a.py"},
+            {**FAKE_MENTOR_OUTPUT["nodes"][0], "file": "b.py", "id": "n2"},
         ],
+        "edges": [{"from_id": "n1", "to_id": "n2", "kind": "sequence"}],
         "confidence": "low",
     }
     output = MentorOutput(**payload)
@@ -313,18 +395,19 @@ def test_find_duplicate_anchors_ignores_same_range_different_files():
 @patch("backend.rag.retrieval.get_commit_sha", return_value=FAKE_COMMIT_SHA)
 def test_run_retries_when_llm_returns_duplicate_anchors(mock_sha, mock_embed, mock_query):
     bad = MagicMock()
-    bad.content = [MagicMock(text=json.dumps(FAKE_LEARNING_PATH_OUTPUT_WITH_DUPES))]
+    bad.content = [MagicMock(text=json.dumps(FAKE_MENTOR_OUTPUT_WITH_DUPES))]
     good = MagicMock()
-    good.content = [MagicMock(text=json.dumps(FAKE_LEARNING_PATH_OUTPUT))]
+    good.content = [MagicMock(text=json.dumps(FAKE_MENTOR_OUTPUT))]
     client = MagicMock()
     client.messages.create.side_effect = [bad, good]
 
     result = run(_make_state(), client=client)
 
     assert client.messages.create.call_count == 2
-    assert result.learning_path is not None
-    assert result.learning_path[0]["title"] == "Understand HTTPBasicAuth"
-    assert result.learning_path[1]["title"] == "Trace Session.send to the auth handler"
+    assert result.graph is not None
+    titles = [n.title for n in result.graph.nodes.values()]
+    assert "Understand HTTPBasicAuth" in titles
+    assert "Trace Session.send to the auth handler" in titles
 
 
 @patch("backend.rag.retrieval.store.query", return_value=FAKE_CHROMA_RESULT)
@@ -332,14 +415,16 @@ def test_run_retries_when_llm_returns_duplicate_anchors(mock_sha, mock_embed, mo
 @patch("backend.rag.retrieval.get_commit_sha", return_value=FAKE_COMMIT_SHA)
 def test_run_keeps_original_when_retry_still_has_duplicates(mock_sha, mock_embed, mock_query):
     bad = MagicMock()
-    bad.content = [MagicMock(text=json.dumps(FAKE_LEARNING_PATH_OUTPUT_WITH_DUPES))]
+    bad.content = [MagicMock(text=json.dumps(FAKE_MENTOR_OUTPUT_WITH_DUPES))]
     client = MagicMock()
     client.messages.create.side_effect = [bad, bad]
 
     result = run(_make_state(), client=client)
 
     assert client.messages.create.call_count == 2
-    assert result.learning_path is not None  # accept partial output
+    # We accept partial output — graph still gets built, but with both nodes
+    # pointing at the same anchor.
+    assert result.graph is not None
     assert any("duplicate anchors persisted" in e for e in result.errors)
 
 
@@ -347,10 +432,10 @@ def test_run_keeps_original_when_retry_still_has_duplicates(mock_sha, mock_embed
 @patch("backend.rag.retrieval.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
 @patch("backend.rag.retrieval.get_commit_sha", return_value=FAKE_COMMIT_SHA)
 def test_run_does_not_retry_when_output_is_clean(mock_sha, mock_embed, mock_query):
-    client = _make_mock_client(json.dumps(FAKE_LEARNING_PATH_OUTPUT))
+    client = _make_mock_client(json.dumps(FAKE_MENTOR_OUTPUT))
     result = run(_make_state(), client=client)
     assert client.messages.create.call_count == 1
-    assert result.learning_path is not None
+    assert result.graph is not None
     assert not any("duplicate" in e.lower() for e in result.errors)
 
 
@@ -359,9 +444,9 @@ def test_run_does_not_retry_when_output_is_clean(mock_sha, mock_embed, mock_quer
 @patch("backend.rag.retrieval.get_commit_sha", return_value=FAKE_COMMIT_SHA)
 def test_retry_message_includes_duplicate_chunk_identifier(mock_sha, mock_embed, mock_query):
     bad = MagicMock()
-    bad.content = [MagicMock(text=json.dumps(FAKE_LEARNING_PATH_OUTPUT_WITH_DUPES))]
+    bad.content = [MagicMock(text=json.dumps(FAKE_MENTOR_OUTPUT_WITH_DUPES))]
     good = MagicMock()
-    good.content = [MagicMock(text=json.dumps(FAKE_LEARNING_PATH_OUTPUT))]
+    good.content = [MagicMock(text=json.dumps(FAKE_MENTOR_OUTPUT))]
     client = MagicMock()
     client.messages.create.side_effect = [bad, good]
 
@@ -376,13 +461,14 @@ def test_retry_message_includes_duplicate_chunk_identifier(mock_sha, mock_embed,
 # ── parsing ───────────────────────────────────────────────────────────────────
 
 def test_parse_output_handles_plain_json():
-    output = _parse_output(json.dumps(FAKE_LEARNING_PATH_OUTPUT))
+    output = _parse_output(json.dumps(FAKE_MENTOR_OUTPUT))
     assert output.confidence == "high"
-    assert len(output.steps) == 2
+    assert len(output.nodes) == 2
+    assert len(output.edges) == 1
 
 
 def test_parse_output_strips_markdown_fence():
-    fenced = f"```json\n{json.dumps(FAKE_LEARNING_PATH_OUTPUT)}\n```"
+    fenced = f"```json\n{json.dumps(FAKE_MENTOR_OUTPUT)}\n```"
     output = _parse_output(fenced)
     assert output.confidence == "high"
 
@@ -390,18 +476,18 @@ def test_parse_output_strips_markdown_fence():
 def test_parse_output_handles_prose_preamble_then_fenced_json():
     response = (
         "# Learning Path Analysis\n\nHere's a summary of the auth flow...\n\n"
-        f"```json\n{json.dumps(FAKE_LEARNING_PATH_OUTPUT)}\n```\n"
+        f"```json\n{json.dumps(FAKE_MENTOR_OUTPUT)}\n```\n"
         "\nLet me know if you need more detail."
     )
     output = _parse_output(response)
     assert output.confidence == "high"
-    assert len(output.steps) == 2
+    assert len(output.nodes) == 2
 
 
 def test_parse_output_handles_prose_preamble_no_fence():
     response = (
         "Here is the JSON you requested:\n\n"
-        f"{json.dumps(FAKE_LEARNING_PATH_OUTPUT)}"
+        f"{json.dumps(FAKE_MENTOR_OUTPUT)}"
     )
     output = _parse_output(response)
     assert output.confidence == "high"
@@ -412,6 +498,7 @@ def test_parse_output_handles_prose_preamble_no_fence():
 def test_run_errors_when_goal_missing():
     state = _make_state(goal=None)
     result = run(state, client=MagicMock())
+    assert result.graph is None
     assert result.learning_path is None
     assert any("goal" in e.lower() for e in result.errors)
 
@@ -420,6 +507,7 @@ def test_run_errors_when_module_map_missing():
     state = _make_state()
     state.module_map = None
     result = run(state, client=MagicMock())
+    assert result.graph is None
     assert result.learning_path is None
     assert any("module_map" in e for e in result.errors)
 
@@ -428,6 +516,7 @@ def test_run_errors_when_chunks_not_embedded():
     state = _make_state()
     state.chunks_embedded = False
     result = run(state, client=MagicMock())
+    assert result.graph is None
     assert result.learning_path is None
     assert any("embedded" in e.lower() for e in result.errors)
 
@@ -438,6 +527,7 @@ def test_run_errors_when_chunks_not_embedded():
 def test_run_handles_retrieval_failure(mock_sha, mock_embed, mock_query):
     client = MagicMock()
     result = run(_make_state(), client=client)
+    assert result.graph is None
     assert result.learning_path is None
     assert any("retrieval failed" in e for e in result.errors)
     client.messages.create.assert_not_called()
@@ -449,6 +539,7 @@ def test_run_handles_retrieval_failure(mock_sha, mock_embed, mock_query):
 def test_run_handles_invalid_llm_json(mock_sha, mock_embed, mock_query):
     client = _make_mock_client("not valid json at all")
     result = run(_make_state(), client=client)
+    assert result.graph is None
     assert result.learning_path is None
     assert any("LLM call failed" in e for e in result.errors)
 
@@ -459,8 +550,9 @@ def test_run_handles_invalid_llm_json(mock_sha, mock_embed, mock_query):
 def test_run_handles_unknown_goal_type(mock_sha, mock_embed, mock_query):
     state = _make_state()
     state.goal = {**FAKE_GOAL_UNDERSTAND_COMPONENT, "goal_type": "alien_request"}
-    client = _make_mock_client(json.dumps(FAKE_LEARNING_PATH_OUTPUT))
+    client = _make_mock_client(json.dumps(FAKE_MENTOR_OUTPUT))
     result = run(state, client=client)
+    assert result.graph is None
     assert result.learning_path is None
     assert any("goal_type" in e.lower() for e in result.errors)
     client.messages.create.assert_not_called()
