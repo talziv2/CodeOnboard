@@ -61,6 +61,10 @@ def mentor_node(state: OnboardState) -> dict:
     prev_errors = list(state.errors)
     runner.run_mentor(state, client=state.client)
     return {
+        # Phase 3: state.graph is the source of truth; learning_path is
+        # derived inside run_mentor by walking sequence edges. Both fields
+        # come out of the same single Sonnet call.
+        "graph": state.graph,
         "learning_path": state.learning_path,
         "confidence": state.confidence,
         "errors": _extract_new_errors(state, prev_errors),

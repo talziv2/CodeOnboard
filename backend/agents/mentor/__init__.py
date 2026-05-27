@@ -1,3 +1,3 @@
-from backend.agents.mentor.agent import LearningPathStep, MentorOutput, run
+from backend.agents.mentor.agent import MentorOutput, run
 
-__all__ = ["LearningPathStep", "MentorOutput", "run"]
+__all__ = ["MentorOutput", "run"]
