@@ -102,19 +102,20 @@ See the **Open design decisions** section for the budget rethink — this is a r
 
 ---
 
-### Part 3 — Teaching Agent
+### Part 3 — Teaching Agent ✓ (done)
 
-Expands a single node's lesson brief into the **actual lesson**: walkthrough, examples, architectural context, "what to pay attention to," and **one active-learning prompt** at the end.
+Expands a single node's lesson brief into the **actual lesson**: a walkthrough plus one active-learning prompt. Skeleton scope — the agent exists and is fully tested, but is **not yet wired into the pipeline or an API endpoint**. Part 4 calls it from `GET /session/{id}/lesson`.
 
-**`backend/agents/teaching/agent.py`**
-- Input: `node`, `graph` (for prior-context awareness — which nodes are already understood), `goal`, RAG handle.
-- Pulls the actual source for the node's `code_anchor` from disk (not RAG — we already know the file/lines), plus 1–2 supporting chunks from RAG for cross-references. The supporting chunks are the **workaround for the rigid single-range anchor** (see Part 1's deferred block — "Rich code anchors"): they let Teaching reach for imports / callers / related flows even though the node's anchor itself is one contiguous range.
-- One Haiku call. System prompt: "you're tutoring a developer at experience-level X, the user already understands these nodes, this node's lesson brief is Y, the source code is Z. Output: walkthrough markdown + one active-learning prompt + prompt_kind."
-- Output validated through `LessonOutput` Pydantic model: `walkthrough: str (markdown)`, `prompt: str`, `expected_answer: str` (used later by the Grader), `prompt_kind: "predict-then-reveal"` (locked to one form for v1 — see Open decisions).
+**`backend/agents/teaching/agent.py`** ✅
+- `run(state, client)` — operates on `state.graph.current_node_id`. Errors append to `state.errors`, never raises.
+- **Caching:** if the node already has a `cached_lesson` (prior visit), reuse it — no LLM call. (Refresh-on-demand is a Part 4 concern.)
+- Reads the node's source from disk (`{repo_path}/{file}` lines `start:end`, 1-indexed inclusive). A read failure aborts cleanly without calling the LLM.
+- Pulls 1–2 supporting chunks via `retrieve_supporting_chunks` (new helper in `backend/rag/retrieval.py`) — the **workaround for the rigid single-range anchor** (Part 1 deferred block, "Rich code anchors"). Best-effort: a retrieval failure is recorded but does not block the lesson.
+- Builds prior-context from the graph (titles + concept_tags of `understood` nodes) so the lesson doesn't re-explain.
+- One Haiku call (`claude-haiku-4-5`). Output validated through `LessonOutput`: `walkthrough: str (markdown)`, `prompt: str`, `expected_answer: str` (used later by the Grader), `prompt_kind: "predict-then-reveal"` (locked to one form for v1 — see Open decisions).
+- On success: writes the lesson to both `node.cached_lesson` and `state.current_lesson`.
 
-**Test:**
-- On a known node from the `requests` graph, generate a lesson. Manually verify: walkthrough references the real code, the prompt is answerable from the walkthrough, no hallucinated file paths.
-- Same node, different `goal.experience_level` → lesson tone shifts.
+**Tests** ✅ — 18 tests in `tests/test_teaching_agent.py`: happy path, cache-hit skips LLM, prior-context built from understood nodes, supporting-retrieval failure is non-fatal, own-anchor excluded from the supporting query, source-read failure handled, error paths (no graph / no current node / no goal), fenced-JSON parsing, prompt_kind default. All 181 tests pass.
 
 ---
 

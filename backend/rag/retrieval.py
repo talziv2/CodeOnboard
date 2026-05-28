@@ -271,3 +271,38 @@ def retrieve_chunks(state: OnboardState) -> list[dict]:
     if profile.retrieval_strategy == "per_module":
         return retrieve_chunks_per_module(state, profile)
     return retrieve_chunks_focused(state, profile)
+
+
+def retrieve_supporting_chunks(
+    state: OnboardState,
+    query_text: str,
+    exclude: set[tuple[str, int, int]] | None = None,
+    top_k: int = 2,
+) -> list[dict]:
+    """Small, focused lookup around a single node — used by the Teaching Agent.
+
+    Unlike retrieve_chunks (which serves the Mentor's whole-graph planning),
+    this fetches a couple of extra chunks for cross-reference context when
+    teaching one node: a related import, a caller, a sibling flow. No role
+    filter — any relevant context is fair game. `exclude` drops anchors the
+    caller already has (e.g. the node's own chunk) so we don't echo them back.
+
+    This is the workaround for the single-range anchor model (see phase3.md
+    Part 1 deferred block, "Rich code anchors"): the anchor stays one range,
+    but the lesson can still reach for surrounding context.
+    """
+    exclude = exclude or set()
+    name = collection_name(state)
+    embedding = embedder.embed_query(query_text)
+    result = store.query(name, embedding, top_k=top_k + len(exclude))
+    docs = result["documents"][0]
+    metas = result["metadatas"][0]
+    out: list[dict] = []
+    for doc, meta in zip(docs, metas):
+        key = (meta["file"], meta["start_line"], meta["end_line"])
+        if key in exclude:
+            continue
+        out.append(flatten_chunk(doc, meta))
+        if len(out) >= top_k:
+            break
+    return out
