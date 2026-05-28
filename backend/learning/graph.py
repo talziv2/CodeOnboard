@@ -167,15 +167,70 @@ class LearningGraph:
         self.edges.append(LearningEdge(anchor_id, new_node.id, kind))
         return new_node
 
+    # --- traversal ---
+
+    def next_in_sequence(self, node_id: str) -> str | None:
+        # The next node along the "sequence" chain, or None at the end.
+        # Graph traversal lives here (not in the API) because it's pure
+        # structure logic. Only sequence edges advance the main path —
+        # "deeper"/"prerequisite" edges are side-structure.
+        for edge in self.edges:
+            if edge.kind == "sequence" and edge.from_node_id == node_id:
+                return edge.to_node_id
+        return None
+
+    def sequence_head(self) -> str | None:
+        # The node with no incoming sequence edge — where the path starts.
+        if not self.nodes:
+            return None
+        incoming = {e.to_node_id for e in self.edges if e.kind == "sequence"}
+        for node_id in self.nodes:
+            if node_id not in incoming:
+                return node_id
+        return next(iter(self.nodes))
+
     # --- derived metrics ---
 
     def readiness(self) -> float:
         # Heuristic progress signal — understood_count / total. Communicates
         # progress without overclaiming. The roadmap calls for
         # "goal_relevant_count" in the denominator; for v1 every node in the
-        # graph is goal-relevant by construction (the Planner only emits
+        # graph is goal-relevant by construction (the Mentor only emits
         # relevant nodes), so total works.
         if not self.nodes:
             return 0.0
         understood = sum(1 for n in self.nodes.values() if n.understanding_state == "understood")
         return understood / len(self.nodes)
+
+    # --- serialization (for API responses / UI) ---
+
+    def to_dict(self) -> dict:
+        # JSON-friendly view of the graph for HTTP responses. Excludes the
+        # cached_lesson bodies (large) — the lesson endpoint returns those
+        # separately. Includes the derived readiness gauge.
+        return {
+            "session_id": self.session_id,
+            "repo_url": self.repo_url,
+            "goal": self.goal,
+            "current_node_id": self.current_node_id,
+            "readiness": self.readiness(),
+            "nodes": [
+                {
+                    "id": n.id,
+                    "title": n.title,
+                    "file": n.code_anchor.file,
+                    "line_start": n.code_anchor.line_start,
+                    "line_end": n.code_anchor.line_end,
+                    "concept_tags": n.concept_tags,
+                    "understanding_state": n.understanding_state,
+                    "visited": n.visited,
+                    "weak_spot": n.weak_spot,
+                    "has_lesson": n.cached_lesson is not None,
+                }
+                for n in self.nodes.values()
+            ],
+            "edges": [
+                {"from_id": e.from_node_id, "to_id": e.to_node_id, "kind": e.kind}
+                for e in self.edges
+            ],
+        }

@@ -119,20 +119,29 @@ Expands a single node's lesson brief into the **actual lesson**: a walkthrough p
 
 ---
 
-### Part 4 — Vertical slice API + UI
+### Part 4 — Vertical slice API ✓ (done; UI deferred)
 
-**This is the integration gate.** By the end of Part 4 you can run an end-to-end session with no mutation, no grading, no persistence — just *one lesson at a time, click "next."* If this doesn't feel right, fix it here before adding adaptivity.
+**The integration gate.** Mentor + Teaching are now wired together behind real session endpoints, and Part 1's SQLite persistence is finally in use. **The UI half was deliberately skipped** — the slice is drivable end-to-end over HTTP (curl/Postman). A frontend can come later or be skipped entirely; the backend doesn't depend on it.
 
-**API (additions to `backend/api.py`):**
-- `POST /session/start` — body: `{ repo_url, goal }` → runs Code Structure + Prioritization + Mentor. Returns `{ session_id, graph }`.
-- `GET /session/{id}/lesson` — runs Teaching on `graph.current_node`. Returns `{ lesson, node_id }`.
-- `POST /session/{id}/advance` — body: `{ signal: "next" }`. Marks current node visited, advances `current_node_id` along the sequence, returns next lesson or `{ done: true }`.
+**API (added to `backend/api.py`)** ✅
+- `POST /session/start` — `{repo_url, goal}` → runs the pipeline (Code Structure + Prioritization + Mentor), **persists the graph to SQLite**, returns `{session_id, graph, errors}`. 500 with the error list if the pipeline produced no graph.
+- `GET /session/{id}` — returns the serialized graph (`LearningGraph.to_dict()`) for state inspection. 404 if unknown.
+- `GET /session/{id}/lesson` — loads the graph, runs the Teaching Agent on the current node, persists (lesson now cached), returns `{node_id, lesson}`.
+- `POST /session/{id}/advance` — `{signal:"next"}` → marks the current node visited, advances along the sequence, persists; returns the next rendered lesson, or `{done:true}` at the end of the chain. Non-`next` signals 400 (Part 6 adds the rest).
 
-**UI (additions to `frontend/`):**
-- New `/session/[id]` page. Left pane: lesson markdown. Right pane: a *list* view of the graph (a real graph view comes in Part 8). Current node highlighted; previously visited nodes greyed.
-- One button: **Got it, next**. Calls `/advance` with `signal: "next"`.
+**Supporting changes** ✅
+- `LearningGraph.next_in_sequence(node_id)`, `sequence_head()`, and `to_dict()` (graph traversal + serialization belong on the graph).
+- `SESSIONS_DB_PATH` indirection in `api.py` so tests point persistence at a temp DB.
+- `repo_path` is re-derived on each request via `clone_repo(graph.repo_url)` (no-op when cloned) rather than persisted — Teaching needs it to read source.
+- Goal-dialogue sessions stay in the in-memory dict; learning-graph sessions live in SQLite. Different lifecycles.
 
-**Done when:** A run on `psf/requests` walks the user through 6–10 lessons, in order, click by click, with no errors.
+**Tests** ✅ — 12 tests in `tests/test_session_api.py` (FastAPI `TestClient`, real SQLite at a temp path, mocked pipeline + Teaching + clone): start persists + returns the graph, lesson renders + caches, advance moves the pointer / marks visited / returns done at the end, 404s and the unsupported-signal 400. All 199 tests pass.
+
+**Deferred:**
+- **UI** — the `frontend/` `/session/[id]` page (lesson pane + graph list + "Got it, next"). Skipped for now; revisit alongside Part 8 (graph UI) or drop entirely if the project stays API-first.
+- **Resume** — `/session/start` doesn't yet check for an existing session on the repo; that's Part 7.
+
+**Done when (revised, met):** a session on `psf/requests` can be walked start → lesson → advance → … → done entirely over HTTP, with the graph persisted between calls.
 
 ---
 
@@ -232,27 +241,6 @@ These were deferred in the roadmap. **Lock each one before it blocks its part.**
 | 7 | Lesson regeneration on revisit | Cache the rendered lesson on first generation; regenerate only on user request (`/lesson?refresh=true`) | Part 4 |
 
 Anything else uncovered during build that needs a call: append here with a default, don't block the part.
-
----
-
-## Token budget (rough — Phase 3 changes the rules)
-
-| Agent | Model | When | Est. per session |
-|---|---|---|---|
-| Goal Agent | Haiku | 1× at start | ~$0.0004 |
-| Code Structure Agent | Haiku | 1× at start | ~$0.002 |
-| Prioritization Agent | Haiku | 1× at start | ~$0.001 |
-| Mentor (initial graph) | Sonnet | 1× at start | ~$0.07 |
-| Teaching | Haiku | per lesson, 6–10× | ~$0.03 |
-| Grader | Haiku | per response, 6–10× | ~$0.01 |
-| Mentor (mutator) | Sonnet | ~2× per session (avg) | ~$0.04 |
-| **Total** | | | **~$0.15/session** |
-
-**This breaks the Phase 1 $0.10 budget.** Two mitigations to evaluate during Part 6:
-- Cache Mentor mutator decisions for common signal patterns (`confused` on the same node twice → same prerequisite).
-- Try Haiku for the mutator entirely; only fall back to Sonnet when Haiku's output fails validation.
-
-Document the realized per-session cost in the recap once Parts 1–4 are running.
 
 ---
 

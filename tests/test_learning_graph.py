@@ -176,3 +176,70 @@ def test_readiness_counts_only_understood():
     g.mark_understanding(a.id, "understood")
     g.mark_understanding(b.id, "partial")
     assert g.readiness() == pytest.approx(1 / 3)
+
+
+# --- traversal ---
+
+
+def test_next_in_sequence_follows_chain():
+    g = _make_graph()
+    a = g.add_node(_make_node("A"))
+    b = g.add_node(_make_node("B"))
+    c = g.add_node(_make_node("C"))
+    g.add_edge(a.id, b.id, kind="sequence")
+    g.add_edge(b.id, c.id, kind="sequence")
+    assert g.next_in_sequence(a.id) == b.id
+    assert g.next_in_sequence(b.id) == c.id
+    assert g.next_in_sequence(c.id) is None  # end of chain
+
+
+def test_next_in_sequence_ignores_non_sequence_edges():
+    g = _make_graph()
+    a = g.add_node(_make_node("A"))
+    deeper = g.add_node(_make_node("DEEPER"))
+    g.add_edge(a.id, deeper.id, kind="deeper")
+    # Only "deeper" edge leaves A — sequence traversal stops here.
+    assert g.next_in_sequence(a.id) is None
+
+
+def test_sequence_head_is_node_with_no_incoming_sequence_edge():
+    g = _make_graph()
+    a = g.add_node(_make_node("A"))
+    b = g.add_node(_make_node("B"))
+    g.add_edge(a.id, b.id, kind="sequence")
+    assert g.sequence_head() == a.id
+
+
+def test_sequence_head_none_on_empty_graph():
+    assert _make_graph().sequence_head() is None
+
+
+# --- serialization ---
+
+
+def test_to_dict_shape():
+    g = _make_graph()
+    a = g.add_node(_make_node("A"))
+    b = g.add_node(_make_node("B"))
+    g.add_edge(a.id, b.id, kind="sequence")
+    g.set_current(a.id)
+    g.mark_understanding(a.id, "understood")
+    d = g.to_dict()
+    assert d["session_id"] == g.session_id
+    assert d["current_node_id"] == a.id
+    assert d["readiness"] == pytest.approx(0.5)
+    assert len(d["nodes"]) == 2
+    assert len(d["edges"]) == 1
+    assert d["edges"][0]["kind"] == "sequence"
+    node_a = next(n for n in d["nodes"] if n["id"] == a.id)
+    assert node_a["understanding_state"] == "understood"
+    assert node_a["has_lesson"] is False
+
+
+def test_to_dict_has_lesson_reflects_cache():
+    g = _make_graph()
+    a = g.add_node(_make_node("A"))
+    a.cached_lesson = {"walkthrough": "x", "prompt": "y", "expected_answer": "z",
+                       "prompt_kind": "predict-then-reveal"}
+    d = g.to_dict()
+    assert d["nodes"][0]["has_lesson"] is True
