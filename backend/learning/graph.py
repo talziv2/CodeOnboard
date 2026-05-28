@@ -201,6 +201,44 @@ class LearningGraph:
                 return node_id
         return next(iter(self.nodes))
 
+    def path_order(self) -> list[str]:
+        # Node ids in walk order: from the head along path edges, then any
+        # off-path nodes (e.g. "deeper" detours) appended at the end. The
+        # seen-set guards against cycles.
+        order: list[str] = []
+        seen: set[str] = set()
+        cur = self.path_head()
+        while cur is not None and cur not in seen:
+            seen.add(cur)
+            order.append(cur)
+            cur = self.next_in_path(cur)
+        for node_id in self.nodes:
+            if node_id not in seen:
+                order.append(node_id)
+        return order
+
+    def resume_point(self) -> str | None:
+        # Where a returning user should continue: the first unvisited node, in
+        # walk order, whose prerequisites are all understood. Falls back to the
+        # saved current_node_id when everything's been visited (or nothing
+        # qualifies). Heuristic, not rigorous — just a sensible re-entry point.
+        for node_id in self.path_order():
+            node = self.nodes[node_id]
+            if node.visited:
+                continue
+            prereqs = [
+                e.from_node_id
+                for e in self.edges
+                if e.kind == "prerequisite" and e.to_node_id == node_id
+            ]
+            if all(
+                self.nodes[p].understanding_state == "understood"
+                for p in prereqs
+                if p in self.nodes
+            ):
+                return node_id
+        return self.current_node_id
+
     # --- derived metrics ---
 
     def readiness(self) -> float:

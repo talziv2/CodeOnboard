@@ -193,17 +193,23 @@ The Mentor stops being one-shot — it now reshapes the graph in response to sig
 
 ---
 
-### Part 7 — Persistence + resume
+### Part 7 — Persistence + resume ✓ (done; UI deferred)
 
-The vertical slice already writes to SQLite at session start. Now wire up **load and resume**.
+Part 1 already wrote to SQLite on every state change; Part 7 adds **load and resume**.
 
-- `POST /session/start` checks if a graph already exists for `(user_id="local", repo_url, goal.primary_goal)`. If so, returns the existing one with `resumed: true`.
-- Save the graph on every state change (cheap — SQLite, single-row write).
-- Resume point heuristic: prefer the first unvisited node that has all its prerequisites understood; fall back to `current_node_id` from the saved graph.
-- UI: on a repeat visit to the same repo + goal, show "Resume from Step N" vs "Start over."
+**`LearningGraph.resume_point()` + `path_order()`** ✅ — `resume_point()` returns the first unvisited node (in walk order) whose prerequisites are all `understood`, falling back to `current_node_id`. `path_order()` walks head → `next_in_path`, then appends off-path nodes.
 
-**Test:**
-- Run a session through 3 lessons, kill the server, restart, hit `/session/start` with the same repo + goal → resumes at lesson 4.
+**`/session/start` auto-resume** ✅ — before running the pipeline, matches an existing session by `(repo_url, exact goal)`. On a hit: loads the graph, moves the pointer to `resume_point()`, persists, returns `{resumed: true, ...}` — **no pipeline re-run, no Sonnet cost**. A `force_new: true` flag bypasses resume. Matching is on exact goal-dict equality (deterministic, not brittle substring matching).
+
+**`GET /sessions?repo_url=`** ✅ — lists past sessions for a repo (the explicit "find your session" path), wrapping `list_sessions_for_repo`.
+
+**Tests** ✅ — resume_point/path_order unit tests in `tests/test_learning_graph.py`; API tests in `tests/test_session_api.py` (same goal resumes without re-running the pipeline, resume moves current to first unvisited, different goal → new session, `force_new` → fresh session, `GET /sessions` lists). All 242 tests pass.
+
+**Done when (met):** start a session, advance partway, then `/session/start` again with the same repo + goal → resumes the same session at the first unvisited node, without re-running the pipeline.
+
+**Deferred:**
+- **UI** — "Resume from Step N" vs "Start over" prompt. Same deferral as Parts 4–6.
+- **Multi-user identity** — resume matches per `(repo_url, goal)` only; a `user_id` dimension is still the Part 1 deferral (add when Phase 5 needs it).
 
 ---
 

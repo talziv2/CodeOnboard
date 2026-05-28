@@ -411,3 +411,89 @@ def test_override_rejects_unknown_action(mock_pipeline, client):
     ).json()["session_id"]
     resp = client.post(f"/session/{session_id}/override", json={"action": "explode"})
     assert resp.status_code == 400
+
+
+# ── Part 7: resume ────────────────────────────────────────────────────────────
+
+@patch("backend.api.clone_repo", return_value="data/repos/requests")
+@patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_same_repo_goal_resumes_without_rerunning_pipeline(
+    mock_pipeline, mock_teaching, mock_clone, client
+):
+    start = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()
+    session_id = start["session_id"]
+    assert start["resumed"] is False
+    # Advance once so the first node is visited and current moves to the second.
+    client.post(f"/session/{session_id}/advance", json={"signal": "next"})
+
+    # Second start, same repo + goal → resume the SAME session, no new pipeline.
+    again = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()
+    assert again["resumed"] is True
+    assert again["session_id"] == session_id
+    assert mock_pipeline.call_count == 1  # pipeline ran only the first time
+
+
+@patch("backend.api.clone_repo", return_value="data/repos/requests")
+@patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_resume_moves_current_to_first_unvisited(
+    mock_pipeline, mock_teaching, mock_clone, client
+):
+    start = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()
+    session_id = start["session_id"]
+    first_node = start["graph"]["current_node_id"]
+    client.post(f"/session/{session_id}/advance", json={"signal": "next"})
+
+    again = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()
+    # First node was visited → resume lands on the second (first unvisited).
+    assert again["graph"]["current_node_id"] != first_node
+
+
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_different_goal_creates_new_session(mock_pipeline, client):
+    client.post("/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL})
+    other_goal = {**FAKE_GOAL, "primary_goal": "something else entirely"}
+    resp = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": other_goal}
+    ).json()
+    assert resp["resumed"] is False
+    assert mock_pipeline.call_count == 2  # ran for each distinct goal
+
+
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_force_new_starts_fresh_despite_match(mock_pipeline, client):
+    first = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()
+    forced = client.post(
+        "/session/start",
+        json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL, "force_new": True},
+    ).json()
+    assert forced["resumed"] is False
+    assert forced["session_id"] != first["session_id"]
+    assert mock_pipeline.call_count == 2
+
+
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_list_sessions_for_repo(mock_pipeline, client):
+    client.post("/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL})
+    resp = client.get("/sessions", params={"repo_url": FAKE_REPO_URL})
+    assert resp.status_code == 200
+    sessions = resp.json()["sessions"]
+    assert len(sessions) >= 1
+    assert sessions[0]["goal"] == FAKE_GOAL
+
+
+def test_list_sessions_empty_for_unknown_repo(client):
+    resp = client.get("/sessions", params={"repo_url": "https://github.com/none/none"})
+    assert resp.status_code == 200
+    assert resp.json()["sessions"] == []

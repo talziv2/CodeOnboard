@@ -164,6 +164,10 @@ def onboard(body: OnboardRequest) -> OnboardResponse:
 class SessionStartRequest(BaseModel):
     repo_url: str
     goal: dict
+    # When an identical (repo_url, goal) session already exists, /session/start
+    # resumes it instead of re-running the pipeline. Set force_new to start a
+    # fresh session regardless.
+    force_new: bool = False
 
 
 class AdvanceRequest(BaseModel):
@@ -209,6 +213,13 @@ def _render_current_lesson(graph, client) -> dict:
 
 @app.post("/session/start")
 def session_start(body: SessionStartRequest) -> dict:
+    # Resume: if an identical (repo_url, goal) session exists, continue it
+    # rather than paying for the pipeline again. Match on exact goal equality.
+    if not body.force_new:
+        resumed = _try_resume(body.repo_url, body.goal)
+        if resumed is not None:
+            return resumed
+
     client = _new_client()
     state = run_pipeline(body.repo_url, body.goal, client=client)
     if state.graph is None:
@@ -220,8 +231,37 @@ def session_start(body: SessionStartRequest) -> dict:
     return {
         "session_id": state.graph.session_id,
         "graph": state.graph.to_dict(),
+        "resumed": False,
         "errors": state.errors,
     }
+
+
+def _try_resume(repo_url: str, goal: dict) -> dict | None:
+    for summary in learning_store.list_sessions_for_repo(repo_url, SESSIONS_DB_PATH):
+        if summary["goal"] != goal:
+            continue
+        graph = learning_store.load_graph(summary["session_id"], SESSIONS_DB_PATH)
+        if graph is None:
+            continue
+        # Move the pointer to a sensible re-entry point and persist it.
+        resume_node = graph.resume_point()
+        if resume_node is not None:
+            graph.set_current(resume_node)
+            learning_store.save_graph(graph, SESSIONS_DB_PATH)
+        return {
+            "session_id": graph.session_id,
+            "graph": graph.to_dict(),
+            "resumed": True,
+            "errors": [],
+        }
+    return None
+
+
+@app.get("/sessions")
+def list_sessions(repo_url: str) -> dict:
+    # Past sessions for a repo, so a returning client can find and resume one.
+    summaries = learning_store.list_sessions_for_repo(repo_url, SESSIONS_DB_PATH)
+    return {"sessions": summaries}
 
 
 @app.get("/session/{session_id}")

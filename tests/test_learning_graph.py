@@ -236,6 +236,67 @@ def test_path_head_none_on_empty_graph():
     assert _make_graph().path_head() is None
 
 
+def test_path_order_follows_walk():
+    g = _make_graph()
+    a = g.add_node(_make_node("A"))
+    b = g.add_node(_make_node("B"))
+    c = g.add_node(_make_node("C"))
+    g.add_edge(a.id, b.id, kind="sequence")
+    g.add_edge(b.id, c.id, kind="sequence")
+    assert g.path_order() == [a.id, b.id, c.id]
+
+
+def test_path_order_appends_off_path_nodes():
+    g = _make_graph()
+    a = g.add_node(_make_node("A"))
+    b = g.add_node(_make_node("B"))
+    g.add_edge(a.id, b.id, kind="sequence")
+    deeper = g.add_node(_make_node("DEEPER"))
+    g.add_edge(a.id, deeper.id, kind="deeper")  # off the main walk
+    order = g.path_order()
+    assert order[:2] == [a.id, b.id]
+    assert deeper.id in order  # appended, not lost
+
+
+# --- resume_point ---
+
+
+def test_resume_point_first_unvisited_in_order():
+    g = _make_graph()
+    a = g.add_node(_make_node("A"))
+    b = g.add_node(_make_node("B"))
+    c = g.add_node(_make_node("C"))
+    g.add_edge(a.id, b.id, kind="sequence")
+    g.add_edge(b.id, c.id, kind="sequence")
+    g.mark_visited(a.id)
+    g.mark_visited(b.id)
+    assert g.resume_point() == c.id  # first unvisited
+
+
+def test_resume_point_falls_back_to_current_when_all_visited():
+    g = _make_graph()
+    a = g.add_node(_make_node("A"))
+    b = g.add_node(_make_node("B"))
+    g.add_edge(a.id, b.id, kind="sequence")
+    g.mark_visited(a.id)
+    g.mark_visited(b.id)
+    g.set_current(b.id)
+    assert g.resume_point() == b.id  # nothing unvisited → current
+
+
+def test_resume_point_prefers_unvisited_prerequisite():
+    # Prereq inserted before X; both unvisited → resume at the prereq (it
+    # comes first in walk order).
+    g = _make_graph()
+    a = g.add_node(_make_node("A"))
+    x = g.add_node(_make_node("X"))
+    g.add_edge(a.id, x.id, kind="sequence")
+    g.mark_visited(a.id)
+    prereq = _make_node("PREREQ")
+    g.insert_before(x.id, prereq)
+    assert g.resume_point() == prereq.id
+
+
 # --- serialization ---
 
 
