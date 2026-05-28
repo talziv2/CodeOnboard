@@ -230,11 +230,34 @@ def test_run_errors_when_source_unreadable(mock_read):
 @patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
 def test_run_handles_invalid_llm_json(mock_read, mock_support):
     state, node = _make_state_with_current_node()
-    client = _make_mock_client("not valid json")
+    # Both the first call and the retry return garbage → give up gracefully.
+    client = MagicMock()
+    bad = MagicMock()
+    bad.content = [MagicMock(text="not valid json")]
+    client.messages.create.side_effect = [bad, bad]
     result = run(state, client=client)
     assert result.current_lesson is None
     assert node.cached_lesson is None
     assert any("LLM call failed" in e for e in result.errors)
+
+
+@patch("backend.agents.teaching.agent.retrieve_supporting_chunks", return_value=[])
+@patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
+def test_run_retries_once_on_bad_json(mock_read, mock_support):
+    # First response is unparseable; the retry returns valid JSON → lesson set.
+    state, node = _make_state_with_current_node()
+    bad = MagicMock()
+    bad.content = [MagicMock(text="here you go: {oops not json")]
+    good = MagicMock()
+    good.content = [MagicMock(text=json.dumps(FAKE_LESSON_OUTPUT))]
+    client = MagicMock()
+    client.messages.create.side_effect = [bad, good]
+
+    result = run(state, client=client)
+
+    assert client.messages.create.call_count == 2
+    assert result.current_lesson is not None
+    assert result.current_lesson["prompt_kind"] == "predict-then-reveal"
 
 
 # ── parsing ───────────────────────────────────────────────────────────────────

@@ -28,7 +28,10 @@ from backend.rag.retrieval import retrieve_supporting_chunks
 
 
 MODEL = "claude-haiku-4-5"
-MAX_TOKENS = 2048
+# Walkthroughs are the longest prose in the system. 2048 was too tight — a long
+# lesson would get truncated mid-JSON-string ("Unterminated string" on parse).
+# Match the Mentor's budget so the JSON always closes.
+MAX_TOKENS = 4096
 
 # How many extra cross-reference chunks to pull for context. Small on purpose —
 # the lesson is about one node, the supporting chunks just give it reach.
@@ -72,7 +75,7 @@ Rules:
 - Teach only what the shown code supports. Do not invent behavior, file paths,
   or relationships not visible in the code or supporting chunks.
 - Keep the walkthrough focused on THIS piece — the supporting chunks are
-  context, not separate lessons.
+  context, not separate lessons. Aim for under ~350 words.
 - Return ONLY the JSON object — no markdown fences, no preamble.
 """
 
@@ -217,14 +220,7 @@ def run(
     user_content = _build_user_content(state.goal, node, source, prior_context, supporting)
 
     try:
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            system=_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_content}],
-        )
-        raw = response.content[0].text
-        output = _parse_output(raw)
+        output = _generate_lesson(client, user_content)
         lesson = output.model_dump()
         node.cached_lesson = lesson
         state.current_lesson = lesson
@@ -232,3 +228,37 @@ def run(
         state.errors.append(f"teaching_agent LLM call failed: {e}")
 
     return state
+
+
+def _generate_lesson(client: anthropic.Anthropic, user_content: str) -> LessonOutput:
+    """One Haiku call, with a single corrective retry on a parse failure.
+
+    Haiku occasionally wraps the JSON in prose or emits malformed JSON. Like
+    the Mentor's retries and the Grader's fallback, we don't let one bad
+    response fail the lesson — we show the model its miss and ask once more.
+    """
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=MAX_TOKENS,
+        system=_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_content}],
+    )
+    raw = response.content[0].text
+    try:
+        return _parse_output(raw)
+    except Exception:
+        retry = client.messages.create(
+            model=MODEL,
+            max_tokens=MAX_TOKENS,
+            system=_SYSTEM_PROMPT,
+            messages=[
+                {"role": "user", "content": user_content},
+                {"role": "assistant", "content": raw},
+                {"role": "user", "content": (
+                    "That was not a valid JSON object. Return ONLY the JSON object "
+                    "with keys walkthrough, prompt, expected_answer, prompt_kind — "
+                    "no markdown fences, no prose."
+                )},
+            ],
+        )
+        return _parse_output(retry.content[0].text)  # may raise → caller logs it
