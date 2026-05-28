@@ -168,22 +168,34 @@ class LearningGraph:
         return new_node
 
     # --- traversal ---
+    #
+    # The "path" the user walks is made of two edge kinds:
+    #   - sequence:     the Mentor's planned order
+    #   - prerequisite: a node spliced in before another (mutator, Part 6) —
+    #                   it still moves the user forward (learn the prereq,
+    #                   then continue to the node that needed it)
+    # "deeper" edges are deliberately NOT part of the walk: they're opt-in
+    # side detours, reached only by explicit navigation.
 
-    def next_in_sequence(self, node_id: str) -> str | None:
-        # The next node along the "sequence" chain, or None at the end.
-        # Graph traversal lives here (not in the API) because it's pure
-        # structure logic. Only sequence edges advance the main path —
-        # "deeper"/"prerequisite" edges are side-structure.
-        for edge in self.edges:
-            if edge.kind == "sequence" and edge.from_node_id == node_id:
-                return edge.to_node_id
+    _PATH_EDGE_KINDS = ("sequence", "prerequisite")
+
+    def next_in_path(self, node_id: str) -> str | None:
+        # Next node along the main walk, or None at the end. Prefer a sequence
+        # edge; fall back to a prerequisite edge (a prereq points at the node
+        # it unblocks, which is exactly where the user should go next).
+        for kind in self._PATH_EDGE_KINDS:
+            for edge in self.edges:
+                if edge.kind == kind and edge.from_node_id == node_id:
+                    return edge.to_node_id
         return None
 
-    def sequence_head(self) -> str | None:
-        # The node with no incoming sequence edge — where the path starts.
+    def path_head(self) -> str | None:
+        # The node with no incoming path edge — where the walk starts.
         if not self.nodes:
             return None
-        incoming = {e.to_node_id for e in self.edges if e.kind == "sequence"}
+        incoming = {
+            e.to_node_id for e in self.edges if e.kind in self._PATH_EDGE_KINDS
+        }
         for node_id in self.nodes:
             if node_id not in incoming:
                 return node_id

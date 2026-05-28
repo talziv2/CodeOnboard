@@ -31,6 +31,10 @@ class OnboardState:
     # durable effect is the node's understanding_state / weak_spot, which
     # the Grader updates directly on the graph.
     last_grade: dict | None = None
+    # What the mutator did on the last signal ({kind, new_node_id?,
+    # anchor_node_id?}). Transient — the durable effect is the mutated graph.
+    # kind: "none" | "prerequisite" | "skip".
+    last_mutation: dict | None = None
     # operator.add reducer: when a node returns errors, the list is *extended*
     # rather than replaced. Required for safe concurrent writes once parallel
     # nodes exist (e.g. Documentation Agent in Phase 2). Harmless today.

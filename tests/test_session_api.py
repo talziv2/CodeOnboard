@@ -290,3 +290,124 @@ def test_respond_409_before_lesson_rendered(mock_pipeline, client):
 
 def test_respond_unknown_session_404(client):
     assert client.post("/session/nope/respond", json={"response": "x"}).status_code == 404
+
+
+# ── Part 6: mutation on confused, skip, override ──────────────────────────────
+
+def _mutator_inserts_prerequisite(state, signal, client=None):
+    # Mimic the real mutator's prerequisite insertion without RAG/LLM.
+    graph = state.graph
+    current = graph.current_node_id
+    from backend.learning.graph import CodeAnchor, LearningNode
+    prereq = LearningNode(
+        title="Prerequisite",
+        code_anchor=CodeAnchor(file="requests/models.py", line_start=10, line_end=40),
+        lesson_brief={"why": "foundation", "understand": "the basics"},
+    )
+    graph.insert_before(current, prereq, kind="prerequisite")
+    graph.set_current(prereq.id)
+    state.last_mutation = {"kind": "prerequisite", "new_node_id": prereq.id,
+                           "anchor_node_id": current}
+    return state
+
+
+@patch("backend.api.clone_repo", return_value="data/repos/requests")
+@patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_confused_inserts_prerequisite_and_walk_returns_to_node(
+    mock_pipeline, mock_teaching, mock_clone, client
+):
+    start = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()
+    session_id = start["session_id"]
+    confused_node = start["graph"]["current_node_id"]
+    client.get(f"/session/{session_id}/lesson")  # render so /respond has a prompt
+
+    with patch("backend.api.run_grader", side_effect=_grader_side_effect("confused")), \
+         patch("backend.api.mutate_graph", side_effect=_mutator_inserts_prerequisite):
+        resp = client.post(f"/session/{session_id}/respond", json={"response": "lost"})
+
+    body = resp.json()
+    assert body["classification"] == "confused"
+    assert body["mutation"]["kind"] == "prerequisite"
+    prereq_id = body["mutation"]["new_node_id"]
+    # Current moved to the new prerequisite.
+    assert body["current_node_id"] == prereq_id
+
+    # The persisted graph gained a node, and the prereq walks back to the
+    # originally-confused node.
+    graph = client.get(f"/session/{session_id}").json()
+    assert len(graph["nodes"]) == 3
+    assert graph["current_node_id"] == prereq_id
+    prereq_edge = next(
+        e for e in graph["edges"]
+        if e["from_id"] == prereq_id and e["to_id"] == confused_node
+    )
+    assert prereq_edge["kind"] == "prerequisite"
+
+
+@patch("backend.api.clone_repo", return_value="data/repos/requests")
+@patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_understood_does_not_mutate(mock_pipeline, mock_teaching, mock_clone, client):
+    session_id = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()["session_id"]
+    client.get(f"/session/{session_id}/lesson")
+
+    with patch("backend.api.run_grader", side_effect=_grader_side_effect("understood")):
+        resp = client.post(f"/session/{session_id}/respond", json={"response": "great answer"})
+
+    assert resp.json()["mutation"]["kind"] == "none"
+    graph = client.get(f"/session/{session_id}").json()
+    assert len(graph["nodes"]) == 2  # unchanged
+
+
+@patch("backend.api.clone_repo", return_value="data/repos/requests")
+@patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_advance_skip_marks_skipped_and_moves_on(mock_pipeline, mock_teaching, mock_clone, client):
+    start = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()
+    session_id = start["session_id"]
+    first = start["graph"]["current_node_id"]
+
+    resp = client.post(f"/session/{session_id}/advance", json={"signal": "skip"})
+    assert resp.status_code == 200
+    assert resp.json()["done"] is False
+
+    graph = client.get(f"/session/{session_id}").json()
+    node = next(n for n in graph["nodes"] if n["id"] == first)
+    assert node["visited"] is True
+    assert graph["current_node_id"] != first
+
+
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_override_mark_understood(mock_pipeline, client):
+    start = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()
+    session_id = start["session_id"]
+    node_id = start["graph"]["current_node_id"]
+
+    resp = client.post(
+        f"/session/{session_id}/override",
+        json={"action": "mark_understood", "node_id": node_id},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["understanding_state"] == "understood"
+
+    graph = client.get(f"/session/{session_id}").json()
+    node = next(n for n in graph["nodes"] if n["id"] == node_id)
+    assert node["understanding_state"] == "understood"
+
+
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_override_rejects_unknown_action(mock_pipeline, client):
+    session_id = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()["session_id"]
+    resp = client.post(f"/session/{session_id}/override", json={"action": "explode"})
+    assert resp.status_code == 400

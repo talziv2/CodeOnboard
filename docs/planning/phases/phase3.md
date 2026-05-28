@@ -165,30 +165,31 @@ Classifies **free-text** user responses to active-learning prompts and records t
 
 ---
 
-### Part 6 — Mentor gains a mutator
+### Part 6 — Mentor gains a mutator ✓ (done; UI + some signals deferred)
 
-The Mentor stops being one-shot. On each user signal, it decides whether to mutate the graph.
+The Mentor stops being one-shot — it now reshapes the graph in response to signals. **This is where the "adaptive" claim becomes real.**
 
-**Signals that can trigger mutation:**
-- Explicit user actions: *deeper*, *simpler*, *skip*, *go to architecture first*.
-- Grader-derived: `confused` → consider inserting a prerequisite node; `understood` repeatedly → consider raising depth.
+**`backend/agents/mentor/mutator.py`** ✅ — `mutate(state, signal, client)` dispatcher. Records what it did in `state.last_mutation` (`{kind, new_node_id?, anchor_node_id?}`). Never raises — a failed mutation leaves the graph untouched.
+- **`prerequisite`** (the headline; triggered when the Grader returns `confused`): one Sonnet call generates a foundational node, anchored on a *real* retrieved chunk. The mutator retrieves candidate chunks (`retrieve_supporting_chunks`, excluding existing node anchors), asks Sonnet to pick one and write the node, **grounds the anchor** (rejects hallucinated anchors → no insert), then `insert_before` + sets it current. Guard: **at most one prerequisite per node**, so repeated confusion doesn't stack prereqs or burn repeated Sonnet calls.
+- **`skip`** — pure Python: `override("skip")` + advance. No LLM.
 
-**`backend/agents/mentor/mutator.py`** (separate from initial-graph generator, same module):
-- Input: `graph`, `signal`, optionally `current_node`.
-- Decides one of: `no-op` / `insert_prerequisite(before=node_id, new_node=...)` / `insert_deeper(after=node_id, new_node=...)` / `reorder(...)` / `skip(node_id)`.
-- One Sonnet call **only when the signal is ambiguous or requires generating a new node**. Cheap signals (`skip`, explicit `next`) bypass the LLM and mutate via pure-Python rules using `LearningGraph.insert_before` / `insert_after` / `override`.
-- Returns a mutated `LearningGraph`.
+**Traversal change** ✅ — the main walk is now **sequence + prerequisite edges** (`next_in_sequence`/`sequence_head` → `next_in_path`/`path_head`). A spliced-in prerequisite walks forward to the node it unblocks, so after the detour the user lands back on the original node. `deeper` edges stay opt-in (not part of the walk).
 
-**API additions:**
-- Extend `/advance` to accept signals beyond `next`: `deeper`, `simpler`, `skip`, `confused`.
-- Add `POST /session/{id}/override` for direct user-driven graph edits (mark understood, mark weak, drop node).
+**API additions** ✅
+- `/respond` now mutates: when the Grader classifies `confused`, it inserts a prerequisite and returns `{mutation, current_node_id}` (current may now point at the new prereq).
+- `/advance` accepts `skip` in addition to `next`.
+- `POST /session/{id}/override` — pure-Python user edits: `mark_understood` / `mark_weak` / `skip` (defaults to the current node).
 
-**UI additions:**
-- Lesson page: row of signal buttons (deeper / simpler / skip / "I'm lost").
-- New nodes inserted by the mutator visibly appear in the right-pane list.
+**Tests** ✅ — 10 in `tests/test_mutator.py` (prerequisite insertion + walk-returns-to-node, Sonnet use, double-insert guard, no-candidates / ungrounded-anchor / LLM-failure no-ops, skip, dispatcher guards) + 5 API tests in `tests/test_session_api.py` (confused→prerequisite end-to-end, understood→no-mutation, skip, override). All 231 tests pass.
 
-**Test:**
-- Trigger `confused` on a node that has an obvious prerequisite (e.g. ask about adapters before sessions). Mutator inserts the prerequisite node before the current one. Run the session forward — prerequisite is taught first, then the original.
+**Deferred (with reasons):**
+- **`deeper`** — needs a "return pointer" (after the detour, resume where you were); extra session state, not worth it for v1.
+- **`simpler`** — it's a Teaching *re-render* (needs a "simpler" directive on the Teaching prompt), not a structural mutation.
+- **reorder / architecture-first / auto-raise-depth-on-repeated-understood** — speculative; the graph already demonstrably mutates without them.
+- **Manual "I'm lost" signal** — `confused` is Grader-derived via `/respond` for now; a manual button is deferred with the UI.
+- **UI** — signal buttons + showing inserted nodes. Same deferral as Parts 4–5.
+
+**Done when (met):** triggering `confused` on a node inserts a real, grounded prerequisite before it; walking forward teaches the prerequisite, then returns to the original node.
 
 ---
 

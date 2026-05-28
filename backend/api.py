@@ -34,6 +34,7 @@ from backend.agents.goal import (
     start_session,
 )
 from backend.agents.grader import run as run_grader
+from backend.agents.mentor.mutator import mutate as mutate_graph
 from backend.agents.teaching import run as run_teaching
 from backend.learning import store as learning_store
 from backend.pipeline.runner import run_pipeline
@@ -173,6 +174,11 @@ class RespondRequest(BaseModel):
     response: str
 
 
+class OverrideRequest(BaseModel):
+    action: str  # "mark_understood" | "mark_weak" | "skip"
+    node_id: str | None = None  # defaults to the current node
+
+
 def _load_session_or_404(session_id: str):
     graph = learning_store.load_graph(session_id, SESSIONS_DB_PATH)
     if graph is None:
@@ -236,12 +242,12 @@ def session_lesson(session_id: str) -> dict:
 
 @app.post("/session/{session_id}/advance")
 def session_advance(session_id: str, body: AdvanceRequest) -> dict:
-    # Part 4 supports only "next". Richer signals (deeper / simpler / skip /
-    # confused) arrive with the Part 6 mutator.
-    if body.signal != "next":
+    # "next" moves along the path; "skip" marks the node skipped then advances.
+    # Other signals (deeper / simpler) are deferred (phase3.md Part 6).
+    if body.signal not in ("next", "skip"):
         raise HTTPException(
             status_code=400,
-            detail=f"unsupported signal {body.signal!r}; only 'next' is supported in Part 4",
+            detail=f"unsupported signal {body.signal!r}; supported: 'next', 'skip'",
         )
 
     graph = _load_session_or_404(session_id)
@@ -249,10 +255,24 @@ def session_advance(session_id: str, body: AdvanceRequest) -> dict:
     if current is None:
         raise HTTPException(status_code=409, detail="session_has_no_current_node")
 
+    if body.signal == "skip":
+        # Pure-Python mutation: mark skipped + advance to the next node.
+        state = OnboardState(repo_url=graph.repo_url, goal=graph.goal)
+        state.graph = graph
+        mutate_graph(state, "skip")
+        learning_store.save_graph(graph, SESSIONS_DB_PATH)
+        nxt = graph.current_node_id if graph.current_node_id != current else None
+        if nxt is None or nxt == current:
+            return {"done": True}
+        client = _new_client()
+        lesson = _render_current_lesson(graph, client)
+        return {"done": False, "node_id": graph.current_node_id, "lesson": lesson}
+
+    # signal == "next"
     graph.mark_visited(current)
-    nxt = graph.next_in_sequence(current)
+    nxt = graph.next_in_path(current)
     if nxt is None:
-        # End of the sequence. Leave current_node_id pointing at the last node
+        # End of the path. Leave current_node_id pointing at the last node
         # (non-destructive) so /session/{id} still shows where the user ended.
         learning_store.save_graph(graph, SESSIONS_DB_PATH)
         return {"done": True}
@@ -278,11 +298,46 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
     state.graph = graph
     run_grader(state, body.response, client=client)
     # The Grader updated the node's understanding_state / weak_spot in place.
-    learning_store.save_graph(graph, SESSIONS_DB_PATH)
 
     grade = state.last_grade or {}
+    mutation = {"kind": "none"}
+    if grade.get("classification") == "confused":
+        # Adaptive step: insert a prerequisite before the confused node and
+        # make it current, so the user learns the missing foundation first.
+        # repo_path is needed for retrieval during node generation.
+        state.repo_path = clone_repo(graph.repo_url)
+        mutate_graph(state, "prerequisite", client=client)
+        mutation = state.last_mutation or {"kind": "none"}
+
+    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+
     return {
         "classification": grade.get("classification"),
         "rationale": grade.get("rationale"),
         "understanding_state": graph.nodes[current].understanding_state,
+        "mutation": mutation,
+        "current_node_id": graph.current_node_id,  # may now point at a new prerequisite
+    }
+
+
+@app.post("/session/{session_id}/override")
+def session_override(session_id: str, body: OverrideRequest) -> dict:
+    # User-driven edits to their own understanding graph. Pure Python, no LLM.
+    if body.action not in ("mark_understood", "mark_weak", "skip"):
+        raise HTTPException(
+            status_code=400, detail=f"unsupported action {body.action!r}"
+        )
+    graph = _load_session_or_404(session_id)
+    node_id = body.node_id or graph.current_node_id
+    if node_id is None or node_id not in graph.nodes:
+        raise HTTPException(status_code=404, detail="node_not_found")
+
+    graph.override(node_id, body.action)
+    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    node = graph.nodes[node_id]
+    return {
+        "node_id": node_id,
+        "understanding_state": node.understanding_state,
+        "visited": node.visited,
+        "weak_spot": node.weak_spot,
     }

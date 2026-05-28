@@ -181,37 +181,59 @@ def test_readiness_counts_only_understood():
 # --- traversal ---
 
 
-def test_next_in_sequence_follows_chain():
+def test_next_in_path_follows_sequence_chain():
     g = _make_graph()
     a = g.add_node(_make_node("A"))
     b = g.add_node(_make_node("B"))
     c = g.add_node(_make_node("C"))
     g.add_edge(a.id, b.id, kind="sequence")
     g.add_edge(b.id, c.id, kind="sequence")
-    assert g.next_in_sequence(a.id) == b.id
-    assert g.next_in_sequence(b.id) == c.id
-    assert g.next_in_sequence(c.id) is None  # end of chain
+    assert g.next_in_path(a.id) == b.id
+    assert g.next_in_path(b.id) == c.id
+    assert g.next_in_path(c.id) is None  # end of chain
 
 
-def test_next_in_sequence_ignores_non_sequence_edges():
+def test_next_in_path_follows_prerequisite_edges():
+    # A prerequisite node should walk forward to the node it unblocks.
+    g = _make_graph()
+    a = g.add_node(_make_node("A"))
+    x = g.add_node(_make_node("X"))
+    g.add_edge(a.id, x.id, kind="sequence")
+    prereq = _make_node("PREREQ")
+    g.insert_before(x.id, prereq)  # A->PREREQ (sequence), PREREQ->X (prerequisite)
+    assert g.next_in_path(a.id) == prereq.id          # spine rerouted to the prereq
+    assert g.next_in_path(prereq.id) == x.id          # prereq walks forward to X
+    assert g.next_in_path(x.id) is None
+
+
+def test_next_in_path_ignores_deeper_edges():
     g = _make_graph()
     a = g.add_node(_make_node("A"))
     deeper = g.add_node(_make_node("DEEPER"))
     g.add_edge(a.id, deeper.id, kind="deeper")
-    # Only "deeper" edge leaves A — sequence traversal stops here.
-    assert g.next_in_sequence(a.id) is None
+    # "deeper" is an opt-in detour — not part of the main walk.
+    assert g.next_in_path(a.id) is None
 
 
-def test_sequence_head_is_node_with_no_incoming_sequence_edge():
+def test_path_head_is_node_with_no_incoming_path_edge():
     g = _make_graph()
     a = g.add_node(_make_node("A"))
     b = g.add_node(_make_node("B"))
     g.add_edge(a.id, b.id, kind="sequence")
-    assert g.sequence_head() == a.id
+    assert g.path_head() == a.id
 
 
-def test_sequence_head_none_on_empty_graph():
-    assert _make_graph().sequence_head() is None
+def test_path_head_accounts_for_prerequisite_edges():
+    # Inserting a prerequisite before the head makes the prereq the new head.
+    g = _make_graph()
+    x = g.add_node(_make_node("X"))  # X is the head
+    prereq = _make_node("PREREQ")
+    g.insert_before(x.id, prereq)    # only a prerequisite edge PREREQ->X
+    assert g.path_head() == prereq.id  # X no longer counts as a head
+
+
+def test_path_head_none_on_empty_graph():
+    assert _make_graph().path_head() is None
 
 
 # --- serialization ---
