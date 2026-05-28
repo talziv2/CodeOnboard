@@ -26,6 +26,11 @@ class OnboardState:
     # Agent, cleared by /advance. Not persisted on its own — the node's
     # cached_lesson is the source of truth for revisits.
     current_lesson: dict | None = None
+    # The Grader's classification of the user's last free-text response
+    # ({classification, rationale}). Transient like current_lesson — the
+    # durable effect is the node's understanding_state / weak_spot, which
+    # the Grader updates directly on the graph.
+    last_grade: dict | None = None
     # operator.add reducer: when a node returns errors, the list is *extended*
     # rather than replaced. Required for safe concurrent writes once parallel
     # nodes exist (e.g. Documentation Agent in Phase 2). Harmless today.

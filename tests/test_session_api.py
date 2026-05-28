@@ -219,3 +219,74 @@ def test_advance_rejects_unsupported_signal(client):
 
 def test_advance_unknown_session_404(client):
     assert client.post("/session/nope/advance", json={"signal": "next"}).status_code == 404
+
+
+# ── /session/{id}/respond ─────────────────────────────────────────────────────
+
+def _grader_side_effect(classification: str):
+    def _apply(state, user_response, client=None):
+        node = state.graph.nodes[state.graph.current_node_id]
+        # Mimic the real agent's node update for the non-off-topic cases.
+        mapping = {"understood": "understood", "partial": "partial", "confused": "not-yet"}
+        if classification in mapping:
+            state.graph.mark_understanding(node.id, mapping[classification])
+        state.last_grade = {"classification": classification, "rationale": "mock"}
+        return state
+    return _apply
+
+
+@patch("backend.api.clone_repo", return_value="data/repos/requests")
+@patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_respond_classifies_and_persists(mock_pipeline, mock_teaching, mock_clone, client):
+    session_id = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()["session_id"]
+    client.get(f"/session/{session_id}/lesson")  # render so there's a lesson to grade
+
+    with patch("backend.api.run_grader", side_effect=_grader_side_effect("understood")):
+        resp = client.post(f"/session/{session_id}/respond", json={"response": "good answer"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["classification"] == "understood"
+    assert body["understanding_state"] == "understood"
+
+    # And it persisted: the graph now reports the node as understood.
+    graph = client.get(f"/session/{session_id}").json()
+    current = graph["current_node_id"]
+    node = next(n for n in graph["nodes"] if n["id"] == current)
+    assert node["understanding_state"] == "understood"
+
+
+@patch("backend.api.clone_repo", return_value="data/repos/requests")
+@patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_respond_confused_sets_weak_spot(mock_pipeline, mock_teaching, mock_clone, client):
+    session_id = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()["session_id"]
+    client.get(f"/session/{session_id}/lesson")
+
+    with patch("backend.api.run_grader", side_effect=_grader_side_effect("confused")):
+        client.post(f"/session/{session_id}/respond", json={"response": "no idea"})
+
+    graph = client.get(f"/session/{session_id}").json()
+    current = graph["current_node_id"]
+    node = next(n for n in graph["nodes"] if n["id"] == current)
+    assert node["understanding_state"] == "not-yet"
+    assert node["weak_spot"] is True
+
+
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_respond_409_before_lesson_rendered(mock_pipeline, client):
+    # No /lesson call → current node has no cached_lesson → 409.
+    session_id = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()["session_id"]
+    resp = client.post(f"/session/{session_id}/respond", json={"response": "x"})
+    assert resp.status_code == 409
+
+
+def test_respond_unknown_session_404(client):
+    assert client.post("/session/nope/respond", json={"response": "x"}).status_code == 404

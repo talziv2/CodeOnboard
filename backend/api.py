@@ -33,6 +33,7 @@ from backend.agents.goal import (
     process_answer,
     start_session,
 )
+from backend.agents.grader import run as run_grader
 from backend.agents.teaching import run as run_teaching
 from backend.learning import store as learning_store
 from backend.pipeline.runner import run_pipeline
@@ -168,6 +169,10 @@ class AdvanceRequest(BaseModel):
     signal: str = "next"
 
 
+class RespondRequest(BaseModel):
+    response: str
+
+
 def _load_session_or_404(session_id: str):
     graph = learning_store.load_graph(session_id, SESSIONS_DB_PATH)
     if graph is None:
@@ -256,3 +261,28 @@ def session_advance(session_id: str, body: AdvanceRequest) -> dict:
     client = _new_client()
     lesson = _render_current_lesson(graph, client)  # also persists
     return {"done": False, "node_id": nxt, "lesson": lesson}
+
+
+@app.post("/session/{session_id}/respond")
+def session_respond(session_id: str, body: RespondRequest) -> dict:
+    graph = _load_session_or_404(session_id)
+    current = graph.current_node_id
+    if current is None:
+        raise HTTPException(status_code=409, detail="session_has_no_current_node")
+    if not graph.nodes[current].cached_lesson:
+        # Nothing to grade against — the user must view the lesson first.
+        raise HTTPException(status_code=409, detail="no_lesson_rendered_yet")
+
+    client = _new_client()
+    state = OnboardState(repo_url=graph.repo_url, goal=graph.goal, client=client)
+    state.graph = graph
+    run_grader(state, body.response, client=client)
+    # The Grader updated the node's understanding_state / weak_spot in place.
+    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+
+    grade = state.last_grade or {}
+    return {
+        "classification": grade.get("classification"),
+        "rationale": grade.get("rationale"),
+        "understanding_state": graph.nodes[current].understanding_state,
+    }

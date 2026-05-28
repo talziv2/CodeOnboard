@@ -145,23 +145,23 @@ Expands a single node's lesson brief into the **actual lesson**: a walkthrough p
 
 ---
 
-### Part 5 — Grader Agent
+### Part 5 — Grader Agent ✓ (done; UI deferred)
 
-Classifies **free-text** user responses to active-learning prompts.
+Classifies **free-text** user responses to active-learning prompts and records the result on the node — the signal that drives the understanding graph (and, from Part 6, the Mentor's mutator).
 
-**`backend/agents/grader/agent.py`**
-- Input: `prompt`, `expected_answer` (Teaching can produce this alongside the lesson — add to `LessonOutput`), `user_response`.
-- One Haiku call. Classification only: `"understood" | "partial" | "confused" | "off-topic"`. Plus a one-sentence rationale (for debugging, not shown to user in v1).
-- Pydantic-validated, with a fallback to `"partial"` on parse failure (graceful — never blocks).
+**`backend/agents/grader/agent.py`** ✅
+- `run(state, user_response, client)` — reads the current node's `cached_lesson` for `prompt` + `expected_answer`, makes one Haiku call, applies the result to the node, writes `{classification, rationale}` to `state.last_grade`. Errors append, never raises.
+- Classification → node effect: `understood` → `"understood"`; `partial` → `"partial"`; `confused` → `"not-yet"` (trips `weak_spot` via the graph's own logic); `off-topic` → **no change** (the user didn't actually answer).
+- Graceful: a parse/LLM failure falls back to `"partial"` instead of blocking the session.
+- `last_grade` added to `OnboardState` (transient, like `current_lesson`). The durable effect is the node's `understanding_state` / `weak_spot`.
 
-**API addition:**
-- `POST /session/{id}/respond` — body: `{ response: str }`. Calls Grader, updates the current node's `understanding_state`, sets `weak_spot=True` if confused. Does **not** mutate the graph yet — that's Part 6. Returns `{ classification, rationale }`.
+**API addition** ✅
+- `POST /session/{id}/respond` — `{response}` → 409 if no current node or no lesson rendered yet; else grades, **persists**, returns `{classification, rationale, understanding_state}`. **No graph mutation** — that's Part 6.
 
-**UI addition:**
-- Lesson page gets a free-text input + Submit button below the active prompt. After submit, show the classification and reveal "Continue" → calls `/advance`.
+**Tests** ✅ — 11 in `tests/test_grader_agent.py` (each classification → node state, confused → weak_spot, off-topic leaves state, model choice, prompt assembly, parse-failure → partial fallback, error paths) + 4 `/respond` tests in `tests/test_session_api.py`. All 214 tests pass.
 
-**Test:**
-- Synthesize 10 (prompt, expected, response) triples by hand — 3 obviously understood, 3 obviously confused, 4 ambiguous. Grader matches your judgment on the first 6 and gives sane partial/confused calls on the rest.
+**Deferred:**
+- **UI** — the lesson page's free-text input + classification display. Same deferral as Part 4's UI.
 
 ---
 
