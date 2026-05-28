@@ -1,0 +1,151 @@
+"""
+Pytest tests for the Grader Agent using mocks.
+Run with: uv run pytest tests/test_grader_agent.py -v
+"""
+import json
+from unittest.mock import MagicMock
+
+from backend.agents.grader import run
+from backend.agents.grader.agent import GraderOutput, _parse_output
+from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
+from backend.pipeline.state import OnboardState
+
+
+FAKE_REPO_URL = "https://github.com/psf/requests"
+FAKE_GOAL = {"primary_goal": "x", "goal_type": "understand_component"}
+
+FAKE_LESSON = {
+    "walkthrough": "…",
+    "prompt": "What does __call__ return?",
+    "expected_answer": "The mutated PreparedRequest.",
+    "prompt_kind": "predict-then-reveal",
+}
+
+
+def _make_state_with_lesson() -> tuple[OnboardState, str]:
+    graph = LearningGraph(repo_url=FAKE_REPO_URL, goal=FAKE_GOAL)
+    node = graph.add_node(LearningNode(
+        title="Understand HTTPBasicAuth",
+        code_anchor=CodeAnchor(file="requests/auth.py", line_start=72, line_end=100),
+    ))
+    node.cached_lesson = FAKE_LESSON
+    graph.set_current(node.id)
+    state = OnboardState(repo_url=FAKE_REPO_URL, goal=FAKE_GOAL)
+    state.graph = graph
+    return state, node.id
+
+
+def _mock_client(classification: str, rationale: str = "because") -> MagicMock:
+    payload = json.dumps({"classification": classification, "rationale": rationale})
+    message = MagicMock()
+    message.content = [MagicMock(text=payload)]
+    client = MagicMock()
+    client.messages.create.return_value = message
+    return client
+
+
+# ── classification → node state ───────────────────────────────────────────────
+
+def test_understood_marks_node_understood():
+    state, node_id = _make_state_with_lesson()
+    run(state, "It returns the mutated PreparedRequest", client=_mock_client("understood"))
+    assert state.graph.nodes[node_id].understanding_state == "understood"
+    assert state.last_grade["classification"] == "understood"
+
+
+def test_partial_marks_node_partial():
+    state, node_id = _make_state_with_lesson()
+    run(state, "It changes the request somehow", client=_mock_client("partial"))
+    assert state.graph.nodes[node_id].understanding_state == "partial"
+
+
+def test_confused_marks_not_yet_and_sets_weak_spot():
+    state, node_id = _make_state_with_lesson()
+    run(state, "It opens a socket?", client=_mock_client("confused"))
+    node = state.graph.nodes[node_id]
+    assert node.understanding_state == "not-yet"
+    assert node.weak_spot is True
+
+
+def test_off_topic_leaves_understanding_state_unchanged():
+    state, node_id = _make_state_with_lesson()
+    before = state.graph.nodes[node_id].understanding_state  # "not-yet" default
+    run(state, "what's for lunch", client=_mock_client("off-topic"))
+    node = state.graph.nodes[node_id]
+    assert node.understanding_state == before
+    assert node.weak_spot is False
+    assert state.last_grade["classification"] == "off-topic"
+
+
+def test_uses_haiku_model():
+    state, _ = _make_state_with_lesson()
+    client = _mock_client("understood")
+    run(state, "answer", client=client)
+    assert client.messages.create.call_args.kwargs["model"] == "claude-haiku-4-5"
+
+
+def test_prompt_and_expected_answer_sent_to_model():
+    state, _ = _make_state_with_lesson()
+    client = _mock_client("understood")
+    run(state, "my answer", client=client)
+    user_msg = client.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert FAKE_LESSON["prompt"] in user_msg
+    assert FAKE_LESSON["expected_answer"] in user_msg
+    assert "my answer" in user_msg
+
+
+# ── graceful fallback ─────────────────────────────────────────────────────────
+
+def test_parse_failure_defaults_to_partial():
+    state, node_id = _make_state_with_lesson()
+    bad = MagicMock()
+    bad.content = [MagicMock(text="not json at all")]
+    client = MagicMock()
+    client.messages.create.return_value = bad
+
+    run(state, "answer", client=client)
+
+    assert state.last_grade["classification"] == "partial"
+    assert state.graph.nodes[node_id].understanding_state == "partial"
+    assert any("defaulting to partial" in e for e in state.errors)
+
+
+# ── error paths ───────────────────────────────────────────────────────────────
+
+def test_errors_when_graph_missing():
+    state = OnboardState(repo_url=FAKE_REPO_URL, goal=FAKE_GOAL)
+    run(state, "answer", client=MagicMock())
+    assert state.last_grade is None
+    assert any("graph missing" in e for e in state.errors)
+
+
+def test_errors_when_no_current_node():
+    state = OnboardState(repo_url=FAKE_REPO_URL, goal=FAKE_GOAL)
+    state.graph = LearningGraph(repo_url=FAKE_REPO_URL, goal=FAKE_GOAL)
+    run(state, "answer", client=MagicMock())
+    assert state.last_grade is None
+    assert any("no current node" in e for e in state.errors)
+
+
+def test_errors_when_node_has_no_lesson():
+    graph = LearningGraph(repo_url=FAKE_REPO_URL, goal=FAKE_GOAL)
+    node = graph.add_node(LearningNode(
+        title="X", code_anchor=CodeAnchor(file="a.py", line_start=1, line_end=5),
+    ))
+    graph.set_current(node.id)  # no cached_lesson
+    state = OnboardState(repo_url=FAKE_REPO_URL, goal=FAKE_GOAL)
+    state.graph = graph
+    client = MagicMock()
+    run(state, "answer", client=client)
+    assert state.last_grade is None
+    assert any("no lesson to grade" in e for e in state.errors)
+    client.messages.create.assert_not_called()
+
+
+# ── parsing ───────────────────────────────────────────────────────────────────
+
+def test_parse_output_handles_fenced_json():
+    fenced = '```json\n{"classification": "understood", "rationale": "ok"}\n```'
+    out = _parse_output(fenced)
+    assert isinstance(out, GraderOutput)
+    assert out.classification == "understood"
