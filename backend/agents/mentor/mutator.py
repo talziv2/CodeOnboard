@@ -148,7 +148,7 @@ def _generate_prerequisite_node(
     if not candidates:
         return None
 
-    user_content = _build_prereq_prompt(anchor, candidates)
+    user_content = _build_prereq_prompt(anchor, candidates, state.goal or {})
     try:
         response = client.messages.create(
             model=MODEL,
@@ -201,11 +201,19 @@ Rules:
 - The concept must be genuinely MORE foundational than the node the developer
   was confused about — something that, once understood, makes the harder node
   click.
+- The developer's background and familiarity (in the user content) are a
+  TIEBREAKER, not a primary signal. First, ensure the chosen prerequisite
+  teaches the foundational concept that actually unblocks the confused node.
+  AMONG candidates that do, prefer the one that aligns with what the developer
+  reports knowing — skip prerequisites whose concept the developer's
+  background suggests they already understand.
 - Return ONLY the JSON object — no markdown fences, no preamble.
 """
 
 
-def _build_prereq_prompt(anchor: LearningNode, candidates: list[dict]) -> str:
+def _build_prereq_prompt(
+    anchor: LearningNode, candidates: list[dict], goal: dict
+) -> str:
     brief = anchor.lesson_brief or {}
     chunk_lines = []
     for c in candidates:
@@ -214,6 +222,10 @@ def _build_prereq_prompt(anchor: LearningNode, candidates: list[dict]) -> str:
             f"{c['file']} (lines {c['start_line']}–{c['end_line']})\n{c['content']}"
         )
     return (
+        f"Developer profile:\n"
+        f"  familiarity with THIS codebase: {goal.get('familiarity', 'unknown')}\n"
+        f"  background: {goal.get('background', 'unknown')}\n"
+        f"  experience level: {goal.get('experience_level', 'unknown')}\n\n"
         f"The developer was confused while learning this node:\n"
         f"  title: {anchor.title}\n"
         f"  why: {brief.get('why', '')}\n"

@@ -1,18 +1,28 @@
 # LangGraph orchestration for the onboarding pipeline.
 #
-# Graph shape (Phase 2 migration; logically equivalent to the Phase 1
-# sequential runner):
+# Graph shape:
 #
-#     START -> code_structure --(module_map set?)-- yes -> prioritization -> mentor -> END
-#                                              \--- no  -> END
+#     START -> code_structure --(module_map set?)-- no  -> END
+#                                              \--- yes -> prioritization
+#                                                              │
+#                                              ┌───────────────┴───────────────┐
+#                                  (review-worthy goal_type?)            (else)
+#                                              │                             │
+#                                              ▼                             ▼
+#                                           reviewer ────────────────────► mentor ──► END
 #
 # The Goal Agent is intentionally NOT a node here — it runs upstream of the
 # pipeline as a multi-turn HTTP dialogue via /goal/start and /goal/answer
 # (see backend/api.py). By the time invoke() is called, `goal` is finalized
 # input.
+#
+# The Reviewer is gated by goal_type (improve_existing_system,
+# understand_architecture). Other goal types skip straight to the Mentor —
+# saves a Haiku call and keeps the Mentor's emphasis on-goal.
 
 from langgraph.graph import END, START, StateGraph
 
+from backend.agents.reviewer.agent import should_run as _reviewer_should_run
 from backend.pipeline.state import OnboardState
 
 
@@ -55,6 +65,17 @@ def prioritization_node(state: OnboardState) -> dict:
     }
 
 
+def reviewer_node(state: OnboardState) -> dict:
+    from backend.pipeline import runner
+
+    prev_errors = list(state.errors)
+    runner.run_reviewer(state, client=state.client)
+    return {
+        "system_review": state.system_review,
+        "errors": _extract_new_errors(state, prev_errors),
+    }
+
+
 def mentor_node(state: OnboardState) -> dict:
     from backend.pipeline import runner
 
@@ -77,11 +98,18 @@ def route_after_code_structure(state: OnboardState) -> str:
     return "prioritization" if state.module_map is not None else END
 
 
+def route_after_prioritization(state: OnboardState) -> str:
+    # Reviewer runs only for goal types that need it (improve_existing_system,
+    # understand_architecture). Other goal types skip straight to the Mentor.
+    return "reviewer" if _reviewer_should_run(state.goal) else "mentor"
+
+
 def build_graph():
     graph = StateGraph(OnboardState)
 
     graph.add_node("code_structure", code_structure_node)
     graph.add_node("prioritization", prioritization_node)
+    graph.add_node("reviewer", reviewer_node)
     graph.add_node("mentor", mentor_node)
 
     graph.add_edge(START, "code_structure")
@@ -90,7 +118,12 @@ def build_graph():
         route_after_code_structure,
         {"prioritization": "prioritization", END: END},
     )
-    graph.add_edge("prioritization", "mentor")
+    graph.add_conditional_edges(
+        "prioritization",
+        route_after_prioritization,
+        {"reviewer": "reviewer", "mentor": "mentor"},
+    )
+    graph.add_edge("reviewer", "mentor")
     graph.add_edge("mentor", END)
 
     return graph.compile()

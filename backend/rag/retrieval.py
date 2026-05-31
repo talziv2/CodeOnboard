@@ -106,12 +106,21 @@ def drop_redundant_class_chunks(chunks: list[dict]) -> list[dict]:
 def build_retrieval_query(goal: dict) -> str:
     primary = goal["primary_goal"]
     goal_type = goal["goal_type"]
-    if goal_type == "understand_component":
+    if goal_type in ("understand_component", "understand_architecture"):
         focus = goal.get("focus_area", "")
         return f"{primary}. Focus area: {focus}" if focus else primary
     if goal_type == "contribute_code":
         contribution = goal.get("contribution_context", "")
         return f"{primary}. Contribution: {contribution}" if contribution else primary
+    if goal_type == "improve_existing_system":
+        change = goal.get("change_target", "")
+        focus = goal.get("focus_area", "")
+        parts = [primary]
+        if change:
+            parts.append(f"Change target: {change}")
+        if focus:
+            parts.append(f"Focus area: {focus}")
+        return ". ".join(parts)
     if goal_type == "debug_issue":
         error = goal.get("error_description", "")
         tried = goal.get("tried_so_far", "")
@@ -140,6 +149,8 @@ def build_retrieval_queries(goal: dict, profile: RetrievalProfile) -> list[str]:
         extra_fields = ("error_description", "tried_so_far")
     elif goal["goal_type"] == "contribute_code":
         extra_fields = ("contribution_context",)
+    elif goal["goal_type"] == "improve_existing_system":
+        extra_fields = ("change_target", "focus_area")
     else:
         extra_fields = ()
     for field in extra_fields:

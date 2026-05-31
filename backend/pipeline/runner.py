@@ -10,7 +10,12 @@
 
 import anthropic
 
-from backend.agents import run_code_structure, run_mentor, run_prioritization  # re-exported  # noqa: F401
+from backend.agents import (  # re-exported  # noqa: F401
+    run_code_structure,
+    run_mentor,
+    run_prioritization,
+    run_reviewer,
+)
 from backend.pipeline.state import OnboardState
 
 # Compile the graph once at import. The graph itself imports this module

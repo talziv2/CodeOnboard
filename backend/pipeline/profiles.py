@@ -95,6 +95,39 @@ PROFILES: dict[str, RetrievalProfile] = {
         prioritization_mode="prune",
         drop_redundant_classes=True,
     ),
+    # Architecture tour: like understand_system, but slightly more chunks per
+    # module so we have headroom to surface entry points, boundaries, and
+    # public APIs. Source-only — the architectural narrative is in the code,
+    # not the tests.
+    "understand_architecture": RetrievalProfile(
+        goal_type="understand_architecture",
+        retrieval_roles=frozenset({"source"}),
+        retrieval_strategy="per_module",
+        top_k=28,
+        per_module_top_k=3,
+        per_pool_k=28,
+        max_per_file=3,
+        decompose_query=False,
+        prioritization_mode="preserve_breadth",
+        drop_redundant_classes=True,
+    ),
+    # Safe-change planning: similar pool mix to contribute_code (source +
+    # test + example), focused retrieval, and decomposition so the
+    # change_target / risk_tolerance fields contribute their own embedding
+    # rather than dilute the primary goal. Tests are essential here — the
+    # user needs to know what guards the area they will touch.
+    "improve_existing_system": RetrievalProfile(
+        goal_type="improve_existing_system",
+        retrieval_roles=frozenset({"source", "test", "example"}),
+        retrieval_strategy="focused",
+        top_k=22,
+        per_module_top_k=2,
+        per_pool_k=22,
+        max_per_file=3,
+        decompose_query=True,
+        prioritization_mode="prune",
+        drop_redundant_classes=True,
+    ),
 }
 
 # Unknown goal_type falls back to the broad tour — the safest default.
