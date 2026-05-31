@@ -23,6 +23,8 @@ ANS_GOAL_UNDERSTAND = "Understand how it works (reading/learning)"
 ANS_GOAL_DEBUG = "Debug an issue I'm hitting"
 ANS_GOAL_CONTRIBUTE = "Contribute code / open a PR"
 ANS_GOAL_USE = "Use it in my own project"
+ANS_GOAL_ARCHITECTURE = "Understand the architecture (layers, boundaries, design)"
+ANS_GOAL_IMPROVE = "Improve or extend the codebase safely"
 ANS_PRIMARY_GOAL = "understand the request lifecycle"
 ANS_BACKGROUND = "Python, Flask, some Java"
 
@@ -100,6 +102,20 @@ def test_q2_use_sets_goal_type():
     process_answer(session, ANS_FAMILIARITY, client=None)
     process_answer(session, ANS_GOAL_USE, client=None)
     assert session.goal_type == "understand_component"
+
+
+def test_q2_architecture_sets_goal_type():
+    session = start_session(REPO_URL)
+    process_answer(session, ANS_FAMILIARITY, client=None)
+    process_answer(session, ANS_GOAL_ARCHITECTURE, client=None)
+    assert session.goal_type == "understand_architecture"
+
+
+def test_q2_improve_sets_goal_type():
+    session = start_session(REPO_URL)
+    process_answer(session, ANS_FAMILIARITY, client=None)
+    process_answer(session, ANS_GOAL_IMPROVE, client=None)
+    assert session.goal_type == "improve_existing_system"
 
 
 def test_q2_invalid_option_raises():
@@ -248,6 +264,13 @@ def test_goal_type_validation_rejects_invalid_value():
 
 
 def test_goal_type_accepts_all_valid_values():
-    for valid_type in ("understand_system", "understand_component", "contribute_code", "debug_issue"):
+    for valid_type in (
+        "understand_system",
+        "understand_component",
+        "understand_architecture",
+        "contribute_code",
+        "improve_existing_system",
+        "debug_issue",
+    ):
         obj = GoalOutput(**{**VALID_GOAL_JSON, "goal_type": valid_type})
         assert obj.goal_type == valid_type

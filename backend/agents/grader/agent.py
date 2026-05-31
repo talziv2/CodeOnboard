@@ -20,6 +20,7 @@ from typing import Literal
 import anthropic
 from pydantic import BaseModel
 
+from backend.learning.graph import LearningNode
 from backend.pipeline.state import OnboardState
 
 
@@ -44,9 +45,19 @@ class GraderOutput(BaseModel):
 
 
 _SYSTEM_PROMPT = """\
-You grade a developer's answer to a comprehension question about code.
+You grade a developer's answer to a system-level question about one node in
+their understanding graph of a codebase. The node represents a concept the
+developer needs to grasp to reason about, critique, or safely change this
+system — not a piece of code they need to be able to write.
 
-You are given the question, a model answer, and the developer's response.
+You are given:
+  - the node's title (its learning objective)
+  - the node's concept tags (which dictate the kind of understanding to check)
+  - what the node intends the developer to take away
+  - the active-learning question they were asked
+  - a model answer (what a developer who understood this node would say)
+  - the developer's actual response
+
 Classify the response as EXACTLY one of:
   understood — correct and substantial; they clearly grasp the idea
   partial    — partially correct; some grasp but with gaps or imprecision
@@ -58,15 +69,47 @@ Return a JSON object with exactly these keys:
   classification: one of "understood", "partial", "confused", "off-topic"
   rationale:      one short sentence explaining the call
 
-Grade the understanding, not the wording. A correct idea in clumsy words is
-"understood". Return ONLY the JSON object — no markdown fences, no preamble.
+Rubric by dominant concept tag (pick the first tag from this vocabulary that
+appears in the node's tags; otherwise use the "other" rubric):
+  architecture     — did they name the layer's responsibility or boundary —
+                     what this part of the system owns and what it does NOT
+                     own — rather than just describing its code?
+  flow             — did they identify the order of operations and where
+                     data moves through the system, not just trace function
+                     calls line by line?
+  extension_point  — did they identify WHERE and HOW the system is meant to
+                     be extended (the contract, the seam, what a new
+                     extension must provide and what it can rely on)?
+  risk             — did they identify what can break, the invariant at
+                     stake, or the unsafe assumption a change might violate?
+  test_coverage    — did they identify what IS or IS NOT guarded by tests,
+                     or which class of regression the coverage catches?
+  component        — for this one tag, implementation-level detail (specific
+                     functions, attributes, return values) IS the learning
+                     objective and may legitimately be required for credit.
+  other            — did they grasp the lesson's central idea, expressed at
+                     the altitude of the prompt?
+
+A correct system-level answer is "understood" even when it does not cite
+specific line numbers, function names, or low-level implementation details —
+UNLESS the dominant tag is `component`, in which case those details may be
+the point. Grade the understanding, not the wording. A correct idea in
+clumsy words is "understood". Return ONLY the JSON object — no markdown
+fences, no preamble.
 """
 
 
-def _build_user_content(prompt: str, expected_answer: str, user_response: str) -> str:
+def _build_user_content(node: LearningNode, user_response: str) -> str:
+    lesson = node.cached_lesson or {}
+    brief = node.lesson_brief or {}
+    tags = ", ".join(node.concept_tags) if node.concept_tags else "(none)"
+    takeaway = brief.get("understand") or "(none provided)"
     return (
-        f"Question:\n{prompt}\n\n"
-        f"Model answer:\n{expected_answer}\n\n"
+        f"Node title:\n{node.title}\n\n"
+        f"Concept tags:\n{tags}\n\n"
+        f"What the developer should take away from this node:\n{takeaway}\n\n"
+        f"Question:\n{lesson.get('prompt', '')}\n\n"
+        f"Model answer:\n{lesson.get('expected_answer', '')}\n\n"
         f"Developer's response:\n{user_response}"
     )
 
@@ -108,9 +151,7 @@ def run(
         state.errors.append("grader_agent: current node has no lesson to grade against")
         return state
 
-    prompt = node.cached_lesson.get("prompt", "")
-    expected = node.cached_lesson.get("expected_answer", "")
-    user_content = _build_user_content(prompt, expected, user_response)
+    user_content = _build_user_content(node, user_response)
 
     try:
         response = client.messages.create(

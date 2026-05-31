@@ -11,7 +11,9 @@ from unittest.mock import MagicMock, patch
 from backend.agents.teaching import run
 from backend.agents.teaching.agent import (
     LessonOutput,
+    _SYSTEM_PROMPT,
     _build_prior_context,
+    _build_user_content,
     _parse_output,
 )
 from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
@@ -258,6 +260,55 @@ def test_run_retries_once_on_bad_json(mock_read, mock_support):
     assert client.messages.create.call_count == 2
     assert result.current_lesson is not None
     assert result.current_lesson["prompt_kind"] == "predict-then-reveal"
+
+
+# ── system-prompt calibration regression guards ──────────────────────────────
+
+
+def test_system_prompt_has_depth_calibration_with_word_counts():
+    # Depth must drive lesson length — the most demo-visible Teaching lever.
+    assert "By `Depth requested`" in _SYSTEM_PROMPT
+    assert "~200 words" in _SYSTEM_PROMPT
+    assert "~350 words" in _SYSTEM_PROMPT
+    assert "~500" in _SYSTEM_PROMPT
+
+
+def test_system_prompt_has_familiarity_terminology_calibration():
+    assert "By `familiarity" in _SYSTEM_PROMPT
+    assert "Starting fresh" in _SYSTEM_PROMPT
+    assert "Diving into source" in _SYSTEM_PROMPT
+
+
+def test_system_prompt_has_background_elision_not_analogies():
+    # Background should drive elision, not forced analogies.
+    assert "By `background`" in _SYSTEM_PROMPT
+    assert "information elision" in _SYSTEM_PROMPT.lower() or "elision" in _SYSTEM_PROMPT.lower()
+    assert "DO NOT force analogies" in _SYSTEM_PROMPT
+
+
+def test_user_content_includes_familiarity_and_background():
+    # Plumbing check: the new fields must reach the model.
+    node = LearningNode(
+        title="Identify the auth extension point",
+        code_anchor=CodeAnchor(file="requests/auth.py", line_start=1, line_end=5),
+        concept_tags=["extension_point"],
+        lesson_brief={"why": "x", "understand": "y"},
+    )
+    goal = {
+        "primary_goal": "extend safely",
+        "experience_level": "intermediate",
+        "depth": "moderate",
+        "familiarity": "Skimmed the README or docs",
+        "background": "Python, Flask",
+    }
+    content = _build_user_content(
+        goal, node, "source code", "no prior context", []
+    )
+    assert "Skimmed the README or docs" in content
+    assert "Python, Flask" in content
+    # familiarity must be labeled "with THIS codebase" so the LLM doesn't
+    # confuse it with general experience_level.
+    assert "familiarity with THIS codebase" in content
 
 
 # ── parsing ───────────────────────────────────────────────────────────────────

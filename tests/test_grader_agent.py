@@ -6,7 +6,11 @@ import json
 from unittest.mock import MagicMock
 
 from backend.agents.grader import run
-from backend.agents.grader.agent import GraderOutput, _parse_output
+from backend.agents.grader.agent import (
+    _SYSTEM_PROMPT,
+    GraderOutput,
+    _parse_output,
+)
 from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
 from backend.pipeline.state import OnboardState
 
@@ -22,11 +26,18 @@ FAKE_LESSON = {
 }
 
 
-def _make_state_with_lesson() -> tuple[OnboardState, str]:
+def _make_state_with_lesson(
+    *,
+    title: str = "Understand HTTPBasicAuth",
+    concept_tags: list[str] | None = None,
+    understand: str = "AuthBase subclasses are callables that mutate and return a PreparedRequest.",
+) -> tuple[OnboardState, str]:
     graph = LearningGraph(repo_url=FAKE_REPO_URL, goal=FAKE_GOAL)
     node = graph.add_node(LearningNode(
-        title="Understand HTTPBasicAuth",
+        title=title,
         code_anchor=CodeAnchor(file="requests/auth.py", line_start=72, line_end=100),
+        concept_tags=list(concept_tags or ["extension_point", "auth"]),
+        lesson_brief={"why": "why-text", "understand": understand},
     ))
     node.cached_lesson = FAKE_LESSON
     graph.set_current(node.id)
@@ -92,6 +103,60 @@ def test_prompt_and_expected_answer_sent_to_model():
     assert FAKE_LESSON["prompt"] in user_msg
     assert FAKE_LESSON["expected_answer"] in user_msg
     assert "my answer" in user_msg
+
+
+def test_node_title_tags_and_takeaway_sent_to_model():
+    state, _ = _make_state_with_lesson(
+        title="Identify the AuthBase extension point",
+        concept_tags=["extension_point", "auth"],
+        understand="AuthBase is the seam for custom auth — subclass it.",
+    )
+    client = _mock_client("understood")
+    run(state, "yes — subclass AuthBase", client=client)
+    user_msg = client.messages.create.call_args.kwargs["messages"][0]["content"]
+    # The Grader needs to know what KIND of understanding to evaluate.
+    assert "Identify the AuthBase extension point" in user_msg
+    assert "extension_point" in user_msg
+    assert "AuthBase is the seam for custom auth" in user_msg
+
+
+def test_node_with_no_tags_or_brief_still_renders_user_content():
+    # Defensive: nodes built outside the new-vocabulary path still grade.
+    state, _ = _make_state_with_lesson(
+        concept_tags=[],
+        understand="",
+    )
+    state.graph.nodes[state.graph.current_node_id].concept_tags = []
+    state.graph.nodes[state.graph.current_node_id].lesson_brief = {}
+    client = _mock_client("understood")
+    run(state, "answer", client=client)
+    user_msg = client.messages.create.call_args.kwargs["messages"][0]["content"]
+    # Falls back to a "(none)" / "(none provided)" line rather than crashing.
+    assert "(none)" in user_msg
+    assert "(none provided)" in user_msg
+
+
+def test_system_prompt_includes_per_tag_rubric():
+    # Regression guard: the per-tag rubric block is the load-bearing change
+    # for the new product direction. If a future edit drops it, the demo's
+    # CONFUSED-on-flow-node story silently regresses to a generic rubric.
+    for tag in (
+        "architecture",
+        "flow",
+        "extension_point",
+        "risk",
+        "test_coverage",
+        "component",
+    ):
+        assert tag in _SYSTEM_PROMPT
+
+
+def test_system_prompt_frames_as_system_level_not_code_comprehension():
+    # The opening line was reframed away from "comprehension question about
+    # code" toward system-level / understanding-graph framing.
+    assert "system-level" in _SYSTEM_PROMPT
+    assert "understanding graph" in _SYSTEM_PROMPT
+    assert "comprehension question about code" not in _SYSTEM_PROMPT
 
 
 # ── graceful fallback ─────────────────────────────────────────────────────────

@@ -30,7 +30,14 @@ from backend.agents.goal.questions import (
 # once the pipeline runner (backend/pipeline/runner.py) is wired up.
 class GoalOutput(BaseModel):
     primary_goal: str
-    goal_type: Literal["understand_system", "understand_component", "contribute_code", "debug_issue"]
+    goal_type: Literal[
+        "understand_system",
+        "understand_component",
+        "understand_architecture",
+        "contribute_code",
+        "improve_existing_system",
+        "debug_issue",
+    ]
     focus_area: str
     experience_level: str
     depth: str
@@ -39,6 +46,8 @@ class GoalOutput(BaseModel):
     background: str
     # Populated only for the relevant goal_type
     contribution_context: str | None = None
+    change_target: str | None = None
+    risk_tolerance: str | None = None
     error_description: str | None = None
     tried_so_far: str | None = None
 
@@ -104,14 +113,26 @@ produce a JSON object with exactly these keys:
   target_repo, familiarity, background
 
 And these optional keys (include only when the user provided relevant data):
-  contribution_context, error_description, tried_so_far
+  contribution_context, change_target, risk_tolerance,
+  error_description, tried_so_far
 
 Rules:
-- goal_type must be one of: understand_system, understand_component, contribute_code, debug_issue
+- goal_type must be one of:
+    understand_system            — broad "read this library" tour
+    understand_component         — focused dive into one feature
+    understand_architecture      — layers, boundaries, extension surface, design
+    contribute_code              — specific issue or feature PR
+    improve_existing_system      — safely change/extend an existing system; the
+                                   user cares about risks, extension points, and
+                                   what tests guard the area they will touch
+    debug_issue                  — trace a specific error
 - depth must be one of: overview, moderate, deep
 - experience_level: short phrase, e.g. "beginner", "intermediate", "senior engineer"
 - familiarity: short phrase summarising the user's familiarity level
 - focus_area: the specific part of the codebase to focus on
+- For improve_existing_system, copy the user's `change_target` answer into
+  change_target verbatim (or paraphrase if very long), and the user's
+  `risk_tolerance` answer into risk_tolerance verbatim.
 - Return ONLY the JSON object — no markdown fences, no explanation.
 """
 
