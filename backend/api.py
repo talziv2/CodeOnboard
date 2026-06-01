@@ -25,6 +25,7 @@ import os
 import anthropic
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from backend.agents.goal import (
@@ -43,6 +44,13 @@ from backend.rag.cloner import clone_repo
 
 load_dotenv()
 app = FastAPI(title="CodeOnboard API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # In-memory session store: session_id → GoalSession (goal dialogue only).
 # Learning-graph sessions live in SQLite (learning_store) — different lifecycle:
@@ -384,3 +392,18 @@ def session_override(session_id: str, body: OverrideRequest) -> dict:
         "visited": node.visited,
         "weak_spot": node.weak_spot,
     }
+
+
+@app.get("/session/{session_id}/file")
+def session_file(session_id: str, path: str) -> dict:
+    graph = _load_session_or_404(session_id)
+    repo_path = clone_repo(graph.repo_url)
+    full_path = os.path.join(repo_path, path)
+    # Prevent path traversal outside the repo
+    if not os.path.abspath(full_path).startswith(os.path.abspath(repo_path)):
+        raise HTTPException(status_code=400, detail="invalid_path")
+    if not os.path.isfile(full_path):
+        raise HTTPException(status_code=404, detail="file_not_found")
+    with open(full_path, encoding="utf-8", errors="replace") as f:
+        content = f.read()
+    return {"path": path, "content": content}
