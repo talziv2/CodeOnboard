@@ -39,7 +39,7 @@ def _populate_learning_path(state, client=None):
     return state
 
 
-def test_build_graph_compiles_and_registers_four_nodes():
+def test_build_graph_compiles_and_registers_five_nodes():
     graph = build_graph()
     # get_graph() returns a stable serializable view across LangGraph versions;
     # its .nodes is a dict keyed by node name.
