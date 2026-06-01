@@ -9,3 +9,5 @@ __pycache__/
 .pytest_cache/
 .idea/
 _tmp_compare/
+frontend/.next/
+frontend/node_modules/
