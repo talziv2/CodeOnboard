@@ -180,10 +180,12 @@ class SessionStartRequest(BaseModel):
 
 class AdvanceRequest(BaseModel):
     signal: str = "next"
+    node_id: str | None = None  # if provided, advance from this node instead of current
 
 
 class RespondRequest(BaseModel):
     response: str
+    node_id: str | None = None  # if provided, grade this node instead of current
 
 
 class OverrideRequest(BaseModel):
@@ -215,10 +217,24 @@ def _render_current_lesson(graph, client) -> dict:
     # Persist whatever changed (cached_lesson on the node, etc.).
     learning_store.save_graph(graph, SESSIONS_DB_PATH)
     if state.current_lesson is None:
-        raise HTTPException(
-            status_code=500,
-            detail={"error": "lesson_generation_failed", "errors": state.errors},
-        )
+        # Fallback: return a minimal lesson so the session isn't blocked.
+        node = graph.nodes.get(graph.current_node_id)
+        fallback = {
+            "walkthrough": (
+                f"The lesson for this node could not be generated automatically.\n\n"
+                f"Please read the source file `{node.code_anchor.file}` "
+                f"lines {node.code_anchor.line_start}–{node.code_anchor.line_end} directly."
+                if node else "Lesson generation failed. Please skip this node."
+            ),
+            "prompt": "What is the main purpose of this code?",
+            "expected_answer": "",
+            "prompt_kind": "predict-then-reveal",
+        }
+        # Save fallback as cached_lesson so the grader can run against it.
+        if node:
+            node.cached_lesson = fallback
+            learning_store.save_graph(graph, SESSIONS_DB_PATH)
+        return fallback
     return state.current_lesson
 
 
@@ -302,20 +318,25 @@ def session_advance(session_id: str, body: AdvanceRequest) -> dict:
         )
 
     graph = _load_session_or_404(session_id)
-    current = graph.current_node_id
+    current = body.node_id or graph.current_node_id
     if current is None:
         raise HTTPException(status_code=409, detail="session_has_no_current_node")
+    if current not in graph.nodes:
+        raise HTTPException(status_code=404, detail="node_not_found")
+    graph.set_current(current)
 
     if body.signal == "skip":
-        # Pure-Python mutation: mark skipped + advance to the next node.
-        state = OnboardState(repo_url=graph.repo_url, goal=graph.goal)
+        client = _new_client()
+        state = OnboardState(repo_url=graph.repo_url, goal=graph.goal, client=client)
         state.graph = graph
+        # Insert a prerequisite so the skipped topic isn't lost, then skip forward.
+        state.repo_path = clone_repo(graph.repo_url)
+        mutate_graph(state, "prerequisite", client=client)
         mutate_graph(state, "skip")
         learning_store.save_graph(graph, SESSIONS_DB_PATH)
         nxt = graph.current_node_id if graph.current_node_id != current else None
         if nxt is None or nxt == current:
             return {"done": True}
-        client = _new_client()
         lesson = _render_current_lesson(graph, client)
         return {"done": False, "node_id": graph.current_node_id, "lesson": lesson}
 
@@ -337,11 +358,14 @@ def session_advance(session_id: str, body: AdvanceRequest) -> dict:
 @app.post("/session/{session_id}/respond")
 def session_respond(session_id: str, body: RespondRequest) -> dict:
     graph = _load_session_or_404(session_id)
-    current = graph.current_node_id
+    current = body.node_id or graph.current_node_id
     if current is None:
         raise HTTPException(status_code=409, detail="session_has_no_current_node")
+    if current not in graph.nodes:
+        raise HTTPException(status_code=404, detail="node_not_found")
+    # Set current so grader and mutator operate on the right node
+    graph.set_current(current)
     if not graph.nodes[current].cached_lesson:
-        # Nothing to grade against — the user must view the lesson first.
         raise HTTPException(status_code=409, detail="no_lesson_rendered_yet")
 
     client = _new_client()
@@ -352,7 +376,7 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
 
     grade = state.last_grade or {}
     mutation = {"kind": "none"}
-    if grade.get("classification") == "confused":
+    if grade.get("classification") in ("confused", "off-topic"):
         # Adaptive step: insert a prerequisite before the confused node and
         # make it current, so the user learns the missing foundation first.
         # repo_path is needed for retrieval during node generation.
@@ -369,6 +393,17 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
         "mutation": mutation,
         "current_node_id": graph.current_node_id,  # may now point at a new prerequisite
     }
+
+
+@app.post("/session/{session_id}/jump")
+def session_jump(session_id: str, body: dict) -> dict:
+    node_id = body.get("node_id")
+    graph = _load_session_or_404(session_id)
+    if not node_id or node_id not in graph.nodes:
+        raise HTTPException(status_code=404, detail="node_not_found")
+    graph.set_current(node_id)
+    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    return {"current_node_id": node_id}
 
 
 @app.post("/session/{session_id}/override")

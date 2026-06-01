@@ -127,7 +127,6 @@ export default function LearningGraph({ nodes, edges, currentNodeId, readiness, 
           nodes={rfNodes}
           edges={rfEdges}
           nodeTypes={nodeTypes}
-          onNodeClick={handleNodeClick}
           fitView
           fitViewOptions={{ padding: 0.25 }}
           panOnDrag={false}

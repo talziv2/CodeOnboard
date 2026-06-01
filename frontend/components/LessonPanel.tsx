@@ -14,6 +14,7 @@ interface Props {
   lineEnd?: number;
   onFileClick: (file: string) => void;
   onAdvance: () => Promise<void>;
+  onFinish: () => void;
 }
 
 const classificationColor: Record<string, string> = {
@@ -23,7 +24,7 @@ const classificationColor: Record<string, string> = {
   "off-topic": "text-red-400",
 };
 
-export default function LessonPanel({ sessionId, nodeId, nodeTitle, nodeFile, lineStart, lineEnd, onFileClick, onAdvance }: Props) {
+export default function LessonPanel({ sessionId, nodeId, nodeTitle, nodeFile, lineStart, lineEnd, onFileClick, onAdvance, onFinish }: Props) {
   const router = useRouter();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [answer, setAnswer] = useState("");
@@ -49,7 +50,7 @@ export default function LessonPanel({ sessionId, nodeId, nodeTitle, nodeFile, li
     setLoading(true);
     setError(null);
     try {
-      const res = await respond(sessionId, answer);
+      const res = await respond(sessionId, answer, nodeId);
       setResult(res);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Something went wrong");
@@ -61,7 +62,7 @@ export default function LessonPanel({ sessionId, nodeId, nodeTitle, nodeFile, li
   const handleAdvance = async () => {
     setLoading(true);
     try {
-      const res = await advance(sessionId, "next") as { done?: boolean };
+      const res = await advance(sessionId, "next", nodeId) as { done?: boolean };
       await onAdvance(); // always reload graph so last node turns green
       if (res?.done) {
         setDone(true);
@@ -182,6 +183,16 @@ export default function LessonPanel({ sessionId, nodeId, nodeTitle, nodeFile, li
           )}
         </div>
       )}
+
+      {/* Always-visible finish button */}
+      <div className="border-t border-gray-800 pt-4 mt-2">
+        <button
+          onClick={onFinish}
+          className="text-xs text-gray-500 hover:text-gray-300 transition"
+        >
+          Finish session early
+        </button>
+      </div>
     </div>
   );
 }
