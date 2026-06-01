@@ -28,6 +28,9 @@ def __getattr__(name: str):
     if name == "run_prioritization":
         from backend.agents.prioritization import run
         return run
+    if name == "run_reviewer":
+        from backend.agents.reviewer import run
+        return run
     if name == "start_session":
         from backend.agents.goal import start_session
         return start_session
