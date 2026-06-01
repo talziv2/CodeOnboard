@@ -1,24 +1,17 @@
 # LangGraph orchestration for the onboarding pipeline.
 #
-# Graph shape:
+# Graph shape (Phase 2 + Documentation Agent):
 #
-#     START -> code_structure --(module_map set?)-- no  -> END
-#                                              \--- yes -> prioritization
-#                                                              │
-#                                              ┌───────────────┴───────────────┐
-#                                  (review-worthy goal_type?)            (else)
-#                                              │                             │
-#                                              ▼                             ▼
-#                                           reviewer ────────────────────► mentor ──► END
+#     START -> code_structure --(module_map set?)-- yes -> documentation -> prioritization -> mentor -> END
+#                                              \--- no  -> END
 #
 # The Goal Agent is intentionally NOT a node here — it runs upstream of the
 # pipeline as a multi-turn HTTP dialogue via /goal/start and /goal/answer
 # (see backend/api.py). By the time invoke() is called, `goal` is finalized
 # input.
 #
-# The Reviewer is gated by goal_type (improve_existing_system,
-# understand_architecture). Other goal types skip straight to the Mentor —
-# saves a Haiku call and keeps the Mentor's emphasis on-goal.
+# Documentation Agent runs after code_structure (needs repo_path) and before
+# prioritization. It requires no LLM so it adds negligible latency.
 
 from langgraph.graph import END, START, StateGraph
 
@@ -50,6 +43,17 @@ def code_structure_node(state: OnboardState) -> dict:
         "repo_path": state.repo_path,
         "module_map": state.module_map,
         "chunks_embedded": state.chunks_embedded,
+        "errors": _extract_new_errors(state, prev_errors),
+    }
+
+
+def documentation_node(state: OnboardState) -> dict:
+    from backend.pipeline import runner
+
+    prev_errors = list(state.errors)
+    runner.run_documentation(state)
+    return {
+        "doc_context": state.doc_context,
         "errors": _extract_new_errors(state, prev_errors),
     }
 
@@ -93,9 +97,9 @@ def mentor_node(state: OnboardState) -> dict:
 
 
 def route_after_code_structure(state: OnboardState) -> str:
-    # Mirrors the Phase 1 short-circuit: without a module_map the Mentor Agent
-    # has nothing to ground on, so skip the rest of the pipeline.
-    return "prioritization" if state.module_map is not None else END
+    # Without a module_map the Mentor Agent has nothing to ground on, so skip
+    # the rest of the pipeline. Documentation runs first in the happy path.
+    return "documentation" if state.module_map is not None else END
 
 
 def route_after_prioritization(state: OnboardState) -> str:
@@ -108,6 +112,7 @@ def build_graph():
     graph = StateGraph(OnboardState)
 
     graph.add_node("code_structure", code_structure_node)
+    graph.add_node("documentation", documentation_node)
     graph.add_node("prioritization", prioritization_node)
     graph.add_node("reviewer", reviewer_node)
     graph.add_node("mentor", mentor_node)
@@ -116,14 +121,10 @@ def build_graph():
     graph.add_conditional_edges(
         "code_structure",
         route_after_code_structure,
-        {"prioritization": "prioritization", END: END},
+        {"documentation": "documentation", END: END},
     )
-    graph.add_conditional_edges(
-        "prioritization",
-        route_after_prioritization,
-        {"reviewer": "reviewer", "mentor": "mentor"},
-    )
-    graph.add_edge("reviewer", "mentor")
+    graph.add_edge("documentation", "prioritization")
+    graph.add_edge("prioritization", "mentor")
     graph.add_edge("mentor", END)
 
     return graph.compile()

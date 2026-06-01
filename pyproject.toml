@@ -2,7 +2,7 @@
 name = "codeonboard"
 version = "0.1.0"
 description = "AI-powered codebase onboarding"
-requires-python = ">=3.14"
+requires-python = ">=3.11"
 dependencies = [
     # LLM + API
     "anthropic>=0.97.0",
@@ -19,7 +19,7 @@ dependencies = [
     "tree-sitter>=0.23.0",
     "tree-sitter-python>=0.23.0",
     # Embeddings (nomic-embed-text-v1.5 via sentence-transformers, runs locally)
-    "sentence-transformers>=5.4.1",
+    "sentence-transformers>=3.0.0",
     # Required transitively by nomic-embed-text-v1.5's modeling code
     "einops>=0.8.0",
     # Vector store
@@ -31,6 +31,19 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+]
+
+[tool.uv]
+# onnxruntime 1.19+ dropped Intel Mac (x86_64) wheels; pin to last compatible version
+# torch 2.2.x (max for Intel Mac) was built against NumPy 1.x; pin numpy<2 and sentence-transformers<4 on Intel Mac only
+override-dependencies = [
+    "onnxruntime>=1.16.0,<1.19.0 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "numpy<2 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "sentence-transformers>=3.0.0,<4.0.0 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+]
+# Ensure lockfile resolves wheels compatible with Intel Mac
+required-environments = [
+    "sys_platform == 'darwin' and platform_machine == 'x86_64'",
 ]
 
 [tool.pytest.ini_options]

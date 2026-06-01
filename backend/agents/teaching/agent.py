@@ -174,14 +174,63 @@ def _format_supporting_chunks(chunks: list[dict]) -> str:
     return "\n\n".join(lines)
 
 
+def _format_doc_context(node: LearningNode, doc_context: dict | None) -> str:
+    """Build the documentation-context section for the Teaching Agent prompt.
+
+    Pulls four sources of real repo documentation (none LLM-generated):
+      1. Module docstring for the node's file
+      2. Class / function docstrings in that file
+      3. README excerpt (first 400 chars)
+      4. Relevant docs/ file excerpt if one matches the node's file path
+    Returns "" when doc_context is absent or all sources are empty.
+    """
+    if not doc_context:
+        return ""
+    parts: list[str] = []
+
+    file = node.code_anchor.file
+
+    # 1. Module-level docstring
+    file_doc = (doc_context.get("file_docs") or {}).get(file, "").strip()
+    if file_doc:
+        parts.append(f"Module docstring for {file}:\n{file_doc}")
+
+    # 2. Class / function docstrings in this file
+    symbols: dict[str, str] = (doc_context.get("symbol_docs") or {}).get(file, {})
+    if symbols:
+        lines = [f"  `{name}`: {doc.splitlines()[0]}" for name, doc in symbols.items()]
+        parts.append(f"Docstrings in {file}:\n" + "\n".join(lines))
+
+    # 3. README excerpt
+    readme = (doc_context.get("readme") or "").strip()
+    if readme:
+        parts.append(f"README excerpt:\n{readme[:400]}")
+
+    # 4. Relevant docs/ file — pick the first extra_doc whose key mentions
+    #    the stem of the node's file (e.g. "sessions" matches docs/api.rst
+    #    only if "sessions" appears in the key; otherwise skip).
+    file_stem = Path(file).stem  # e.g. "sessions" from "requests/sessions.py"
+    extra: dict[str, str] = doc_context.get("extra_docs") or {}
+    for doc_path, content in extra.items():
+        if file_stem in doc_path:
+            parts.append(f"Docs file ({doc_path}):\n{content[:500]}")
+            break
+
+    if not parts:
+        return ""
+    return "\n\n".join(parts) + "\n\n"
+
+
 def _build_user_content(
     goal: dict,
     node: LearningNode,
     source: str,
     prior_context: str,
     supporting: list[dict],
+    doc_context: dict | None = None,
 ) -> str:
     brief = node.lesson_brief or {}
+    doc_section = _format_doc_context(node, doc_context)
     return (
         f"Developer profile:\n"
         f"  experience level: {goal.get('experience_level', 'unknown')}\n"
@@ -190,6 +239,7 @@ def _build_user_content(
         f"Overall goal: {goal.get('primary_goal', '')}\n"
         f"Depth requested: {goal.get('depth', 'normal')}\n\n"
         f"{prior_context}\n\n"
+        f"{doc_section}"
         f"Lesson brief for this node:\n"
         f"  title: {node.title}\n"
         f"  why: {brief.get('why', '')}\n"
@@ -278,7 +328,8 @@ def run(
         state.errors.append(f"teaching_agent: supporting retrieval failed (non-fatal): {e}")
 
     prior_context = _build_prior_context(state.graph, current_id)
-    user_content = _build_user_content(state.goal, node, source, prior_context, supporting)
+    doc_context = state.doc_context if state.doc_context is not None else state.graph.doc_context
+    user_content = _build_user_content(state.goal, node, source, prior_context, supporting, doc_context=doc_context)
 
     try:
         output = _generate_lesson(client, user_content)

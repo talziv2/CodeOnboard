@@ -15,11 +15,9 @@ class OnboardState:
     module_map: dict | None = None
     relevant_modules: list[str] | None = None  # set by Prioritization Agent
     chunks_embedded: bool = False
-    # Reviewer Agent output (set only for goal types that need it:
-    # improve_existing_system, understand_architecture). Consumed by the
-    # Mentor as additional context. Shape: see backend/agents/reviewer/agent.py
-    # ReviewerOutput. None for goal types that skip the Reviewer node.
-    system_review: dict | None = None
+    # Set by Documentation Agent: README excerpt + per-file module docstrings.
+    # Passed to Teaching Agent so it can quote real documentation in lessons.
+    doc_context: dict | None = None
     learning_path: list | None = None
     confidence: str = "low"
     # Phase 3: the interactive learning graph. Set by the Planner Agent,

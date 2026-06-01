@@ -25,19 +25,20 @@ from backend.learning.graph import (
 )
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_DB_PATH = Path("data/sessions.db")
 
 
 _CREATE_SESSIONS = """
 CREATE TABLE IF NOT EXISTS sessions (
-    session_id      TEXT PRIMARY KEY,
-    repo_url        TEXT NOT NULL,
-    goal_json       TEXT NOT NULL,
-    current_node_id TEXT,
-    schema_version  INTEGER NOT NULL,
-    created_at      TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
-    updated_at      TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+    session_id       TEXT PRIMARY KEY,
+    repo_url         TEXT NOT NULL,
+    goal_json        TEXT NOT NULL,
+    current_node_id  TEXT,
+    doc_context_json TEXT,
+    schema_version   INTEGER NOT NULL,
+    created_at       TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+    updated_at       TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
 )
 """
 
@@ -100,6 +101,14 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
         conn.execute(_CREATE_NODES)
         conn.execute(_CREATE_NODES_INDEX)
         conn.execute(_CREATE_EDGES)
+        # Add the doc_context_json column to existing databases that were
+        # created before schema v2. SQLite has no ADD COLUMN IF NOT EXISTS,
+        # so we catch the OperationalError that fires when the column already
+        # exists rather than checking first.
+        try:
+            conn.execute("ALTER TABLE sessions ADD COLUMN doc_context_json TEXT")
+        except Exception:
+            pass
 
 
 def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
@@ -108,20 +117,23 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
         conn.execute(
             """
             INSERT INTO sessions
-                (session_id, repo_url, goal_json, current_node_id, schema_version)
-            VALUES (?, ?, ?, ?, ?)
+                (session_id, repo_url, goal_json, current_node_id,
+                 doc_context_json, schema_version)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(session_id) DO UPDATE SET
-                repo_url        = excluded.repo_url,
-                goal_json       = excluded.goal_json,
-                current_node_id = excluded.current_node_id,
-                schema_version  = excluded.schema_version,
-                updated_at      = strftime('%Y-%m-%d %H:%M:%f', 'now')
+                repo_url         = excluded.repo_url,
+                goal_json        = excluded.goal_json,
+                current_node_id  = excluded.current_node_id,
+                doc_context_json = excluded.doc_context_json,
+                schema_version   = excluded.schema_version,
+                updated_at       = strftime('%Y-%m-%d %H:%M:%f', 'now')
             """,
             (
                 graph.session_id,
                 graph.repo_url,
                 json.dumps(graph.goal),
                 graph.current_node_id,
+                json.dumps(graph.doc_context) if graph.doc_context is not None else None,
                 SCHEMA_VERSION,
             ),
         )
@@ -159,11 +171,13 @@ def load_graph(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> LearningGrap
         if session_row["schema_version"] != SCHEMA_VERSION:
             # Different schema — treat as missing. No silent migration.
             return None
+        raw_doc = session_row["doc_context_json"]
         graph = LearningGraph(
             repo_url=session_row["repo_url"],
             goal=json.loads(session_row["goal_json"]),
             session_id=session_row["session_id"],
             current_node_id=session_row["current_node_id"],
+            doc_context=json.loads(raw_doc) if raw_doc is not None else None,
         )
         for node_row in conn.execute(
             "SELECT * FROM nodes WHERE session_id = ?", (session_id,)
