@@ -2,8 +2,8 @@
 #
 # Graph shape (Phase 2 + Documentation Agent):
 #
-#     START -> code_structure --(module_map set?)-- yes -> documentation -> prioritization -> mentor -> END
-#                                              \--- no  -> END
+#     START -> code_structure --(module_map set?)-- yes -> documentation -> prioritization --(reviewer needed?)-- yes -> reviewer -> mentor -> END
+#                                              \--- no  -> END                                                    \--- no  -> mentor -> END
 #
 # The Goal Agent is intentionally NOT a node here — it runs upstream of the
 # pipeline as a multi-turn HTTP dialogue via /goal/start and /goal/answer
@@ -124,7 +124,12 @@ def build_graph():
         {"documentation": "documentation", END: END},
     )
     graph.add_edge("documentation", "prioritization")
-    graph.add_edge("prioritization", "mentor")
+    graph.add_conditional_edges(
+        "prioritization",
+        route_after_prioritization,
+        {"reviewer": "reviewer", "mentor": "mentor"},
+    )
+    graph.add_edge("reviewer", "mentor")
     graph.add_edge("mentor", END)
 
     return graph.compile()

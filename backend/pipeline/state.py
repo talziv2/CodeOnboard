@@ -38,6 +38,11 @@ class OnboardState:
     # anchor_node_id?}). Transient — the durable effect is the mutated graph.
     # kind: "none" | "prerequisite" | "skip".
     last_mutation: dict | None = None
+    # Structured review produced by the Reviewer Agent for goal types that need
+    # architectural reasoning (improve_existing_system, understand_architecture).
+    # Consumed by the Mentor Agent to emit risk/extension_point nodes. None for
+    # all other goal types — the Mentor falls back to its normal behaviour.
+    system_review: dict | None = None
     # operator.add reducer: when a node returns errors, the list is *extended*
     # rather than replaced. Required for safe concurrent writes once parallel
     # nodes exist (e.g. Documentation Agent in Phase 2). Harmless today.
