@@ -156,8 +156,15 @@ def _synthesize_goal(
 
     raw = message.content[0].text
     try:
-        data = json.loads(raw)
+        # Strip markdown code fences if the model wrapped the JSON
+        text = raw.strip()
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        data = json.loads(text.strip())
     except json.JSONDecodeError as exc:
+        print(f"[goal/synthesize] raw response was:\n{raw}")
         raise ValueError("synthesis_failed") from exc
 
     return GoalOutput(**data)
