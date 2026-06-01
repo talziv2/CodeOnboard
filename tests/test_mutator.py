@@ -7,7 +7,11 @@ retrieve_supporting_chunks and the Sonnet client are mocked.
 import json
 from unittest.mock import MagicMock, patch
 
-from backend.agents.mentor.mutator import mutate
+from backend.agents.mentor.mutator import (
+    _PREREQ_SYSTEM_PROMPT,
+    _build_prereq_prompt,
+    mutate,
+)
 from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
 from backend.pipeline.state import OnboardState
 
@@ -171,6 +175,36 @@ def test_skip_does_not_call_llm():
     # No client passed — skip must not need one.
     mutate(state, "skip")
     assert state.last_mutation["kind"] == "skip"
+
+
+# ── prereq prompt: developer profile + background tiebreaker ─────────────────
+
+
+def test_prereq_prompt_includes_developer_profile_fields():
+    anchor = LearningNode(
+        title="A confused node",
+        code_anchor=CodeAnchor(file="a.py", line_start=1, line_end=5),
+        concept_tags=["request signing"],
+        lesson_brief={"why": "x", "understand": "y"},
+    )
+    goal = {
+        "familiarity": "Skimmed the README or docs",
+        "background": "Embedded C++, learning Python",
+        "experience_level": "intermediate",
+    }
+    prompt = _build_prereq_prompt(anchor, FAKE_CANDIDATES, goal)
+    # All three profile lines must reach the Mutator so background can act
+    # as a tiebreaker.
+    assert "Skimmed the README or docs" in prompt
+    assert "Embedded C++, learning Python" in prompt
+    assert "intermediate" in prompt
+
+
+def test_prereq_system_prompt_has_background_tiebreaker_rule():
+    # Background is a tiebreaker, not a primary signal — the rule must say so
+    # to avoid the LLM picking a "background-appropriate" prereq that doesn't
+    # actually unblock the confused node.
+    assert "TIEBREAKER" in _PREREQ_SYSTEM_PROMPT or "tiebreaker" in _PREREQ_SYSTEM_PROMPT.lower()
 
 
 # ── dispatcher guards ─────────────────────────────────────────────────────────

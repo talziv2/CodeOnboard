@@ -9,6 +9,7 @@ __all__ = [
     "run_documentation",
     "run_mentor",
     "run_prioritization",
+    "run_reviewer",
     "start_session",
     "process_answer",
 ]

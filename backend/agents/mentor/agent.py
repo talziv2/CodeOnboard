@@ -57,10 +57,13 @@ class NodeWire(BaseModel):
 class EdgeWire(BaseModel):
     from_id: str
     to_id: str
-    # Only "sequence" in Part 2. "prerequisite" and "deeper" arrive with the
-    # Part 6 mutator. Keeping the field permissive now means the wire format
-    # is stable when the mutator lands.
-    kind: Literal["sequence", "prerequisite", "deeper"] = "sequence"
+    # The Mentor only produces sequence chains at creation time. `prerequisite`
+    # edges are introduced LATER by the Mutator in response to a real user
+    # confusion signal (graph.insert_before with kind="prerequisite"), and
+    # `deeper` is reserved for future user-driven detours. Keeping the wire
+    # format restricted here means a Mentor that tries to invent prerequisite
+    # edges fails fast at parse, not at semantic review.
+    kind: Literal["sequence"] = "sequence"
 
 
 class MentorOutput(BaseModel):
@@ -143,7 +146,7 @@ You are a mentor guiding a developer through an unfamiliar Python codebase.
 
 Given the user's goal, the repository's module map, and a set of code chunks
 retrieved via semantic search, produce a JSON object with exactly these keys:
-  nodes:      list of 5–8 learning nodes (each anchored on one retrieved chunk)
+  nodes:      list of learning nodes (count varies by depth — see Calibration)
   edges:      list of edges connecting the nodes into a teaching order
   confidence: one of "high", "medium", "low"
 
@@ -162,7 +165,71 @@ Each node is an object with exactly these keys:
 Each edge is an object with exactly these keys:
   from_id:  id of the source node (must match a node id above)
   to_id:    id of the destination node (must match a node id above)
-  kind:     always "sequence" in this response
+  kind:     always "sequence" in this response. The initial graph is a single
+            ordered chain. Prerequisite and deeper edges are reserved for
+            session-time mutations; never emit them here.
+
+Concept-tag vocabulary (use whichever tags fit; one node can have several):
+  component        — a specific class/function and its role
+  flow             — a step in an execution path crossing files (anchor on
+                     the entry point of the flow)
+  architecture     — a layer, boundary, or responsibility worth naming
+  extension_point  — a seam designed to be extended (hooks, ABCs, plugin
+                     registries, registered handlers)
+  risk             — a fragility, hidden coupling, or invariant the developer
+                     must respect before changing nearby code
+  test_coverage    — what is (or isn't) guarded by tests in this area
+  in addition to any free-form domain tags (e.g. "auth", "retries")
+
+Calibration by goal fields (read these from the developer profile / depth /
+goal_type in the user content — they shape the SHAPE of the graph, not just
+its wording):
+
+  By `depth`:
+    overview  → 4–5 nodes total. Prefer `architecture` and `flow` over
+                `component`. Anchor on BROADER chunks (a class or top-level
+                function as a concept representative). Omit `risk` and
+                `test_coverage` UNLESS the goal_type instruction requires
+                them.
+    moderate  → 5–7 nodes total. Balanced tag mix. Prefer the narrowest
+                chunk that answers the node.
+    deep      → 7–10 nodes total. Include `component` nodes for specific
+                implementations. Anchor on the NARROWEST possible chunk
+                (method over class). Include `risk` / `test_coverage` nodes
+                whenever the review surfaces non-trivial findings.
+
+  By `familiarity` (the developer's familiarity with THIS codebase):
+    "Starting fresh — never looked at it" →
+      Start at the highest-altitude `architecture` or `flow` node. Include
+      1–2 orientation nodes BEFORE any `extension_point` or `risk` node.
+      Phrase `understand` briefs as "what this is and why it exists."
+    "Skimmed the README or docs" →
+      Start at a major boundary node. Include 1 orientation node. Assume
+      domain vocabulary; do not re-explain what the library does.
+    "Looked at some code but still confused" →
+      Start at the node closest to the user's confusion area or goal focus.
+      Skip orientation. Phrase briefs as "what's going on here."
+    "Used it before, now diving into the source" →
+      Start at the deepest node relevant to the goal. Zero orientation
+      nodes. Phrase briefs as "what's unusual here vs. the obvious."
+
+  By `background`:
+    If the developer's background suggests fluency with concepts this
+    codebase relies on (e.g. Python decorators for a Python veteran, REST
+    middleware for a web-backend engineer), SKIP nodes whose primary value
+    would be teaching those concepts. Spend the saved node budget on what
+    is specific to THIS codebase. Background is informational only — it
+    does not override depth's count or familiarity's entry point.
+
+Cross-field coupling (resolve conflicts in this order):
+  1. `depth` sets the total node count.
+  2. `familiarity` carves orientation nodes OUT of that count (it does not
+     increase the count). For "diving into source" + "deep", that means all
+     nodes are deep nodes.
+  3. `background` decides which foundational nodes to skip entirely.
+  4. The per-goal-type instruction (below the calibration) determines the
+     required tag mix (e.g. improve_existing_system requires risk + test
+     nodes regardless of depth).
 
 Rules:
 - Use only files that appear in the retrieved chunks. Never invent file paths.
@@ -175,19 +242,25 @@ Rules:
   test/example chunk can answer a node. Cite a test or example only when it
   reproduces the exact failure mode, shows a concrete usage idiom, or
   illustrates the extension surface the user must touch.
-- 5–8 nodes total. Each node must anchor on a DISTINCT chunk — never reuse
-  the same (file, line_start, line_end) across nodes.
-- The edges must form a single ordered chain over all nodes — exactly N-1
-  edges of kind="sequence" if there are N nodes. Each node appears exactly
-  once in the chain. The first node is the starting point; the last node is
-  where the user ends up. No isolated nodes, no branching, no cycles.
+- Each node must anchor on a DISTINCT chunk — never reuse the same
+  (file, line_start, line_end) across nodes.
+- The edges form a single ordered chain over all N nodes — exactly N-1 edges
+  of kind="sequence". Each node appears exactly once. The first node is
+  where the path starts; the last node is where the user ends up. No
+  isolated nodes, no branching, no cycles. Never emit any edge with a kind
+  other than "sequence" in this response.
 - Order matters: each node builds on the previous one in the sequence.
-- Prefer the narrowest chunk that answers the node. When both an enclosing
-  class and one of its methods are retrieved, anchor on the method's
-  line range — a whole class is rarely the right teaching unit.
+- Anchor granularity is depth-conditional (see Calibration). When both an
+  enclosing class and one of its methods are retrieved, prefer the method's
+  range at depth=moderate or deep, and the class range at depth=overview
+  if the class is the right concept representative.
 - Only describe inheritance, imports, or call relationships that are
   visible in the retrieved chunks. Do not infer relationships from class
   names alone.
+- When a "System review" section is provided, use it as a guide for which
+  kinds of nodes to include (risks, extension points, test gaps,
+  architectural boundaries). Findings with an anchor are the strongest
+  candidates for nodes — they are already grounded in the retrieved chunks.
 - Self-rate confidence:
     high   — retrieved chunks clearly cover the user's goal and the path is concrete
     medium — chunks partially cover the goal, some nodes required interpolation
@@ -217,21 +290,70 @@ def _format_chunks(chunks: list[dict]) -> str:
     return "\n\n".join(lines)
 
 
-def _common_context(goal: dict, module_map: dict, chunks: list[dict]) -> str:
+def _format_system_review(review: dict | None) -> str:
+    """Render the Reviewer Agent's structured output for the Mentor prompt.
+
+    Returns an empty string when there is no review — callers concatenate
+    unconditionally and the empty case is a no-op.
+    """
+    if not review:
+        return ""
+
+    def _anchor(a: dict | None) -> str:
+        if not a:
+            return ""
+        return f" [anchor: {a['file']} lines {a['line_start']}-{a['line_end']}]"
+
+    sections: list[str] = []
+
+    def _add_finding_list(label: str, items: list[dict]) -> None:
+        if not items:
+            return
+        lines = [f"{label}:"]
+        for it in items:
+            lines.append(f"  - {it['area']}: {it['note']}{_anchor(it.get('anchor'))}")
+        sections.append("\n".join(lines))
+
+    _add_finding_list("Strengths", review.get("strengths", []))
+    _add_finding_list("Risks", review.get("risks", []))
+    _add_finding_list("Extension points", review.get("extension_points", []))
+    _add_finding_list("Test gaps", review.get("test_gaps", []))
+
+    boundaries = review.get("boundaries", [])
+    if boundaries:
+        lines = ["Boundaries:"]
+        for b in boundaries:
+            between = " <-> ".join(b.get("between", []))
+            lines.append(f"  - {between}: {b['note']}")
+        sections.append("\n".join(lines))
+
+    if not sections:
+        return ""
+    return "System review (use to choose which kinds of nodes to include):\n" + "\n\n".join(sections)
+
+
+def _common_context(
+    goal: dict,
+    module_map: dict,
+    chunks: list[dict],
+    system_review: dict | None = None,
+) -> str:
+    review_block = _format_system_review(system_review)
+    review_section = f"\n\n{review_block}" if review_block else ""
     return (
         f"User goal: {goal['primary_goal']}\n"
         f"Experience level: {goal['experience_level']}\n"
         f"Depth requested: {goal['depth']}\n\n"
         f"Module map:\n{_format_module_map(module_map)}\n\n"
-        f"Retrieved code chunks:\n{_format_chunks(chunks)}"
+        f"Retrieved code chunks:\n{_format_chunks(chunks)}{review_section}"
     )
 
 
 def _build_understand_system_prompt(
-    goal: dict, module_map: dict, chunks: list[dict]
+    goal: dict, module_map: dict, chunks: list[dict], system_review: dict | None = None
 ) -> str:
     return (
-        f"{_common_context(goal, module_map, chunks)}\n\n"
+        f"{_common_context(goal, module_map, chunks, system_review)}\n\n"
         f"Goal type: understand_system. The user wants a high-level tour. "
         f"Pick nodes that span the major modules and show how they connect. "
         f"Favour breadth over depth — touch entry points, not internals."
@@ -239,22 +361,44 @@ def _build_understand_system_prompt(
 
 
 def _build_understand_component_prompt(
-    goal: dict, module_map: dict, chunks: list[dict]
+    goal: dict, module_map: dict, chunks: list[dict], system_review: dict | None = None
 ) -> str:
     return (
-        f"{_common_context(goal, module_map, chunks)}\n\n"
+        f"{_common_context(goal, module_map, chunks, system_review)}\n\n"
         f"Goal type: understand_component. Focus area: {goal['focus_area']}. "
         f"Go deep into this area. Prefer fewer files at greater depth over "
         f"a broad tour. Each node should explain a specific abstraction or flow."
     )
 
 
+def _build_understand_architecture_prompt(
+    goal: dict, module_map: dict, chunks: list[dict], system_review: dict | None = None
+) -> str:
+    focus = goal.get("focus_area", "(broad architectural tour)")
+    return (
+        f"{_common_context(goal, module_map, chunks, system_review)}\n\n"
+        f"Goal type: understand_architecture. Architectural focus: {focus}\n"
+        f"Build a node sequence that explains how this system is STRUCTURED, "
+        f"not just what each file does. The path should include:\n"
+        f"  - one or two nodes tagged `architecture` naming the major layers "
+        f"or responsibilities,\n"
+        f"  - at least one `flow` node tracing a representative execution "
+        f"path across files (anchor on the entry point of the flow),\n"
+        f"  - at least one `extension_point` node where the system is meant "
+        f"to be extended, and\n"
+        f"  - if the system review highlights any, one `risk` node naming a "
+        f"fragility or hidden coupling the user should be aware of.\n"
+        f"Use the concept_tags vocabulary in the system prompt. End on the "
+        f"node that best summarises the system's overall shape."
+    )
+
+
 def _build_contribute_code_prompt(
-    goal: dict, module_map: dict, chunks: list[dict]
+    goal: dict, module_map: dict, chunks: list[dict], system_review: dict | None = None
 ) -> str:
     contribution = goal.get("contribution_context", "(none provided)")
     return (
-        f"{_common_context(goal, module_map, chunks)}\n\n"
+        f"{_common_context(goal, module_map, chunks, system_review)}\n\n"
         f"Goal type: contribute_code. Contribution context: {contribution}\n"
         f"Order nodes so the user understands extension points first, then "
         f"the file(s) most likely to need editing. The final node should "
@@ -262,13 +406,56 @@ def _build_contribute_code_prompt(
     )
 
 
+def _build_improve_existing_system_prompt(
+    goal: dict, module_map: dict, chunks: list[dict], system_review: dict | None = None
+) -> str:
+    change = goal.get("change_target", "(none provided)")
+    risk = goal.get("risk_tolerance", "(none provided)")
+    return (
+        f"{_common_context(goal, module_map, chunks, system_review)}\n\n"
+        f"Goal type: improve_existing_system.\n"
+        f"Planned change: {change}\n"
+        f"Risk tolerance: {risk}\n"
+        f"The user needs to UNDERSTAND THIS SYSTEM WELL ENOUGH TO CHANGE IT "
+        f"SAFELY. The graph should walk them from \"what shape is this code "
+        f"in\" through \"what guards the area I will touch\" to \"where to "
+        f"safely insert the change.\"\n\n"
+        f"Required ingredients in the path (regardless of risk tolerance):\n"
+        f"  - at least one `architecture` or `flow` node giving context for "
+        f"the area being changed,\n"
+        f"  - one or more `extension_point` nodes where the change actually "
+        f"belongs (seams designed to be extended).\n\n"
+        f"Risk-tolerance topology (read the user's `Risk tolerance` answer "
+        f"above and pick the appropriate regime):\n"
+        f"  SAFETY-CRITICAL — answer mentions production / must not regress "
+        f"/ safety / can't break / safety-critical:\n"
+        f"    • Require AT LEAST 2 `risk` nodes (prefer anchored review "
+        f"findings) and AT LEAST 1 `test_coverage` node.\n"
+        f"    • Every `extension_point` node MUST be preceded in the "
+        f"sequence chain by at least one `risk` AND one `test_coverage` "
+        f"node covering the same area. The sequence ORDERING is how this "
+        f"safety constraint is expressed — do not invent new edge kinds.\n"
+        f"  PROTOTYPE / EXPERIMENTAL — answer mentions prototype / "
+        f"experimental / can break / throwaway:\n"
+        f"    • 1 `risk` node only if a review finding is genuinely on the "
+        f"critical path for the planned change; otherwise omit.\n"
+        f"    • `test_coverage` node optional; include only if a test "
+        f"directly demonstrates the change pattern.\n"
+        f"  UNSPECIFIED / IN BETWEEN (the default):\n"
+        f"    • At least 1 `risk` node and at least 1 `test_coverage` "
+        f"node, as in the prior version of this instruction.\n\n"
+        f"End the sequence at the most likely insertion site. Use the "
+        f"concept_tags vocabulary in the system prompt."
+    )
+
+
 def _build_debug_issue_prompt(
-    goal: dict, module_map: dict, chunks: list[dict]
+    goal: dict, module_map: dict, chunks: list[dict], system_review: dict | None = None
 ) -> str:
     error = goal.get("error_description", "(none provided)")
     tried = goal.get("tried_so_far", "(none provided)")
     return (
-        f"{_common_context(goal, module_map, chunks)}\n\n"
+        f"{_common_context(goal, module_map, chunks, system_review)}\n\n"
         f"Goal type: debug_issue.\n"
         f"Error: {error}\n"
         f"Tried so far: {tried}\n"
@@ -278,10 +465,14 @@ def _build_debug_issue_prompt(
     )
 
 
-_PROMPT_BUILDERS: dict[str, Callable[[dict, dict, list[dict]], str]] = {
+_PROMPT_BUILDERS: dict[
+    str, Callable[[dict, dict, list[dict], dict | None], str]
+] = {
     "understand_system": _build_understand_system_prompt,
     "understand_component": _build_understand_component_prompt,
+    "understand_architecture": _build_understand_architecture_prompt,
     "contribute_code": _build_contribute_code_prompt,
+    "improve_existing_system": _build_improve_existing_system_prompt,
     "debug_issue": _build_debug_issue_prompt,
 }
 
@@ -449,7 +640,9 @@ def run(
         return state
 
     builder = _PROMPT_BUILDERS[goal_type]
-    user_content = builder(state.goal, effective_module_map(state), chunks)
+    user_content = builder(
+        state.goal, effective_module_map(state), chunks, state.system_review
+    )
 
     try:
         response = client.messages.create(

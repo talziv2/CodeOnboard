@@ -15,6 +15,7 @@
 
 from langgraph.graph import END, START, StateGraph
 
+from backend.agents.reviewer.agent import should_run as _reviewer_should_run
 from backend.pipeline.state import OnboardState
 
 
@@ -68,6 +69,17 @@ def prioritization_node(state: OnboardState) -> dict:
     }
 
 
+def reviewer_node(state: OnboardState) -> dict:
+    from backend.pipeline import runner
+
+    prev_errors = list(state.errors)
+    runner.run_reviewer(state, client=state.client)
+    return {
+        "system_review": state.system_review,
+        "errors": _extract_new_errors(state, prev_errors),
+    }
+
+
 def mentor_node(state: OnboardState) -> dict:
     from backend.pipeline import runner
 
@@ -90,12 +102,19 @@ def route_after_code_structure(state: OnboardState) -> str:
     return "documentation" if state.module_map is not None else END
 
 
+def route_after_prioritization(state: OnboardState) -> str:
+    # Reviewer runs only for goal types that need it (improve_existing_system,
+    # understand_architecture). Other goal types skip straight to the Mentor.
+    return "reviewer" if _reviewer_should_run(state.goal) else "mentor"
+
+
 def build_graph():
     graph = StateGraph(OnboardState)
 
     graph.add_node("code_structure", code_structure_node)
     graph.add_node("documentation", documentation_node)
     graph.add_node("prioritization", prioritization_node)
+    graph.add_node("reviewer", reviewer_node)
     graph.add_node("mentor", mentor_node)
 
     graph.add_edge(START, "code_structure")

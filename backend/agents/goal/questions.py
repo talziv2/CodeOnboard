@@ -7,10 +7,13 @@
 #   4. background   (free text) — languages/frameworks they already know
 #
 # After Q4, FOLLOWUP_QUESTIONS adds 1–2 goal-specific questions:
-#   understand_system / understand_component  →  focus_area          (5 total)
-#   contribute_code                           →  contribution_context (5 total)
+#   understand_system / understand_component  →  focus_area
+#   understand_architecture                   →  focus_area
+#   contribute_code                           →  contribution_context
+#   improve_existing_system                   →  change_target
+#                                                risk_tolerance
 #   debug_issue                               →  error_description
-#                                                tried_so_far         (6 total)
+#                                                tried_so_far
 #
 # GOAL_TYPE_MAP translates the human-readable Q2 option into the internal
 # goal_type string used for routing and stored in GoalOutput.
@@ -34,6 +37,8 @@ FAMILIARITY_OPTIONS = [
 
 GOAL_TYPE_OPTIONS = [
     "Use it in my own project",
+    "Understand the architecture (layers, boundaries, design)",
+    "Improve or extend the codebase safely",
     "Contribute code / open a PR",
     "Debug an issue I'm hitting",
     "Understand how it works (reading/learning)",
@@ -41,6 +46,8 @@ GOAL_TYPE_OPTIONS = [
 
 GOAL_TYPE_MAP: dict[str, str] = {
     "Use it in my own project": "understand_component",
+    "Understand the architecture (layers, boundaries, design)": "understand_architecture",
+    "Improve or extend the codebase safely": "improve_existing_system",
     "Contribute code / open a PR": "contribute_code",
     "Debug an issue I'm hitting": "debug_issue",
     "Understand how it works (reading/learning)": "understand_system",
@@ -72,14 +79,30 @@ _UNDERSTAND_FOLLOWUP = Question(
     text="Is there a part of the system you're most curious about, or do you want the full picture?",
 )
 
+_ARCHITECTURE_FOLLOWUP = Question(
+    key="focus_area",
+    text="Any specific architectural concern (e.g. request lifecycle, extension surface, plugin system), or a full architectural tour?",
+)
+
 FOLLOWUP_QUESTIONS: dict[str, list[Question]] = {
     "understand_system": [_UNDERSTAND_FOLLOWUP],
     "understand_component": [_UNDERSTAND_FOLLOWUP],
+    "understand_architecture": [_ARCHITECTURE_FOLLOWUP],
     "contribute_code": [
         Question(
             key="contribution_context",
             text="Is there a specific issue or feature you're working on? (paste a GitHub issue link or describe it)",
         )
+    ],
+    "improve_existing_system": [
+        Question(
+            key="change_target",
+            text="What change do you want to make? (e.g. \"add a new auth scheme\", \"refactor the session lifecycle\", \"extend the adapter interface\")",
+        ),
+        Question(
+            key="risk_tolerance",
+            text="How safety-critical is this change? (e.g. \"prototype, can break\", \"production use, must not regress\")",
+        ),
     ],
     "debug_issue": [
         Question(key="error_description", text="What error or unexpected behavior are you seeing?"),

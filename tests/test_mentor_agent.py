@@ -11,16 +11,23 @@ translation, and the derived learning_path.
 import json
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from backend.pipeline.state import OnboardState
 from backend.agents.mentor import run
 from backend.agents.mentor.agent import (
+    EdgeWire,
     MentorOutput,
     _PROMPT_BUILDERS,
+    _SYSTEM_PROMPT,
     _build_contribute_code_prompt,
     _build_debug_issue_prompt,
+    _build_improve_existing_system_prompt,
+    _build_understand_architecture_prompt,
     _build_understand_component_prompt,
     _build_understand_system_prompt,
     _find_duplicate_anchors,
+    _format_system_review,
     _parse_output,
 )
 
@@ -82,6 +89,57 @@ FAKE_GOAL_DEBUG_ISSUE = {
     "primary_goal": "fix SSL verification error",
     "error_description": "SSLError on every HTTPS request after upgrade",
     "tried_so_far": "verified certs are valid, downgraded urllib3, no luck",
+}
+
+
+FAKE_GOAL_UNDERSTAND_ARCHITECTURE = {
+    **FAKE_GOAL_UNDERSTAND_COMPONENT,
+    "goal_type": "understand_architecture",
+    "primary_goal": "map the request lifecycle and extension surface",
+    "focus_area": "request lifecycle and adapter boundaries",
+}
+
+
+FAKE_GOAL_IMPROVE_EXISTING_SYSTEM = {
+    **FAKE_GOAL_UNDERSTAND_COMPONENT,
+    "goal_type": "improve_existing_system",
+    "primary_goal": "safely add a custom auth scheme",
+    "focus_area": "session auth",
+    "change_target": "add CustomAuth subclass of AuthBase",
+    "risk_tolerance": "production use, must not regress",
+}
+
+
+FAKE_SYSTEM_REVIEW = {
+    "strengths": [],
+    "risks": [
+        {
+            "area": "auth_on_redirect",
+            "note": "Auth header is rebuilt on redirect; subclasses must handle this.",
+            "anchor": {
+                "file": "requests/sessions.py",
+                "line_start": 394,
+                "line_end": 470,
+            },
+        }
+    ],
+    "extension_points": [
+        {
+            "area": "auth_base",
+            "note": "Subclass AuthBase to inject custom headers.",
+            "anchor": {
+                "file": "requests/auth.py",
+                "line_start": 72,
+                "line_end": 100,
+            },
+        }
+    ],
+    "test_gaps": [
+        {"area": "custom_auth_helpers", "note": "No tests for AuthBase subclasses."}
+    ],
+    "boundaries": [
+        {"between": ["sessions", "auth"], "note": "auth applied right before send"}
+    ],
 }
 
 
@@ -302,11 +360,13 @@ def test_graph_repo_url_and_goal_match_state(mock_sha, mock_embed, mock_query):
 
 # ── goal-type branching ───────────────────────────────────────────────────────
 
-def test_prompt_builders_has_all_four_goal_types():
+def test_prompt_builders_cover_all_goal_types():
     assert set(_PROMPT_BUILDERS.keys()) == {
         "understand_system",
         "understand_component",
+        "understand_architecture",
         "contribute_code",
+        "improve_existing_system",
         "debug_issue",
     }
 
@@ -340,6 +400,130 @@ def test_debug_issue_prompt_includes_error_and_tried():
     )
     assert FAKE_GOAL_DEBUG_ISSUE["error_description"] in prompt
     assert FAKE_GOAL_DEBUG_ISSUE["tried_so_far"] in prompt
+
+
+def test_understand_architecture_prompt_includes_focus_and_taxonomy_hints():
+    prompt = _build_understand_architecture_prompt(
+        FAKE_GOAL_UNDERSTAND_ARCHITECTURE, FAKE_MODULE_MAP, []
+    )
+    assert FAKE_GOAL_UNDERSTAND_ARCHITECTURE["focus_area"] in prompt
+    # The builder is supposed to push the model toward an architectural shape.
+    assert "architecture" in prompt
+    assert "flow" in prompt
+    assert "extension_point" in prompt
+
+
+def test_improve_existing_system_prompt_includes_change_target_and_risk():
+    prompt = _build_improve_existing_system_prompt(
+        FAKE_GOAL_IMPROVE_EXISTING_SYSTEM, FAKE_MODULE_MAP, []
+    )
+    assert FAKE_GOAL_IMPROVE_EXISTING_SYSTEM["change_target"] in prompt
+    assert FAKE_GOAL_IMPROVE_EXISTING_SYSTEM["risk_tolerance"] in prompt
+    # Required ingredients in the safe-change path.
+    assert "extension_point" in prompt
+    assert "risk" in prompt
+    assert "test_coverage" in prompt
+
+
+# ── system-prompt calibration regression guards ───────────────────────────────
+
+
+def test_system_prompt_has_depth_calibration_with_node_counts():
+    # Depth must drive total node count — the most demo-visible lever.
+    assert "By `depth`" in _SYSTEM_PROMPT
+    assert "overview" in _SYSTEM_PROMPT
+    assert "moderate" in _SYSTEM_PROMPT
+    assert "deep" in _SYSTEM_PROMPT
+    assert "4–5" in _SYSTEM_PROMPT
+    assert "5–7" in _SYSTEM_PROMPT
+    assert "7–10" in _SYSTEM_PROMPT
+
+
+def test_system_prompt_has_familiarity_calibration_with_entry_point_rules():
+    # Familiarity must affect entry point and orientation budget, not wording.
+    assert "By `familiarity`" in _SYSTEM_PROMPT
+    assert "Starting fresh" in _SYSTEM_PROMPT
+    assert "diving into the source" in _SYSTEM_PROMPT
+    assert "orientation" in _SYSTEM_PROMPT.lower()
+
+
+def test_system_prompt_has_background_assumed_knowledge_gate():
+    assert "By `background`" in _SYSTEM_PROMPT
+    # Should be an assumed-knowledge SKIP gate, not analogies.
+    assert "SKIP" in _SYSTEM_PROMPT or "skip" in _SYSTEM_PROMPT
+
+
+def test_system_prompt_enforces_sequence_only_initial_graph():
+    # Architectural decision (see Phase 3 review): the initial graph is a
+    # pure sequence chain. Prerequisite and deeper edges are reserved for
+    # session-time mutations (Mutator). The Mentor must NOT emit them.
+    assert "always \"sequence\" in this response" in _SYSTEM_PROMPT
+    assert "N-1 edges\n  of kind=\"sequence\"" in _SYSTEM_PROMPT or \
+           "N-1 edges of kind=\"sequence\"" in _SYSTEM_PROMPT
+    # No relaxation language should remain.
+    assert "PREREQUISITE edges:" not in _SYSTEM_PROMPT
+    assert "supplementary structural assertions" not in _SYSTEM_PROMPT
+
+
+def test_edge_wire_rejects_non_sequence_kinds():
+    # Schema-level enforcement of the architectural decision. A Mentor
+    # response that tries to invent a prerequisite or deeper edge fails
+    # at parse, not silently at semantic review.
+    from pydantic import ValidationError
+    EdgeWire(from_id="n1", to_id="n2", kind="sequence")  # accepted
+    for bad_kind in ("prerequisite", "deeper", "supports", ""):
+        with pytest.raises(ValidationError):
+            EdgeWire(from_id="n1", to_id="n2", kind=bad_kind)
+
+
+def test_improve_builder_expresses_safety_via_ordering_not_edge_kinds():
+    prompt = _build_improve_existing_system_prompt(
+        FAKE_GOAL_IMPROVE_EXISTING_SYSTEM, FAKE_MODULE_MAP, []
+    )
+    # Three risk-tolerance regimes must still be present.
+    assert "SAFETY-CRITICAL" in prompt
+    assert "PROTOTYPE / EXPERIMENTAL" in prompt
+    assert "UNSPECIFIED" in prompt
+    # Safety-critical must require risk + test_coverage to PRECEDE the
+    # extension point in the sequence chain — ordering, not extra edges.
+    assert "preceded" in prompt
+    assert "sequence ORDERING" in prompt or "sequence chain" in prompt
+    # And must explicitly NOT invent new edge kinds for the safety assertion.
+    assert "do not invent new edge kinds" in prompt
+    # The old "emit PREREQUISITE edges" instruction must be gone.
+    assert "emit PREREQUISITE edges" not in prompt
+
+
+def test_improve_existing_system_prompt_threads_system_review():
+    prompt = _build_improve_existing_system_prompt(
+        FAKE_GOAL_IMPROVE_EXISTING_SYSTEM,
+        FAKE_MODULE_MAP,
+        [],
+        FAKE_SYSTEM_REVIEW,
+    )
+    assert "System review" in prompt
+    assert "auth_on_redirect" in prompt
+    # Anchor metadata should be visible to the LLM so it can prefer
+    # already-grounded findings as anchor candidates.
+    assert "requests/sessions.py" in prompt
+
+
+def test_format_system_review_returns_empty_string_for_none_or_empty():
+    assert _format_system_review(None) == ""
+    assert _format_system_review({}) == ""
+
+
+def test_format_system_review_renders_sections_and_anchors():
+    block = _format_system_review(FAKE_SYSTEM_REVIEW)
+    assert "Risks:" in block
+    assert "Extension points:" in block
+    assert "Test gaps:" in block
+    assert "Boundaries:" in block
+    # An anchored finding renders its (file, line range).
+    assert "requests/auth.py" in block
+    assert "lines 72-100" in block
+    # An unanchored finding renders without an anchor suffix.
+    assert "custom_auth_helpers" in block
 
 
 def test_prompt_includes_retrieved_chunk_files():

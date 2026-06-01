@@ -4,7 +4,11 @@ Run with: uv run pytest tests/test_graph.py -v
 """
 from unittest.mock import MagicMock, patch
 
-from backend.pipeline.graph import build_graph, route_after_code_structure
+from backend.pipeline.graph import (
+    build_graph,
+    route_after_code_structure,
+    route_after_prioritization,
+)
 from backend.pipeline.state import OnboardState
 
 
@@ -43,6 +47,7 @@ def test_build_graph_compiles_and_registers_four_nodes():
     assert "code_structure" in node_names
     assert "documentation" in node_names
     assert "prioritization" in node_names
+    assert "reviewer" in node_names
     assert "mentor" in node_names
 
 
@@ -59,6 +64,27 @@ def test_router_returns_end_when_module_map_missing():
     assert route_after_code_structure(state) == END
 
 
+def test_post_prioritization_router_runs_reviewer_for_review_worthy_goals():
+    for gt in ("improve_existing_system", "understand_architecture"):
+        state = OnboardState(
+            repo_url=FAKE_REPO_URL, goal={**FAKE_GOAL, "goal_type": gt}
+        )
+        assert route_after_prioritization(state) == "reviewer"
+
+
+def test_post_prioritization_router_skips_reviewer_for_other_goals():
+    for gt in (
+        "understand_system",
+        "understand_component",
+        "contribute_code",
+        "debug_issue",
+    ):
+        state = OnboardState(
+            repo_url=FAKE_REPO_URL, goal={**FAKE_GOAL, "goal_type": gt}
+        )
+        assert route_after_prioritization(state) == "mentor"
+
+
 @patch("backend.pipeline.runner.run_mentor", side_effect=_populate_learning_path)
 @patch("backend.pipeline.runner.run_documentation")
 @patch("backend.pipeline.runner.run_code_structure", side_effect=_populate_module_map)
@@ -71,6 +97,45 @@ def test_graph_reaches_mentor_when_module_map_populated(mock_cs, mock_doc, mock_
     assert state.module_map is not None
     assert state.learning_path is not None
     assert state.confidence == "high"
+
+
+def _populate_system_review(state, client=None):
+    state.system_review = {
+        "strengths": [],
+        "risks": [],
+        "extension_points": [],
+        "test_gaps": [],
+        "boundaries": [],
+    }
+    return state
+
+
+@patch("backend.pipeline.runner.run_reviewer", side_effect=_populate_system_review)
+@patch("backend.pipeline.runner.run_mentor", side_effect=_populate_learning_path)
+@patch("backend.pipeline.runner.run_code_structure", side_effect=_populate_module_map)
+def test_graph_runs_reviewer_for_improve_existing_system(
+    mock_cs, mock_mentor, mock_reviewer
+):
+    from backend.pipeline.runner import run_pipeline
+    goal = {**FAKE_GOAL, "goal_type": "improve_existing_system"}
+    state = run_pipeline(FAKE_REPO_URL, goal, client=MagicMock())
+    mock_reviewer.assert_called_once()
+    mock_mentor.assert_called_once()
+    assert state.system_review is not None
+
+
+@patch("backend.pipeline.runner.run_reviewer")
+@patch("backend.pipeline.runner.run_mentor", side_effect=_populate_learning_path)
+@patch("backend.pipeline.runner.run_code_structure", side_effect=_populate_module_map)
+def test_graph_skips_reviewer_for_other_goal_types(
+    mock_cs, mock_mentor, mock_reviewer
+):
+    from backend.pipeline.runner import run_pipeline
+    # FAKE_GOAL is goal_type="understand_component" — not review-worthy.
+    state = run_pipeline(FAKE_REPO_URL, FAKE_GOAL, client=MagicMock())
+    mock_reviewer.assert_not_called()
+    mock_mentor.assert_called_once()
+    assert state.system_review is None
 
 
 @patch("backend.pipeline.runner.run_mentor")
