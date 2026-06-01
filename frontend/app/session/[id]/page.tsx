@@ -1,47 +1,37 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import LearningGraph from "@/components/LearningGraph";
 import LessonPanel from "@/components/LessonPanel";
 import CodeViewer from "@/components/CodeViewer";
 import { getSession } from "@/lib/api";
-import type { SessionGraph, GraphNode } from "@/lib/api";
+import type { SessionGraph } from "@/lib/api";
 
 export default function SessionPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [graph, setGraph] = useState<SessionGraph | null>(null);
-  const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [viewingFile, setViewingFile] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const loadGraph = useCallback(async () => {
+  const loadGraph = async () => {
     try {
       const data = await getSession(id);
       setGraph(data);
-      if (data.current_node_id && !activeNodeId) {
-        setActiveNodeId(data.current_node_id);
-      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load session");
     }
-  }, [id, activeNodeId]);
+  };
 
   useEffect(() => {
     loadGraph();
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleNodeClick = (node: GraphNode) => {
-    setActiveNodeId(node.id);
-    setViewingFile(null);
-  };
-
-  const handleAdvance = async () => {
+  const handleAdvance = async (): Promise<void> => {
     try {
       const data = await getSession(id);
       setGraph(data);
-      if (data.current_node_id) setActiveNodeId(data.current_node_id);
       setViewingFile(null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load session");
@@ -64,7 +54,8 @@ export default function SessionPage() {
     );
   }
 
-  const activeNode = graph.nodes.find((n) => n.id === activeNodeId);
+  const currentNodeId = graph.current_node_id;
+  const currentNode = graph.nodes.find((n) => n.id === currentNodeId);
 
   return (
     <main className="h-screen bg-gray-950 flex flex-col overflow-hidden">
@@ -82,40 +73,41 @@ export default function SessionPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left panel — graph OR code viewer */}
         <div className="flex-[3] flex flex-col p-4 overflow-hidden">
-          {viewingFile && activeNode ? (
+          {viewingFile && currentNode ? (
             <CodeViewer
               sessionId={id}
               filePath={viewingFile}
-              highlightStart={activeNode.line_start}
-              highlightEnd={activeNode.line_end}
+              highlightStart={currentNode.line_start}
+              highlightEnd={currentNode.line_end}
               onClose={() => setViewingFile(null)}
             />
           ) : (
             <LearningGraph
               nodes={graph.nodes}
               edges={graph.edges}
-              currentNodeId={graph.current_node_id}
+              currentNodeId={currentNodeId}
               readiness={graph.readiness}
-              onNodeClick={handleNodeClick}
+              onNodeClick={() => {}}
             />
           )}
         </div>
 
-        {/* Right panel — lesson */}
+        {/* Right panel — lesson for current node */}
         <div className="flex-[2] border-l border-gray-800 p-6 overflow-y-auto">
-          {activeNodeId ? (
+          {currentNodeId ? (
             <LessonPanel
               sessionId={id}
-              nodeId={activeNodeId}
-              nodeTitle={activeNode?.title ?? ""}
-              nodeFile={activeNode?.file}
-              lineStart={activeNode?.line_start}
-              lineEnd={activeNode?.line_end}
+              nodeId={currentNodeId}
+              nodeTitle={currentNode?.title ?? ""}
+              nodeFile={currentNode?.file}
+              lineStart={currentNode?.line_start}
+              lineEnd={currentNode?.line_end}
               onFileClick={(file) => setViewingFile(file)}
               onAdvance={handleAdvance}
+              onFinish={() => router.push("/")}
             />
           ) : (
-            <p className="text-gray-500 text-sm">Click a node to start learning.</p>
+            <p className="text-gray-500 text-sm">Loading your first lesson…</p>
           )}
         </div>
       </div>

@@ -104,13 +104,16 @@ export interface RespondResult {
   understanding_state: string;
 }
 
-export const respond = (session_id: string, answer: string) =>
-  post<RespondResult>(`/session/${session_id}/respond`, { response: answer });
+export const respond = (session_id: string, answer: string, node_id?: string) =>
+  post<RespondResult>(`/session/${session_id}/respond`, { response: answer, node_id });
 
 // --- Advance ---
 
-export const advance = (session_id: string, signal: "next" | "skip" = "next") =>
-  post(`/session/${session_id}/advance`, { signal });
+export const advance = (session_id: string, signal: "next" | "skip" = "next", node_id?: string) =>
+  post(`/session/${session_id}/advance`, { signal, node_id });
+
+export const jump = (session_id: string, node_id: string) =>
+  post(`/session/${session_id}/jump`, { node_id });
 
 // --- File viewer ---
 

@@ -31,7 +31,7 @@ MODEL = "claude-haiku-4-5"
 # Walkthroughs are the longest prose in the system. 2048 was too tight — a long
 # lesson would get truncated mid-JSON-string ("Unterminated string" on parse).
 # Match the Mentor's budget so the JSON always closes.
-MAX_TOKENS = 4096
+MAX_TOKENS = 8192
 
 # How many extra cross-reference chunks to pull for context. Small on purpose —
 # the lesson is about one node, the supporting chunks just give it reach.
@@ -59,11 +59,13 @@ piece of an unfamiliar Python codebase. You are given:
   - a few supporting code chunks for cross-reference context
   - the node's concept tags (frame your walkthrough around the dominant tag)
 
+IMPORTANT: Keep your ENTIRE response under 1500 words total. Be concise.
+
 Produce a JSON object with exactly these keys:
-  walkthrough:     markdown. Explain this code so the developer understands it
-                   in service of their goal. Reference the real identifiers and
-                   line structure. Connect to what they already understand
-                   where relevant.
+  walkthrough:     markdown. Max 400 words. Explain this code so the developer
+                   understands it in service of their goal. Reference the real
+                   identifiers and line structure. Connect to what they already
+                   understand where relevant.
   prompt:          ONE active-learning question of the "predict-then-reveal"
                    form — ask the developer to predict something about this code
                    BEFORE they read your explanation in full (e.g. "Before

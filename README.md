@@ -73,18 +73,38 @@ These provide a contrast between complex and lightweight architectures.
 
 ## Setup
 
+### 1. Backend
+
 ```bash
-# Install dependencies
+# Install Python dependencies
 uv sync
 
 # Copy env file and fill in your keys
 cp .env.example .env
 
-# Run backend
-uvicorn backend.api:app --reload
-
-# Run frontend (Week 5+)
-cd frontend && npm run dev
+# Run backend (exclude data/ to prevent false reloads when repos are cloned)
+uv run uvicorn backend.api:app --reload 
 ```
 
 Required env vars: `ANTHROPIC_API_KEY`, `GITHUB_TOKEN` (optional)
+
+### 2. Frontend
+
+```bash
+# First time only — install Node dependencies
+cd frontend && npm install
+
+# Run frontend (in a separate terminal)
+cd frontend && npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+> **Note:** `node_modules/` is gitignored. Run `npm install` after every fresh clone or pull.
+> If you see `sh: next: command not found`, run `npm install` first.
+
+### Running both together
+
+You need **two terminals running at the same time**:
+- Terminal 1: backend on `http://localhost:8000`
+- Terminal 2: frontend on `http://localhost:3000`
