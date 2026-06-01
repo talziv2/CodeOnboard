@@ -6,7 +6,7 @@ from sentence_transformers import SentenceTransformer
 MODEL_NAME = "nomic-ai/nomic-embed-text-v1.5"
 DOCUMENT_PREFIX = "search_document: "
 QUERY_PREFIX = "search_query: "
-BATCH_SIZE = 32
+BATCH_SIZE = 4
 
 
 @lru_cache(maxsize=1)
