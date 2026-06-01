@@ -200,6 +200,9 @@ def _render_current_lesson(graph, client) -> dict:
     state = OnboardState(repo_url=graph.repo_url, goal=graph.goal, client=client)
     state.repo_path = repo_path
     state.graph = graph
+    # Make doc_context available to Teaching Agent. It lives on the graph
+    # (persisted in SQLite) because state is reconstructed fresh here.
+    state.doc_context = graph.doc_context
     run_teaching(state, client=client)
     # Persist whatever changed (cached_lesson on the node, etc.).
     learning_store.save_graph(graph, SESSIONS_DB_PATH)

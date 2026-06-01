@@ -312,6 +312,7 @@ def _build_learning_graph(state: OnboardState, output: MentorOutput) -> Learning
     to this function — the wire IDs never leave the agent.
     """
     graph = LearningGraph(repo_url=state.repo_url, goal=state.goal)
+    graph.doc_context = state.doc_context  # may be None if doc agent was skipped
 
     wire_to_uuid: dict[str, str] = {}
     for wire_node in output.nodes:

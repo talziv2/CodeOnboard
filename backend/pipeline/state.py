@@ -15,6 +15,9 @@ class OnboardState:
     module_map: dict | None = None
     relevant_modules: list[str] | None = None  # set by Prioritization Agent
     chunks_embedded: bool = False
+    # Set by Documentation Agent: README excerpt + per-file module docstrings.
+    # Passed to Teaching Agent so it can quote real documentation in lessons.
+    doc_context: dict | None = None
     learning_path: list | None = None
     confidence: str = "low"
     # Phase 3: the interactive learning graph. Set by the Planner Agent,

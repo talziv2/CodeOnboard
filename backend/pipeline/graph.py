@@ -1,15 +1,17 @@
 # LangGraph orchestration for the onboarding pipeline.
 #
-# Graph shape (Phase 2 migration; logically equivalent to the Phase 1
-# sequential runner):
+# Graph shape (Phase 2 + Documentation Agent):
 #
-#     START -> code_structure --(module_map set?)-- yes -> prioritization -> mentor -> END
+#     START -> code_structure --(module_map set?)-- yes -> documentation -> prioritization -> mentor -> END
 #                                              \--- no  -> END
 #
 # The Goal Agent is intentionally NOT a node here — it runs upstream of the
 # pipeline as a multi-turn HTTP dialogue via /goal/start and /goal/answer
 # (see backend/api.py). By the time invoke() is called, `goal` is finalized
 # input.
+#
+# Documentation Agent runs after code_structure (needs repo_path) and before
+# prioritization. It requires no LLM so it adds negligible latency.
 
 from langgraph.graph import END, START, StateGraph
 
@@ -44,6 +46,17 @@ def code_structure_node(state: OnboardState) -> dict:
     }
 
 
+def documentation_node(state: OnboardState) -> dict:
+    from backend.pipeline import runner
+
+    prev_errors = list(state.errors)
+    runner.run_documentation(state)
+    return {
+        "doc_context": state.doc_context,
+        "errors": _extract_new_errors(state, prev_errors),
+    }
+
+
 def prioritization_node(state: OnboardState) -> dict:
     from backend.pipeline import runner
 
@@ -72,15 +85,16 @@ def mentor_node(state: OnboardState) -> dict:
 
 
 def route_after_code_structure(state: OnboardState) -> str:
-    # Mirrors the Phase 1 short-circuit: without a module_map the Mentor Agent
-    # has nothing to ground on, so skip the rest of the pipeline.
-    return "prioritization" if state.module_map is not None else END
+    # Without a module_map the Mentor Agent has nothing to ground on, so skip
+    # the rest of the pipeline. Documentation runs first in the happy path.
+    return "documentation" if state.module_map is not None else END
 
 
 def build_graph():
     graph = StateGraph(OnboardState)
 
     graph.add_node("code_structure", code_structure_node)
+    graph.add_node("documentation", documentation_node)
     graph.add_node("prioritization", prioritization_node)
     graph.add_node("mentor", mentor_node)
 
@@ -88,8 +102,9 @@ def build_graph():
     graph.add_conditional_edges(
         "code_structure",
         route_after_code_structure,
-        {"prioritization": "prioritization", END: END},
+        {"documentation": "documentation", END: END},
     )
+    graph.add_edge("documentation", "prioritization")
     graph.add_edge("prioritization", "mentor")
     graph.add_edge("mentor", END)
 

@@ -88,6 +88,10 @@ class LearningGraph:
     nodes: dict[str, LearningNode] = field(default_factory=dict)
     edges: list[LearningEdge] = field(default_factory=list)
     current_node_id: str | None = None
+    # Populated by the Documentation Agent during the pipeline run and carried
+    # on the graph so Teaching Agent can access it during interactive sessions
+    # (where state is reconstructed from the persisted graph, not from the pipeline).
+    doc_context: dict | None = None
 
     # --- construction helpers ---
 
