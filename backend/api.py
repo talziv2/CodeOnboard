@@ -42,7 +42,7 @@ from backend.pipeline.runner import run_pipeline
 from backend.pipeline.state import OnboardState
 from backend.rag.cloner import clone_repo
 
-load_dotenv()
+load_dotenv(override=True)
 app = FastAPI(title="CodeOnboard API")
 
 app.add_middleware(
@@ -217,6 +217,8 @@ def _render_current_lesson(graph, client) -> dict:
     # Persist whatever changed (cached_lesson on the node, etc.).
     learning_store.save_graph(graph, SESSIONS_DB_PATH)
     if state.current_lesson is None:
+        # Surface why teaching failed — state.errors is otherwise discarded.
+        print(f"[teaching fallback] node={graph.current_node_id} errors={state.errors}", flush=True)
         # Fallback: return a minimal lesson so the session isn't blocked.
         node = graph.nodes.get(graph.current_node_id)
         fallback = {
