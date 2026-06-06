@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 
-UnderstandingState = Literal["not-yet", "partial", "understood"]
+UnderstandingState = Literal["not_started", "failed", "partial", "understood"]
 EdgeKind = Literal["sequence", "prerequisite", "deeper"]
 
 
@@ -54,7 +54,7 @@ class LearningNode:
     # line_range, which are top-level here. Teaching expands this into the
     # actual lesson at delivery time.
     lesson_brief: dict = field(default_factory=dict)
-    understanding_state: UnderstandingState = "not-yet"
+    understanding_state: UnderstandingState = "not_started"
     visited: bool = False
     # Grader marked the user as "confused" on this node at least once. Survives
     # later "understood" updates so the system remembers a rough patch even
@@ -119,12 +119,9 @@ class LearningGraph:
     def mark_understanding(self, node_id: str, state: UnderstandingState) -> None:
         node = self.nodes[node_id]
         node.understanding_state = state
-        if state == "partial" or state == "not-yet":
-            # "confused" upstream maps to "not-yet" here; both flag a weak spot.
-            # Sticky: once a weak spot, always a weak spot — useful signal for
-            # the Planner even after the user later marks the node understood.
-            if state == "not-yet":
-                node.weak_spot = True
+        if state == "failed":
+            # Mark as weak spot — prerequisite nodes get cleared later in insert_before
+            node.weak_spot = True
 
     def override(self, node_id: str, action: str) -> None:
         # User-driven graph edit ("mark understood" / "mark weak" / "skip").
@@ -135,7 +132,7 @@ class LearningGraph:
         if action == "mark_understood":
             node.understanding_state = "understood"
         elif action == "mark_weak":
-            node.understanding_state = "not-yet"
+            node.understanding_state = "failed"
             node.weak_spot = True
         elif action == "skip":
             node.visited = True
@@ -156,6 +153,8 @@ class LearningGraph:
             if edge.to_node_id == anchor_id and edge.kind == "sequence":
                 edge.to_node_id = new_node.id
         self.edges.append(LearningEdge(new_node.id, anchor_id, kind))
+        # Prerequisite nodes are helpers, not original topics — clear weak_spot
+        new_node.weak_spot = False
         return new_node
 
     def insert_after(
@@ -253,8 +252,13 @@ class LearningGraph:
         # relevant nodes), so total works.
         if not self.nodes:
             return 0.0
-        understood = sum(1 for n in self.nodes.values() if n.understanding_state == "understood")
-        return understood / len(self.nodes)
+        score = sum(
+            1.0 if n.understanding_state == "understood" else
+            0.5 if n.understanding_state == "partial" else
+            0.0  # not_started or failed
+            for n in self.nodes.values()
+        )
+        return score / len(self.nodes)
 
     # --- serialization (for API responses / UI) ---
 
