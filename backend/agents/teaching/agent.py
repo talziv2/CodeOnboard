@@ -59,13 +59,12 @@ piece of an unfamiliar Python codebase. You are given:
   - a few supporting code chunks for cross-reference context
   - the node's concept tags (frame your walkthrough around the dominant tag)
 
-IMPORTANT: Keep your ENTIRE response under 1500 words total. Be concise.
+CRITICAL: Your ENTIRE response must be under 600 words. Be very concise.
 
 Produce a JSON object with exactly these keys:
-  walkthrough:     markdown. Max 400 words. Explain this code so the developer
-                   understands it in service of their goal. Reference the real
-                   identifiers and line structure. Connect to what they already
-                   understand where relevant.
+  walkthrough:     markdown. MAX 250 words. Explain this code so the developer
+                   understands it in service of their goal. Be brief and direct.
+                   Reference key identifiers only — no exhaustive walkthroughs.
   prompt:          ONE active-learning question of the "predict-then-reveal"
                    form — ask the developer to predict something about this code
                    BEFORE they read your explanation in full (e.g. "Before
@@ -104,12 +103,9 @@ Framing by dominant concept tag:
 Calibration by goal fields (read these from the user content):
 
   By `Depth requested`:
-    overview  → ~200 words. Focus on the WHY and the layer's responsibility.
-                Minimal code citation. Skip line-level walkthroughs.
-    moderate  → ~350 words (current default). Balanced explanation.
-    deep      → ~500–600 words. Walk through the code in detail. Cite
-                specific identifiers and line ranges. Include implementation
-                nuance the moderate version would skip.
+    overview  → ~100 words. Focus on the WHY only.
+    moderate  → ~150 words (current default). Balanced explanation.
+    deep      → ~250 words. Walk through the code. Stay under 250 words regardless.
 
   By `familiarity with THIS codebase`:
     "Starting fresh"      → define repo-specific terms on first use; do not

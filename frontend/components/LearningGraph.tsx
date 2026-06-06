@@ -12,12 +12,14 @@ import type { GraphNode, GraphEdge, UnderstandingState } from "@/lib/api";
 
 const stateColor: Record<UnderstandingState, string> = {
   not_started: "#374151",
+  "failed": "#7f1d1d",
   partial: "#92400e",
   understood: "#14532d",
 };
 
 const stateBorder: Record<UnderstandingState, string> = {
   not_started: "#6b7280",
+  "failed": "#ef4444",
   partial: "#d97706",
   understood: "#22c55e",
 };
@@ -145,7 +147,7 @@ export default function LearningGraph({ nodes, edges, currentNodeId, readiness, 
 
       {/* Legend */}
       <div style={{ display: "flex", gap: 20, padding: "0 4px" }}>
-        {(["not_started", "partial", "understood"] as UnderstandingState[]).map((s) => (
+        {(["not_started", "failed", "partial", "understood"] as UnderstandingState[]).map((s) => (
           <span key={s} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#9ca3af" }}>
             <span style={{
               display: "inline-block",

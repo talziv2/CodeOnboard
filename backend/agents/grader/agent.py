@@ -29,13 +29,13 @@ MAX_TOKENS = 512
 
 Classification = Literal["understood", "partial", "confused", "off-topic"]
 
-# How each classification updates the node. "off-topic" is intentionally absent
-# — an answer that doesn't address the prompt leaves understanding_state alone.
-# "confused" maps to "not-yet", which flips weak_spot via the graph's own logic.
+# How each classification updates the node.
+# "confused" and "off-topic" both map to "failed" — the user didn't demonstrate understanding.
 _CLASSIFICATION_TO_STATE: dict[str, str] = {
     "understood": "understood",
     "partial": "partial",
-    "confused": "not-yet",
+    "confused": "failed",
+    "off-topic": "failed",
 }
 
 
@@ -175,7 +175,7 @@ def run(
 def _apply_grade(state: OnboardState, node_id: str, classification: str) -> None:
     # "off-topic" leaves understanding_state untouched — no grasp signal either
     # way. Everything else maps through _CLASSIFICATION_TO_STATE; "confused"
-    # → "not-yet" trips weak_spot inside LearningGraph.mark_understanding.
+    # → "failed" trips weak_spot inside LearningGraph.mark_understanding.
     new_state = _CLASSIFICATION_TO_STATE.get(classification)
     if new_state is not None:
         state.graph.mark_understanding(node_id, new_state)

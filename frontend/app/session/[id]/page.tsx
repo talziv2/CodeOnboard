@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import LearningGraph from "@/components/LearningGraph";
 import LessonPanel from "@/components/LessonPanel";
 import CodeViewer from "@/components/CodeViewer";
-import { getSession } from "@/lib/api";
+import { getSession, sessionStart } from "@/lib/api";
 import type { SessionGraph } from "@/lib/api";
 
 export default function SessionPage() {
@@ -14,6 +14,7 @@ export default function SessionPage() {
   const [graph, setGraph] = useState<SessionGraph | null>(null);
   const [viewingFile, setViewingFile] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [restarting, setRestarting] = useState(false);
 
   const loadGraph = async () => {
     try {
@@ -63,10 +64,26 @@ export default function SessionPage() {
         <h1 className="text-white font-bold text-lg">CodeOnboard</h1>
         <span className="text-gray-500 text-sm flex-1">Session {id.slice(0, 8)}…</span>
         <button
+          onClick={async () => {
+            if (!graph) return;
+            setRestarting(true);
+            try {
+              const { session_id } = await sessionStart(graph.repo_url, graph.goal, true);
+              router.push(`/session/${session_id}`);
+            } catch {
+              setRestarting(false);
+            }
+          }}
+          disabled={restarting}
+          className="px-4 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 text-sm transition disabled:opacity-40"
+        >
+          {restarting ? "Restarting…" : "Start over"}
+        </button>
+        <button
           onClick={() => router.push("/")}
           className="px-4 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 text-sm transition"
         >
-          Start over
+          Main menu
         </button>
       </header>
 
@@ -102,8 +119,10 @@ export default function SessionPage() {
               nodeFile={currentNode?.file}
               lineStart={currentNode?.line_start}
               lineEnd={currentNode?.line_end}
+              graph={graph}
               onFileClick={(file) => setViewingFile(file)}
               onAdvance={handleAdvance}
+              onRespond={loadGraph}
               onFinish={() => router.push("/")}
             />
           ) : (

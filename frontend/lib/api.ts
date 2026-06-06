@@ -46,12 +46,12 @@ export interface SessionStartResponse {
   session_id: string;
 }
 
-export const sessionStart = (repo_url: string, goal: Record<string, string>) =>
-  post<SessionStartResponse>("/session/start", { repo_url, goal });
+export const sessionStart = (repo_url: string, goal: Record<string, string>, force_new = false) =>
+  post<SessionStartResponse>("/session/start", { repo_url, goal, force_new });
 
 // --- Learning graph ---
 
-export type UnderstandingState = "not_started" | "partial" | "understood";
+export type UnderstandingState = "not_started" | "failed" | "partial" | "understood";
 
 export interface GraphNode {
   id: string;
@@ -61,6 +61,7 @@ export interface GraphNode {
   line_end: number;
   understanding_state: UnderstandingState;
   visited: boolean;
+  weak_spot: boolean;
 }
 
 export interface GraphEdge {
@@ -71,6 +72,8 @@ export interface GraphEdge {
 
 export interface SessionGraph {
   session_id: string;
+  repo_url: string;
+  goal: Record<string, string>;
   current_node_id: string | null;
   nodes: GraphNode[];
   edges: GraphEdge[];
@@ -114,6 +117,9 @@ export const advance = (session_id: string, signal: "next" | "skip" = "next", no
 
 export const jump = (session_id: string, node_id: string) =>
   post(`/session/${session_id}/jump`, { node_id });
+
+export const retry = (session_id: string, node_id?: string) =>
+  post<{ current_node_id: string; inserted: boolean }>(`/session/${session_id}/retry`, { node_id });
 
 // --- File viewer ---
 

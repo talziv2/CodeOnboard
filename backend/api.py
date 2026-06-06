@@ -331,9 +331,6 @@ def session_advance(session_id: str, body: AdvanceRequest) -> dict:
         client = _new_client()
         state = OnboardState(repo_url=graph.repo_url, goal=graph.goal, client=client)
         state.graph = graph
-        # Insert a prerequisite so the skipped topic isn't lost, then skip forward.
-        state.repo_path = clone_repo(graph.repo_url)
-        mutate_graph(state, "prerequisite", client=client)
         mutate_graph(state, "skip")
         learning_store.save_graph(graph, SESSIONS_DB_PATH)
         nxt = graph.current_node_id if graph.current_node_id != current else None
@@ -345,9 +342,22 @@ def session_advance(session_id: str, body: AdvanceRequest) -> dict:
     # signal == "next"
     graph.mark_visited(current)
     nxt = graph.next_in_path(current)
+
+    # If the current node is a prerequisite, skip the node it unlocks —
+    # the user already tried it (got it wrong) and chose "Try again" which
+    # inserted this prerequisite. After learning the prereq, move forward
+    # past the original node rather than retrying it.
+    # A prerequisite node has an outgoing prerequisite edge to the node it unlocks
+    current_is_prereq = any(
+        e.kind == "prerequisite" and e.from_node_id == current
+        for e in graph.edges
+    )
+    print(f"[advance] current={current[:8]} is_prereq={current_is_prereq} nxt={nxt[:8] if nxt else None} edges={[(e.from_node_id[:8], e.to_node_id[:8], e.kind) for e in graph.edges]}")
+    if current_is_prereq and nxt is not None:
+        graph.mark_visited(nxt)
+        nxt = graph.next_in_path(nxt)
+
     if nxt is None:
-        # End of the path. Leave current_node_id pointing at the last node
-        # (non-destructive) so /session/{id} still shows where the user ended.
         learning_store.save_graph(graph, SESSIONS_DB_PATH)
         return {"done": True}
 
@@ -378,13 +388,8 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
 
     grade = state.last_grade or {}
     mutation = {"kind": "none"}
-    if grade.get("classification") in ("confused", "off-topic"):
-        # Adaptive step: insert a prerequisite before the confused node and
-        # make it current, so the user learns the missing foundation first.
-        # repo_path is needed for retrieval during node generation.
-        state.repo_path = clone_repo(graph.repo_url)
-        mutate_graph(state, "prerequisite", client=client)
-        mutation = state.last_mutation or {"kind": "none"}
+    # Prerequisites are no longer inserted automatically on wrong answers.
+    # The user explicitly triggers them via the /retry endpoint ("Try again" button).
 
     learning_store.save_graph(graph, SESSIONS_DB_PATH)
 
@@ -395,6 +400,30 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
         "mutation": mutation,
         "current_node_id": graph.current_node_id,  # may now point at a new prerequisite
     }
+
+
+@app.post("/session/{session_id}/retry")
+def session_retry(session_id: str, body: dict) -> dict:
+    """Insert a prerequisite for the current node and load its lesson.
+    Called when the user clicks 'Try again' after a wrong answer.
+    """
+    node_id = body.get("node_id")
+    graph = _load_session_or_404(session_id)
+    current = node_id or graph.current_node_id
+    if not current or current not in graph.nodes:
+        raise HTTPException(status_code=404, detail="node_not_found")
+    graph.set_current(current)
+    client = _new_client()
+    state = OnboardState(repo_url=graph.repo_url, goal=graph.goal, client=client)
+    state.graph = graph
+    state.repo_path = clone_repo(graph.repo_url)
+    mutate_graph(state, "prerequisite", client=client)
+    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    if graph.current_node_id == current:
+        # No prerequisite was inserted (guard triggered) — just return current
+        return {"current_node_id": current, "inserted": False}
+    lesson = _render_current_lesson(graph, client)
+    return {"current_node_id": graph.current_node_id, "inserted": True, "lesson": lesson}
 
 
 @app.post("/session/{session_id}/jump")
