@@ -24,62 +24,81 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
         setSessionId(res.session_id);
         setQuestion(res.question);
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "Failed to start goal dialogue");
+        setError(e instanceof Error ? e.message : "Couldn't reach the server.");
       } finally {
         setLoading(false);
       }
     })();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [repoUrl]);
 
   const submit = async () => {
-    if (!sessionId || !answer.trim()) return;
+    if (!sessionId || !answer.trim() || loading) return;
     setLoading(true);
     setError(null);
     try {
       const res = await goalAnswer(sessionId, answer);
       setAnswer("");
-      if (res.done && res.goal) {
-        onDone(sessionId, res.goal);
-      } else if (res.question) {
-        setQuestion(res.question);
-      }
+      if (res.done && res.goal) onDone(sessionId, res.goal);
+      else if (res.question) setQuestion(res.question);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Something went wrong");
+      setError(e instanceof Error ? e.message : "Couldn't save that answer.");
     } finally {
       setLoading(false);
     }
   };
 
   if (loading && !question) {
-    return <p className="text-gray-400 animate-pulse">Starting goal dialogue…</p>;
+    return <p className="animate-pulse font-mono text-sm text-graphite">Starting the interview…</p>;
   }
 
+  if (!question) {
+    return error ? <p className="text-sm text-rust">{error}</p> : null;
+  }
+
+  const ticks = Math.max(question.total, question.index);
+
   return (
-    <div className="flex flex-col gap-4 w-full max-w-xl">
-      {question && (
-        <div>
-          <p className="text-lg text-white font-medium">{question.text}</p>
-          {question.options && (
-            <div className="flex flex-wrap gap-2 mt-3">
-              {question.options.map((opt) => (
-                <button
-                  key={opt}
-                  onClick={() => setAnswer(opt)}
-                  className={`px-3 py-1.5 rounded-lg text-sm border transition ${
-                    answer === opt
-                      ? "bg-indigo-600 border-indigo-600 text-white"
-                      : "border-gray-600 text-gray-300 hover:border-indigo-500"
-                  }`}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          )}
+    <div className="flex w-full max-w-xl flex-col gap-5">
+      <div className="flex flex-col gap-2">
+        <div className="flex gap-1" role="presentation">
+          {Array.from({ length: ticks }, (_, i) => (
+            <span
+              key={i}
+              className={`h-0.5 flex-1 rounded-full transition-colors ${
+                i < question.index ? "bg-signal" : "bg-rule"
+              }`}
+            />
+          ))}
+        </div>
+        <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-graphite">
+          Question {question.index} of {ticks}
+        </span>
+      </div>
+
+      <h2 className="font-display text-[22px] font-medium leading-[1.25] tracking-tight text-chalk text-balance">
+        {question.text}
+      </h2>
+
+      {question.options && (
+        <div className="flex flex-wrap gap-2">
+          {question.options.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => setAnswer(opt)}
+              className={`rounded border px-3 py-1.5 text-[13px] transition ${
+                answer === opt
+                  ? "border-signal-dim bg-signal/15 text-signal"
+                  : "border-rule text-graphite hover:border-signal-dim hover:text-chalk"
+              }`}
+            >
+              {opt}
+            </button>
+          ))}
         </div>
       )}
+
       <textarea
-        className="w-full rounded-lg bg-gray-800 border border-gray-600 text-white p-3 resize-none focus:outline-none focus:border-indigo-500"
+        className="w-full resize-none rounded border border-rule bg-trench p-3 text-[13.5px] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
         rows={3}
         placeholder="Your answer…"
         value={answer}
@@ -92,14 +111,19 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
         }}
         disabled={loading}
       />
-      {error && <p className="text-red-400 text-sm">{error}</p>}
-      <button
-        onClick={submit}
-        disabled={loading || !answer.trim()}
-        className="self-end px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-medium transition"
-      >
-        {loading ? "Thinking…" : "Answer"}
-      </button>
+
+      {error && <p className="text-sm text-rust">{error}</p>}
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={submit}
+          disabled={loading || !answer.trim()}
+          className="rounded border border-signal-dim bg-signal/15 px-5 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+        >
+          {loading ? "Thinking…" : "Continue"}
+        </button>
+        <span className="font-mono text-[10.5px] text-graphite">↵ to continue</span>
+      </div>
     </div>
   );
 }

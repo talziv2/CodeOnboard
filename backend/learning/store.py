@@ -109,6 +109,13 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
             conn.execute("ALTER TABLE sessions ADD COLUMN doc_context_json TEXT")
         except Exception:
             pass
+        # Same additive trick for the per-node answer history. Adding a column
+        # rather than bumping SCHEMA_VERSION keeps existing sessions loadable —
+        # they simply start with an empty history.
+        try:
+            conn.execute("ALTER TABLE nodes ADD COLUMN attempts_json TEXT")
+        except Exception:
+            pass
 
 
 def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
@@ -147,8 +154,9 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
             INSERT INTO nodes (
                 node_id, session_id, title, file, line_start, line_end,
                 concept_tags_json, lesson_brief_json, understanding_state,
-                visited, weak_spot, user_override, cached_lesson_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                visited, weak_spot, user_override, cached_lesson_json,
+                attempts_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [_node_row(graph.session_id, n) for n in graph.nodes.values()],
         )
@@ -249,6 +257,7 @@ def _node_row(session_id: str, node: LearningNode) -> tuple:
         1 if node.weak_spot else 0,
         node.user_override,
         json.dumps(node.cached_lesson) if node.cached_lesson is not None else None,
+        json.dumps(node.attempts),
     )
 
 
@@ -272,4 +281,15 @@ def _row_to_node(row: sqlite3.Row) -> LearningNode:
             if row["cached_lesson_json"] is not None
             else None
         ),
+        attempts=_json_or_default(row, "attempts_json", []),
     )
+
+
+def _json_or_default(row: sqlite3.Row, column: str, default):
+    # Rows written before the column existed have no value (or no key at all,
+    # if an older DB was opened read-only), so degrade to the default.
+    try:
+        raw = row[column]
+    except IndexError:
+        return default
+    return json.loads(raw) if raw else default

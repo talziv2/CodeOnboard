@@ -20,6 +20,7 @@
 
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Literal
 
 
@@ -68,6 +69,11 @@ class LearningNode:
     # Stored on the node so revisits are free; regenerated only on explicit
     # refresh.
     cached_lesson: dict | None = None
+    # Every graded answer, oldest first: {answer, classification, rationale, at}.
+    # understanding_state only records where the user ended up; this records how
+    # they got there, so revisiting a node adds to the record instead of
+    # silently overwriting it.
+    attempts: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -115,6 +121,20 @@ class LearningGraph:
 
     def mark_visited(self, node_id: str) -> None:
         self.nodes[node_id].visited = True
+
+    def record_attempt(
+        self, node_id: str, answer: str, classification: str, rationale: str
+    ) -> dict:
+        # Append-only: a re-answer on a revisited node adds to the record rather
+        # than replacing it, so the history survives a change of state.
+        attempt = {
+            "answer": answer,
+            "classification": classification,
+            "rationale": rationale,
+            "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }
+        self.nodes[node_id].attempts.append(attempt)
+        return attempt
 
     def mark_understanding(self, node_id: str, state: UnderstandingState) -> None:
         node = self.nodes[node_id]
@@ -284,6 +304,7 @@ class LearningGraph:
                     "visited": n.visited,
                     "weak_spot": n.weak_spot,
                     "has_lesson": n.cached_lesson is not None,
+                    "attempts": n.attempts,
                 }
                 for n in self.nodes.values()
             ],

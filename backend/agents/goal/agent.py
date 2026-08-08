@@ -74,6 +74,18 @@ def start_session(repo_url: str) -> GoalSession:
     return GoalSession(session_id=str(uuid.uuid4()), repo_url=repo_url)
 
 
+def question_progress(session: GoalSession) -> tuple[int, int]:
+    """1-based position of the pending question and how many there are.
+
+    Until Q2 sets goal_type the follow-up count is unknown, so the total is a
+    lower bound of one follow-up — every goal_type has at least one.
+    """
+    answered = len(session.answers)
+    if session.goal_type is None:
+        return answered + 1, len(CORE_QUESTIONS) + 1
+    return answered + 1, len(_get_question_sequence(session))
+
+
 def process_answer(
     session: GoalSession,
     answer: str,

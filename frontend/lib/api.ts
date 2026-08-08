@@ -1,26 +1,59 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+/** FastAPI puts the useful part in `detail`, which may be a string or an
+ *  object carrying the pipeline's error list. Raw JSON in a UI is useless, so
+ *  unwrap it to something a person can read. */
+async function fail(res: Response): Promise<never> {
+  const raw = await res.text();
+  let message = raw;
+  try {
+    const body = JSON.parse(raw);
+    const detail = body?.detail ?? body;
+    if (typeof detail === "string") message = detail;
+    else if (Array.isArray(detail?.errors) && detail.errors.length > 0) {
+      message = detail.errors.join("\n");
+    } else if (typeof detail?.error === "string") message = detail.error;
+  } catch {
+    /* not JSON — the raw body is the best we have */
+  }
+  throw new Error(message.trim() || `Request failed (${res.status})`);
+}
+
 async function post<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) await fail(res);
   return res.json();
 }
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`);
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) await fail(res);
   return res.json();
 }
+
+// --- Repository ---
+
+export interface RepoCheck {
+  ok: boolean;
+  reason: string | null;
+}
+
+export const checkRepo = (repo_url: string) =>
+  post<RepoCheck>("/repo/check", { repo_url });
 
 // --- Goal dialogue ---
 
 export interface Question {
   text: string;
   options: string[] | null;
+  /** 1-based position in the interview. */
+  index: number;
+  /** Question count; a lower bound until goal_type is known. */
+  total: number;
 }
 
 export interface StartResponse {
@@ -53,15 +86,29 @@ export const sessionStart = (repo_url: string, goal: Record<string, string>, for
 
 export type UnderstandingState = "not_started" | "failed" | "partial" | "understood";
 
+export type Classification = "understood" | "partial" | "confused" | "off-topic";
+
+/** One graded answer. Append-only, oldest first. */
+export interface Attempt {
+  answer: string;
+  classification: Classification;
+  rationale: string;
+  /** ISO-8601, UTC. */
+  at: string;
+}
+
 export interface GraphNode {
   id: string;
   title: string;
   file: string;
   line_start: number;
   line_end: number;
+  concept_tags: string[];
   understanding_state: UnderstandingState;
   visited: boolean;
   weak_spot: boolean;
+  has_lesson: boolean;
+  attempts: Attempt[];
 }
 
 export interface GraphEdge {
@@ -101,10 +148,18 @@ export const getLesson = (session_id: string) =>
 
 // --- Respond ---
 
+export interface Mutation {
+  kind: "prerequisite" | "skip" | "none";
+  reason?: string;
+}
+
 export interface RespondResult {
-  classification: "understood" | "partial" | "confused" | "off-topic";
+  classification: Classification;
   rationale: string;
   understanding_state: string;
+  /** A wrong answer auto-creates a warm-up; "partial" leaves it to the user. */
+  mutation: Mutation;
+  current_node_id: string | null;
 }
 
 export const respond = (session_id: string, answer: string, node_id?: string) =>

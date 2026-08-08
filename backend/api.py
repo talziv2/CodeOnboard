@@ -32,6 +32,7 @@ from backend.agents.goal import (
     CORE_QUESTIONS,
     GoalSession,
     process_answer,
+    question_progress,
     start_session,
 )
 from backend.agents.grader import run as run_grader
@@ -40,7 +41,7 @@ from backend.agents.teaching import run as run_teaching
 from backend.learning import store as learning_store
 from backend.pipeline.runner import run_pipeline
 from backend.pipeline.state import OnboardState
-from backend.rag.cloner import clone_repo
+from backend.rag.cloner import check_repo_reachable, clone_repo
 
 load_dotenv(override=True)
 app = FastAPI(title="CodeOnboard API")
@@ -72,9 +73,13 @@ class StartRequest(BaseModel):
 
 
 # A single question sent to the client. options=None means free-text input.
+# index/total let the UI show interview progress. total is a lower bound until
+# Q2 fixes the goal_type, since goal_type decides how many follow-ups follow.
 class QuestionOut(BaseModel):
     text: str
     options: list[str] | None = None
+    index: int = 1
+    total: int = len(CORE_QUESTIONS) + 1
 
 
 class StartResponse(BaseModel):
@@ -97,14 +102,29 @@ class AnswerResponse(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+class RepoCheckRequest(BaseModel):
+    repo_url: str
+
+
+@app.post("/repo/check")
+def repo_check(body: RepoCheckRequest) -> dict:
+    # Catches an unclonable URL before the user answers five questions, rather
+    # than surfacing it as a pipeline failure minutes later.
+    reason = check_repo_reachable(body.repo_url)
+    return {"ok": reason is None, "reason": reason}
+
+
 @app.post("/goal/start", response_model=StartResponse)
 def goal_start(body: StartRequest) -> StartResponse:
     session = start_session(body.repo_url)
     sessions[session.session_id] = session
     first_q = CORE_QUESTIONS[0]
+    index, total = question_progress(session)
     return StartResponse(
         session_id=session.session_id,
-        question=QuestionOut(text=first_q.text, options=first_q.options),
+        question=QuestionOut(
+            text=first_q.text, options=first_q.options, index=index, total=total
+        ),
     )
 
 
@@ -125,9 +145,12 @@ def goal_answer(body: AnswerRequest) -> AnswerResponse:
         del sessions[body.session_id]
         return AnswerResponse(done=True, goal=goal_output.model_dump())
 
+    index, total = question_progress(session)
     return AnswerResponse(
         done=False,
-        question=QuestionOut(text=next_q.text, options=next_q.options),
+        question=QuestionOut(
+            text=next_q.text, options=next_q.options, index=index, total=total
+        ),
     )
 
 
@@ -387,14 +410,29 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
     # The Grader updated the node's understanding_state / weak_spot in place.
 
     grade = state.last_grade or {}
+    classification = grade.get("classification") or "partial"
+    graph.record_attempt(
+        current, body.response, classification, grade.get("rationale") or ""
+    )
+
+    # A wrong answer gets a warm-up automatically — being stuck is exactly when
+    # a user is least able to judge that they need one. "partial" does not: the
+    # user is mostly there, so the warm-up stays an offer they can decline
+    # (the /retry endpoint). The Mutator's one-prerequisite-per-node cap still
+    # applies, so repeated failures can't stack warm-ups.
     mutation = {"kind": "none"}
-    # Prerequisites are no longer inserted automatically on wrong answers.
-    # The user explicitly triggers them via the /retry endpoint ("Try again" button).
+    if classification in ("confused", "off-topic"):
+        try:
+            state.repo_path = clone_repo(graph.repo_url)
+            mutate_graph(state, "prerequisite", client=client)
+            mutation = state.last_mutation or {"kind": "none"}
+        except Exception as exc:  # a failed warm-up must not lose the grade
+            state.errors.append(f"auto prerequisite failed: {exc}")
 
     learning_store.save_graph(graph, SESSIONS_DB_PATH)
 
     return {
-        "classification": grade.get("classification"),
+        "classification": classification,
         "rationale": grade.get("rationale"),
         "understanding_state": graph.nodes[current].understanding_state,
         "mutation": mutation,
