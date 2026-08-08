@@ -7,7 +7,9 @@ import { getLesson, respond, advance, retry } from "@/lib/api";
 import type {
   Attempt, Classification, GraphNode, Lesson, RespondResult, SessionGraph,
 } from "@/lib/api";
-import { tagStyle } from "@/lib/tags";
+import type { Dictionary } from "@/lib/i18n";
+import { tagStyle, tagLabel } from "@/lib/tags";
+import { useI18n } from "@/lib/i18n/context";
 
 interface Props {
   sessionId: string;
@@ -23,12 +25,15 @@ interface Props {
   onFinish: () => void;
 }
 
-const VERDICT: Record<string, { label: string; color: string }> = {
-  understood: { label: "Understood", color: "#4fb286" },
-  partial: { label: "Partly there", color: "#d9a441" },
-  confused: { label: "Not yet", color: "#d4634f" },
-  "off-topic": { label: "Off topic", color: "#d4634f" },
+/** Classification keys stay English on the wire; only the label is localized. */
+const VERDICT_COLOR: Record<string, string> = {
+  understood: "#4fb286",
+  partial: "#d9a441",
+  confused: "#d4634f",
+  "off-topic": "#d4634f",
 };
+
+const NEUTRAL = "#dde5ea";
 
 const FAILED: Classification[] = ["confused", "off-topic"];
 
@@ -43,60 +48,68 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function whenLabel(iso: string): string {
+/** Chevron that points along the reading direction when closed, down when open. */
+function Chevron() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 10 10"
+      className="h-2.5 w-2.5 shrink-0 fill-none stroke-graphite stroke-[1.5] transition-transform group-open:rotate-90 rtl:rotate-180 rtl:group-open:rotate-90"
+    >
+      <path d="M3.5 1.5 L7 5 L3.5 8.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function whenLabel(t: Dictionary, iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
   const mins = Math.round((Date.now() - then) / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return t.lesson.when.justNow;
+  if (mins < 60) return t.lesson.when.minutes(mins);
   const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) return t.lesson.when.hours(hrs);
   return new Date(iso).toLocaleDateString();
 }
 
 /** One graded answer, collapsed to its verdict until opened. */
 function AttemptCard({ attempt, index }: { attempt: Attempt; index: number }) {
-  const verdict = VERDICT[attempt.classification] ?? {
-    label: attempt.classification,
-    color: "#dde5ea",
-  };
+  const { t } = useI18n();
+  const label = t.lesson.verdict[attempt.classification] ?? attempt.classification;
+  const color = VERDICT_COLOR[attempt.classification] ?? NEUTRAL;
+
   return (
     <details className="group rounded border border-rule bg-slab open:bg-trench">
       <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2">
-        <span aria-hidden className="font-mono text-[10px] text-graphite">
+        <span aria-hidden dir="ltr" className="font-mono text-[10px] text-graphite">
           {String(index + 1).padStart(2, "0")}
         </span>
         <span
           className="font-mono text-[10.5px] uppercase tracking-[0.13em]"
-          style={{ color: verdict.color }}
+          style={{ color }}
         >
-          {verdict.label}
+          {label}
         </span>
-        <span className="ml-auto font-mono text-[10px] text-graphite">
-          {whenLabel(attempt.at)}
+        <span className="ms-auto font-mono text-[10px] text-graphite">
+          {whenLabel(t, attempt.at)}
         </span>
-        <span
-          aria-hidden
-          className="font-mono text-[10px] text-graphite transition group-open:rotate-90"
-        >
-          ›
-        </span>
+        <Chevron />
       </summary>
       <div className="flex flex-col gap-2.5 border-t border-rule px-3 py-3">
         <div className="flex flex-col gap-1">
           <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-graphite">
-            You wrote
+            {t.lesson.youWrote}
           </span>
-          <p className="measure whitespace-pre-wrap text-[12.5px] leading-relaxed text-paper">
+          <p className="measure bidi-auto whitespace-pre-wrap text-[12.5px] leading-relaxed text-paper">
             {attempt.answer}
           </p>
         </div>
         {attempt.rationale && (
           <div className="flex flex-col gap-1">
             <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-graphite">
-              Feedback
+              {t.lesson.feedback}
             </span>
-            <p className="measure text-[12.5px] leading-relaxed text-graphite">
+            <p className="measure bidi-auto text-[12.5px] leading-relaxed text-graphite">
               {attempt.rationale}
             </p>
           </div>
@@ -111,6 +124,7 @@ export default function LessonPanel({
   graph, onFileClick, onAdvance, onRespond, onFinish,
 }: Props) {
   const router = useRouter();
+  const { t, te, locale } = useI18n();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [answer, setAnswer] = useState("");
   const [result, setResult] = useState<RespondResult | null>(null);
@@ -118,16 +132,26 @@ export default function LessonPanel({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
+  // Refetching on a locale change is the point: the server returns this
+  // lesson translated into the new language. The verdict is deliberately not
+  // cleared — a switch mid-answer shouldn't discard feedback already earned.
   useEffect(() => {
     setLesson(null);
-    setResult(null);
-    setAnswer("");
     setError(null);
     setLoading(true);
-    getLesson(sessionId)
+    getLesson(sessionId, locale)
       .then(setLesson)
-      .catch((e) => setError(e.message))
+      .catch((e) => setError(te(e.message)))
       .finally(() => setLoading(false));
+    // `te` is a fresh closure on every provider render; `locale` is the part
+    // of it that actually matters here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, nodeId, locale]);
+
+  // Moving to a different node is what clears the answer in progress.
+  useEffect(() => {
+    setResult(null);
+    setAnswer("");
   }, [sessionId, nodeId]);
 
   const submitAnswer = async () => {
@@ -135,13 +159,13 @@ export default function LessonPanel({
     setLoading(true);
     setError(null);
     try {
-      const res = await respond(sessionId, answer, nodeId);
+      const res = await respond(sessionId, answer, nodeId, locale);
       setResult(res);
       // A warm-up moves the session pointer, and refreshing now would swap this
       // panel out before the verdict could be read. Follow on the user's click.
       if (res.mutation?.kind !== "prerequisite") onRespond();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Couldn't grade that answer. Try again.");
+      setError(e instanceof Error ? te(e.message) : t.lesson.gradeFailed);
     } finally {
       setLoading(false);
     }
@@ -154,7 +178,7 @@ export default function LessonPanel({
       await onAdvance();
       if (res?.done) setDone(true);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Couldn't move to the next stop.");
+      setError(e instanceof Error ? te(e.message) : t.lesson.advanceFailed);
     } finally {
       setLoading(false);
     }
@@ -168,7 +192,7 @@ export default function LessonPanel({
       setAnswer("");
       await onAdvance();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Couldn't build a warm-up for this one.");
+      setError(e instanceof Error ? te(e.message) : t.lesson.warmUpFailed);
     } finally {
       setLoading(false);
     }
@@ -180,12 +204,12 @@ export default function LessonPanel({
 
   if (loading && !lesson) {
     return (
-      <p className="animate-pulse font-mono text-sm text-graphite">Writing this lesson…</p>
+      <p className="animate-pulse font-mono text-sm text-graphite">{t.lesson.writing}</p>
     );
   }
 
   if (error && !lesson) {
-    return <p className="text-sm text-rust">{error}</p>;
+    return <p className="bidi-auto text-sm text-rust">{error}</p>;
   }
 
   if (!lesson) return null;
@@ -224,7 +248,7 @@ export default function LessonPanel({
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
         <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-graphite">
-          {isPrerequisite ? "Warm-up · added after confusion" : `Stop ${position} of ${total}`}
+          {isPrerequisite ? t.lesson.warmUpHeading : t.lesson.stopOf(position, total)}
         </span>
 
         <h2 className="font-display text-[23px] font-medium leading-[1.2] tracking-tight text-chalk text-balance">
@@ -235,7 +259,9 @@ export default function LessonPanel({
           onClick={() => onFileClick(node.file)}
           className="w-fit border-b border-dashed border-signal-dim pb-px font-mono text-[11px] text-signal transition hover:border-signal"
         >
-          {node.file} · lines {node.line_start}–{node.line_end}
+          <span dir="ltr">{node.file}</span>
+          {" · "}
+          {t.lesson.lines(node.line_start, node.line_end)}
         </button>
 
         {node.concept_tags.length > 0 && (
@@ -248,7 +274,7 @@ export default function LessonPanel({
                   className="rounded-[2px] border px-1.5 py-px font-mono text-[9.5px] tracking-[0.05em]"
                   style={{ color: s.text, borderColor: s.border, background: s.background }}
                 >
-                  {s.label}
+                  {tagLabel(t, tag)}
                 </span>
               );
             })}
@@ -259,28 +285,28 @@ export default function LessonPanel({
       {recovered && (
         <div className="flex flex-col gap-1 rounded border border-jade/40 bg-jade/10 px-4 py-3">
           <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-jade">
-            The warm-up worked
+            {t.lesson.recoveredLabel}
           </span>
           <p className="text-[12.5px] leading-relaxed text-paper">
-            You got this one after studying{" "}
-            <span className="text-chalk">“{warmUpTitle}”</span> first. It stays marked
-            as a rough patch, but you came back from it.
+            {t.lesson.recoveredBody}{" "}
+            <span className="text-chalk">“{warmUpTitle}”</span>
+            {t.lesson.recoveredBodyEnd}
           </p>
         </div>
       )}
 
       <div className="flex flex-col gap-3">
-        <SectionLabel>Walkthrough</SectionLabel>
-        <p className="measure whitespace-pre-wrap text-[13.5px] leading-[1.72] text-paper">
+        <SectionLabel>{t.lesson.walkthrough}</SectionLabel>
+        {/* Agent prose interleaves the user's language with code identifiers,
+            so direction is resolved line by line rather than for the block. */}
+        <p className="measure bidi-auto whitespace-pre-wrap text-[13.5px] leading-[1.72] text-paper">
           {lesson.lesson.walkthrough}
         </p>
       </div>
 
       {attempts.length > 0 && (
         <div className="flex flex-col gap-3">
-          <SectionLabel>
-            Your answers ({attempts.length})
-          </SectionLabel>
+          <SectionLabel>{t.lesson.yourAnswers(attempts.length)}</SectionLabel>
           <div className="flex flex-col gap-2">
             {attempts.map((attempt, i) => (
               <AttemptCard key={`${attempt.at}-${i}`} attempt={attempt} index={i} />
@@ -291,12 +317,14 @@ export default function LessonPanel({
 
       {!result && (
         <div className="flex flex-col gap-3">
-          <SectionLabel>Check your understanding</SectionLabel>
-          <p className="measure text-[13.5px] leading-[1.6] text-chalk">{lesson.lesson.prompt}</p>
+          <SectionLabel>{t.lesson.checkUnderstanding}</SectionLabel>
+          <p className="measure bidi-auto text-[13.5px] leading-[1.6] text-chalk">
+            {lesson.lesson.prompt}
+          </p>
           <textarea
             rows={4}
-            className="w-full resize-none rounded border border-rule bg-trench p-3 text-[13px] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
-            placeholder="Write your answer…"
+            className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[13px] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
+            placeholder={t.lesson.answerPlaceholder}
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
             onKeyDown={(e) => {
@@ -307,23 +335,25 @@ export default function LessonPanel({
             }}
             disabled={loading}
           />
-          {error && <p className="text-sm text-rust">{error}</p>}
+          {error && <p className="bidi-auto text-sm text-rust">{error}</p>}
           <div className="flex items-center gap-3">
             <button
               onClick={submitAnswer}
               disabled={loading || !answer.trim()}
               className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
             >
-              {loading ? "Grading…" : "Submit"}
+              {loading ? t.lesson.grading : t.lesson.submit}
             </button>
             <button
               onClick={handleAdvance}
               disabled={loading}
               className="rounded border border-rule px-4 py-2 text-[13px] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
             >
-              Skip this stop
+              {t.lesson.skipStop}
             </button>
-            <span className="ml-auto font-mono text-[10.5px] text-graphite">⌘↵ to submit</span>
+            <span className="ms-auto font-mono text-[10.5px] text-graphite">
+              {t.lesson.submitHint}
+            </span>
           </div>
         </div>
       )}
@@ -332,20 +362,22 @@ export default function LessonPanel({
         <div className="flex flex-col gap-3 rounded border border-rule bg-slab p-4">
           <p
             className="font-mono text-[11px] uppercase tracking-[0.14em]"
-            style={{ color: VERDICT[result.classification]?.color ?? "#dde5ea" }}
+            style={{ color: VERDICT_COLOR[result.classification] ?? NEUTRAL }}
           >
-            {VERDICT[result.classification]?.label ?? result.classification}
+            {t.lesson.verdict[result.classification] ?? result.classification}
           </p>
-          <p className="measure text-[13px] leading-[1.65] text-paper">{result.rationale}</p>
-          {error && <p className="text-sm text-rust">{error}</p>}
+          <p className="measure bidi-auto text-[13px] leading-[1.65] text-paper">
+            {result.rationale}
+          </p>
+          {error && <p className="bidi-auto text-sm text-rust">{error}</p>}
 
           {FAILED.includes(result.classification) && (
             <p className="text-[12.5px] leading-relaxed text-paper">
               {result.mutation?.kind === "prerequisite"
-                ? "We've added a shorter warm-up before this stop to build up to it."
+                ? t.lesson.warmUpAdded
                 : result.mutation?.reason === "prerequisite_exists"
-                ? "You've already had a warm-up for this stop, so there isn't another one to add."
-                : "We couldn't build a warm-up for this one, so it's your call how to continue."}
+                ? t.lesson.warmUpExists
+                : t.lesson.warmUpUnavailable}
             </p>
           )}
 
@@ -356,7 +388,7 @@ export default function LessonPanel({
                 disabled={loading}
                 className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
               >
-                {loading ? "Loading…" : "Next stop →"}
+                {loading ? t.lesson.loadingShort : t.lesson.nextStop}
               </button>
             )}
 
@@ -368,14 +400,14 @@ export default function LessonPanel({
                   disabled={loading}
                   className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
                 >
-                  {loading ? "Loading…" : "Next stop →"}
+                  {loading ? t.lesson.loadingShort : t.lesson.nextStop}
                 </button>
                 <button
                   onClick={handleRetry}
                   disabled={loading}
                   className="rounded border border-rule px-4 py-2 text-[13px] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
                 >
-                  Build me a warm-up
+                  {t.lesson.buildWarmUp}
                 </button>
               </>
             )}
@@ -395,7 +427,7 @@ export default function LessonPanel({
                     disabled={loading}
                     className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
                   >
-                    {loading ? "Loading…" : "Start the warm-up →"}
+                    {loading ? t.lesson.loadingShort : t.lesson.startWarmUp}
                   </button>
                 )}
                 <button
@@ -404,8 +436,8 @@ export default function LessonPanel({
                   className="rounded border border-rule px-4 py-2 text-[13px] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
                 >
                   {result.mutation?.kind === "prerequisite"
-                    ? "Skip it, move on"
-                    : "Move on anyway"}
+                    ? t.lesson.skipItMoveOn
+                    : t.lesson.moveOnAnyway}
                 </button>
               </>
             )}
@@ -418,7 +450,7 @@ export default function LessonPanel({
           onClick={() => setDone(true)}
           className="font-mono text-[10.5px] text-graphite transition hover:text-chalk"
         >
-          Finish session early
+          {t.lesson.finishEarly}
         </button>
       </div>
     </div>
@@ -430,6 +462,7 @@ export default function LessonPanel({
 function CompletionScreen({
   graph, onNewSession, onFinish,
 }: { graph: SessionGraph; onNewSession: () => void; onFinish: () => void }) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<"summary" | "map">("summary");
   const weak = graph.nodes.filter((n) => n.weak_spot);
   const understood = graph.nodes.filter((n) => n.understanding_state === "understood").length;
@@ -437,17 +470,17 @@ function CompletionScreen({
   return (
     <div className="flex h-full flex-col gap-5">
       <div className="flex shrink-0 gap-1 border-b border-rule">
-        {(["summary", "map"] as const).map((t) => (
+        {(["summary", "map"] as const).map((key) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
+            key={key}
+            onClick={() => setTab(key)}
             className={`-mb-px border-b-2 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.12em] transition ${
-              tab === t
+              tab === key
                 ? "border-signal text-signal"
                 : "border-transparent text-graphite hover:text-chalk"
             }`}
           >
-            {t === "map" ? "Your map" : "Summary"}
+            {key === "map" ? t.completion.tabMap : t.completion.tabSummary}
           </button>
         ))}
       </div>
@@ -456,28 +489,29 @@ function CompletionScreen({
         <div className="flex flex-col gap-6">
           <div className="flex flex-col gap-2">
             <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-graphite">
-              Session complete
+              {t.completion.label}
             </span>
             <h2 className="font-display text-[26px] font-medium leading-tight tracking-tight text-chalk">
-              You understood {understood} of {graph.nodes.length} concepts
+              {t.completion.heading(understood, graph.nodes.length)}
             </h2>
             <p className="measure text-[13.5px] leading-[1.7] text-paper">
-              Your map is saved. Come back to this repo and goal and you'll pick up
-              exactly where you left off — including the stops still marked weak.
+              {t.completion.body}
             </p>
           </div>
 
           {weak.length > 0 && (
             <div className="flex flex-col gap-3 rounded border border-rule bg-slab p-4">
               <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-rust">
-                Worth another pass ({weak.length})
+                {t.completion.anotherPass(weak.length)}
               </span>
               <ul className="flex flex-col gap-2.5">
                 {weak.map((n) => (
                   <li key={n.id} className="flex flex-col gap-0.5">
                     <span className="text-[13px] font-medium text-chalk">{n.title}</span>
                     <span className="font-mono text-[10.5px] text-graphite">
-                      {n.file} · lines {n.line_start}–{n.line_end}
+                      <span dir="ltr">{n.file}</span>
+                      {" · "}
+                      {t.lesson.lines(n.line_start, n.line_end)}
                     </span>
                   </li>
                 ))}
@@ -490,13 +524,13 @@ function CompletionScreen({
               onClick={onNewSession}
               className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25"
             >
-              Start a new session
+              {t.completion.newSession}
             </button>
             <button
               onClick={onFinish}
               className="rounded border border-rule px-4 py-2 text-[13px] text-graphite transition hover:border-signal-dim hover:text-signal"
             >
-              Go home
+              {t.completion.goHome}
             </button>
           </div>
         </div>

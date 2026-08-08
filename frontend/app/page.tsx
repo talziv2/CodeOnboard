@@ -3,20 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import GoalDialogue from "@/components/GoalDialogue";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { checkRepo, sessionStart } from "@/lib/api";
+import { useI18n } from "@/lib/i18n/context";
 
 type Step = "repo" | "goal" | "starting" | "failed";
 
 const RECENT_KEY = "codeonboard:recent-repos";
-
-/** Phases the pipeline runs, in order. The backend doesn't stream progress,
- *  so these are listed rather than checked off — only elapsed time is real. */
-const PHASES = [
-  "Cloning the repository",
-  "Parsing files into concepts",
-  "Indexing for retrieval",
-  "Planning your route",
-];
 
 function readRecent(): string[] {
   if (typeof window === "undefined") return [];
@@ -39,6 +32,7 @@ function rememberRepo(url: string) {
 
 export default function Home() {
   const router = useRouter();
+  const { t, te } = useI18n();
   const [step, setStep] = useState<Step>("repo");
   const [repoUrl, setRepoUrl] = useState("");
   const [recent, setRecent] = useState<string[]>([]);
@@ -66,12 +60,12 @@ export default function Home() {
     try {
       const { ok, reason } = await checkRepo(repoUrl.trim());
       if (!ok) {
-        setError(reason ?? "That repository couldn't be opened.");
+        setError(reason ? te(reason) : t.home.repoUnreachable);
         return;
       }
       setStep("goal");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Couldn't reach the server.");
+      setError(err instanceof Error ? te(err.message) : t.home.serverUnreachable);
     } finally {
       setChecking(false);
     }
@@ -85,7 +79,7 @@ export default function Home() {
       rememberRepo(repoUrl);
       router.push(`/session/${session_id}`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Couldn't build your learning path.");
+      setError(err instanceof Error ? te(err.message) : t.home.pipelineFailed);
       setStep("failed");
     }
   };
@@ -96,13 +90,15 @@ export default function Home() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-ink px-6 py-16">
+    <main className="relative flex min-h-screen flex-col items-center justify-center bg-ink px-6 py-16">
+      <LanguageSwitcher className="absolute top-5 end-6" />
+
       <div className="mb-12 flex flex-col items-center gap-2 text-center">
         <h1 className="font-display text-[38px] font-medium leading-none tracking-tight text-chalk">
-          CodeOnboard
+          {t.appName}
         </h1>
         <p className="max-w-sm text-[13.5px] leading-relaxed text-graphite">
-          Build a real understanding of an unfamiliar codebase, one anchored concept at a time.
+          {t.tagline}
         </p>
       </div>
 
@@ -112,13 +108,14 @@ export default function Home() {
             htmlFor="repo"
             className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-graphite"
           >
-            Repository to read
+            {t.home.repoLabel}
           </label>
           <input
             id="repo"
             type="url"
-            className="rounded border border-rule bg-trench px-3.5 py-3 font-mono text-[13px] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
-            placeholder="https://github.com/psf/requests"
+            dir="ltr"
+            className="rounded border border-rule bg-trench px-3.5 py-3 text-start font-mono text-[13px] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
+            placeholder={t.home.repoPlaceholder}
             value={repoUrl}
             onChange={(e) => { setRepoUrl(e.target.value); setError(null); }}
             required
@@ -127,12 +124,13 @@ export default function Home() {
           {recent.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-graphite">
-                Recent
+                {t.home.recent}
               </span>
               {recent.map((url) => (
                 <button
                   key={url}
                   type="button"
+                  dir="ltr"
                   onClick={() => { setRepoUrl(url); setError(null); }}
                   className="rounded border border-rule px-2.5 py-1 font-mono text-[11px] text-graphite transition hover:border-signal-dim hover:text-signal"
                 >
@@ -149,7 +147,7 @@ export default function Home() {
             disabled={checking}
             className="mt-1 rounded border border-signal-dim bg-signal/15 py-3 text-[13.5px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
           >
-            {checking ? "Checking the repository…" : "Start"}
+            {checking ? t.home.checking : t.home.start}
           </button>
         </form>
       )}
@@ -160,15 +158,17 @@ export default function Home() {
         <div className="flex w-full max-w-md flex-col gap-5">
           <div className="flex flex-col gap-1.5">
             <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-graphite">
-              Reading the repository
+              {t.starting.label}
             </span>
-            <h2 className="font-display text-[21px] font-medium tracking-tight text-chalk">
+            <h2 dir="ltr" className="font-display text-[21px] font-medium tracking-tight text-chalk">
               {repoUrl.replace(/^https?:\/\/github\.com\//, "")}
             </h2>
           </div>
 
+          {/* The backend doesn't stream progress, so these are listed rather
+              than checked off — only elapsed time is real. */}
           <ul className="flex flex-col gap-2.5">
-            {PHASES.map((phase) => (
+            {t.starting.phases.map((phase) => (
               <li key={phase} className="flex items-center gap-2.5 text-[12.5px] text-graphite">
                 <span aria-hidden className="h-[11px] w-[11px] shrink-0 rounded-full border-[1.5px] border-rule" />
                 {phase}
@@ -179,7 +179,7 @@ export default function Home() {
           <div className="flex items-center gap-2.5 border-t border-rule pt-3">
             <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-signal" />
             <span className="font-mono text-[11px] text-graphite">
-              {elapsed}s elapsed · usually about a minute on a small repo
+              {t.starting.elapsed(elapsed)}
             </span>
           </div>
         </div>
@@ -189,19 +189,18 @@ export default function Home() {
         <div className="flex w-full max-w-md flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-rust">
-              Couldn&apos;t build your learning path
+              {t.failed.label}
             </span>
-            <h2 className="font-display text-[21px] font-medium tracking-tight text-chalk">
+            <h2 dir="ltr" className="font-display text-[21px] font-medium tracking-tight text-chalk">
               {repoUrl.replace(/^https?:\/\/github\.com\//, "")}
             </h2>
             <p className="text-[13px] leading-relaxed text-graphite">
-              Your answers are saved, so retrying won&apos;t make you go through the
-              questions again.
+              {t.failed.reassurance}
             </p>
           </div>
 
           {error && (
-            <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded border border-rule bg-trench p-3 font-mono text-[11px] leading-relaxed text-rust">
+            <pre className="bidi-auto max-h-44 overflow-auto whitespace-pre-wrap break-words rounded border border-rule bg-trench p-3 font-mono text-[11px] leading-relaxed text-rust">
               {error}
             </pre>
           )}
@@ -212,13 +211,13 @@ export default function Home() {
               disabled={!goal}
               className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
             >
-              Try again
+              {t.failed.tryAgain}
             </button>
             <button
               onClick={() => { setStep("repo"); setError(null); setGoal(null); }}
               className="rounded border border-rule px-4 py-2 text-[13px] text-graphite transition hover:border-signal-dim hover:text-signal"
             >
-              Use a different repository
+              {t.failed.differentRepo}
             </button>
           </div>
         </div>

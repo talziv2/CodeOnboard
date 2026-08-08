@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CodeOnboard — A1 Project Poster</title>
+<!--
+  A1 PORTRAIT POSTER (594 x 841 mm)
+  To export: open in Chrome/Edge -> Ctrl+P -> Destination "Save as PDF"
+             -> Paper size A1 (or "Custom 594x841mm") -> Margins: None
+             -> Background graphics: ON -> Scale: 100%
+  EDIT ME: the author/supervisor line is marked with <!-- AUTHOR LINE --> below.
+-->
+<style>
+  @page { size: 594mm 841mm; margin: 0; }
+
+  :root {
+    --ink:      #0d1a2b;
+    --ink-soft: #3f5570;
+    --line:     #cfdae8;
+    --tint:     #f2f6fb;
+    --accent:   #1d4ed8;
+    --teal:     #0d7d76;
+    --amber:    #c2570b;
+    --violet:   #6d28d9;
+    --paper:    #ffffff;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { background: #6b7280; }
+
+  body {
+    width: 594mm;
+    height: 841mm;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    margin: 0 auto;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 8.7pt;          /* scaled up ~2x by the mm page; reads as ~17pt at A1 */
+    line-height: 1.42;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ============ scale system ============ */
+  /* Everything is authored in mm so it lands exactly on A1. */
+  .page { padding: 16mm 16mm 12mm; }
+
+  /* ============ header ============ */
+  header {
+    background: linear-gradient(105deg, #0d1a2b 0%, #16304f 55%, #1d4ed8 130%);
+    color: #fff;
+    padding: 16mm 16mm 13mm;
+    position: relative;
+    overflow: hidden;
+  }
+  header::after {
+    content: "";
+    position: absolute; right: -30mm; top: -30mm;
+    width: 110mm; height: 110mm; border-radius: 50%;
+    background: rgba(255,255,255,.05);
+  }
+  .eyebrow {
+    font-size: 5.6pt; letter-spacing: .38em; text-transform: uppercase;
+    color: #8fc0ff; font-weight: 700; margin-bottom: 4mm;
+  }
+  h1 {
+    font-size: 30pt; line-height: 1.0; letter-spacing: -.02em; font-weight: 800;
+  }
+  h1 .dot { color: #6ea8ff; }
+  .tagline {
+    font-size: 11pt; font-weight: 400; color: #d3e3f8; margin-top: 4mm;
+    max-width: 400mm; line-height: 1.3;
+  }
+  .byline {
+    margin-top: 7mm; padding-top: 5mm; border-top: .4mm solid rgba(255,255,255,.22);
+    font-size: 7.4pt; color: #b9cfea; display: flex; gap: 10mm; flex-wrap: wrap;
+  }
+  .byline b { color: #fff; font-weight: 600; }
+
+  /* ============ headline claim strip ============ */
+  .claim {
+    background: var(--tint);
+    border-bottom: .5mm solid var(--line);
+    padding: 10mm 16mm;
+    display: grid; grid-template-columns: 1fr auto; gap: 12mm; align-items: center;
+  }
+  .claim p { font-size: 12pt; font-weight: 600; line-height: 1.28; color: var(--ink); }
+  .claim p em { font-style: normal; color: var(--accent); }
+  .claim .metrics { display: flex; gap: 9mm; }
+  .metric { text-align: center; }
+  .metric b { display: block; font-size: 17pt; font-weight: 800; color: var(--accent); line-height: 1; }
+  .metric span { font-size: 5.8pt; text-transform: uppercase; letter-spacing: .12em; color: var(--ink-soft); font-weight: 600; }
+
+  /* ============ section furniture ============ */
+  h2 {
+    font-size: 11.5pt; font-weight: 800; letter-spacing: -.01em;
+    color: var(--ink); margin-bottom: 3.5mm;
+    padding-bottom: 2mm; border-bottom: .8mm solid var(--accent);
+    display: flex; align-items: baseline; gap: 3mm;
+  }
+  h2 .num {
+    font-size: 7.5pt; color: #fff; background: var(--accent);
+    padding: .8mm 2.2mm; border-radius: 1mm; font-weight: 700;
+  }
+  h3 {
+    font-size: 8.6pt; font-weight: 700; color: var(--ink);
+    margin: 4mm 0 1.8mm;
+  }
+  p { margin-bottom: 2.4mm; }
+  p:last-child { margin-bottom: 0; }
+  .lead { font-size: 9pt; color: var(--ink-soft); }
+
+  ul { list-style: none; }
+  li { padding-left: 4.5mm; position: relative; margin-bottom: 1.6mm; }
+  li::before {
+    content: ""; position: absolute; left: 0; top: 1.5mm;
+    width: 1.8mm; height: 1.8mm; border-radius: 50%; background: var(--accent);
+  }
+  li b { font-weight: 700; }
+
+  code, .mono {
+    font-family: "Cascadia Mono", Consolas, "SF Mono", monospace;
+    font-size: 7.2pt; background: #eef3fa; color: #12325f;
+    padding: .3mm 1mm; border-radius: .8mm;
+  }
+
+  .band { padding: 11mm 16mm; border-bottom: .4mm solid var(--line); }
+  .band.alt { background: var(--tint); }
+
+  .cols {
+    flex: 1;                     /* absorbs any residual page height */
+    padding: 11mm 16mm 0;
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 9mm;
+  }
+  .col { display: flex; flex-direction: column; }
+  .col > section { margin-bottom: 11mm; }
+  .col > section:last-child { margin-bottom: 0; }
+
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10mm; }
+
+  .card {
+    border: .4mm solid var(--line); border-radius: 2mm;
+    padding: 4mm 4.5mm; background: #fff;
+  }
+  .card.tint { background: var(--tint); }
+  .card.warn { border-color: #f0c8a0; background: #fff8f1; }
+  .card.teal { border-color: #a9d8d4; background: #f2fbfa; }
+  .card-title {
+    font-size: 7.4pt; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--accent); margin-bottom: 2.5mm;
+  }
+  .card.warn .card-title { color: var(--amber); }
+  .card.teal .card-title { color: var(--teal); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 1.7mm 2mm; border-bottom: .3mm solid var(--line); vertical-align: top; }
+  th { font-size: 6.6pt; text-transform: uppercase; letter-spacing: .09em; color: var(--ink-soft); font-weight: 700; }
+  td:first-child { font-weight: 600; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+
+  .tags { display: flex; flex-wrap: wrap; gap: 1.6mm; margin-top: 2mm; }
+  .tag {
+    font-family: "Cascadia Mono", Consolas, monospace; font-size: 6.6pt;
+    border: .3mm solid var(--line); border-radius: 6mm; padding: .9mm 2.4mm;
+    background: #fff; color: var(--ink-soft);
+  }
+  .tag.a { border-color: #9db9ea; color: #1d4ed8; background: #eff4fe; }
+  .tag.r { border-color: #f0c8a0; color: var(--amber); background: #fff6ee; }
+  .tag.t { border-color: #a9d8d4; color: var(--teal); background: #f0faf9; }
+
+  svg { display: block; width: 100%; height: auto; }
+
+  .snippet {
+    font-family: "Cascadia Mono", Consolas, monospace; font-size: 6.9pt;
+    background: #0d1a2b; color: #d6e6ff; border-radius: 2mm;
+    padding: 3.5mm 4mm; line-height: 1.55; white-space: pre; overflow: hidden;
+  }
+  .snippet .k { color: #8fc0ff; }
+  .snippet .s { color: #9ee6a8; }
+  .snippet .c { color: #7f95b3; }
+
+  /* ============ footer ============ */
+  footer {
+    background: #0d1a2b; color: #cddcef; padding: 11mm 16mm 10mm; margin-top: 11mm;
+  }
+  footer h2 { color: #fff; border-bottom-color: #6ea8ff; }
+  footer h2 .num { background: #6ea8ff; color: #0d1a2b; }
+  footer table th { color: #7f9dc4; }
+  footer table td, footer table th { border-bottom-color: rgba(255,255,255,.13); }
+  footer td:first-child { color: #fff; }
+  .foot-note {
+    margin-top: 7mm; padding-top: 4mm; border-top: .4mm solid rgba(255,255,255,.2);
+    display: flex; justify-content: space-between; gap: 8mm; font-size: 6.8pt; color: #8aa4c4;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Final-Year Computer Science Project</div>
+  <h1>CodeOnboard<span class="dot">.</span></h1>
+  <p class="tagline">
+    A team of LLM agents turns a GitHub URL and a stated goal into a personalized, code-anchored
+    <b>understanding graph</b> — an adaptive learning artifact that knows which parts of the system you have actually internalized.
+  </p>
+  <!-- AUTHOR LINE — edit the three fields below -->
+  <div class="byline">
+    <span><b>Author:</b> [Your Name]</span>
+    <span><b>Supervisor:</b> [Supervisor Name]</span>
+    <span><b>Department:</b> [Department / Institution]</span>
+  </div>
+</header>
+
+<div class="claim">
+  <p>
+    Joining an unfamiliar codebase is slow and undirected. CodeOnboard reframes onboarding as a
+    <em>first-class, goal-driven process</em> — not a chat transcript, but a persistent graph of
+    concepts anchored to real files and line ranges.
+  </p>
+  <div class="metrics">
+    <div class="metric"><b>9</b><span>Agents</span></div>
+    <div class="metric"><b>6</b><span>Goal types</span></div>
+    <div class="metric"><b>281</b><span>Tests passing</span></div>
+    <div class="metric"><b>~$0.07</b><span>Per run</span></div>
+  </div>
+</div>
+
+<!-- ================= PROBLEM / IDEA ================= -->
+<div class="band">
+  <div class="two">
+    <section>
+      <h2><span class="num">01</span> The problem</h2>
+      <p class="lead">
+        Documentation is missing, stale, or written for someone who already knows the system. A README
+        rarely says <b>where to start reading for the specific thing you care about</b>.
+      </p>
+      <ul>
+        <li>Developers lose days clicking through files, building an incomplete mental map.</li>
+        <li>Skimmed code produces <b>false confidence</b> — the most expensive failure mode.</li>
+        <li>AI assistants (Copilot, Cursor, Claude) are <b>reactive and stateless</b>: they answer the
+            question in front of them but hold no model of what you have learned.</li>
+        <li>In the AI-assisted era the bottleneck moved from <i>writing</i> the line to
+            <b>understanding, validating and critiquing</b> what was produced.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="num">02</span> The idea</h2>
+      <p class="lead">
+        One graph serves as both the system's <b>teaching plan</b> and the user's <b>progress record</b>.
+        Storing them as the same object is the project's distinctive contribution.
+      </p>
+      <ul>
+        <li>Every <b>node</b> is one teachable concept, anchored to a real <code>(file, line_start, line_end)</code>.</li>
+        <li>Every node carries an on-demand <b>lesson</b> and a tracked <b>understanding state</b>.</li>
+        <li>The path <b>reshapes at runtime</b>: confusion splices in a foundational prerequisite.</li>
+        <li>The graph <b>persists</b> — you return to <i>your</i> graph, not to a fresh chat.</li>
+      </ul>
+      <div class="card teal" style="margin-top:4mm">
+        <div class="card-title">Positioning</div>
+        Frontier chat tools will always out-analyse this system on raw code. They will not hold a
+        persistent, repo-anchored model of what <i>this</i> developer has internalized about
+        <i>this</i> codebase. That artifact is what onboarding actually needs.
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- ================= ARCHITECTURE BAND ================= -->
+<div class="band alt">
+  <h2><span class="num">03</span> System architecture — nine agents, one shared state object</h2>
+  <p class="lead" style="margin-bottom:5mm">
+    A LangGraph state machine runs the one-off analysis pipeline; the interactive loop calls agents directly.
+    Agents communicate <b>only</b> through <code>OnboardState</code> — no globals, no cross-agent imports.
+    Every agent degrades gracefully: failures append to <code>state.errors</code> and never raise.
+  </p>
+
+  <svg viewBox="0 0 1460 300" role="img" aria-label="Pipeline architecture diagram">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="#3f5570"/>
+      </marker>
+      <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="#c2570b"/>
+      </marker>
+    </defs>
+
+    <!-- lane label -->
+    <text x="0" y="20" font-size="19" font-weight="700" fill="#3f5570" font-family="Segoe UI, sans-serif">RETRIEVAL-GROUNDED ANALYSIS PIPELINE  (LangGraph · runs once per session)</text>
+
+    <!-- Goal agent -->
+    <g>
+      <rect x="4" y="150" width="176" height="76" rx="8" fill="#fff" stroke="#1d4ed8" stroke-width="2.5"/>
+      <text x="92" y="180" text-anchor="middle" font-size="22" font-weight="700" fill="#0d1a2b" font-family="Segoe UI, sans-serif">Goal Agent</text>
+      <text x="92" y="204" text-anchor="middle" font-size="17" fill="#3f5570" font-family="Segoe UI, sans-serif">multi-turn · Haiku</text>
+    </g>
+    <path d="M182 188 H 214" stroke="#3f5570" stroke-width="2.5" marker-end="url(#ar)"/>
+
+    <!-- Code structure -->
+    <g>
+      <rect x="218" y="150" width="182" height="76" rx="8" fill="#fff" stroke="#3f5570" stroke-width="2"/>
+      <text x="309" y="180" text-anchor="middle" font-size="22" font-weight="700" fill="#0d1a2b" font-family="Segoe UI, sans-serif">Code Structure</text>
+      <text x="309" y="204" text-anchor="middle" font-size="17" fill="#3f5570" font-family="Segoe UI, sans-serif">clone · chunk · embed</text>
+    </g>
+    <path d="M402 188 H 434" stroke="#3f5570" stroke-width="2.5" marker-end="url(#ar)"/>
+
+    <!-- Documentation -->
+    <g>
+      <rect x="438" y="150" width="176" height="76" rx="8" fill="#f2fbfa" stroke="#0d7d76" stroke-width="2"/>
+      <text x="526" y="180" text-anchor="middle" font-size="22" font-weight="700" fill="#0d1a2b" font-family="Segoe UI, sans-serif">Documentation</text>
+      <text x="526" y="204" text-anchor="middle" font-size="17" fill="#0d7d76" font-family="Segoe UI, sans-serif">no LLM · zero cost</text>
+    </g>
+    <path d="M616 188 H 648" stroke="#3f5570" stroke-width="2.5" marker-end="url(#ar)"/>
+
+    <!-- Prioritization -->
+    <g>
+      <rect x="652" y="150" width="176" height="76" rx="8" fill="#fff" stroke="#3f5570" stroke-width="2"/>
+      <text x="740" y="180" text-anchor="middle" font-size="22" font-weight="700" fill="#0d1a2b" font-family="Segoe UI, sans-serif">Prioritization</text>
+      <text x="740" y="204" text-anchor="middle" font-size="17" fill="#3f5570" font-family="Segoe UI, sans-serif">prune vs. breadth</text>
+    </g>
+
+    <!-- gate branch up to reviewer -->
+    <path d="M830 172 C 880 172, 880 92, 928 92" stroke="#c2570b" stroke-width="2.5" fill="none" marker-end="url(#arw)"/>
+    <text x="838" y="128" font-size="15" fill="#c2570b" font-family="Segoe UI, sans-serif">goal = improve /</text>
+    <text x="838" y="146" font-size="15" fill="#c2570b" font-family="Segoe UI, sans-serif">architecture</text>
+
+    <g>
+      <rect x="932" y="54" width="184" height="76" rx="8" fill="#fff8f1" stroke="#c2570b" stroke-width="2.5"/>
+      <text x="1024" y="84" text-anchor="middle" font-size="22" font-weight="700" fill="#0d1a2b" font-family="Segoe UI, sans-serif">Reviewer</text>
+      <text x="1024" y="108" text-anchor="middle" font-size="17" fill="#c2570b" font-family="Segoe UI, sans-serif">risks · seams · gaps</text>
+    </g>
+    <path d="M1118 92 C 1166 92, 1166 172, 1210 172" stroke="#c2570b" stroke-width="2.5" fill="none" marker-end="url(#arw)"/>
+
+    <!-- direct route -->
+    <path d="M830 204 H 1206" stroke="#3f5570" stroke-width="2.5" marker-end="url(#ar)"/>
+    <text x="960" y="230" font-size="15" fill="#3f5570" font-family="Segoe UI, sans-serif">all other goal types</text>
+
+    <!-- Mentor -->
+    <g>
+      <rect x="1214" y="150" width="182" height="76" rx="8" fill="#eff4fe" stroke="#1d4ed8" stroke-width="3"/>
+      <text x="1305" y="180" text-anchor="middle" font-size="22" font-weight="700" fill="#0d1a2b" font-family="Segoe UI, sans-serif">Mentor</text>
+      <text x="1305" y="204" text-anchor="middle" font-size="17" fill="#1d4ed8" font-family="Segoe UI, sans-serif">Sonnet · once</text>
+    </g>
+
+    <!-- RAG substrate -->
+    <rect x="218" y="252" width="1178" height="44" rx="6" fill="#e6eefb" stroke="#9db9ea" stroke-width="1.5"/>
+    <text x="807" y="280" text-anchor="middle" font-size="18" font-weight="600" fill="#12325f" font-family="Segoe UI, sans-serif">
+      RAG substrate — tree-sitter AST chunks · local nomic-embed-text-v1.5 · ChromaDB per-commit collection · per-goal retrieval profiles + RRF
+    </text>
+    <path d="M309 250 V 232" stroke="#9db9ea" stroke-width="2"/>
+    <path d="M740 250 V 232" stroke="#9db9ea" stroke-width="2"/>
+    <path d="M1024 250 V 134" stroke="#9db9ea" stroke-width="2" stroke-dasharray="5 4"/>
+    <path d="M1305 250 V 232" stroke="#9db9ea" stroke-width="2"/>
+  </svg>
+
+  <div class="two" style="margin-top:6mm">
+    <div class="card">
+      <div class="card-title">Cheap by default, smart rarely</div>
+      Eight of nine agents run on <b>Claude Haiku</b>; <b>Sonnet</b> is reserved for the two genuine
+      multi-step reasoning tasks — curriculum synthesis and foundational-concept inference. Sonnet is
+      never used in a loop. Embeddings run locally, so retrieval costs nothing per query, and a repeated
+      commit is re-analysed for free.
+    </div>
+    <div class="card">
+      <div class="card-title">Grounding is the hallucination guard</div>
+      Every node anchor must resolve to a chunk that was <b>actually retrieved</b>. The Mentor retries on
+      duplicate anchors and on invented file paths; the Mutator <b>refuses to splice</b> an ungrounded
+      node rather than teaching a lie. Edge kind is pinned to <code>Literal["sequence"]</code> at the
+      wire format, so the initial graph is provably a chain.
+    </div>
+  </div>
+</div>
+
+<!-- ================= THREE COLUMNS ================= -->
+<div class="cols">
+
+  <!-- ---------- COLUMN 1 ---------- -->
+  <div class="col">
+    <section>
+      <h2><span class="num">04</span> How a session runs</h2>
+      <p class="lead">Two halves with deliberately different lifecycles: a throwaway interview that produces a structured goal, and a durable learning session that may span days.</p>
+      <ul>
+        <li><b>Interview</b> — four core questions plus 1–2 follow-ups conditional on goal type; one Haiku call synthesizes the goal JSON.</li>
+        <li><b>Start</b> — same repo and identical goal resumes from SQLite; otherwise the pipeline runs once and the graph is persisted.</li>
+        <li><b>Loop</b> — render lesson → answer → grade → advance, with free navigation to any node in the graph.</li>
+        <li><b>Override</b> — the user can overrule the Grader at any time: <code>mark_understood</code>, <code>mark_weak</code>, <code>skip</code>. It is their graph.</li>
+      </ul>
+      <div class="snippet"><span class="c">## interactive session API</span>
+POST /session/start     <span class="c">→ run or resume</span>
+GET  /session/{id}/lesson
+POST /session/{id}/respond   <span class="c">→ grade + mutate</span>
+POST /session/{id}/advance
+POST /session/{id}/jump
+POST /session/{id}/override
+GET  /session/{id}/file  <span class="c">→ sandboxed source</span></div>
+      <p style="margin-top:2.5mm">The Next.js client renders the graph as the centrepiece, with a lesson panel and a source viewer scrolled to the node's exact line range.</p>
+    </section>
+
+    <section>
+      <h2><span class="num">05</span> The learning graph</h2>
+      <p>
+        The Mentor emits 5–8 nodes (4–10 depending on requested depth) plus exactly N−1 sequence edges.
+        Each node is a concept, an anchor, and a piece of mutable state.
+      </p>
+      <div class="snippet"><span class="c"># one node of the persisted graph</span>
+<span class="k">title</span>:        <span class="s">"How Session dispatches a request"</span>
+<span class="k">code_anchor</span>:  requests/sessions.py <span class="s">[502, 587]</span>
+<span class="k">concept_tags</span>: [<span class="s">"flow"</span>, <span class="s">"component"</span>]
+<span class="k">lesson_brief</span>: {why, understand}
+<span class="k">understanding_state</span>: partial
+<span class="k">visited</span>: true   <span class="k">weak_spot</span>: true
+<span class="k">cached_lesson</span>: {...}</div>
+      <h3>Concept-tag vocabulary</h3>
+      <p>A shared language across four agents: it selects the Teaching framing, the Grader rubric, and the topology rules the Mentor must satisfy.</p>
+      <div class="tags">
+        <span class="tag a">architecture</span><span class="tag a">flow</span>
+        <span class="tag t">extension_point</span><span class="tag r">risk</span>
+        <span class="tag t">test_coverage</span><span class="tag">component</span>
+        <span class="tag">+ domain tags</span>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="num">06</span> Six goals, one engine</h2>
+      <p class="lead">The goal interview is the single source of truth. Its output steers retrieval profiles, prompt builders, the Reviewer gate, and every personalization rule.</p>
+      <table>
+        <tr><td>understand_system</td><td>Broad tour — entry points, spanning modules</td></tr>
+        <tr><td>understand_component</td><td>Deep dive on one area</td></tr>
+        <tr><td>understand_architecture</td><td>Layers, boundaries, responsibilities</td></tr>
+        <tr><td>contribute_code</td><td>Extension points, then insertion sites</td></tr>
+        <tr><td>improve_existing_system</td><td>Safe-change path: risk → test → seam</td></tr>
+        <tr><td>debug_issue</td><td>Trace the failing execution path</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2><span class="num">07</span> Personalization that pays rent</h2>
+      <p class="lead" style="margin-bottom:3mm">
+        Design principle: <b>if the system asks a question, the answer must change a downstream decision — otherwise don't ask.</b>
+      </p>
+      <table>
+        <tr><th>Field</th><th>What it moves</th></tr>
+        <tr><td>familiarity</td><td>Entry point altitude, orientation-node budget</td></tr>
+        <tr><td>depth</td><td>Node count, anchor granularity, lesson length</td></tr>
+        <tr><td>background</td><td>Assumed terminology, information elision</td></tr>
+        <tr><td>risk_tolerance</td><td>Reviewer finding density, safety ordering</td></tr>
+      </table>
+    </section>
+  </div>
+
+  <!-- ---------- COLUMN 2 ---------- -->
+  <div class="col">
+    <section>
+      <h2><span class="num">08</span> The adaptive inner loop</h2>
+      <p class="lead" style="margin-bottom:4mm">
+        Each iteration is one predict-then-reveal question. The Mutator is the only step permitted to
+        change graph structure — and it is the moment "adaptive" stops being a marketing word.
+      </p>
+
+      <svg viewBox="0 0 460 470" role="img" aria-label="Teaching, grading and mutation loop">
+        <defs>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#3f5570"/>
+          </marker>
+          <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c2570b"/>
+          </marker>
+        </defs>
+
+        <rect x="118" y="6" width="224" height="58" rx="8" fill="#eff4fe" stroke="#1d4ed8" stroke-width="2.5"/>
+        <text x="230" y="30" text-anchor="middle" font-size="19" font-weight="700" fill="#0d1a2b" font-family="Segoe UI, sans-serif">Teaching Agent · Haiku</text>
+        <text x="230" y="52" text-anchor="middle" font-size="15" fill="#1d4ed8" font-family="Segoe UI, sans-serif">renders lesson (cached on node)</text>
+        <path d="M230 66 V 92" stroke="#3f5570" stroke-width="2.5" marker-end="url(#a2)"/>
+
+        <rect x="128" y="96" width="204" height="46" rx="8" fill="#fff" stroke="#3f5570" stroke-width="2"/>
+        <text x="230" y="125" text-anchor="middle" font-size="17" fill="#0d1a2b" font-family="Segoe UI, sans-serif">user predicts / answers</text>
+        <path d="M230 144 V 170" stroke="#3f5570" stroke-width="2.5" marker-end="url(#a2)"/>
+
+        <rect x="118" y="174" width="224" height="58" rx="8" fill="#f6f0ff" stroke="#6d28d9" stroke-width="2.5"/>
+        <text x="230" y="198" text-anchor="middle" font-size="19" font-weight="700" fill="#0d1a2b" font-family="Segoe UI, sans-serif">Grader Agent · Haiku</text>
+        <text x="230" y="220" text-anchor="middle" font-size="16" fill="#6d28d9" font-family="Segoe UI, sans-serif">per-tag rubric, system-level</text>
+
+        <path d="M230 234 V 262" stroke="#3f5570" stroke-width="2.5"/>
+        <path d="M230 262 H 92 V 292" stroke="#3f5570" stroke-width="2.5" marker-end="url(#a2)"/>
+        <path d="M230 262 H 372 V 292" stroke="#c2570b" stroke-width="2.5" marker-end="url(#a3)"/>
+        <text x="120" y="282" font-size="16" font-weight="600" fill="#0d7d76" font-family="Segoe UI, sans-serif">understood / partial</text>
+        <text x="300" y="282" font-size="16" font-weight="600" fill="#c2570b" font-family="Segoe UI, sans-serif">confused</text>
+
+        <rect x="10" y="296" width="164" height="66" rx="8" fill="#f2fbfa" stroke="#0d7d76" stroke-width="2"/>
+        <text x="92" y="322" text-anchor="middle" font-size="17" font-weight="700" fill="#0d1a2b" font-family="Segoe UI, sans-serif">mark node state</text>
+        <text x="92" y="345" text-anchor="middle" font-size="16" fill="#0d7d76" font-family="Segoe UI, sans-serif">advance in chain</text>
+
+        <rect x="290" y="296" width="164" height="66" rx="8" fill="#fff8f1" stroke="#c2570b" stroke-width="2.5"/>
+        <text x="372" y="318" text-anchor="middle" font-size="17" font-weight="700" fill="#0d1a2b" font-family="Segoe UI, sans-serif">Mutator · Sonnet</text>
+        <text x="372" y="339" text-anchor="middle" font-size="15" fill="#c2570b" font-family="Segoe UI, sans-serif">retrieve → write prereq</text>
+        <text x="372" y="356" text-anchor="middle" font-size="15" fill="#c2570b" font-family="Segoe UI, sans-serif">→ ground → splice in</text>
+
+        <path d="M92 364 V 392 H 230 V 418" stroke="#3f5570" stroke-width="2.5" fill="none" marker-end="url(#a2)"/>
+        <path d="M372 364 V 392 H 230" stroke="#c2570b" stroke-width="2.5" fill="none"/>
+
+        <rect x="34" y="422" width="392" height="42" rx="8" fill="#f2f6fb" stroke="#cfdae8" stroke-width="2"/>
+        <text x="230" y="448" text-anchor="middle" font-size="16" font-weight="600" fill="#3f5570" font-family="Segoe UI, sans-serif">next node → loop · state saved to SQLite</text>
+      </svg>
+    </section>
+
+    <section>
+      <h2><span class="num">09</span> Structural adaptation</h2>
+      <p>On <code>confused</code>, the Mutator retrieves candidate chunks excluding existing anchors,
+         asks Sonnet for a more foundational node, verifies the anchor is real, and reroutes the chain.
+         <b>At most one prerequisite per node</b> — the system makes one focused attempt to unblock you, then gets out of the way.</p>
+
+      <svg viewBox="0 0 460 170" style="margin-top:3mm" role="img" aria-label="Graph before and after a confusion-driven mutation">
+        <defs>
+          <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#3f5570"/>
+          </marker>
+          <marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c2570b"/>
+          </marker>
+        </defs>
+        <text x="0" y="14" font-size="16" font-weight="700" fill="#3f5570" font-family="Segoe UI, sans-serif">BEFORE</text>
+        <circle cx="70"  cy="52" r="21" fill="#eff4fe" stroke="#1d4ed8" stroke-width="2"/><text x="70"  y="58" text-anchor="middle" font-size="17" fill="#0d1a2b" font-family="Segoe UI, sans-serif">A</text>
+        <circle cx="200" cy="52" r="21" fill="#eff4fe" stroke="#1d4ed8" stroke-width="2"/><text x="200" y="58" text-anchor="middle" font-size="17" fill="#0d1a2b" font-family="Segoe UI, sans-serif">B</text>
+        <circle cx="330" cy="52" r="21" fill="#eff4fe" stroke="#1d4ed8" stroke-width="2"/><text x="330" y="58" text-anchor="middle" font-size="17" fill="#0d1a2b" font-family="Segoe UI, sans-serif">C</text>
+        <path d="M93 52 H 172" stroke="#3f5570" stroke-width="2" marker-end="url(#a4)"/>
+        <path d="M223 52 H 302" stroke="#3f5570" stroke-width="2" marker-end="url(#a4)"/>
+        <text x="360" y="57" font-size="15" fill="#3f5570" font-family="Segoe UI, sans-serif">sequence</text>
+
+        <text x="0" y="112" font-size="16" font-weight="700" fill="#c2570b" font-family="Segoe UI, sans-serif">AFTER — user was confused at B</text>
+        <circle cx="55"  cy="146" r="19" fill="#eff4fe" stroke="#1d4ed8" stroke-width="2"/><text x="55"  y="152" text-anchor="middle" font-size="16" fill="#0d1a2b" font-family="Segoe UI, sans-serif">A</text>
+        <circle cx="170" cy="146" r="19" fill="#fff8f1" stroke="#c2570b" stroke-width="2.5"/><text x="170" y="152" text-anchor="middle" font-size="16" fill="#c2570b" font-family="Segoe UI, sans-serif">P</text>
+        <circle cx="290" cy="146" r="19" fill="#ffeeee" stroke="#c62828" stroke-width="2.5"/><text x="290" y="152" text-anchor="middle" font-size="16" fill="#c62828" font-family="Segoe UI, sans-serif">B</text>
+        <circle cx="405" cy="146" r="19" fill="#eff4fe" stroke="#1d4ed8" stroke-width="2"/><text x="405" y="152" text-anchor="middle" font-size="16" fill="#0d1a2b" font-family="Segoe UI, sans-serif">C</text>
+        <path d="M76 146 H 143" stroke="#3f5570" stroke-width="2" marker-end="url(#a4)"/>
+        <path d="M191 146 H 263" stroke="#c2570b" stroke-width="2.5" marker-end="url(#a5)"/>
+        <path d="M311 146 H 378" stroke="#3f5570" stroke-width="2" marker-end="url(#a4)"/>
+        <text x="146" y="122" font-size="14" fill="#c2570b" font-family="Segoe UI, sans-serif">new prereq</text>
+        <text x="262" y="122" font-size="14" fill="#c62828" font-family="Segoe UI, sans-serif">weak_spot ✓</text>
+      </svg>
+      <p style="margin-top:3mm"><b>weak_spot</b> is sticky: it survives later mastery as a permanent record of a rough patch, and feeds the resume heuristic.</p>
+    </section>
+  </div>
+
+  <!-- ---------- COLUMN 3 ---------- -->
+  <div class="col">
+    <section>
+      <h2><span class="num">10</span> Key design decisions</h2>
+      <table>
+        <tr><th>Decision</th><th>Reasoning</th></tr>
+        <tr><td>Many small agents,<br>not one big prompt</td><td>Each has one job, one Pydantic output type, and can use the cheapest model that does it.</td></tr>
+        <tr><td>One shared state object</td><td>The only channel between agents. <code>errors</code> uses an <code>operator.add</code> reducer so parallel nodes can append safely.</td></tr>
+        <tr><td>AST chunks,<br>never line windows</td><td>A function is a teachable unit; 50 arbitrary lines is not. Anchors would otherwise be meaningless.</td></tr>
+        <tr><td>Per-commit vector<br>collection</td><td>Re-analysing a known commit is free — the single biggest cost optimization.</td></tr>
+        <tr><td>Local embeddings</td><td>No API key, no per-query cost, keeps the run under the $0.10 budget.</td></tr>
+        <tr><td>Graceful degradation<br>everywhere</td><td>A failed Prioritization regresses to full-map behaviour, not a broken pipeline.</td></tr>
+      </table>
+      <div class="card warn" style="margin-top:4mm">
+        <div class="card-title">A rollback worth reporting</div>
+        The Mentor was briefly allowed to emit <code>prerequisite</code> edges in the initial graph. It worked —
+        and was then <b>deliberately reverted</b> after architectural review. Prerequisite edges now carry
+        exactly one meaning: <i>the path changed because you struggled</i>. The educational intent was
+        preserved through sequence <i>ordering</i> instead, and the invariant is enforced by schema, prompt, and a regression test.
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="num">11</span> Persistence &amp; resume</h2>
+      <p class="lead">The learning session is the durable half of the system — SQLite stores nodes, edges, per-node state, cached lessons and the current pointer.</p>
+      <ul>
+        <li>A returning user with the same repo and goal <b>skips the pipeline entirely</b> — no clone, no embedding, no Sonnet call.</li>
+        <li><code>resume_point()</code> restores where they stopped, respecting recorded weak spots.</li>
+        <li>Lessons are cached on the node, so <b>revisiting a concept is free</b>.</li>
+        <li><code>doc_context</code> is copied onto the stored graph so real docstrings survive resume.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="num">12</span> Evaluation</h2>
+      <p class="lead">Does modelling onboarding as a first-class, goal-oriented process add value beyond existing AI coding assistants?</p>
+      <h3>Measures</h3>
+      <ul>
+        <li>Time to first meaningful task</li>
+        <li>Number of clarification questions needed</li>
+        <li>Self-reported confidence</li>
+        <li>Task success rate</li>
+      </ul>
+      <h3>Baselines</h3>
+      <ul>
+        <li><b>Manual</b> — README and docs, unguided exploration</li>
+        <li><b>AI-assisted</b> — Copilot / Cursor: strong contextually, but reactive, with no global prioritization or progress model</li>
+      </ul>
+      <h3>Demo corpus</h3>
+      <p><code>psf/requests</code> (small, clean) and <code>fastapi/fastapi</code> (large, stress test).</p>
+    </section>
+
+    <section>
+      <h2><span class="num">13</span> Limitations &amp; next steps</h2>
+      <ul>
+        <li><b>LLM nondeterminism</b> — graph shape varies run to run; guardrails are structural, not exact-output.</li>
+        <li><b>Partial rule firing</b> — the safety-critical ordering rule holds for most, not all, extension points.</li>
+        <li><b>Single-range anchors</b> — a concept spread across files cannot yet be anchored as one node.</li>
+        <li><b>Single user, no auth</b> — team-shared graphs are a deliberate non-goal for v1.</li>
+        <li><b>Next:</b> richer adaptive moves beyond confusion and skip; an AI-Assisted Development Mode where the Grader evaluates a developer's <i>critique</i> of generated code; audio walkthroughs; a VS Code extension.</li>
+      </ul>
+    </section>
+  </div>
+</div>
+
+<!-- ================= FOOTER ================= -->
+<footer>
+  <h2><span class="num">14</span> Implementation at a glance</h2>
+  <div class="two">
+    <table>
+      <tr><th>Layer</th><th>Choice</th></tr>
+      <tr><td>Language / tooling</td><td>Python 3.12, <code>uv</code></td></tr>
+      <tr><td>Backend</td><td>FastAPI (async, typed) + Pydantic output contracts</td></tr>
+      <tr><td>Orchestration</td><td>LangGraph state graph with conditional routing</td></tr>
+      <tr><td>Models</td><td>Claude Haiku (8 agents) · Claude Sonnet (Mentor, Mutator)</td></tr>
+      <tr><td>Retrieval</td><td>tree-sitter · nomic-embed-text-v1.5 (local) · ChromaDB · RRF</td></tr>
+    </table>
+    <table>
+      <tr><th>Layer</th><th>Choice</th></tr>
+      <tr><td>Persistence</td><td>SQLite — sessions, nodes, edges, cached lessons; full resume</td></tr>
+      <tr><td>Frontend</td><td>Next.js 15 · React 19 · Tailwind · reactflow graph view</td></tr>
+      <tr><td>Testing</td><td>pytest + FastAPI <code>TestClient</code>; mocked units, live-LLM smoke runs</td></tr>
+      <tr><td>Test suite</td><td><b style="color:#8fe3a8">281 passing</b></td></tr>
+      <tr><td>Cost per run</td><td><b style="color:#8fe3a8">≈ $0.07</b> against a $0.10 target</td></tr>
+    </table>
+  </div>
+  <div class="foot-note">
+    <span>Contact: [your.email@institution.edu]</span>
+    <span>Repository: [github.com/…/CodeOnboard]</span>
+    <span>Evaluated on <code style="background:rgba(255,255,255,.1);color:#cddcef">psf/requests</code> and <code style="background:rgba(255,255,255,.1);color:#cddcef">fastapi/fastapi</code></span>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -22,6 +22,7 @@ from typing import Literal
 import anthropic
 from pydantic import BaseModel
 
+from backend.agents.language import language_instruction
 from backend.learning.graph import LearningGraph, LearningNode
 from backend.pipeline.state import OnboardState
 from backend.rag.retrieval import retrieve_supporting_chunks
@@ -330,7 +331,9 @@ def run(
     user_content = _build_user_content(state.goal, node, source, prior_context, supporting, doc_context=doc_context)
 
     try:
-        output = _generate_lesson(client, user_content)
+        output = _generate_lesson(
+            client, user_content, _SYSTEM_PROMPT + language_instruction(state.goal)
+        )
         lesson = output.model_dump()
         node.cached_lesson = lesson
         state.current_lesson = lesson
@@ -340,7 +343,9 @@ def run(
     return state
 
 
-def _generate_lesson(client: anthropic.Anthropic, user_content: str) -> LessonOutput:
+def _generate_lesson(
+    client: anthropic.Anthropic, user_content: str, system: str = _SYSTEM_PROMPT
+) -> LessonOutput:
     """One Haiku call, with a single corrective retry on a parse failure.
 
     Haiku occasionally wraps the JSON in prose or emits malformed JSON. Like
@@ -350,7 +355,7 @@ def _generate_lesson(client: anthropic.Anthropic, user_content: str) -> LessonOu
     response = client.messages.create(
         model=MODEL,
         max_tokens=MAX_TOKENS,
-        system=_SYSTEM_PROMPT,
+        system=system,
         messages=[{"role": "user", "content": user_content}],
     )
     raw = response.content[0].text
@@ -360,7 +365,7 @@ def _generate_lesson(client: anthropic.Anthropic, user_content: str) -> LessonOu
         retry = client.messages.create(
             model=MODEL,
             max_tokens=MAX_TOKENS,
-            system=_SYSTEM_PROMPT,
+            system=system,
             messages=[
                 {"role": "user", "content": user_content},
                 {"role": "assistant", "content": raw},

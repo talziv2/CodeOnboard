@@ -2,7 +2,8 @@
 
 import type { GraphNode } from "@/lib/api";
 import type { RouteStop } from "@/lib/graph-layout";
-import { tagStyle, stateStyle, STATE_ORDER } from "@/lib/tags";
+import { tagStyle, tagLabel, stateStyle, stateLabel, STATE_ORDER } from "@/lib/tags";
+import { useI18n } from "@/lib/i18n/context";
 
 interface Props {
   stops: RouteStop[];
@@ -32,17 +33,19 @@ function Pin({ node, isCurrent }: { node: GraphNode; isCurrent: boolean }) {
 }
 
 export default function RouteRail({ stops, currentNodeId, onJump, onExpand }: Props) {
+  const { t } = useI18n();
+
   return (
-    <aside className="flex h-full min-h-0 flex-col gap-3 border-r border-rule bg-trench py-4">
+    <aside className="flex h-full min-h-0 flex-col gap-3 border-e border-rule bg-trench py-4">
       <div className="flex items-baseline justify-between px-4">
         <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-graphite">
-          Your route
+          {t.rail.title}
         </span>
         <button
           onClick={onExpand}
           className="font-mono text-[10.5px] text-signal transition hover:text-chalk"
         >
-          Open map
+          {t.rail.openMap}
         </button>
       </div>
 
@@ -57,15 +60,15 @@ export default function RouteRail({ stops, currentNodeId, onJump, onExpand }: Pr
               key={node.id}
               onClick={() => onJump(node)}
               aria-current={isCurrent ? "step" : undefined}
-              className={`group relative grid w-full grid-cols-[18px_1fr] gap-3 py-1.5 text-left ${
-                stop.isPrerequisite ? "ml-[22px] w-[calc(100%-22px)]" : ""
+              className={`group relative grid w-full grid-cols-[18px_1fr] gap-3 py-1.5 text-start ${
+                stop.isPrerequisite ? "ms-[22px] w-[calc(100%-22px)]" : ""
               }`}
             >
               {/* connector down to the next stop */}
               {!isLast && (
                 <span
                   aria-hidden
-                  className="absolute left-2 top-[22px] bottom-[-8px] w-px bg-rule"
+                  className="absolute start-2 top-[22px] bottom-[-8px] w-px bg-rule"
                 />
               )}
 
@@ -75,7 +78,7 @@ export default function RouteRail({ stops, currentNodeId, onJump, onExpand }: Pr
                 {stop.isPrerequisite && (
                   <span className="flex items-center gap-[5px] font-mono text-[9.5px] tracking-[0.06em] text-signal">
                     <span aria-hidden className="h-px w-3 bg-signal" />
-                    added after confusion
+                    {t.rail.addedAfterConfusion}
                   </span>
                 )}
 
@@ -89,7 +92,7 @@ export default function RouteRail({ stops, currentNodeId, onJump, onExpand }: Pr
                   {node.title}
                 </span>
 
-                <span className="truncate font-mono text-[10.5px] text-graphite">
+                <span dir="ltr" className="truncate text-start font-mono text-[10.5px] text-graphite">
                   {node.file}
                 </span>
 
@@ -103,7 +106,7 @@ export default function RouteRail({ stops, currentNodeId, onJump, onExpand }: Pr
                           className="rounded-[2px] border px-[5px] py-px font-mono text-[9.5px] tracking-[0.05em]"
                           style={{ color: s.text, borderColor: s.border, background: s.background }}
                         >
-                          {s.label}
+                          {tagLabel(t, tag)}
                         </span>
                       );
                     })}
@@ -112,7 +115,7 @@ export default function RouteRail({ stops, currentNodeId, onJump, onExpand }: Pr
 
                 {node.weak_spot && (
                   <span className="font-mono text-[9.5px] tracking-[0.05em] text-rust">
-                    ⚑ marked weak
+                    {t.rail.markedWeak}
                   </span>
                 )}
               </span>
@@ -134,7 +137,7 @@ export default function RouteRail({ stops, currentNodeId, onJump, onExpand }: Pr
                 className="h-[9px] w-[9px] shrink-0 rounded-full border-[1.5px]"
                 style={{ borderColor: s.stroke, background: s.fill }}
               />
-              {s.label}
+              {stateLabel(t, state)}
             </span>
           );
         })}

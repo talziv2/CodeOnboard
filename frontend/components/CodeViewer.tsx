@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getFile } from "@/lib/api";
+import { useI18n } from "@/lib/i18n/context";
 
 interface Props {
   sessionId: string;
@@ -14,6 +15,7 @@ interface Props {
 export default function CodeViewer({
   sessionId, filePath, highlightStart, highlightEnd, onClose,
 }: Props) {
+  const { t, te } = useI18n();
   const [content, setContent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const firstHotLine = useRef<HTMLTableRowElement | null>(null);
@@ -23,8 +25,8 @@ export default function CodeViewer({
     setError(null);
     getFile(sessionId, filePath)
       .then((f) => setContent(f.content))
-      .catch((e) => setError(e.message));
-  }, [sessionId, filePath]);
+      .catch((e) => setError(te(e.message)));
+  }, [sessionId, filePath, te]);
 
   useEffect(() => {
     if (content && firstHotLine.current) {
@@ -35,7 +37,9 @@ export default function CodeViewer({
   const lines = content?.split("\n") ?? [];
 
   return (
-    <aside className="flex min-h-0 flex-col bg-trench">
+    // Source is always left-to-right: indentation, operators and line numbers
+    // only make sense in the direction the code was written.
+    <aside dir="ltr" className="flex min-h-0 flex-col bg-trench">
       <div className="flex shrink-0 items-center gap-2.5 border-b border-rule px-3.5 py-2.5">
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-graphite">
           {filePath}
@@ -47,7 +51,7 @@ export default function CodeViewer({
         )}
         <button
           onClick={onClose}
-          aria-label="Hide source"
+          aria-label={t.session.hideSource}
           className="shrink-0 font-mono text-[11px] text-graphite transition hover:text-signal"
         >
           ✕
@@ -57,7 +61,9 @@ export default function CodeViewer({
       <div className="min-h-0 flex-1 overflow-auto py-2">
         {error && <p className="px-4 py-3 text-[12px] text-rust">{error}</p>}
         {!content && !error && (
-          <p className="px-4 py-3 font-mono text-[11px] text-graphite">Loading source…</p>
+          <p className="px-4 py-3 font-mono text-[11px] text-graphite">
+            {t.session.loading}
+          </p>
         )}
         {content && (
           <table className="w-full border-collapse font-mono text-[11px] leading-[1.75]">

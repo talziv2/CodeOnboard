@@ -24,6 +24,7 @@ import os
 import anthropic
 from pydantic import BaseModel
 
+from backend.agents.language import language_instruction
 from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
 from backend.pipeline.state import OnboardState
 from backend.rag.retrieval import retrieve_supporting_chunks
@@ -153,7 +154,7 @@ def _generate_prerequisite_node(
         response = client.messages.create(
             model=MODEL,
             max_tokens=MAX_TOKENS,
-            system=_PREREQ_SYSTEM_PROMPT,
+            system=_PREREQ_SYSTEM_PROMPT + language_instruction(state.goal),
             messages=[{"role": "user", "content": user_content}],
         )
         wire = _parse_node(response.content[0].text)

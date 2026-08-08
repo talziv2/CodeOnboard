@@ -20,6 +20,7 @@ from typing import Literal
 import anthropic
 from pydantic import BaseModel
 
+from backend.agents.language import language_instruction, language_of
 from backend.learning.graph import LearningNode
 from backend.pipeline.state import OnboardState
 
@@ -42,6 +43,14 @@ _CLASSIFICATION_TO_STATE: dict[str, str] = {
 class GraderOutput(BaseModel):
     classification: Classification
     rationale: str  # one sentence — for debugging, not shown to the user in v1
+
+
+# The rationale is surfaced in the UI, so even the never-reached-the-model
+# fallback has to be readable in the session's language.
+_GRADING_FAILED: dict[str, str] = {
+    "en": "grading failed; defaulted to partial",
+    "he": "הבדיקה נכשלה; סווג כברירת מחדל כהבנה חלקית",
+}
 
 
 _SYSTEM_PROMPT = """\
@@ -157,7 +166,7 @@ def run(
         response = client.messages.create(
             model=MODEL,
             max_tokens=MAX_TOKENS,
-            system=_SYSTEM_PROMPT,
+            system=_SYSTEM_PROMPT + language_instruction(state.goal),
             messages=[{"role": "user", "content": user_content}],
         )
         raw = response.content[0].text
@@ -165,7 +174,12 @@ def run(
     except Exception as e:
         # Never block the session on a grading hiccup — assume partial.
         state.errors.append(f"grader_agent: classification failed, defaulting to partial: {e}")
-        output = GraderOutput(classification="partial", rationale="grading failed; defaulted to partial")
+        output = GraderOutput(
+            classification="partial",
+            rationale=_GRADING_FAILED.get(
+                language_of(state.goal), _GRADING_FAILED["en"]
+            ),
+        )
 
     _apply_grade(state, current_id, output.classification)
     state.last_grade = {"classification": output.classification, "rationale": output.rationale}

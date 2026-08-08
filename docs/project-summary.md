@@ -81,7 +81,7 @@ All six paths share the same agent infrastructure; the differences are encoded i
 
 ### 1.7 What the project is and is not
 
-**Today, CodeOnboard is a complete, tested backend.** The clickable visual interface is the principal not-yet-built piece. The system is fully drivable over HTTP today; the in-process `TestClient` powers smoke scripts that exercise the entire adaptive loop on real repos with real LLM calls.
+**Today, CodeOnboard is a complete, tested backend with a scaffolded Next.js frontend.** The backend is fully drivable over HTTP and is exercised end-to-end by smoke scripts and the in-process `TestClient` on real repos with real LLM calls. A `frontend/` workspace (Next.js 15 / React 19 / Tailwind / `reactflow`) wires the repo-input page, the goal dialogue, the graph view, the lesson panel, and the source viewer to the live API — it talks to `http://localhost:8000` with CORS allowed from `http://localhost:3000`. The interactive learning UI exists; what remains is polish, fuller graph semantics in the view, and design work.
 
 ---
 
@@ -107,7 +107,7 @@ Three changes raised quality without changing the basic shape:
 - **LangGraph migration.** The plain Python chain was rebuilt as a LangGraph state graph with conditional routing. This unlocked the safe short-circuit pattern (no module map → skip the rest of the pipeline cleanly) and prepared the system for parallel nodes.
 - **Reducer-friendly error list.** `OnboardState.errors` became an `Annotated[list, operator.add]` field so future parallel nodes can append safely without overwriting each other.
 
-A **Documentation Agent** was planned (extract README + docstring quotes, enrich lessons with real codebase prose) but never landed. Phase 3 work made it lower-priority.
+A **Documentation Agent** also landed as part of Phase 2 — it extracts the README, per-file module docstrings, public class/function docstrings, and `docs/` directory excerpts from the cloned repo and stashes them on `OnboardState.doc_context`. It is pure file reading: no LLM, no API key, zero cost, deterministic. The Teaching Agent quotes from `doc_context` so lessons reference real codebase prose rather than LLM-paraphrased descriptions.
 
 ### 2.3 Phase 3 — The interactive learning graph
 
@@ -247,8 +247,8 @@ Every loop iteration is one user-facing question. The Mutator is the only step t
 graph TB
     User(["Developer"])
 
-    subgraph UI["Layer 1 — UI (not yet built)"]
-        Web["Next.js + Tailwind<br/>graph view as centerpiece"]
+    subgraph UI["Layer 1 — UI (scaffolded)"]
+        Web["Next.js 15 + Tailwind + reactflow<br/>graph view as centerpiece"]
     end
 
     subgraph API["Layer 2 — FastAPI"]
@@ -262,6 +262,7 @@ graph TB
     subgraph Agents["Layer 4 — Agent team"]
         GA["Goal · Haiku"]
         CSA["Code Structure · Haiku"]
+        DA["Documentation · no LLM"]
         PA["Prioritization · Haiku"]
         RA["Reviewer · Haiku"]
         MA["Mentor · Sonnet"]
@@ -289,10 +290,11 @@ graph TB
 
     User --> Web --> Endpoints
     Endpoints --> Graph
-    Graph --> GA & CSA & PA & RA & MA
+    Graph --> GA & CSA & DA & PA & RA & MA
     Endpoints --> TA & GD & MU
     CSA --> Cln --> GH
     Cln --> Ch --> Em --> Vs
+    DA --> Cln
     PA --> Ret
     RA --> Ret
     MA --> Ret
@@ -315,7 +317,8 @@ graph LR
     Start([START]) --> CS[code_structure]
     CS --> R1{module_map<br/>present?}
     R1 -- no --> End([END])
-    R1 -- yes --> Pr[prioritization]
+    R1 -- yes --> Doc[documentation]
+    Doc --> Pr[prioritization]
     Pr --> R2{goal needs<br/>Reviewer?}
     R2 -- improve_existing_system<br/>or understand_architecture --> Rv[reviewer]
     R2 -- other --> Mn[mentor]
@@ -323,12 +326,15 @@ graph LR
     Mn --> End
 
     style Rv fill:#fff3e0,stroke:#e65100
+    style Doc fill:#e8f5e9,stroke:#2e7d32
 ```
 
 Two conditional routes:
 
-- **After `code_structure`**: if the module map is missing (clone failure, parse failure), short-circuit to END. The Mentor has nothing to ground on; running it would only waste a Sonnet call.
+- **After `code_structure`**: if the module map is missing (clone failure, parse failure), short-circuit to END. The Mentor has nothing to ground on; running it would only waste a Sonnet call. The Documentation node only runs when the module map is present (it needs `repo_path` too).
 - **After `prioritization`**: if the goal type is `improve_existing_system` or `understand_architecture`, route through the Reviewer. Otherwise skip it. The Reviewer is gated because its findings (strengths / risks / extension points / test gaps / boundaries) are most valuable for goals that involve changing or critiquing the system; a debugging session doesn't benefit from them.
+
+`documentation` runs unconditionally on the happy path. It has no LLM call and trivial latency, so there is no cost-driven reason to gate it.
 
 ### 4.3 Shared state
 
@@ -340,6 +346,7 @@ The state carries:
 |---|---|---|
 | `repo_url`, `goal` | Caller of `run_pipeline` | All agents |
 | `repo_path`, `module_map`, `chunks_embedded` | Code Structure | Everyone downstream |
+| `doc_context` | Documentation | Teaching (real docstring + README quotes in lessons) |
 | `relevant_modules` | Prioritization | Retrieval (via `effective_module_map`) |
 | `system_review` | Reviewer | Mentor (`_format_system_review`) |
 | `graph` | Mentor | Teaching, Grader, Mutator, store |
@@ -369,9 +376,19 @@ Interactive session (persistent):
   GET  /session/{id}      → return the serialized graph
   GET  /session/{id}/lesson  → render lesson for the current node
   POST /session/{id}/advance → mark current visited, move forward, render
+                              (accepts optional node_id to advance from an
+                              explicit node — the frontend uses this when the
+                              user clicks a non-current node in the graph)
   POST /session/{id}/respond → grade answer; on confused, mutate
+                              (also accepts optional node_id)
+  POST /session/{id}/jump    → set current_node_id to any node in the graph
+                              (frontend navigation)
   POST /session/{id}/override → user-driven graph edit (mark / skip)
+  GET  /session/{id}/file?path=... → return source file contents for the
+                              CodeViewer panel (sandboxed to the cloned repo)
 ```
+
+CORS is enabled for `http://localhost:3000` so the Next.js dev server can talk to the API in development.
 
 ---
 
@@ -422,7 +439,28 @@ This section describes every agent twice: what it does (implementation) and why 
 - **Local embeddings, not API embeddings.** `nomic-embed-text-v1.5` runs on-machine. No API key, no per-query cost. The model is ~550 MB and downloads once. The alternative (OpenAI ada / Cohere) would add per-query cost to every retrieval — unacceptable for a project whose budget target is $0.10 per pipeline run.
 - **Per-commit cache.** Re-analyzing the same commit is free. This is the single most important cost optimization in the project.
 
-### 5.3 Prioritization Agent
+### 5.3 Documentation Agent
+
+**Implementation.** Pure Python, no LLM call. Runs after Code Structure (it needs `repo_path`) and before Prioritization. Reads four sources from the cloned repo:
+
+1. **README** (`README.md` / `.rst` / `.txt` / no-extension) — first 2 000 chars.
+2. **Module docstrings** for up to 120 Python files (top-level `ast.get_docstring`).
+3. **Symbol docstrings** for top-level classes, top-level functions, and public methods of classes in those files. Method docs are keyed as `Class.method`.
+4. **`docs/` directory excerpts** — up to 10 `.md` / `.rst` files at 1 000 chars each.
+
+Output lands on `OnboardState.doc_context` as a four-key dict (`readme`, `file_docs`, `symbol_docs`, `extra_docs`). The Mentor copies `doc_context` onto the persisted `LearningGraph` at synthesis time so it survives session resume; the Teaching Agent's `_format_doc_context` helper pulls the per-node module docstring, in-file symbol docstrings, README excerpt, and any `docs/` file whose path matches the node's file stem.
+
+If `repo_path` is missing or the directory doesn't exist (e.g. unit tests with fake paths), the agent writes an empty four-key dict and continues — no exception.
+
+**Intent.** Lessons should quote *real* documentation, not LLM-paraphrased descriptions. A `flow` lesson referencing the `Session` class is more accurate and more trustworthy when it can include the maintainer-written docstring verbatim. Three intent-level choices:
+
+- **No LLM.** Documentation is already authored prose. Putting an LLM in the middle would add cost and risk paraphrasing drift; reading the file directly is faster, free, and exactly faithful.
+- **Capped sizes everywhere.** README at 2 KB, 120 files, 10 docs files, 1 KB each. Teaching's prompt has a finite budget; doc_context must fit.
+- **Public surface only.** Top-level classes, top-level functions, and their public methods. Private/dunder methods are deliberately excluded — they are implementation, not API.
+
+**Failure mode.** Graceful no-op. A repo with no docstrings produces an empty `doc_context`; Teaching falls back to source-code reasoning. The Documentation Agent never blocks the pipeline.
+
+### 5.4 Prioritization Agent
 
 **Implementation.** One Haiku call that takes the module map and decides which modules to keep. Output: a list of module names. The agent is goal-aware via two regimes:
 
@@ -437,7 +475,7 @@ If the agent fails for any reason — LLM down, parse failure, empty result, kep
 2. **Sonnet focus.** The Mentor produces better paths when its module map is already on-goal.
 3. **Per-goal calibration.** The two regimes encode the insight that "filter aggressively" is the wrong policy for a system tour. Without the floor and the preserve-breadth directive, Haiku would prune a broad tour down to 5 modules and call it done.
 
-### 5.4 Reviewer Agent (new)
+### 5.5 Reviewer Agent
 
 **Implementation.** A single Haiku call gated on `goal_type ∈ {improve_existing_system, understand_architecture}`. Inputs: the prioritized module map and the retrieved chunks for the goal. Output, all anchor-grounded against real chunks:
 
@@ -496,7 +534,7 @@ graph LR
 - **Different model.** Reviewer can be Haiku because the output is structured; the Mentor is Sonnet because curriculum synthesis is harder.
 - **Goal-gated cost.** A debugging session does not benefit from a structured review; gating saves a Haiku call (~$0.01) on every run that doesn't need it.
 
-### 5.5 Mentor Agent
+### 5.6 Mentor Agent
 
 **Implementation.** One Sonnet call. Takes the goal, the (effective) module map, the retrieved chunks, and the optional system_review. Produces a `MentorOutput` with:
 
@@ -534,9 +572,9 @@ For **personalization**, the system prompt includes a calibration block (Part 7)
 - **Grounded anchors.** The Mentor is forbidden from inventing file paths or line ranges. The retry path handles the case where the model strays.
 - **Per-goal-type builders, not one universal prompt.** The shape of a good path differs enormously between "give me a tour" and "I want to safely add a new auth scheme." Encoding that difference in dispatch tables keeps the system prompt clean.
 
-### 5.6 Teaching Agent
+### 5.7 Teaching Agent
 
-**Implementation.** One Haiku call per node visit. Reads the node's source from disk (`{repo_path}/{file}` lines `start:end`, 1-indexed inclusive), pulls 1–2 supporting RAG chunks for cross-reference (a related caller, an import), notes which earlier nodes are already understood, and writes:
+**Implementation.** One Haiku call per node visit. Reads the node's source from disk (`{repo_path}/{file}` lines `start:end`, 1-indexed inclusive), pulls 1–2 supporting RAG chunks for cross-reference (a related caller, an import), pulls real documentation from `state.doc_context` (module docstring for the node's file, public-symbol docstrings in that file, a README excerpt, and any `docs/` file whose path matches the file stem), notes which earlier nodes are already understood, and writes:
 
 - `walkthrough`: markdown explanation
 - `prompt`: an active-learning "predict-then-reveal" question
@@ -568,7 +606,7 @@ A **single retry** handles Haiku's occasional mid-string JSON truncation: if the
 - One agent, one prompt, one Pydantic shape is cheaper and simpler than five specialized agents.
 - The tag vocabulary is the right level of granularity: the Mentor decides what kind of concept a node is; Teaching reads the tag and adjusts the lesson shape; both reuse the same vocabulary.
 
-### 5.7 Grader Agent
+### 5.8 Grader Agent
 
 **Implementation.** One Haiku call per `/respond`. Inputs: the current node's title, concept_tags, lesson takeaway, the lesson's prompt, the lesson's expected_answer, and the user's free-text response. Output: one of `understood` / `partial` / `confused` / `off-topic`, plus a one-sentence rationale.
 
@@ -608,7 +646,7 @@ Critically, the prompt now says: *"A correct system-level answer is 'understood'
 - **Familiarity does not enter grading.** A user "starting fresh" who nails the concept should still get UNDERSTOOD. A user "diving in" who gets it wrong should still get CONFUSED. The rubric already says "grade the understanding, not the wording" — that covers the imprecise-but-correct case without coupling grading to self-reported familiarity.
 - **No critique-of-AI scope.** Evaluating critique-of-AI tasks (spot the bug in an AI-generated diff) is a deliberately deferred Phase 3 future — it's a different task type with different artifacts.
 
-### 5.8 Mutator
+### 5.9 Mutator
 
 **Implementation.** Dispatches on a signal:
 
@@ -958,8 +996,8 @@ stateDiagram-v2
 Three things can change graph structure during a session:
 
 1. **`/respond` with `confused`** → Mutator inserts a grounded prereq.
-2. **`/advance { signal: skip }`** → marks visited + advances. (No structural change; sequence chain stays intact.)
-3. **`/override { action: skip }`** → same as `/advance skip` but explicit.
+2. **`/advance { signal: skip }`** → API now runs `mutate_graph("prerequisite", ...)` *before* the skip, so the topic the user is walking past is preserved as a foundational prereq node, then the user advances. This is a behavior change from the original "skip = no structural change" design: skipping is treated as a signal that the user wants to come back to this material later, not that it's irrelevant. The one-prereq-per-node cap in the Mutator still applies.
+3. **`/override { action: skip }`** → pure-Python skip via the override endpoint. Marks visited + advances, no prereq insertion. Use this when the user genuinely wants to drop a node.
 
 `/override { mark_understood }` and `/override { mark_weak }` change *node state*, not graph structure.
 
@@ -1244,9 +1282,9 @@ Sonnet occasionally produces two Mentor nodes anchored on the same chunk, and th
 
 `LearningNode.code_anchor` is one contiguous `(file, line_start, line_end)` range. Real-world teaching often needs more — imports, callers, parent classes, cross-file flows. The current workaround is Teaching's supporting-chunk retrieval (1–2 extra chunks pulled at render time). A richer anchor schema (primary + supporting anchors, or sub-graphs) is future work.
 
-### 12.7 No frontend yet
+### 12.7 Frontend is scaffolded, not finished
 
-The whole stack runs over HTTP and is exercised end-to-end by smoke scripts and `TestClient`. The visual graph interface — the thing that turns the engine into a felt product — does not exist. This is the largest single piece of remaining work.
+A Next.js 15 / React 19 / Tailwind / `reactflow` frontend lives under `frontend/` and wires the repo-URL page, the goal dialogue, the `LearningGraph` view, the `LessonPanel`, and the `CodeViewer` to the live API. CORS is configured for `http://localhost:3000`. What's missing is polish (graph layout for branching post-mutation graphs, edge-kind rendering, concept-tag color theming), accessibility, and visual design work. The engine is no longer headless, but the felt product still has rough edges.
 
 ### 12.8 Single-user, no auth
 
@@ -1256,9 +1294,9 @@ The persistence layer keys sessions on `(repo_url, exact_goal)` with no `user_id
 
 Resume matches on exact goal-dict equality. A user who edits any free-text answer between two `POST /session/start` calls will not match the prior session. There's no UI prompt to disambiguate ("do you want to resume the prior session or start fresh?") — `force_new: true` is the explicit opt-out.
 
-### 12.10 Phase 2 Documentation Agent never landed
+### 12.10 Documentation Agent quality is limited by simple AST extraction
 
-The roadmap calls for a Documentation Agent that enriches the Mentor's input with real README + docstring quotes. It was deprioritized when the Phase 3 graph work started and has not landed. The current product is functional without it; the Reviewer fills part of the same role (structured findings the Mentor can cite).
+The Documentation Agent now exists (Part 5.3) and feeds Teaching with real README + docstring quotes. Its limitations are honest: it captures only top-level classes/functions and one level of public methods inside a class — nested helpers and decorated objects with non-trivial AST shapes can be missed. The 2 KB README cap and 1 KB docs-file cap can also truncate mid-paragraph on prose-heavy repos. Richer extraction (sphinx cross-references, mkdocs structure, type-stub doc strings) is future work.
 
 ---
 
@@ -1268,11 +1306,11 @@ The full phase plan lives in [`docs/planning/phases/roadmap.md`](planning/phases
 
 ### 13.1 Near-term (builds directly on what exists)
 
-- **Frontend / graph UI.** The single biggest gap. The graph is the centerpiece of the product but is not yet visible. A `react-flow`-based view with concept-tag-colored nodes, edge kinds rendered distinctly, and click-to-jump navigation is the design intent.
+- **Frontend polish.** The Next.js scaffold (graph view, lesson panel, code viewer) is live but rough. Open: concept-tag-driven node coloring, edge-kind rendering (sequence vs. Mutator-inserted prerequisite), a layout that gracefully handles post-mutation branches, and click-to-jump navigation backed by `/jump` and `/file`.
 - **Direct depth question in the Goal Agent.** Today `depth` is LLM-synthesized; for predictability it could be asked directly.
 - **Field-specific demo isolation.** Run the side-by-side with one variable changing at a time (depth alone, familiarity alone, background alone) on multiple repos.
 - **Sharpen the safety-critical ordering rule** until 4/4 extension points are preceded by both a risk and a test_coverage in chain.
-- **Documentation Agent** (Phase 2 carryover) — enrich the Mentor's input with real codebase prose.
+- **Richer Documentation extraction.** Capture nested helpers, sphinx cross-references, type stubs — see Part 12.10.
 
 ### 13.2 Adaptive moves beyond confusion + skip
 
@@ -1334,7 +1372,7 @@ These are not "we'll get to them"; they are intentional non-goals for the v1 pro
 | Vector store | ChromaDB | Local, free, no infra |
 | Code parser | tree-sitter | AST-based, language-aware |
 | Persistence | SQLite | Standard library, file-based, zero-config |
-| Frontend (future) | Next.js + Tailwind + react-flow | React graph view with custom nodes |
+| Frontend | Next.js 15 + React 19 + Tailwind + reactflow | Graph view, lesson panel, code viewer; talks to API over CORS |
 | Testing | pytest, FastAPI `TestClient` | Real LLM calls in smoke scripts, mocked LLMs in unit tests |
 | **Test count** | **281 passing** | |
 | **Cost target** | **~$0.10 / pipeline run** | Haiku-for-loops + Sonnet-once budget |
@@ -1349,6 +1387,8 @@ Plain-language definitions of the vocabulary this document uses.
 - **Anchor.** A `(file, line_start, line_end)` triple identifying a specific piece of code in the repo. Every learning node has one; the rule that anchors must come from retrieved chunks is the system's main hallucination guard.
 - **Chunk.** A meaningful piece of code — one function or one class — produced by the tree-sitter chunker. Each chunk carries metadata: file, line range, type, name, language, role.
 - **Concept tag.** A short string on a learning node indicating *what kind* of concept it teaches. Vocabulary: architecture / flow / extension_point / risk / test_coverage / component / free-form domain tags.
+- **`doc_context`.** The four-key dict (`readme`, `file_docs`, `symbol_docs`, `extra_docs`) the Documentation Agent writes onto state. Teaching consumes it for grounded quotes; it is also stored on the persisted `LearningGraph` so it survives resume.
+- **Documentation Agent.** Pure-Python agent that extracts the README, module/class/function docstrings, and `docs/` directory excerpts from the cloned repo. No LLM call. Output lands on `state.doc_context`.
 - **Edge.** A connection between two nodes. Kinds: `sequence` (default linear order), `prerequisite` (Mutator-inserted), `deeper` (reserved).
 - **Goal.** The structured output of the Goal Agent's interview. The single source of truth that steers every downstream agent.
 - **Goal type.** One of six values: understand_system / understand_component / understand_architecture / contribute_code / improve_existing_system / debug_issue.

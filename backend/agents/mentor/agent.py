@@ -27,6 +27,7 @@ from backend.learning.graph import (
     LearningGraph,
     LearningNode,
 )
+from backend.agents.language import language_instruction
 from backend.pipeline.state import OnboardState
 from backend.rag.retrieval import effective_module_map, retrieve_chunks
 
@@ -643,12 +644,16 @@ def run(
     user_content = builder(
         state.goal, effective_module_map(state), chunks, state.system_review
     )
+    # Node titles and lesson briefs are read by the user; the concept-tag
+    # vocabulary and edge kinds are read by the frontend, and the directive
+    # pins those to English.
+    system = _SYSTEM_PROMPT + language_instruction(state.goal)
 
     try:
         response = client.messages.create(
             model=MODEL,
             max_tokens=MAX_TOKENS,
-            system=_SYSTEM_PROMPT,
+            system=system,
             messages=[{"role": "user", "content": user_content}],
         )
         raw = response.content[0].text
@@ -660,7 +665,7 @@ def run(
         duplicates = _find_duplicate_anchors(output)
         if duplicates:
             retry_raw, retry_output = _retry_distinct_anchors(
-                client, user_content, raw, duplicates
+                client, user_content, raw, duplicates, system
             )
             if retry_output is not None and not _find_duplicate_anchors(retry_output):
                 output = retry_output
@@ -677,7 +682,7 @@ def run(
         invalid = _ground_anchors(output, chunks)
         if invalid:
             retry_raw, retry_output = _retry_grounded_anchors(
-                client, user_content, raw, invalid, chunks
+                client, user_content, raw, invalid, chunks, system
             )
             if retry_output is not None and not _ground_anchors(retry_output, chunks):
                 output = retry_output
@@ -705,6 +710,7 @@ def _retry_distinct_anchors(
     user_content: str,
     previous_raw: str,
     duplicates: list[tuple[str, tuple[int, int]]],
+    system: str = _SYSTEM_PROMPT,
 ) -> tuple[str, MentorOutput | None]:
     """Ask the LLM to regenerate with distinct anchors.
 
@@ -723,7 +729,7 @@ def _retry_distinct_anchors(
     response = client.messages.create(
         model=MODEL,
         max_tokens=MAX_TOKENS,
-        system=_SYSTEM_PROMPT,
+        system=system,
         messages=[
             {"role": "user", "content": user_content},
             {"role": "assistant", "content": previous_raw},
@@ -753,6 +759,7 @@ def _retry_grounded_anchors(
     previous_raw: str,
     invalid: list[tuple[str, tuple[int, int]]],
     chunks: list[dict],
+    system: str = _SYSTEM_PROMPT,
 ) -> tuple[str, MentorOutput | None]:
     """Ask the LLM to regenerate using anchors that come from real chunks."""
     bad = ", ".join(f"{f} lines {r[0]}-{r[1]}" for f, r in invalid)
@@ -770,7 +777,7 @@ def _retry_grounded_anchors(
     response = client.messages.create(
         model=MODEL,
         max_tokens=MAX_TOKENS,
-        system=_SYSTEM_PROMPT,
+        system=system,
         messages=[
             {"role": "user", "content": user_content},
             {"role": "assistant", "content": previous_raw},

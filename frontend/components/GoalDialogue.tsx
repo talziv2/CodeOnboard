@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { goalStart, goalAnswer } from "@/lib/api";
 import type { Question } from "@/lib/api";
+import { useI18n } from "@/lib/i18n/context";
 
 interface Props {
   repoUrl: string;
@@ -10,26 +11,35 @@ interface Props {
 }
 
 export default function GoalDialogue({ repoUrl, onDone }: Props) {
+  const { t, te, locale } = useI18n();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [question, setQuestion] = useState<Question | null>(null);
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Restarting on a locale change is deliberate: the interview language is
+  // fixed when the session is created, and it decides what language every
+  // downstream agent writes in. Switching mid-interview has to start over.
   useEffect(() => {
     (async () => {
       setLoading(true);
+      setQuestion(null);
+      setAnswer("");
       try {
-        const res = await goalStart(repoUrl);
+        const res = await goalStart(repoUrl, locale);
         setSessionId(res.session_id);
         setQuestion(res.question);
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "Couldn't reach the server.");
+        setError(e instanceof Error ? te(e.message) : t.home.serverUnreachable);
       } finally {
         setLoading(false);
       }
     })();
-  }, [repoUrl]);
+    // `t`/`te` are derived from `locale`; listing them would re-run on identity
+    // changes without changing behaviour.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repoUrl, locale]);
 
   const submit = async () => {
     if (!sessionId || !answer.trim() || loading) return;
@@ -41,14 +51,16 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
       if (res.done && res.goal) onDone(sessionId, res.goal);
       else if (res.question) setQuestion(res.question);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Couldn't save that answer.");
+      setError(e instanceof Error ? te(e.message) : t.goal.answerFailed);
     } finally {
       setLoading(false);
     }
   };
 
   if (loading && !question) {
-    return <p className="animate-pulse font-mono text-sm text-graphite">Starting the interview…</p>;
+    return (
+      <p className="animate-pulse font-mono text-sm text-graphite">{t.goal.starting}</p>
+    );
   }
 
   if (!question) {
@@ -71,7 +83,7 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
           ))}
         </div>
         <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-graphite">
-          Question {question.index} of {ticks}
+          {t.goal.progress(question.index, ticks)}
         </span>
       </div>
 
@@ -98,9 +110,9 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
       )}
 
       <textarea
-        className="w-full resize-none rounded border border-rule bg-trench p-3 text-[13.5px] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
+        className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[13.5px] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
         rows={3}
-        placeholder="Your answer…"
+        placeholder={t.goal.answerPlaceholder}
         value={answer}
         onChange={(e) => setAnswer(e.target.value)}
         onKeyDown={(e) => {
@@ -120,9 +132,9 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
           disabled={loading || !answer.trim()}
           className="rounded border border-signal-dim bg-signal/15 px-5 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
         >
-          {loading ? "Thinking…" : "Continue"}
+          {loading ? t.goal.thinking : t.goal.continue}
         </button>
-        <span className="font-mono text-[10.5px] text-graphite">↵ to continue</span>
+        <span className="font-mono text-[10.5px] text-graphite">{t.goal.enterHint}</span>
       </div>
     </div>
   );

@@ -116,6 +116,17 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
             conn.execute("ALTER TABLE nodes ADD COLUMN attempts_json TEXT")
         except Exception:
             pass
+        # Lazily-filled translation caches, added the same additive way so
+        # sessions written before multilingual support still load — they simply
+        # start with no cached translations and fill them on first switch.
+        try:
+            conn.execute("ALTER TABLE nodes ADD COLUMN translations_json TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE sessions ADD COLUMN goal_translations_json TEXT")
+        except Exception:
+            pass
 
 
 def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
@@ -125,14 +136,15 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
             """
             INSERT INTO sessions
                 (session_id, repo_url, goal_json, current_node_id,
-                 doc_context_json, schema_version)
-            VALUES (?, ?, ?, ?, ?, ?)
+                 doc_context_json, goal_translations_json, schema_version)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(session_id) DO UPDATE SET
-                repo_url         = excluded.repo_url,
-                goal_json        = excluded.goal_json,
-                current_node_id  = excluded.current_node_id,
-                doc_context_json = excluded.doc_context_json,
-                schema_version   = excluded.schema_version,
+                repo_url               = excluded.repo_url,
+                goal_json              = excluded.goal_json,
+                current_node_id        = excluded.current_node_id,
+                doc_context_json       = excluded.doc_context_json,
+                goal_translations_json = excluded.goal_translations_json,
+                schema_version         = excluded.schema_version,
                 updated_at       = strftime('%Y-%m-%d %H:%M:%f', 'now')
             """,
             (
@@ -141,6 +153,7 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
                 json.dumps(graph.goal),
                 graph.current_node_id,
                 json.dumps(graph.doc_context) if graph.doc_context is not None else None,
+                json.dumps(graph.goal_translations),
                 SCHEMA_VERSION,
             ),
         )
@@ -155,8 +168,8 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
                 node_id, session_id, title, file, line_start, line_end,
                 concept_tags_json, lesson_brief_json, understanding_state,
                 visited, weak_spot, user_override, cached_lesson_json,
-                attempts_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                attempts_json, translations_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [_node_row(graph.session_id, n) for n in graph.nodes.values()],
         )
@@ -186,6 +199,9 @@ def load_graph(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> LearningGrap
             session_id=session_row["session_id"],
             current_node_id=session_row["current_node_id"],
             doc_context=json.loads(raw_doc) if raw_doc is not None else None,
+            goal_translations=_json_or_default(
+                session_row, "goal_translations_json", {}
+            ),
         )
         for node_row in conn.execute(
             "SELECT * FROM nodes WHERE session_id = ?", (session_id,)
@@ -258,6 +274,7 @@ def _node_row(session_id: str, node: LearningNode) -> tuple:
         node.user_override,
         json.dumps(node.cached_lesson) if node.cached_lesson is not None else None,
         json.dumps(node.attempts),
+        json.dumps(node.translations),
     )
 
 
@@ -282,6 +299,7 @@ def _row_to_node(row: sqlite3.Row) -> LearningNode:
             else None
         ),
         attempts=_json_or_default(row, "attempts_json", []),
+        translations=_json_or_default(row, "translations_json", {}),
     )
 
 

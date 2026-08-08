@@ -10,7 +10,10 @@ from backend.agents.goal.questions import (
     FOLLOWUP_QUESTIONS,
     GOAL_TYPE_MAP,
     GOAL_TYPE_OPTIONS,
+    LocalizedQuestion,
     Question,
+    localize,
+    option_key,
 )
 
 __all__ = [
@@ -23,5 +26,8 @@ __all__ = [
     "FOLLOWUP_QUESTIONS",
     "GOAL_TYPE_MAP",
     "GOAL_TYPE_OPTIONS",
+    "LocalizedQuestion",
     "Question",
+    "localize",
+    "option_key",
 ]

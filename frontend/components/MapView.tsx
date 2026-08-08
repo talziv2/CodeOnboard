@@ -3,7 +3,10 @@
 import { useMemo } from "react";
 import type { GraphNode, GraphEdge, UnderstandingState } from "@/lib/api";
 import { buildRoute } from "@/lib/graph-layout";
-import { tagStyle, stateStyle, isCanonicalTag, STATE_ORDER } from "@/lib/tags";
+import {
+  tagStyle, tagLabel, stateStyle, stateLabel, isCanonicalTag, STATE_ORDER,
+} from "@/lib/tags";
+import { useI18n } from "@/lib/i18n/context";
 
 interface Props {
   nodes: GraphNode[];
@@ -26,6 +29,7 @@ const emptyTally = (): Tally => ({
 /** Proportional bar of the state mix. Carries the aggregate at a glance
  *  without asking anyone to read four numbers. */
 function StateStrip({ tally, total }: { tally: Tally; total: number }) {
+  const { t } = useI18n();
   return (
     <span className="flex h-1.5 w-full overflow-hidden rounded-full bg-raise">
       {STATE_ORDER.map((state) => {
@@ -34,7 +38,7 @@ function StateStrip({ tally, total }: { tally: Tally; total: number }) {
         return (
           <span
             key={state}
-            title={`${n} ${stateStyle(state).label}`}
+            title={`${n} ${stateLabel(t, state)}`}
             style={{
               width: `${(n / total) * 100}%`,
               background: state === "not_started" ? "var(--color-rule)" : stateStyle(state).stroke,
@@ -62,7 +66,7 @@ function BreakdownRow({
         <span className="min-w-0 truncate" style={accent ? { color: accent } : undefined}>
           {label}
         </span>
-        <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-graphite">
+        <span dir="ltr" className="shrink-0 font-mono text-[10.5px] tabular-nums text-graphite">
           {sublabel ?? `${tally.understood}/${total}`}
         </span>
       </span>
@@ -83,6 +87,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 export default function MapView({
   nodes, edges, currentNodeId, readiness, repoUrl, onNodeClick,
 }: Props) {
+  const { t } = useI18n();
   const stops = useMemo(() => buildRoute(nodes, edges), [nodes, edges]);
 
   const summary = useMemo(() => {
@@ -95,9 +100,9 @@ export default function MapView({
       overall[state] = (overall[state] ?? 0) + 1;
 
       for (const tag of node.concept_tags) {
-        const t = byTag.get(tag) ?? emptyTally();
-        t[state] += 1;
-        byTag.set(tag, t);
+        const tally = byTag.get(tag) ?? emptyTally();
+        tally[state] += 1;
+        byTag.set(tag, tally);
       }
 
       const f = byFile.get(node.file) ?? emptyTally();
@@ -105,7 +110,7 @@ export default function MapView({
       byFile.set(node.file, f);
     }
 
-    const totalOf = (t: Tally) => STATE_ORDER.reduce((sum, s) => sum + t[s], 0);
+    const totalOf = (tally: Tally) => STATE_ORDER.reduce((sum, s) => sum + tally[s], 0);
     const rank = (a: [string, Tally], b: [string, Tally]) =>
       totalOf(b[1]) - totalOf(a[1]) || a[0].localeCompare(b[0]);
 
@@ -117,12 +122,12 @@ export default function MapView({
       kinds: entries
         .filter(([tag]) => isCanonicalTag(tag))
         .sort(rank)
-        .map(([k, t]) => [k, t, totalOf(t)] as const),
+        .map(([k, tally]) => [k, tally, totalOf(tally)] as const),
       topics: entries
         .filter(([tag]) => !isCanonicalTag(tag))
         .sort(rank)
-        .map(([k, t]) => [k, t, totalOf(t)] as const),
-      files: [...byFile.entries()].sort(rank).map(([k, t]) => [k, t, totalOf(t)] as const),
+        .map(([k, tally]) => [k, tally, totalOf(tally)] as const),
+      files: [...byFile.entries()].sort(rank).map(([k, tally]) => [k, tally, totalOf(tally)] as const),
       weak: nodes.filter((n) => n.weak_spot).length,
     };
   }, [nodes]);
@@ -138,26 +143,29 @@ export default function MapView({
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-col gap-1">
             <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-graphite">
-              What you understand so far
+              {t.map.label}
             </span>
-            <h2 className="font-display text-[25px] font-medium leading-tight tracking-tight text-chalk">
-              {repo ?? "This codebase"}
+            <h2
+              dir={repo ? "ltr" : undefined}
+              className="font-display text-[25px] font-medium leading-tight tracking-tight text-chalk"
+            >
+              {repo ?? t.map.thisCodebase}
             </h2>
             <p className="text-[12.5px] text-graphite">
-              {summary.overall.understood} of {nodes.length} concepts understood
+              {t.map.conceptsUnderstood(summary.overall.understood, nodes.length)}
               {" · "}
-              {summary.files.length} file{summary.files.length === 1 ? "" : "s"} touched
+              {t.map.filesTouched(summary.files.length)}
               {summary.weak > 0 && (
-                <> · <span className="text-rust">{summary.weak} marked weak</span></>
+                <> · <span className="text-rust">{t.map.markedWeak(summary.weak)}</span></>
               )}
             </p>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="font-display text-[34px] leading-none tabular-nums text-signal">
+            <span dir="ltr" className="font-display text-[34px] leading-none tabular-nums text-signal">
               {pct}%
             </span>
             <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-graphite">
-              readiness
+              {t.map.readiness}
             </span>
           </div>
         </header>
@@ -177,7 +185,7 @@ export default function MapView({
                   style={{ borderColor: stateStyle(state).stroke, background: stateStyle(state).fill }}
                 />
                 <span className="tabular-nums text-chalk">{summary.overall[state]}</span>
-                {stateStyle(state).label}
+                {stateLabel(t, state)}
               </span>
             ))}
           </div>
@@ -185,35 +193,32 @@ export default function MapView({
 
         {/* the two breakdowns that make this a reflection view rather than a list */}
         <div className="grid gap-4 md:grid-cols-2">
-          <Panel title="By kind of understanding">
+          <Panel title={t.map.byKind}>
             <ul className="flex flex-col gap-3">
-              {summary.kinds.map(([tag, tally, total]) => {
-                const s = tagStyle(tag);
-                return (
-                  <BreakdownRow
-                    key={tag}
-                    label={<span className="font-mono text-[11px]">{s.label}</span>}
-                    accent={s.text}
-                    tally={tally}
-                    total={total}
-                  />
-                );
-              })}
+              {summary.kinds.map(([tag, tally, total]) => (
+                <BreakdownRow
+                  key={tag}
+                  label={<span className="font-mono text-[11px]">{tagLabel(t, tag)}</span>}
+                  accent={tagStyle(tag).text}
+                  tally={tally}
+                  total={total}
+                />
+              ))}
             </ul>
 
             {summary.topics.length > 0 && (
               <div className="flex flex-col gap-2 border-t border-rule pt-3">
                 <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-graphite">
-                  Topics touched
+                  {t.map.topicsTouched}
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {summary.topics.map(([tag, tally, total]) => (
                     <span
                       key={tag}
-                      title={`${tally.understood} of ${total} understood`}
+                      title={t.map.understoodOfTotal(tally.understood, total)}
                       className="rounded-[2px] border border-rule px-1.5 py-px font-mono text-[9.5px] tracking-[0.05em] text-graphite"
                     >
-                      {tagStyle(tag).label}
+                      {tagLabel(t, tag)}
                       {total > 1 && <span className="text-paper"> ×{total}</span>}
                     </span>
                   ))}
@@ -222,12 +227,16 @@ export default function MapView({
             )}
           </Panel>
 
-          <Panel title="Where in the repository">
+          <Panel title={t.map.whereInRepo}>
             <ul className="flex flex-col gap-3">
               {summary.files.map(([file, tally, total]) => (
                 <BreakdownRow
                   key={file}
-                  label={<span className="font-mono text-[11px] text-paper">{file}</span>}
+                  label={
+                    <span dir="ltr" className="block truncate text-start font-mono text-[11px] text-paper">
+                      {file}
+                    </span>
+                  }
                   sublabel={`${tally.understood}/${total}`}
                   tally={tally}
                   total={total}
@@ -240,7 +249,7 @@ export default function MapView({
         {/* the route itself */}
         <section className="flex flex-col gap-4">
           <h3 className="flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-graphite">
-            The route
+            {t.map.theRoute}
             <span aria-hidden className="h-px flex-1 bg-rule" />
           </h3>
 
@@ -258,13 +267,13 @@ export default function MapView({
                 <li
                   key={node.id}
                   className={`relative grid grid-cols-[34px_1fr] gap-4 pb-5 ${
-                    stop.isPrerequisite ? "ml-10" : ""
+                    stop.isPrerequisite ? "ms-10" : ""
                   }`}
                 >
                   {!isLast && (
                     <span
                       aria-hidden
-                      className="absolute left-[16px] top-[26px] bottom-[-6px] w-px"
+                      className="absolute start-[16px] top-[26px] bottom-[-6px] w-px"
                       style={
                         nextIsUnlock
                           ? {
@@ -292,7 +301,7 @@ export default function MapView({
 
                   <button
                     onClick={() => onNodeClick(node)}
-                    className="flex flex-col gap-2 rounded-md border-2 px-4 py-3.5 text-left transition hover:border-signal-dim"
+                    className="flex flex-col gap-2 rounded-md border-2 px-4 py-3.5 text-start transition hover:border-signal-dim"
                     style={{
                       background: isCurrent ? "#16232b" : "var(--color-slab)",
                       borderColor: isCurrent ? "var(--color-signal)" : "var(--color-rule)",
@@ -301,9 +310,9 @@ export default function MapView({
                     {stop.isPrerequisite && (
                       <span className="flex flex-wrap items-center gap-2 font-mono text-[10px] tracking-[0.06em] text-signal">
                         <span aria-hidden className="h-px w-4 bg-signal" />
-                        added after confusion
+                        {t.rail.addedAfterConfusion}
                         {stop.unlocksTitle && (
-                          <span className="text-graphite">· unlocks “{stop.unlocksTitle}”</span>
+                          <span className="text-graphite">{t.map.unlocks(stop.unlocksTitle)}</span>
                         )}
                       </span>
                     )}
@@ -316,25 +325,31 @@ export default function MapView({
                     </span>
 
                     <span className="font-mono text-[11px] text-graphite">
-                      {node.file} · lines {node.line_start}–{node.line_end}
+                      <span dir="ltr">{node.file}</span>
+                      {" · "}
+                      {t.lesson.lines(node.line_start, node.line_end)}
                     </span>
 
                     <span className="flex flex-wrap items-center gap-1.5">
                       {node.concept_tags.map((tag) => {
-                        const t = tagStyle(tag);
+                        const style = tagStyle(tag);
                         return (
                           <span
                             key={tag}
                             className="rounded-[2px] border px-1.5 py-px font-mono text-[9.5px] tracking-[0.05em]"
-                            style={{ color: t.text, borderColor: t.border, background: t.background }}
+                            style={{
+                              color: style.text,
+                              borderColor: style.border,
+                              background: style.background,
+                            }}
                           >
-                            {t.label}
+                            {tagLabel(t, tag)}
                           </span>
                         );
                       })}
                       {node.weak_spot && (
                         <span className="font-mono text-[9.5px] tracking-[0.05em] text-rust">
-                          ⚑ marked weak
+                          {t.rail.markedWeak}
                         </span>
                       )}
                     </span>
