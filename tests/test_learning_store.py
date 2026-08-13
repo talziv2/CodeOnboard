@@ -177,3 +177,61 @@ def test_cached_lesson_roundtrips(db_path):
     assert loaded is not None
     assert loaded.nodes[a.id].cached_lesson is not None
     assert loaded.nodes[a.id].cached_lesson["prompt_kind"] == "predict-then-reveal"
+
+
+# ── symbol identity on the anchor (Stage 0, D14) ─────────────────────────────
+
+
+def test_symbol_roundtrips_on_the_code_anchor(db_path):
+    g = LearningGraph(repo_url="r", goal={"primary_goal": "g"})
+    node = g.add_node(LearningNode(
+        title="How Session.send dispatches",
+        code_anchor=CodeAnchor(
+            file="src/requests/sessions.py",
+            line_start=662,
+            line_end=748,
+            symbol="Session.send",
+        ),
+    ))
+    save_graph(g, db_path)
+
+    loaded = load_graph(g.session_id, db_path)
+    anchor = loaded.nodes[node.id].code_anchor
+    assert anchor.symbol == "Session.send"
+    # Symbol is identity; the range is the resolved location for this commit.
+    assert (anchor.file, anchor.line_start, anchor.line_end) == (
+        "src/requests/sessions.py", 662, 748
+    )
+
+
+def test_node_without_a_symbol_roundtrips_as_none(db_path):
+    g = LearningGraph(repo_url="r", goal={"primary_goal": "g"})
+    node = g.add_node(_make_node("no symbol here"))
+    save_graph(g, db_path)
+
+    loaded = load_graph(g.session_id, db_path)
+    assert loaded.nodes[node.id].code_anchor.symbol is None
+
+
+def test_session_written_before_the_symbol_column_still_loads(db_path):
+    """Backwards compatibility: a pre-Stage-0 database has no `symbol` column.
+
+    Simulated by dropping the column after a normal write, which is as close to
+    an old on-disk row as SQLite allows.
+    """
+    import sqlite3
+
+    g = LearningGraph(repo_url="r", goal={"primary_goal": "g"})
+    node = g.add_node(_make_node("legacy node"))
+    save_graph(g, db_path)
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("ALTER TABLE nodes DROP COLUMN symbol")
+    conn.commit()
+    conn.close()
+
+    # init_db re-adds the column as NULL; the row predates it either way.
+    loaded = load_graph(g.session_id, db_path)
+    assert loaded is not None, "an old session must never fail to load"
+    assert loaded.nodes[node.id].title == "legacy node"
+    assert loaded.nodes[node.id].code_anchor.symbol is None

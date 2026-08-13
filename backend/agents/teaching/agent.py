@@ -22,10 +22,10 @@ from typing import Literal
 import anthropic
 from pydantic import BaseModel
 
-from backend.agents.language import language_instruction
 from backend.learning.graph import LearningGraph, LearningNode
 from backend.pipeline.state import OnboardState
-from backend.rag.retrieval import retrieve_supporting_chunks
+from backend.repo import dossier_context, dossier_store, structure
+from backend.repo.skeleton import build_skeleton
 
 
 MODEL = "claude-haiku-4-5"
@@ -34,9 +34,6 @@ MODEL = "claude-haiku-4-5"
 # Match the Mentor's budget so the JSON always closes.
 MAX_TOKENS = 8192
 
-# How many extra cross-reference chunks to pull for context. Small on purpose —
-# the lesson is about one node, the supporting chunks just give it reach.
-SUPPORTING_CHUNK_COUNT = 2
 
 
 class LessonOutput(BaseModel):
@@ -57,7 +54,7 @@ piece of an unfamiliar Python codebase. You are given:
   - what they already understand (so you don't re-explain it)
   - a "lesson brief": why this piece matters and what they should take away
   - the actual source code for this piece
-  - a few supporting code chunks for cross-reference context
+  - system context: how this piece connects to the rest of the codebase
   - the node's concept tags (frame your walkthrough around the dominant tag)
 
 CRITICAL: Your ENTIRE response must be under 600 words. Be very concise.
@@ -93,7 +90,7 @@ Framing by dominant concept tag:
                         were removed.
   - `flow`            — lead with WHAT TRIGGERS THIS PATH and where it ends
                         up. Treat the anchored code as the entry point of a
-                        path that continues through the supporting chunks.
+                        path that continues through the connected code.
   - `test_coverage`   — lead with WHAT THIS TEST GUARDS (or what is left
                         unguarded). The prompt should ask the developer to
                         predict which kinds of regression this coverage would
@@ -129,9 +126,9 @@ Calibration by goal fields (read these from the user content):
 
 Rules:
 - Teach only what the shown code supports. Do not invent behavior, file paths,
-  or relationships not visible in the code or supporting chunks.
-- Keep the walkthrough focused on THIS piece — the supporting chunks are
-  context, not separate lessons. The target word count is set by
+  or relationships not visible in the code or the system context.
+- Keep the walkthrough focused on THIS piece — the system context is
+  context, not a second lesson. The target word count is set by
   `Depth requested` (see Calibration above).
 - Return ONLY the JSON object — no markdown fences, no preamble.
 """
@@ -159,18 +156,6 @@ def _build_prior_context(graph: LearningGraph, current_id: str) -> str:
         tags = ", ".join(n.concept_tags) if n.concept_tags else "—"
         lines.append(f"- {n.title} (concepts: {tags})")
     return "The developer already understands these earlier nodes:\n" + "\n".join(lines)
-
-
-def _format_supporting_chunks(chunks: list[dict]) -> str:
-    if not chunks:
-        return "(none)"
-    lines = []
-    for c in chunks:
-        lines.append(
-            f"[{c['type'].upper()}] {c['name']} — "
-            f"{c['file']} (lines {c['start_line']}–{c['end_line']})\n{c['content']}"
-        )
-    return "\n\n".join(lines)
 
 
 def _format_doc_context(node: LearningNode, doc_context: dict | None) -> str:
@@ -225,11 +210,16 @@ def _build_user_content(
     node: LearningNode,
     source: str,
     prior_context: str,
-    supporting: list[dict],
     doc_context: dict | None = None,
+    system_context: str = "",
 ) -> str:
     brief = node.lesson_brief or {}
     doc_section = _format_doc_context(node, doc_context)
+    # One slot, filled by whichever provider had something to say — the dossier
+    # slice, the structural neighbourhood, or neither. A source-only lesson is a
+    # supported mode, so an empty section stays empty rather than being padded
+    # with a placeholder the model would try to interpret.
+    context_section = f"{system_context}\n\n" if system_context else ""
     return (
         f"Developer profile:\n"
         f"  experience level: {goal.get('experience_level', 'unknown')}\n"
@@ -248,24 +238,55 @@ def _build_user_content(
         f"({node.code_anchor.file} lines "
         f"{node.code_anchor.line_start}–{node.code_anchor.line_end}):\n"
         f"{source}\n\n"
-        f"Supporting chunks for cross-reference:\n"
-        f"{_format_supporting_chunks(supporting)}"
+        f"{context_section}"
     )
 
 
 def _parse_output(raw: str) -> LessonOutput:
+    """Decode the lesson JSON, tolerating a markdown fence around it.
+
+    NEVER cut at the closing fence. A walkthrough is markdown and routinely
+    contains its own ```python block, so splitting on the next ``` truncates the
+    JSON mid-string — which surfaces as "Unterminated string" pointing at the
+    walkthrough's opening quote and looks exactly like an output-limit
+    truncation. Measured on a real lesson: `stop_reason=end_turn`, 674 output
+    tokens, a complete response, and both the call and its retry "failed".
+    `raw_decode` already stops at the end of the object, so trailing text —
+    including the closing fence — needs no handling at all.
+    """
     raw = raw.strip()
-    if "```json" in raw:
-        raw = raw.split("```json", 1)[1].split("```", 1)[0]
-    elif "```" in raw:
-        parts = raw.split("```")
-        if len(parts) >= 2:
-            raw = parts[1]
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1] if "\n" in raw else ""
     start = raw.find("{")
     if start < 0:
         raise ValueError("no JSON object found in response")
     decoded, _ = json.JSONDecoder().raw_decode(raw[start:])
     return LessonOutput(**decoded)
+
+
+def _session_dossier(state: OnboardState) -> dict | None:
+    """The investigation for this session, from state or from the store.
+
+    At onboarding time it rides on `state.investigation`; at session time the
+    request is rebuilt from the persisted graph, so it is loaded by session id.
+    Unavailable for any reason (absent, schema bump, moved commit, corrupt) is a
+    supported state — the caller falls back (D12).
+    """
+    if state.investigation:
+        return state.investigation.get("dossier")
+    if state.graph is None:
+        return None
+    try:
+        from backend.repo.cloner import get_commit_sha
+
+        commit_sha = get_commit_sha(state.repo_path) if state.repo_path else None
+    except Exception:
+        commit_sha = None
+    stored = dossier_store.load_investigation(state.graph.session_id, commit_sha)
+    if stored is None:
+        return None
+    state.investigation = stored
+    return stored.get("dossier")
 
 
 def run(
@@ -306,34 +327,68 @@ def run(
         state.errors.append(f"teaching_agent: could not read source: {e}")
         return state
 
-    # Supporting chunks are best-effort — a retrieval failure must not block
-    # the lesson, since the primary source is already in hand.
-    supporting: list[dict] = []
+    # System context for this lesson, in strict preference order:
+    #
+    #   1. DOSSIER    the investigation's structured understanding, sliced to
+    #                 THIS node deterministically (component role, flow
+    #                 neighbourhood, relationships, contracts, prerequisites,
+    #                 evidence). Preferred because it knows the user's GOAL.
+    #   2. SKELETON   the repository's own structure around the node — what it
+    #                 extends, what it uses, what uses it. Knows nothing about
+    #                 the goal, but is grounded by construction and available
+    #                 whenever the checkout is.
+    #   3. NOTHING    a source-only lesson, which is a valid degraded mode.
+    #
+    # D12 is the reason rung 2 exists: an absent, stale or version-mismatched
+    # dossier is a SUPPORTED state, not an error, and it must not fall through
+    # to nothing when the repository can still say something true. The anchored
+    # source is the lesson's evidence either way — everything here is
+    # enrichment, and no failure in it may block a lesson.
+    system_context = ""
+    skeleton = None
     try:
-        query_text = node.title
-        if node.concept_tags:
-            query_text = f"{node.title}. {', '.join(node.concept_tags)}"
-        supporting = retrieve_supporting_chunks(
-            state,
-            query_text,
-            exclude={(
-                node.code_anchor.file,
-                node.code_anchor.line_start,
-                node.code_anchor.line_end,
-            )},
-            top_k=SUPPORTING_CHUNK_COUNT,
-        )
+        skeleton = build_skeleton(state.repo_path)
     except Exception as e:
-        state.errors.append(f"teaching_agent: supporting retrieval failed (non-fatal): {e}")
+        state.errors.append(f"teaching_agent: skeleton unavailable (non-fatal): {e}")
+
+    dossier = _session_dossier(state)
+    if dossier is not None and skeleton is not None:
+        try:
+            system_context = dossier_context.context_for_node(
+                skeleton,
+                dossier,
+                node.code_anchor.file,
+                symbol=node.code_anchor.symbol,
+                line_start=node.code_anchor.line_start,
+                line_end=node.code_anchor.line_end,
+            ).as_prompt_section()
+        except Exception as e:
+            state.errors.append(
+                f"teaching_agent: dossier context failed (non-fatal): {e}"
+            )
+    if not system_context and skeleton is not None:
+        try:
+            system_context = structure.neighbour_context(
+                skeleton,
+                node.code_anchor.file,
+                symbol=node.code_anchor.symbol,
+                line_start=node.code_anchor.line_start,
+                line_end=node.code_anchor.line_end,
+            )
+        except Exception as e:
+            state.errors.append(
+                f"teaching_agent: structural context failed (non-fatal): {e}"
+            )
 
     prior_context = _build_prior_context(state.graph, current_id)
     doc_context = state.doc_context if state.doc_context is not None else state.graph.doc_context
-    user_content = _build_user_content(state.goal, node, source, prior_context, supporting, doc_context=doc_context)
+    user_content = _build_user_content(
+        state.goal, node, source, prior_context,
+        doc_context=doc_context, system_context=system_context,
+    )
 
     try:
-        output = _generate_lesson(
-            client, user_content, _SYSTEM_PROMPT + language_instruction(state.goal)
-        )
+        output = _generate_lesson(client, user_content, _SYSTEM_PROMPT)
         lesson = output.model_dump()
         node.cached_lesson = lesson
         state.current_lesson = lesson
@@ -358,7 +413,7 @@ def _generate_lesson(
         system=system,
         messages=[{"role": "user", "content": user_content}],
     )
-    raw = response.content[0].text
+    raw = _text_of(response)
     try:
         return _parse_output(raw)
     except Exception:
@@ -369,11 +424,46 @@ def _generate_lesson(
             messages=[
                 {"role": "user", "content": user_content},
                 {"role": "assistant", "content": raw},
-                {"role": "user", "content": (
-                    "That was not a valid JSON object. Return ONLY the JSON object "
-                    "with keys walkthrough, prompt, expected_answer, prompt_kind — "
-                    "no markdown fences, no prose."
-                )},
+                {"role": "user", "content": _correction(response)},
             ],
         )
-        return _parse_output(retry.content[0].text)  # may raise → caller logs it
+        return _parse_output(_text_of(retry))  # may raise → caller logs it
+
+
+def _text_of(response) -> str:
+    """Every text block, joined — not just the first.
+
+    `content[0].text` silently truncates a response the model split across
+    blocks, and the resulting fragment fails to parse as "Unterminated string"
+    at the very start of the JSON, which reads exactly like an output-limit
+    truncation and is not one. Cheap to be right about; the harness has always
+    joined blocks this way.
+    """
+    return "".join(
+        block.text for block in response.content
+        if isinstance(getattr(block, "text", None), str)
+    )
+
+
+# Two different faults present as the same "Unterminated string" parse error, and
+# they need opposite corrections. Telling a model that ran out of output tokens
+# that its JSON was malformed makes it emit the same too-long lesson again and
+# truncate in the same place — observed on a 87-line doc-heavy anchor, where both
+# the call and its retry failed and the session fell back to a placeholder.
+_CORRECTION_MALFORMED = (
+    "That was not a valid JSON object. Return ONLY the JSON object with keys "
+    "walkthrough, prompt, expected_answer, prompt_kind — no markdown fences, no "
+    "prose."
+)
+_CORRECTION_TRUNCATED = (
+    "Your response hit the output limit and was cut off mid-JSON, so it could not "
+    "be read. Write a SHORTER lesson this time — the same teaching, fewer words: "
+    "trim the walkthrough hardest, quote less source, and close the JSON. Return "
+    "ONLY the JSON object with keys walkthrough, prompt, expected_answer, "
+    "prompt_kind."
+)
+
+
+def _correction(response) -> str:
+    truncated = getattr(response, "stop_reason", None) == "max_tokens"
+    return _CORRECTION_TRUNCATED if truncated else _CORRECTION_MALFORMED

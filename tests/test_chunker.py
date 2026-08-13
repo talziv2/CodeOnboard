@@ -4,7 +4,7 @@ Run with: uv run pytest tests/test_chunker.py -v
 """
 from pathlib import Path
 
-from backend.rag.chunker import _is_test_filename, classify_role, chunk_repo
+from backend.repo.parser import _is_test_filename, classify_role, parse_repo
 
 
 def _write(path: Path, content: str = "def x():\n    pass\n") -> None:
@@ -69,7 +69,7 @@ def test_chunk_repo_includes_test_files_tagged_test(tmp_path):
     _write(tmp_path / "src" / "lib.py", "def foo():\n    pass\n")
     _write(tmp_path / "tests" / "test_lib.py", "def test_foo():\n    pass\n")
 
-    chunks = chunk_repo(str(tmp_path))
+    chunks = parse_repo(str(tmp_path))
     by_file = {c["file"]: c["role"] for c in chunks}
 
     assert any("lib.py" in f and role == "source" for f, role in by_file.items())
@@ -81,7 +81,7 @@ def test_chunk_repo_includes_docs_and_examples(tmp_path):
     _write(tmp_path / "examples" / "demo.py", "def demo():\n    pass\n")
     _write(tmp_path / "src" / "real.py", "def real():\n    pass\n")
 
-    chunks = chunk_repo(str(tmp_path))
+    chunks = parse_repo(str(tmp_path))
     roles_by_file = {c["file"]: c["role"] for c in chunks}
 
     assert any("real" in f and r == "source" for f, r in roles_by_file.items())
@@ -93,7 +93,7 @@ def test_chunk_repo_every_chunk_has_a_role(tmp_path):
     _write(tmp_path / "src" / "core.py", "class A:\n    def m(self):\n        pass\n")
     _write(tmp_path / "tests" / "test_core.py", "def test_a():\n    pass\n")
 
-    chunks = chunk_repo(str(tmp_path))
+    chunks = parse_repo(str(tmp_path))
     assert chunks
     assert all(c["role"] in {"source", "test", "doc", "example"} for c in chunks)
 
@@ -102,7 +102,7 @@ def test_chunk_repo_nested_test_dir_tagged_test(tmp_path):
     _write(tmp_path / "src" / "core.py", "def main():\n    pass\n")
     _write(tmp_path / "src" / "tests" / "test_inner.py", "def test():\n    pass\n")
 
-    chunks = chunk_repo(str(tmp_path))
+    chunks = parse_repo(str(tmp_path))
     roles_by_file = {c["file"]: c["role"] for c in chunks}
 
     assert any("core" in f and r == "source" for f, r in roles_by_file.items())
@@ -119,7 +119,7 @@ def test_chunk_repo_still_chunks_library_files(tmp_path):
         "    return 1\n",
     )
 
-    chunks = chunk_repo(str(tmp_path))
+    chunks = parse_repo(str(tmp_path))
     names = {c["name"] for c in chunks if c["type"] != "import"}
 
     assert "A" in names
@@ -140,7 +140,7 @@ def test_chunk_repo_emits_method_chunks_inside_classes(tmp_path):
         "        return 0\n",
     )
 
-    chunks = chunk_repo(str(tmp_path))
+    chunks = parse_repo(str(tmp_path))
     class_names = [c["name"] for c in chunks if c["type"] == "class"]
     func_names = [c["name"] for c in chunks if c["type"] == "function"]
 
@@ -158,7 +158,7 @@ def test_chunk_repo_method_chunks_have_inner_line_ranges(tmp_path):
         "        return 1\n",
     )
 
-    chunks = chunk_repo(str(tmp_path))
+    chunks = parse_repo(str(tmp_path))
     cls = next(c for c in chunks if c["type"] == "class")
     fn = next(c for c in chunks if c["type"] == "function" and c["name"] == "dive")
 
@@ -175,7 +175,7 @@ def test_chunk_repo_handles_nested_classes(tmp_path):
         "            return 1\n",
     )
 
-    chunks = chunk_repo(str(tmp_path))
+    chunks = parse_repo(str(tmp_path))
     class_names = [c["name"] for c in chunks if c["type"] == "class"]
     func_names = [c["name"] for c in chunks if c["type"] == "function"]
 

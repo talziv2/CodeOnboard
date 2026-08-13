@@ -1,3 +1,19 @@
+# Source parsing for Layer A — the tree-sitter walk the Skeleton is built from.
+#
+# This module began life as `backend/rag/chunker.py`, cutting a repository into
+# embeddable chunks. Retrieval is gone, but the walk itself was never retrieval
+# machinery: it finds every function, class and import statement with exact line
+# ranges, which is precisely what the deterministic index needs. It moved here
+# because Layer A is now its only consumer, not because the name was tidied.
+#
+# One unit per definition, plus one per import statement. `content` is carried on
+# each unit because callers that want source (the Skeleton drops it; tests use
+# it) should not have to re-read the file.
+#
+# PYTHON-ONLY, structurally: the grammar, the node types and the role rules are
+# all Python. Multi-language support means adding sibling adapters behind this
+# interface, not generalising this file.
+
 from pathlib import Path
 
 from tree_sitter import Language, Parser
@@ -8,12 +24,10 @@ PY_LANGUAGE = Language(python_language())
 CHUNK_NODE_TYPES = {"function_definition", "class_definition"}
 IMPORT_NODE_TYPES = {"import_statement", "import_from_statement"}
 
-# Every Python file is indexed; each chunk carries a `role` so retrieval can
-# filter by it. Tour-style goals (understand_system) stay source-only, while
-# debug_issue / contribute_code also retrieve test (and example) chunks as
-# evidence. `tooling` is indexed but no current profile retrieves it — the
-# bucket exists so dev-tooling scripts (build, deploy, docs generation) do
-# not masquerade as library source.
+# Every Python file is indexed and each unit carries a `role`, so a caller can
+# tell library source from tests, docs, examples and dev tooling. The Skeleton
+# uses it for `list_files(role=…)` and to keep `scripts/` out of a repository's
+# source root.
 ROLE_DIR_SEGMENTS: dict[str, frozenset[str]] = {
     "test": frozenset({"tests", "test", "__tests__"}),
     "doc": frozenset({"docs", "doc", "docs_src"}),
@@ -52,7 +66,7 @@ def classify_role(relative_path: Path) -> str:
     return "source"
 
 
-def _chunk_file(file_path: Path, repo_path: str) -> list[dict]:
+def _parse_file(file_path: Path, repo_path: str) -> list[dict]:
     parser = Parser(PY_LANGUAGE)
     source = file_path.read_bytes()
     tree = parser.parse(source)
@@ -60,13 +74,13 @@ def _chunk_file(file_path: Path, repo_path: str) -> list[dict]:
     relative_path = file_path.relative_to(repo_path)
     relative_file = str(relative_path)
     role = classify_role(relative_path)
-    chunks = []
+    units: list[dict] = []
 
     def traverse(node):
         if node.type in CHUNK_NODE_TYPES:
             name = _get_node_name(node, source)
             content = source[node.start_byte:node.end_byte].decode("utf-8")
-            chunks.append({
+            units.append({
                 "file": relative_file,
                 "start_line": node.start_point[0] + 1,
                 "end_line": node.end_point[0] + 1,
@@ -76,10 +90,9 @@ def _chunk_file(file_path: Path, repo_path: str) -> list[dict]:
                 "role": role,
                 "content": content,
             })
-            # For classes, keep recursing so methods become their own chunks.
-            # The class chunk is kept too (whole-class context), and the
-            # retrieval layer drops it when narrower method chunks land in
-            # the same result set.
+            # Keep recursing into classes so methods become their own units.
+            # The class unit is kept too: the Skeleton needs both to derive
+            # qualified names ("Session.send") by containment.
             if node.type == "class_definition":
                 for child in node.children:
                     traverse(child)
@@ -87,7 +100,7 @@ def _chunk_file(file_path: Path, repo_path: str) -> list[dict]:
 
         if node.type in IMPORT_NODE_TYPES:
             content = source[node.start_byte:node.end_byte].decode("utf-8")
-            chunks.append({
+            units.append({
                 "file": relative_file,
                 "start_line": node.start_point[0] + 1,
                 "end_line": node.end_point[0] + 1,
@@ -103,15 +116,20 @@ def _chunk_file(file_path: Path, repo_path: str) -> list[dict]:
             traverse(child)
 
     traverse(tree.root_node)
-    return chunks
+    return units
 
 
-def chunk_repo(repo_path: str) -> list[dict]:
+def parse_repo(repo_path: str) -> list[dict]:
+    """Every function, class and import in the checkout, with exact ranges.
+
+    A file that will not parse is skipped rather than failing the index: one
+    unreadable module must not cost the repository its whole skeleton.
+    """
     repo = Path(repo_path)
-    all_chunks = []
+    units: list[dict] = []
     for py_file in repo.rglob("*.py"):
         try:
-            all_chunks.extend(_chunk_file(py_file, repo_path))
+            units.extend(_parse_file(py_file, repo_path))
         except Exception:
             continue
-    return all_chunks
+    return units

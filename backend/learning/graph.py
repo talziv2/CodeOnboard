@@ -41,6 +41,17 @@ class CodeAnchor:
     file: str
     line_start: int
     line_end: int
+    # Qualified symbol name ("Session.send") when the range corresponds to — or
+    # sits inside — exactly one indexed symbol. Filled in by the anchor resolver
+    # (backend/repo/anchors.py), never by a model.
+    #
+    # `file` + `symbol` is the STABLE SEMANTIC IDENTITY of what this node teaches;
+    # line_start/line_end are the resolved LOCATION for the current commit. That
+    # split is what makes a range re-resolvable if the checkout ever moves.
+    #
+    # Nullable and defaulted: nodes written before this field existed load with
+    # symbol=None and behave exactly as before.
+    symbol: str | None = None
 
 
 @dataclass
@@ -74,32 +85,6 @@ class LearningNode:
     # they got there, so revisiting a node adds to the record instead of
     # silently overwriting it.
     attempts: list[dict] = field(default_factory=list)
-    # Display prose rendered in a language other than the one this node was
-    # written in: {language: {"title": str, "lesson": {...}}}. Populated lazily
-    # by the Translator and cached, so switching back and forth is free after
-    # the first pass. `title` and `cached_lesson` above always hold the
-    # original — translations are derived, never authoritative.
-    translations: dict[str, dict] = field(default_factory=dict)
-
-    def title_in(self, language: str, source_language: str) -> str:
-        """The title in `language`, falling back to the original."""
-        if language == source_language:
-            return self.title
-        return self.translations.get(language, {}).get("title") or self.title
-
-    def lesson_in(self, language: str, source_language: str) -> dict | None:
-        """The cached lesson in `language`, falling back to the original."""
-        if language == source_language:
-            return self.cached_lesson
-        translated = self.translations.get(language, {}).get("lesson")
-        return translated or self.cached_lesson
-
-    def cache_translation(self, language: str, *, title=None, lesson=None) -> None:
-        slot = self.translations.setdefault(language, {})
-        if title is not None:
-            slot["title"] = title
-        if lesson is not None:
-            slot["lesson"] = lesson
 
 
 @dataclass
@@ -124,22 +109,6 @@ class LearningGraph:
     # on the graph so Teaching Agent can access it during interactive sessions
     # (where state is reconstructed from the persisted graph, not from the pipeline).
     doc_context: dict | None = None
-    # Goal prose (primary_goal, focus_area) rendered in other languages:
-    # {language: {"primary_goal": str, ...}}. Same lazy-cache contract as
-    # LearningNode.translations — `goal` itself always holds the original.
-    goal_translations: dict[str, dict] = field(default_factory=dict)
-
-    @property
-    def language(self) -> str:
-        """The language this graph's prose was written in."""
-        return (self.goal or {}).get("language") or "en"
-
-    def goal_in(self, language: str) -> dict:
-        """The goal dict with its display prose swapped for `language`."""
-        if language == self.language:
-            return self.goal
-        overlay = self.goal_translations.get(language)
-        return {**self.goal, **overlay} if overlay else self.goal
 
     # --- construction helpers ---
 
@@ -324,27 +293,20 @@ class LearningGraph:
 
     # --- serialization (for API responses / UI) ---
 
-    def to_dict(self, language: str | None = None) -> dict:
+    def to_dict(self) -> dict:
         # JSON-friendly view of the graph for HTTP responses. Excludes the
         # cached_lesson bodies (large) — the lesson endpoint returns those
         # separately. Includes the derived readiness gauge.
-        #
-        # `language` selects which rendering of the prose to send. It only ever
-        # reads the translation cache; filling that cache is the caller's job,
-        # because it costs an LLM call and this method must stay pure.
-        lang = language or self.language
         return {
             "session_id": self.session_id,
             "repo_url": self.repo_url,
-            "goal": self.goal_in(lang),
-            "language": lang,
-            "source_language": self.language,
+            "goal": self.goal,
             "current_node_id": self.current_node_id,
             "readiness": self.readiness(),
             "nodes": [
                 {
                     "id": n.id,
-                    "title": n.title_in(lang, self.language),
+                    "title": n.title,
                     "file": n.code_anchor.file,
                     "line_start": n.code_anchor.line_start,
                     "line_end": n.code_anchor.line_end,

@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS nodes (
     weak_spot            INTEGER NOT NULL,
     user_override        TEXT,
     cached_lesson_json   TEXT,
+    symbol               TEXT,
     PRIMARY KEY (node_id),
     FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
 )
@@ -116,15 +117,12 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
             conn.execute("ALTER TABLE nodes ADD COLUMN attempts_json TEXT")
         except Exception:
             pass
-        # Lazily-filled translation caches, added the same additive way so
-        # sessions written before multilingual support still load — they simply
-        # start with no cached translations and fill them on first switch.
+        # Symbol identity alongside the resolved line range (Stage 0 of the
+        # repo-understanding migration). Additive and nullable for the same
+        # reason as the columns above: sessions written before symbol resolution
+        # existed still load, with symbol = NULL.
         try:
-            conn.execute("ALTER TABLE nodes ADD COLUMN translations_json TEXT")
-        except Exception:
-            pass
-        try:
-            conn.execute("ALTER TABLE sessions ADD COLUMN goal_translations_json TEXT")
+            conn.execute("ALTER TABLE nodes ADD COLUMN symbol TEXT")
         except Exception:
             pass
 
@@ -136,15 +134,14 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
             """
             INSERT INTO sessions
                 (session_id, repo_url, goal_json, current_node_id,
-                 doc_context_json, goal_translations_json, schema_version)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                 doc_context_json, schema_version)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(session_id) DO UPDATE SET
-                repo_url               = excluded.repo_url,
-                goal_json              = excluded.goal_json,
-                current_node_id        = excluded.current_node_id,
-                doc_context_json       = excluded.doc_context_json,
-                goal_translations_json = excluded.goal_translations_json,
-                schema_version         = excluded.schema_version,
+                repo_url         = excluded.repo_url,
+                goal_json        = excluded.goal_json,
+                current_node_id  = excluded.current_node_id,
+                doc_context_json = excluded.doc_context_json,
+                schema_version   = excluded.schema_version,
                 updated_at       = strftime('%Y-%m-%d %H:%M:%f', 'now')
             """,
             (
@@ -153,7 +150,6 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
                 json.dumps(graph.goal),
                 graph.current_node_id,
                 json.dumps(graph.doc_context) if graph.doc_context is not None else None,
-                json.dumps(graph.goal_translations),
                 SCHEMA_VERSION,
             ),
         )
@@ -168,7 +164,7 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
                 node_id, session_id, title, file, line_start, line_end,
                 concept_tags_json, lesson_brief_json, understanding_state,
                 visited, weak_spot, user_override, cached_lesson_json,
-                attempts_json, translations_json
+                attempts_json, symbol
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [_node_row(graph.session_id, n) for n in graph.nodes.values()],
@@ -199,9 +195,6 @@ def load_graph(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> LearningGrap
             session_id=session_row["session_id"],
             current_node_id=session_row["current_node_id"],
             doc_context=json.loads(raw_doc) if raw_doc is not None else None,
-            goal_translations=_json_or_default(
-                session_row, "goal_translations_json", {}
-            ),
         )
         for node_row in conn.execute(
             "SELECT * FROM nodes WHERE session_id = ?", (session_id,)
@@ -274,7 +267,7 @@ def _node_row(session_id: str, node: LearningNode) -> tuple:
         node.user_override,
         json.dumps(node.cached_lesson) if node.cached_lesson is not None else None,
         json.dumps(node.attempts),
-        json.dumps(node.translations),
+        node.code_anchor.symbol,
     )
 
 
@@ -286,6 +279,7 @@ def _row_to_node(row: sqlite3.Row) -> LearningNode:
             file=row["file"],
             line_start=row["line_start"],
             line_end=row["line_end"],
+            symbol=_column_or_default(row, "symbol", None),
         ),
         concept_tags=json.loads(row["concept_tags_json"]),
         lesson_brief=json.loads(row["lesson_brief_json"]),
@@ -299,15 +293,19 @@ def _row_to_node(row: sqlite3.Row) -> LearningNode:
             else None
         ),
         attempts=_json_or_default(row, "attempts_json", []),
-        translations=_json_or_default(row, "translations_json", {}),
     )
 
 
-def _json_or_default(row: sqlite3.Row, column: str, default):
-    # Rows written before the column existed have no value (or no key at all,
-    # if an older DB was opened read-only), so degrade to the default.
+def _column_or_default(row: sqlite3.Row, column: str, default):
+    # Rows written before the column existed have no key at all when an older DB
+    # is opened without the ALTER having run, so degrade to the default.
     try:
-        raw = row[column]
+        value = row[column]
     except IndexError:
         return default
+    return default if value is None else value
+
+
+def _json_or_default(row: sqlite3.Row, column: str, default):
+    raw = _column_or_default(row, column, None)
     return json.loads(raw) if raw else default

@@ -1,20 +1,21 @@
 # Pipeline runner — public entry point for the onboarding pipeline.
 #
-# Phase 2: internals delegate to a LangGraph stateful graph (backend/pipeline/
-# graph.py). The function signature is unchanged from Phase 1 so api.py and
-# the existing tests keep working untouched.
+# One compiled LangGraph, built once at import. Stage 5 removed the second
+# graph shape and the CODEONBOARD_EXPLORER flag that selected it: there is now
+# a single production path, so there is nothing to choose between.
 #
-# Note: run_code_structure / run_prioritization / run_mentor are re-imported
-# at module level so tests (and the graph nodes) can patch them at
+# Note: run_mentor / run_repo_survey / run_goal_investigation / run_reviewer are
+# re-imported at module level so tests (and the graph nodes) can patch them at
 # backend.pipeline.runner.run_*.
 
 import anthropic
 
-from backend.agents import run_code_structure, run_documentation, run_mentor, run_prioritization, run_reviewer  # re-exported  # noqa: F401
+from backend.agents import run_documentation, run_mentor, run_reviewer  # re-exported  # noqa: F401
+from backend.pipeline.explorer_nodes import run_goal_investigation, run_repo_survey  # re-exported  # noqa: F401
 from backend.pipeline.state import OnboardState
 
-# Compile the graph once at import. The graph itself imports this module
-# lazily (inside its node functions) to break the circular import.
+# The graph imports this module lazily (inside its node functions) to break the
+# circular import.
 from backend.pipeline.graph import build_graph  # noqa: E402
 
 _graph = build_graph()
@@ -27,7 +28,7 @@ def run_pipeline(
 ) -> OnboardState:
     initial = OnboardState(repo_url=repo_url, goal=goal, client=client)
     final = _graph.invoke(initial)
-    # LangGraph returns the compiled state. With a dataclass schema it's
+    # LangGraph returns the compiled state. With a dataclass schema it is
     # already an OnboardState in current versions; fall back to constructing
     # one from a dict in case the runtime returns a mapping.
     if isinstance(final, OnboardState):

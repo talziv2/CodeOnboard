@@ -24,7 +24,8 @@ import anthropic
 from pydantic import BaseModel, field_validator
 
 from backend.pipeline.state import OnboardState
-from backend.rag.retrieval import effective_module_map, retrieve_chunks
+from backend.repo import anchors
+from backend.repo.skeleton import Skeleton, build_skeleton, normalize_path
 
 
 MODEL = "claude-haiku-4-5"
@@ -195,42 +196,42 @@ def _build_user_content(goal: dict, module_map: dict, chunks: list[dict]) -> str
 
 
 def _normalize_path(p: str) -> str:
-    return p.replace("\\", "/")
+    return normalize_path(p)
 
 
 def _drop_ungrounded_anchors(
-    output: ReviewerOutput, chunks: list[dict]
+    output: ReviewerOutput, chunks: list[dict], skeleton: Skeleton
 ) -> ReviewerOutput:
-    """Findings whose anchor does not map to a retrieved chunk lose the anchor.
+    """Findings whose anchor fails verification lose the anchor, not the finding.
 
-    The finding itself stays — the note is still useful even without a precise
-    code anchor. This is gentler than the Mentor's retry-on-bad-anchor flow
-    because a Reviewer finding doesn't have to anchor: it's allowed to talk
-    about cross-cutting concerns. We just refuse to pass through anchors we
-    can't ground.
+    Same two-question check as the Mentor (repo-understanding.md Stage 0): the
+    anchor must resolve against the REPOSITORY, and — while the evidence set is
+    still a retrieval slice — must lie inside code the Reviewer was shown.
+
+    The finding itself stays either way. This is gentler than the Mentor's
+    retry-on-bad-anchor flow because a Reviewer finding doesn't have to anchor:
+    it's allowed to talk about cross-cutting concerns. We just refuse to pass
+    through anchors we can't verify.
     """
-    by_range: dict[tuple[int, int], list[str]] = {}
-    exact: set[tuple[str, int, int]] = set()
-    for c in chunks:
-        cf = _normalize_path(c["file"])
-        exact.add((cf, c["start_line"], c["end_line"]))
-        by_range.setdefault((c["start_line"], c["end_line"]), []).append(cf)
 
     def _ground(anchor: _AnchorWire | None) -> _AnchorWire | None:
         if anchor is None:
             return None
-        sf = _normalize_path(anchor.file)
-        start, end = anchor.line_start, anchor.line_end
-        if (sf, start, end) in exact:
-            return _AnchorWire(file=sf, line_start=start, line_end=end)
-        matches = [
-            cf
-            for cf in by_range.get((start, end), [])
-            if cf == sf or cf.endswith("/" + sf) or sf.endswith("/" + cf)
-        ]
-        if len(matches) == 1:
-            return _AnchorWire(file=matches[0], line_start=start, line_end=end)
-        return None
+        resolution = anchors.resolve_within_evidence(
+            skeleton,
+            chunks,
+            anchor.file,
+            line_start=anchor.line_start,
+            line_end=anchor.line_end,
+        )
+        if not resolution.ok:
+            return None
+        resolved = resolution.anchor
+        return _AnchorWire(
+            file=resolved.file,
+            line_start=resolved.line_start,
+            line_end=resolved.line_end,
+        )
 
     for finding in (
         output.strengths + output.risks + output.extension_points + output.test_gaps
@@ -280,19 +281,25 @@ def run(
         state.errors.append("reviewer_agent: module_map missing")
         return state
 
-    if not state.chunks_embedded:
-        state.errors.append("reviewer_agent: chunks not embedded")
+    if state.investigation is None:
+        # D11: the Reviewer reads the shared investigation and never explores
+        # or retrieves on its own. Without one there is nothing to review.
+        state.errors.append("reviewer_agent: no investigation to review")
         return state
 
     try:
-        chunks = retrieve_chunks(state)
+        from backend.repo.investigation import dossier_as_chunks
+        from backend.repo.skeleton import build_skeleton as _build_skeleton
+
+        chunks = dossier_as_chunks(
+            _build_skeleton(state.repo_path),
+            state.investigation.get("dossier") or {},
+        )
     except Exception as e:
-        state.errors.append(f"reviewer_agent retrieval failed: {e}")
+        state.errors.append(f"reviewer_agent: dossier rendering failed: {e}")
         return state
 
-    user_content = _build_user_content(
-        state.goal, effective_module_map(state), chunks
-    )
+    user_content = _build_user_content(state.goal, state.module_map or {}, chunks)
 
     try:
         response = client.messages.create(
@@ -306,6 +313,17 @@ def run(
         state.errors.append(f"reviewer_agent LLM call failed: {e}")
         return state
 
-    output = _drop_ungrounded_anchors(output, chunks)
+    try:
+        skeleton = build_skeleton(state.repo_path)
+    except Exception as e:
+        # Repository access is a HARD requirement during onboarding (D15). A
+        # partial, anchor-less review is not a reason to soften that — the
+        # Mentor will fail on the same unavailable repository, and a graph
+        # whose anchors were never verified is worse than no graph. Leave
+        # system_review unset and let the pipeline fail explicitly.
+        state.errors.append(f"reviewer_agent: skeleton build failed: {e}")
+        return state
+
+    output = _drop_ungrounded_anchors(output, chunks, skeleton)
     state.system_review = output.model_dump()
     return state

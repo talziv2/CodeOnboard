@@ -15,18 +15,17 @@ dependencies = [
     "python-dotenv>=1.2.2",
     # Repo cloning
     "gitpython>=3.1.0",
-    # AST parsing
+    # AST parsing — Layer A's deterministic index (backend/repo/parser.py)
     "tree-sitter>=0.23.0",
     "tree-sitter-python>=0.23.0",
-    # Embeddings (nomic-embed-text-v1.5 via sentence-transformers, runs locally)
-    "sentence-transformers>=3.0.0",
-    # Required transitively by nomic-embed-text-v1.5's modeling code
-    "einops>=0.8.0",
-    # Vector store
-    "chromadb>=1.5.9",
-    # Pipeline orchestration (graph-based, replaces plain runner.py chain)
+    # Pipeline orchestration
     "langgraph>=0.2.0",
 ]
+
+# Stage 5 removed the embedding/vector stack with the retrieval layer it served:
+# sentence-transformers, einops and chromadb are gone, and with them torch and
+# onnxruntime as transitive weight. Repository understanding is now parsing plus
+# tool-driven exploration, neither of which needs a model on the machine.
 
 [dependency-groups]
 dev = [
@@ -34,17 +33,10 @@ dev = [
 ]
 
 [tool.uv]
-# onnxruntime 1.19+ dropped Intel Mac (x86_64) wheels; pin to last compatible version
-# torch 2.2.x (max for Intel Mac) was built against NumPy 1.x; pin numpy<2 and sentence-transformers<4 on Intel Mac only
-# Each Mac-only pin needs a paired entry for the inverse marker, otherwise the override drops the package on every other platform.
-override-dependencies = [
-    "onnxruntime>=1.16.0,<1.19.0 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "numpy<2 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "numpy ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
-    "sentence-transformers>=3.0.0,<4.0.0 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "sentence-transformers>=3.0.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
-]
-# Ensure lockfile resolves wheels compatible with Intel Mac
+# The Intel-Mac override pins (onnxruntime / numpy / sentence-transformers)
+# existed only to make the embedding stack resolve wheels there. Stage 5 removed
+# that stack, so the overrides went with it; the lockfile is still resolved for
+# Intel Mac so the project stays installable on one.
 required-environments = [
     "sys_platform == 'darwin' and platform_machine == 'x86_64'",
 ]

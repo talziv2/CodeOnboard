@@ -2,8 +2,9 @@
 Pytest tests for the Teaching Agent using mocks.
 Run with: uv run pytest tests/test_teaching_agent.py -v
 
-No real Haiku, no real file reads, no real ChromaDB — source reading and
-supporting-chunk retrieval are patched.
+No real Haiku and no real file reads — source reading is patched. There is no
+retrieval to patch: Stage 5 removed it, and lesson context now comes from the
+Dossier, then the Skeleton, then nothing (see test_dossier_session.py).
 """
 import json
 from unittest.mock import MagicMock, patch
@@ -73,9 +74,8 @@ def _make_mock_client(content: str) -> MagicMock:
 
 # ── happy path ────────────────────────────────────────────────────────────────
 
-@patch("backend.agents.teaching.agent.retrieve_supporting_chunks", return_value=[])
 @patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
-def test_run_sets_current_lesson(mock_read, mock_support):
+def test_run_sets_current_lesson(mock_read):
     state, node = _make_state_with_current_node()
     client = _make_mock_client(json.dumps(FAKE_LESSON_OUTPUT))
     result = run(state, client=client)
@@ -84,9 +84,8 @@ def test_run_sets_current_lesson(mock_read, mock_support):
     assert result.current_lesson["walkthrough"].startswith("`HTTPBasicAuth")
 
 
-@patch("backend.agents.teaching.agent.retrieve_supporting_chunks", return_value=[])
 @patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
-def test_run_caches_lesson_on_node(mock_read, mock_support):
+def test_run_caches_lesson_on_node(mock_read):
     state, node = _make_state_with_current_node()
     client = _make_mock_client(json.dumps(FAKE_LESSON_OUTPUT))
     run(state, client=client)
@@ -94,18 +93,16 @@ def test_run_caches_lesson_on_node(mock_read, mock_support):
     assert node.cached_lesson == state.current_lesson
 
 
-@patch("backend.agents.teaching.agent.retrieve_supporting_chunks", return_value=[])
 @patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
-def test_run_uses_haiku_model(mock_read, mock_support):
+def test_run_uses_haiku_model(mock_read):
     state, node = _make_state_with_current_node()
     client = _make_mock_client(json.dumps(FAKE_LESSON_OUTPUT))
     run(state, client=client)
     assert client.messages.create.call_args.kwargs["model"] == "claude-haiku-4-5"
 
 
-@patch("backend.agents.teaching.agent.retrieve_supporting_chunks", return_value=[])
 @patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
-def test_run_handles_fenced_json(mock_read, mock_support):
+def test_run_handles_fenced_json(mock_read):
     state, node = _make_state_with_current_node()
     fenced = f"```json\n{json.dumps(FAKE_LESSON_OUTPUT)}\n```"
     client = _make_mock_client(fenced)
@@ -113,9 +110,8 @@ def test_run_handles_fenced_json(mock_read, mock_support):
     assert result.current_lesson is not None
 
 
-@patch("backend.agents.teaching.agent.retrieve_supporting_chunks", return_value=[])
 @patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
-def test_run_passes_source_into_prompt(mock_read, mock_support):
+def test_run_passes_source_into_prompt(mock_read):
     state, node = _make_state_with_current_node()
     client = _make_mock_client(json.dumps(FAKE_LESSON_OUTPUT))
     run(state, client=client)
@@ -126,9 +122,8 @@ def test_run_passes_source_into_prompt(mock_read, mock_support):
 
 # ── caching ───────────────────────────────────────────────────────────────────
 
-@patch("backend.agents.teaching.agent.retrieve_supporting_chunks", return_value=[])
 @patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
-def test_run_cache_hit_skips_llm(mock_read, mock_support):
+def test_run_cache_hit_skips_llm(mock_read):
     state, node = _make_state_with_current_node()
     node.cached_lesson = FAKE_LESSON_OUTPUT  # pre-seed a prior visit
     client = MagicMock()
@@ -155,39 +150,14 @@ def test_prior_context_lists_understood_nodes():
     assert "Current node" not in text  # the current node is excluded
 
 
-@patch("backend.agents.teaching.agent.retrieve_supporting_chunks", return_value=[])
 @patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
-def test_run_includes_prior_understanding_in_prompt(mock_read, mock_support):
+def test_run_includes_prior_understanding_in_prompt(mock_read):
     state, node = _make_state_with_current_node()
     done = state.graph.add_node(_make_node("Session basics", understood=True))
     client = _make_mock_client(json.dumps(FAKE_LESSON_OUTPUT))
     run(state, client=client)
     user_msg = client.messages.create.call_args.kwargs["messages"][0]["content"]
     assert "Session basics" in user_msg
-
-
-# ── supporting-chunk retrieval is best-effort ──────────────────────────────────
-
-@patch("backend.agents.teaching.agent.retrieve_supporting_chunks",
-       side_effect=Exception("chroma down"))
-@patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
-def test_run_survives_supporting_retrieval_failure(mock_read, mock_support):
-    state, node = _make_state_with_current_node()
-    client = _make_mock_client(json.dumps(FAKE_LESSON_OUTPUT))
-    result = run(state, client=client)
-    # Lesson still generated; failure recorded but non-fatal.
-    assert result.current_lesson is not None
-    assert any("supporting retrieval failed" in e for e in result.errors)
-
-
-@patch("backend.agents.teaching.agent.retrieve_supporting_chunks", return_value=[])
-@patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
-def test_run_excludes_own_anchor_from_supporting_query(mock_read, mock_support):
-    state, node = _make_state_with_current_node()
-    client = _make_mock_client(json.dumps(FAKE_LESSON_OUTPUT))
-    run(state, client=client)
-    exclude = mock_support.call_args.kwargs["exclude"]
-    assert ("requests/auth.py", 72, 100) in exclude
 
 
 # ── error handling ────────────────────────────────────────────────────────────
@@ -228,9 +198,99 @@ def test_run_errors_when_source_unreadable(mock_read):
     client.messages.create.assert_not_called()
 
 
-@patch("backend.agents.teaching.agent.retrieve_supporting_chunks", return_value=[])
 @patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
-def test_run_handles_invalid_llm_json(mock_read, mock_support):
+def test_a_truncated_lesson_is_asked_to_be_shorter_not_told_it_is_malformed(mock_read):
+    """Truncation and malformed JSON both parse as "Unterminated string".
+
+    They need opposite corrections: telling a model that ran out of output
+    tokens that its JSON was invalid makes it emit the same too-long lesson and
+    truncate in the same place. Observed on an 87-line doc-heavy anchor, where
+    the call and its retry both failed and the session served a placeholder.
+    """
+    state, node = _make_state_with_current_node()
+    cut_off = MagicMock()
+    cut_off.content = [MagicMock(text='{"walkthrough": "a very long lesson that')]
+    cut_off.stop_reason = "max_tokens"
+    good = MagicMock()
+    good.content = [MagicMock(text=json.dumps(FAKE_LESSON_OUTPUT))]
+    good.stop_reason = "end_turn"
+    client = MagicMock()
+    client.messages.create.side_effect = [cut_off, good]
+
+    result = run(state, client=client)
+
+    assert result.current_lesson == FAKE_LESSON_OUTPUT
+    correction = client.messages.create.call_args.kwargs["messages"][-1]["content"]
+    assert "hit the output limit" in correction
+    assert "SHORTER lesson" in correction
+    assert "not a valid JSON object" not in correction
+
+
+def test_a_walkthrough_containing_a_code_fence_still_parses():
+    """The bug that cost a real session its lesson.
+
+    Walkthroughs are markdown and routinely embed a ```python block. Stripping
+    the wrapping fence by cutting at the NEXT ``` truncated the JSON mid-string,
+    which surfaced as "Unterminated string" pointing at the walkthrough's opening
+    quote — indistinguishable from an output-limit truncation, and it was not
+    one: the response was complete at 674 tokens with `stop_reason=end_turn`.
+    """
+    lesson = {
+        **FAKE_LESSON_OUTPUT,
+        "walkthrough": "First read this:\n\n```python\nauth(r)\n```\n\nThen note the header.",
+    }
+    fenced = "```json\n" + json.dumps(lesson) + "\n```"
+
+    assert _parse_output(fenced).walkthrough == lesson["walkthrough"]
+    assert _parse_output(json.dumps(lesson)).walkthrough == lesson["walkthrough"]
+    # Trailing prose after the object is ignored, as it always was.
+    assert _parse_output(json.dumps(lesson) + "\nHope that helps!").prompt
+
+
+@patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
+def test_a_lesson_split_across_text_blocks_is_read_whole(mock_read):
+    """`content[0].text` drops the rest and fails as "Unterminated string".
+
+    That parse error is indistinguishable from an output-limit truncation, which
+    sent the diagnosis in the wrong direction; joining the blocks removes the
+    whole class of confusion.
+    """
+    state, node = _make_state_with_current_node()
+    payload = json.dumps(FAKE_LESSON_OUTPUT)
+    split = MagicMock()
+    split.content = [
+        MagicMock(type="text", text=payload[:20]),
+        MagicMock(type="text", text=payload[20:]),
+    ]
+    split.stop_reason = "end_turn"
+    client = MagicMock()
+    client.messages.create.return_value = split
+
+    result = run(state, client=client)
+
+    assert result.current_lesson == FAKE_LESSON_OUTPUT
+    assert client.messages.create.call_count == 1     # no retry was needed
+
+
+@patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
+def test_genuinely_malformed_json_still_gets_the_json_correction(mock_read):
+    state, node = _make_state_with_current_node()
+    garbage = MagicMock()
+    garbage.content = [MagicMock(text="here is your lesson!")]
+    garbage.stop_reason = "end_turn"
+    good = MagicMock()
+    good.content = [MagicMock(text=json.dumps(FAKE_LESSON_OUTPUT))]
+    client = MagicMock()
+    client.messages.create.side_effect = [garbage, good]
+
+    run(state, client=client)
+
+    correction = client.messages.create.call_args.kwargs["messages"][-1]["content"]
+    assert "not a valid JSON object" in correction
+
+
+@patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
+def test_run_handles_invalid_llm_json(mock_read):
     state, node = _make_state_with_current_node()
     # Both the first call and the retry return garbage → give up gracefully.
     client = MagicMock()
@@ -243,9 +303,8 @@ def test_run_handles_invalid_llm_json(mock_read, mock_support):
     assert any("LLM call failed" in e for e in result.errors)
 
 
-@patch("backend.agents.teaching.agent.retrieve_supporting_chunks", return_value=[])
 @patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
-def test_run_retries_once_on_bad_json(mock_read, mock_support):
+def test_run_retries_once_on_bad_json(mock_read):
     # First response is unparseable; the retry returns valid JSON → lesson set.
     state, node = _make_state_with_current_node()
     bad = MagicMock()
@@ -267,10 +326,12 @@ def test_run_retries_once_on_bad_json(mock_read, mock_support):
 
 def test_system_prompt_has_depth_calibration_with_word_counts():
     # Depth must drive lesson length — the most demo-visible Teaching lever.
+    # The targets came down (200/350/500 -> 100/150/250) when the walkthrough
+    # was capped; what matters is that all three tiers still differ.
     assert "By `Depth requested`" in _SYSTEM_PROMPT
-    assert "~200 words" in _SYSTEM_PROMPT
-    assert "~350 words" in _SYSTEM_PROMPT
-    assert "~500" in _SYSTEM_PROMPT
+    assert "~100 words" in _SYSTEM_PROMPT
+    assert "~150 words" in _SYSTEM_PROMPT
+    assert "~250 words" in _SYSTEM_PROMPT
 
 
 def test_system_prompt_has_familiarity_terminology_calibration():

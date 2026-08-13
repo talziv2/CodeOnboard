@@ -5,7 +5,7 @@ Drives a REAL session against live LLMs through the actual API endpoints
 (in-process TestClient, no server needed) on psf/requests with ONE goal. It
 exercises the whole adaptive loop:
 
-    /session/start   → Mentor builds the graph (clone, chunk, embed, Sonnet)
+    /session/start   → prepare repo, survey, investigate, Mentor builds the graph
     /lesson          → Teaching renders the current node (Haiku)
     /respond         → Grader classifies a (deliberately weak) answer (Haiku);
                        on "confused", the Mentor mutator inserts a prerequisite

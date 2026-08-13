@@ -5,6 +5,9 @@ Run with: uv run pytest tests/test_reviewer_agent.py -v
 import json
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from backend.repo.skeleton import Skeleton
 from backend.agents.reviewer.agent import (
     ReviewerOutput,
     _SYSTEM_PROMPT,
@@ -38,6 +41,30 @@ FAKE_GOAL_IMPROVE = {
 FAKE_GOAL_DEBUG = {**FAKE_GOAL_IMPROVE, "goal_type": "debug_issue"}
 
 
+# Stage 0: anchors are verified against the REPOSITORY (a Skeleton), not against
+# the retrieval slice. Tests supply a synthetic Layer-A index covering the two
+# files the fixtures anchor on.
+def _fake_skeleton() -> Skeleton:
+    return Skeleton.from_chunks(
+        [
+            {"file": "requests/sessions.py", "start_line": 394, "end_line": 470,
+             "type": "class", "name": "Session", "role": "source"},
+            {"file": "requests/auth.py", "start_line": 72, "end_line": 100,
+             "type": "class", "name": "AuthBase", "role": "source"},
+        ],
+        file_lines={"requests/sessions.py": 800, "requests/auth.py": 320},
+    )
+
+
+@pytest.fixture(autouse=True)
+def _patch_skeleton():
+    with patch(
+        "backend.agents.reviewer.agent.build_skeleton",
+        side_effect=lambda repo_path: _fake_skeleton(),
+    ):
+        yield
+
+
 FAKE_MODULE_MAP = {
     "sessions": {
         "purpose": "Session lifecycle",
@@ -69,6 +96,14 @@ FAKE_CHROMA_RESULT = {
     ]],
 }
 
+
+# The dossier's rendered evidence, in the chunk shape `dossier_as_chunks` emits.
+DOSSIER_CHUNKS = [
+    {"file": "requests/sessions.py", "start_line": 394, "end_line": 470,
+     "type": "class", "name": "Session", "role": "source", "content": "class Session: ..."},
+    {"file": "requests/auth.py", "start_line": 72, "end_line": 100,
+     "type": "class", "name": "AuthBase", "role": "source", "content": "class AuthBase: ..."},
+]
 
 FAKE_REVIEWER_OUTPUT = {
     "strengths": [
@@ -151,7 +186,7 @@ def test_drop_ungrounded_anchors_keeps_grounded_ones():
         {"file": "requests/auth.py", "start_line": 72, "end_line": 100,
          "type": "class", "name": "AuthBase", "content": "..."},
     ]
-    result = _drop_ungrounded_anchors(output, chunks)
+    result = _drop_ungrounded_anchors(output, chunks, _fake_skeleton())
     assert result.risks[0].anchor is not None
     assert result.risks[0].anchor.file == "requests/sessions.py"
     assert result.extension_points[0].anchor is not None
@@ -170,11 +205,34 @@ def test_drop_ungrounded_anchors_strips_invented_anchors_but_keeps_note():
         {"file": "requests/sessions.py", "start_line": 394, "end_line": 470,
          "type": "class", "name": "Session", "content": "..."},
     ]
-    result = _drop_ungrounded_anchors(output, chunks)
+    result = _drop_ungrounded_anchors(output, chunks, _fake_skeleton())
     # The finding stays, the anchor is dropped.
     assert len(result.risks) == 1
     assert result.risks[0].anchor is None
     assert result.risks[0].note == "An invented concern."
+
+
+def test_drop_ungrounded_anchors_rejects_real_code_outside_the_evidence():
+    """Stage-0 boundary: real is not the same as shown.
+
+    auth.py:72-100 exists in the skeleton, so it resolves — but it was not among
+    the chunks the Reviewer received, so the anchor must still be dropped.
+    """
+    real_but_unseen = {
+        **FAKE_REVIEWER_OUTPUT,
+        "risks": [
+            {"area": "unseen_but_real", "note": "A concern about code not shown.",
+             "anchor": {"file": "requests/auth.py", "line_start": 72, "line_end": 100}}
+        ],
+    }
+    output = _parse_output(json.dumps(real_but_unseen))
+    chunks = [
+        {"file": "requests/sessions.py", "start_line": 394, "end_line": 470,
+         "type": "class", "name": "Session", "content": "..."},
+    ]
+    result = _drop_ungrounded_anchors(output, chunks, _fake_skeleton())
+    assert result.risks[0].anchor is None
+    assert result.risks[0].note == "A concern about code not shown."
 
 
 # ── system-prompt calibration regression guard ──────────────────────────────
@@ -199,8 +257,23 @@ def _make_state(goal: dict) -> OnboardState:
     state = OnboardState(repo_url=FAKE_REPO_URL, goal=goal)
     state.repo_path = FAKE_REPO_PATH
     state.module_map = FAKE_MODULE_MAP
-    state.chunks_embedded = True
+    # D11: the Reviewer reads the shared investigation and has no other evidence
+    # source since Stage 5. The dossier's contents do not matter to these tests —
+    # `_evidence` below substitutes the rendered chunks — but its presence does,
+    # because without one the Reviewer correctly refuses to review anything.
+    state.investigation = {"dossier": {"components": []}, "accepted": True}
     return state
+
+
+def _evidence(chunks=None):
+    """Stand in for the dossier's rendered evidence.
+
+    The Reviewer resolves each finding's anchor against the repository AND
+    against the code it was shown; these tests are about the review output, so
+    the evidence is supplied directly rather than through a real checkout.
+    """
+    return patch("backend.repo.investigation.dossier_as_chunks",
+                 return_value=DOSSIER_CHUNKS if chunks is None else chunks)
 
 
 def _make_mock_client(raw_text: str) -> MagicMock:
@@ -220,15 +293,12 @@ def test_run_skips_when_goal_type_does_not_need_review():
     assert state.system_review is None
 
 
-@patch("backend.rag.retrieval.store.query", return_value=FAKE_CHROMA_RESULT)
-@patch("backend.rag.retrieval.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
-@patch("backend.rag.retrieval.get_commit_sha", return_value=FAKE_COMMIT_SHA)
-def test_run_populates_system_review_for_improve_existing_system(
-    mock_sha, mock_embed, mock_query
-):
+def test_run_populates_system_review_for_improve_existing_system():
     client = _make_mock_client(json.dumps(FAKE_REVIEWER_OUTPUT))
     state = _make_state(FAKE_GOAL_IMPROVE)
-    run(state, client=client)
+    with _evidence(), patch("backend.repo.skeleton.build_skeleton",
+                            return_value=_fake_skeleton()):
+        run(state, client=client)
     client.messages.create.assert_called_once()
     assert state.system_review is not None
     # Findings round-tripped through Pydantic + model_dump.
@@ -236,10 +306,7 @@ def test_run_populates_system_review_for_improve_existing_system(
     assert state.system_review["risks"][0]["anchor"]["file"] == "requests/sessions.py"
 
 
-@patch("backend.rag.retrieval.store.query", return_value=FAKE_CHROMA_RESULT)
-@patch("backend.rag.retrieval.embedder.embed_query", return_value=FAKE_QUERY_EMBEDDING)
-@patch("backend.rag.retrieval.get_commit_sha", return_value=FAKE_COMMIT_SHA)
-def test_run_leaves_review_none_on_llm_failure(mock_sha, mock_embed, mock_query):
+def test_run_leaves_review_none_on_llm_failure():
     client = MagicMock()
     client.messages.create.side_effect = RuntimeError("boom")
     state = _make_state(FAKE_GOAL_IMPROVE)

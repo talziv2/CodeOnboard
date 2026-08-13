@@ -32,26 +32,39 @@ Do not implement later-phase features until the current phase works end-to-end o
 ```
 backend/
   agents/
-    goal_agent.py           # dialogue → goal JSON
-    code_structure_agent.py # clone + parse → module map + RAG store
-    mentor_agent.py         # goal + map + RAG → learning path
+    goal/         # dialogue → goal JSON
+    documentation/# README + docstrings → doc_context (no LLM)
+    mentor/       # agent.py: wire format + LearningGraph construction
+                  # dossier.py: plans the graph from the Investigation Dossier
+                  # mutator.py: reshapes the graph on user/Grader signals
+    reviewer/     # architectural review for goal types that need one
+    teaching/     # one graph node → the lesson the user reads
+    grader/       # classifies the user's answer
+  repo/           # Layers A–C: repository understanding
+    cloner.py     # git clone --depth 1
+    parser.py     # tree-sitter → AST units with exact ranges  (Layer A)
+    skeleton.py   # the deterministic file/symbol/import index (Layer A)
+    anchors.py    # the grounding oracle: does this citation resolve?
+    tools.py      # the six exploration primitives
+    explore.py    # the budgeted agentic loop over those tools
+    structure.py  # structural neighbours: prerequisite + lesson context
+    survey.py     # Layer B: the goal-agnostic repository survey
+    survey_store.py     # survey cache, keyed (repo, commit, schema)
+    investigation.py    # Layer C: goal investigation → Dossier
+    dossier_store.py    # Dossier persistence, keyed (session, commit, schema)
+    dossier_context.py  # node-scoped slices of the Dossier
   pipeline/
-    state.py                # OnboardState dataclass (shared state)
-    graph.py                # LangGraph StateGraph: nodes, conditional edge, build_graph()
-    runner.py               # public entry point: run_pipeline() invokes the compiled graph
-  rag/
-    cloner.py               # git clone --depth 1
-    chunker.py              # tree-sitter → code chunks with metadata
-    embedder.py             # nomic-embed-text-v1.5 via sentence-transformers
-    store.py                # ChromaDB read/write
-  tools/
-    github.py               # GitHub REST API helpers
-  api.py                    # FastAPI endpoints
-frontend/                   # Next.js (added in Phase 1, Week 5)
+    state.py      # OnboardState dataclass (shared state)
+    graph.py      # LangGraph StateGraph — one shape
+    runner.py     # public entry point: run_pipeline()
+    explorer_nodes.py   # repo_survey + goal_investigation nodes
+  learning/       # LearningGraph model and its SQLite store
+  api.py          # FastAPI endpoints
+frontend/         # Next.js
 tests/
 data/
-  chroma/                   # ChromaDB persistent store (gitignored)
-  repos/                    # cloned repos temp storage (gitignored)
+  repos/          # cloned repos (gitignored)
+  sessions.db     # learning graphs, dossiers, surveys (gitignored)
 ```
 
 ---
@@ -75,11 +88,12 @@ All agents read/write `OnboardState` (defined in `backend/pipeline/state.py`). N
 class OnboardState:
     repo_url: str
     goal: dict | None                                # set by Goal Agent
-    repo_path: str                                   # set by Code Structure Agent
-    module_map: dict | None                          # set by Code Structure Agent
-    relevant_modules: list[str] | None               # set by Prioritization Agent
-    chunks_embedded: bool                            # set by Code Structure Agent
-    learning_path: list | None                       # set by Mentor Agent
+    repo_path: str                                   # set by repo_survey
+    module_map: dict | None                          # set by repo_survey
+    survey: dict | None                              # Layer B payload
+    investigation: dict | None                       # the Dossier (D11)
+    graph: LearningGraph | None                      # set by Mentor Agent
+    learning_path: list | None                       # derived from the graph
     confidence: str                                  # "high" / "medium" / "low"
     errors: Annotated[list, operator.add]            # reducer: append, never replace
     client: anthropic.Anthropic | None               # carried through the graph
@@ -97,14 +111,11 @@ class OnboardState:
   "experience_level": "intermediate",
   "depth": "deep",
   "time_available": "2 hours",
-  "target_repo": "https://github.com/psf/requests",
-  "language": "en"
+  "target_repo": "https://github.com/psf/requests"
 }
 ```
 
 `goal_type` values: `understand_system` | `understand_component` | `contribute_code` | `debug_issue`
-
-`language` values: `en` | `he`
 
 ---
 
@@ -124,65 +135,24 @@ class OnboardState:
 
 ---
 
----
+## UI copy
 
-## Output language
+The app is English-only. There is no locale selection, no translation layer, and
+no per-request language plumbing — agents write prose in English because that is
+the only language their prompts describe.
 
-The UI ships in English and Hebrew. The choice is made on the home page, stored
-in the `codeonboard_locale` cookie, and sent to `POST /goal/start`, which stamps
-it onto the synthesized goal as `language`. Because the goal dict rides on
-`OnboardState.goal` and is persisted with the graph, every agent already has it.
+All user-facing wording lives in `frontend/lib/strings.ts`, imported directly as
+`t` (plus `errorText`, which maps backend `detail` slugs like `session_not_found`
+to a readable sentence). It is a plain module, not a React context: keeping copy
+out of the components is a tidiness choice, not localization infrastructure.
 
-- **UI chrome** — `frontend/lib/i18n/{en,he}.ts`. `he.ts` is typed against the
-  English dictionary, so an untranslated key is a compile error.
-- **Goal-interview questions** — static, translated in
-  `backend/agents/goal/questions.py`. Not sent through the model.
-- **Agent prose** (node titles, walkthroughs, grading rationales) — the Mentor,
-  Mutator, Teaching and Grader agents append `language_instruction(state.goal)`
-  from `backend/agents/language.py` to their system prompt. It is `""` for
-  English, so the default path is byte-identical to before.
+Goal-interview questions are static strings in `backend/agents/goal/questions.py`
+— shown verbatim rather than generated, so the interview never drifts.
 
-Anything parsed rather than read stays English in every locale: JSON keys,
+Values that are *parsed* rather than read stay fixed keys: JSON keys,
 `goal_type`, `depth`, `familiarity`, concept tags, edge kinds, and Grader
-classifications. The frontend switches on those values, so a translated enum
-breaks the UI. Only the *label* is localized, via `tagLabel` / `stateLabel`.
-
-### Switching language on an existing session
-
-A graph's titles and lessons are generated once, in the session's language, and
-persisted alongside the answers the user gave against them. Switching language
-therefore **translates, never regenerates** — regenerating would produce
-different lessons and silently invalidate that history.
-
-- `GET /session/{id}?language=xx` and `GET /session/{id}/lesson?language=xx`
-  render in `xx`, translating on demand via `backend/agents/translator/`.
-- Results are cached on `LearningNode.translations` and
-  `LearningGraph.goal_translations` (both persisted), so a second switch is
-  free. All node titles translate in **one batched call**; a lesson translates
-  when first viewed in that language.
-- `node.title` / `node.cached_lesson` always hold the original. Translations are
-  derived. The Grader marks against the original `expected_answer`, so grading
-  is unaffected by what language the reader is in.
-- A translation failure degrades to the original text — never a broken page.
-  A whole-call failure is retried next read; a single key the model drops is
-  cached as its original so it isn't re-billed forever.
-- `graph.goal` is never rewritten by a language switch. `/session/start` matches
-  on exact goal equality to decide whether to resume, so mutating it would
-  orphan the session.
-
-Grading feedback follows the *reader's* current language (it is a direct reply
-to someone reading now), so a session switched mid-way has a mixed-language
-attempt history. New warm-up nodes are written in the session's language like
-every other node and translated on the next read.
-
-Hebrew is RTL. `app/layout.tsx` reads the cookie server-side so `<html dir>` is
-correct on first paint. Components use logical Tailwind utilities (`ms-`, `pe-`,
-`border-e`, `start-`) rather than directional ones. Code, file paths and repo
-URLs are pinned with `dir="ltr"`; agent prose that mixes languages uses the
-`.bidi-auto` class.
-
-To add a locale: add it to `SUPPORTED_LANGUAGES`, add a dictionary under
-`frontend/lib/i18n/`, and translate `questions.py`. Nothing else changes.
+classifications. The frontend switches on those values, so they must not be
+reworded. Only the displayed label is chosen, via `tagLabel` / `stateLabel`.
 
 ---
 
@@ -195,13 +165,27 @@ To add a locale: add it to `SUPPORTED_LANGUAGES`, add a dictionary under
 
 ---
 
-## RAG pipeline rules
+## Repository-understanding rules
 
-- Chunk by AST unit (function, class) via tree-sitter — never by arbitrary line windows
-- Chunk metadata must include: `file`, `start_line`, `end_line`, `type`, `name`, `language`
-- ChromaDB collection name: sanitized `{owner}_{repo}_{commit_sha[:12]}` (lowercased, non-alphanumeric → `_`); skip re-embedding if collection exists
-- Embedding model: `nomic-ai/nomic-embed-text-v1.5` via `sentence-transformers` — runs locally, no API key. Apply `search_document: ` prefix when indexing and `search_query: ` prefix when searching.
-- Phase 1: Python files only. Add languages one at a time.
+There is no retrieval, no embedding model and no vector store. Stage 5 removed
+them; see `docs/planning/phases/repo-understanding.md`.
+
+- **Layer A is deterministic and model-free.** `parser.py` walks the AST with
+  tree-sitter; `skeleton.py` indexes files, symbols (with exact line ranges) and
+  imports. Never ask a model for something Layer A can compute.
+- **Grounding is against the repository, not against evidence you were shown.**
+  Every citation resolves through `anchors.resolve`. The model names a `file` +
+  `symbol`; our code derives the line range, so a hallucinated range is
+  structurally impossible.
+- **One exploration loop.** `goal_investigation` is the only place the system
+  explores. Teaching, the Mentor, the Reviewer and the Mutator read what it
+  produced; none of them explores on its own.
+- **Dossier first, Skeleton second.** Goal-specific understanding beats generic
+  structure, but generic structure beats nothing — and both are grounded. This
+  is the fallback order in Teaching and in the Mutator.
+- **Python only, structurally.** The grammar, qualified-name rule, import
+  resolution and public-API detection (package `__init__` re-exports) are all
+  Python-specific. Adding a language means a sibling adapter, not a rewrite.
 
 ---
 
@@ -235,8 +219,8 @@ GITHUB_TOKEN=        # optional, increases rate limit
 
 ## Design decisions
 
-- **LangGraph orchestration (Phase 2).** `runner.py` keeps its public `run_pipeline(repo_url, goal, client)` signature but delegates to a compiled `StateGraph` in `backend/pipeline/graph.py`. Three nodes: `code_structure` → (conditional) → `prioritization` → `mentor`. The conditional edge short-circuits to END when `module_map` is missing. `OnboardState.errors` uses an `operator.add` reducer so future parallel nodes (e.g. Documentation Agent) can append safely. The Anthropic client rides on `OnboardState.client` because LangGraph nodes only receive state — no extra args.
-- **No MCP in Phase 1.** Agents call ChromaDB directly. Add MCP when 4+ agents share tools.
+- **LangGraph orchestration.** `run_pipeline(repo_url, goal, client)` delegates to one compiled `StateGraph`: `repo_survey` → `documentation` → `goal_investigation` → (conditional) `reviewer` → `mentor`. Conditional edges end the run when the skeleton or the dossier is missing, rather than fabricating a graph (D15). `OnboardState.errors` uses an `operator.add` reducer. The Anthropic client rides on `OnboardState.client` because LangGraph nodes receive only state.
+- **No MCP yet.** Add it when 4+ agents share tools.
 - **Goal Agent runs first, always.** Its output JSON is the single source of truth for all downstream agents.
 - **Mentor Agent is the only Sonnet call.** Everything upstream uses Haiku.
 - **Interactive learning graph (Phase 3, future).** The current Mentor Agent will retire; its responsibilities split across a Planner Agent (owns and mutates the learning graph), a Teaching Agent (expands a node into the actual lesson), and a Grader Agent (classifies user responses). The current step JSON becomes the *lesson brief*, not the lesson itself. The Planner's learning graph is also the **user's understanding graph** — the same object, persisted across sessions and surfaced to the user as the product's centerpiece artifact (this is the project's X-factor). Strategic positioning: CodeOnboard complements AI code generation by training humans to understand, critique, and direct it — Grader scope expands to critique-of-AI-output tasks, and a new AI-Assisted Development Mode operationalizes this. See `docs/planning/phases/roadmap.md` for the full Phase 3 description and the deferred design decisions.

@@ -12,9 +12,10 @@ class OnboardState:
     repo_url: str
     goal: dict | None = None
     repo_path: str = ""
+    # Subsystem account derived from the Layer B survey (or, without one, from
+    # the skeleton). Not an index status: it describes the repository, and
+    # nothing waits on it.
     module_map: dict | None = None
-    relevant_modules: list[str] | None = None  # set by Prioritization Agent
-    chunks_embedded: bool = False
     # Set by Documentation Agent: README excerpt + per-file module docstrings.
     # Passed to Teaching Agent so it can quote real documentation in lessons.
     doc_context: dict | None = None
@@ -38,6 +39,18 @@ class OnboardState:
     # anchor_node_id?}). Transient — the durable effect is the mutated graph.
     # kind: "none" | "prerequisite" | "skip".
     last_mutation: dict | None = None
+    # The Layer B repository survey (explorer path). A plain payload dict,
+    # loaded from the survey store or produced once and persisted. Context for
+    # the investigation — never evidence for a code claim.
+    survey: dict | None = None
+    # The Goal Investigation result (explorer path, D11): produced once by the
+    # goal_investigation node and read by Reviewer and Mentor, which must not
+    # explore on their own. Shape:
+    #   {"dossier": {...}, "accepted": bool, "stop_reason": str,
+    #    "turns": int, "cost_usd": float}
+    # `accepted` False means the dossier was salvaged at budget exhaustion with
+    # a recorded gap — downstream confidence must reflect that (§5.4).
+    investigation: dict | None = None
     # Structured review produced by the Reviewer Agent for goal types that need
     # architectural reasoning (improve_existing_system, understand_architecture).
     # Consumed by the Mentor Agent to emit risk/extension_point nodes. None for
