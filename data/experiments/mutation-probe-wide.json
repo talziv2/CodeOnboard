@@ -1,0 +1,635 @@
+[
+  {
+    "goal": "fastapi-di",
+    "node_index": "3/9",
+    "confused_at": "fastapi/routing.py:APIRoute.__init__",
+    "grade": "off-topic",
+    "dossier_candidates": [],
+    "dossier_sources": {},
+    "skeleton_candidates": [
+      "fastapi/routing.py:APIRoute",
+      "fastapi/routing.py:request_response",
+      "fastapi/_compat/shared.py:lenient_issubclass",
+      "fastapi/_compat/v2.py:ModelField",
+      "fastapi/datastructures.py:DefaultPlaceholder",
+      "fastapi/datastructures.py:Default",
+      "fastapi/dependencies/utils.py:_should_embed_body_fields",
+      "fastapi/dependencies/utils.py:get_body_field"
+    ],
+    "skeleton_sources": {
+      "enclosing_class": 1,
+      "calls": 4,
+      "module_dependency": 3
+    },
+    "removed_by_exclusion": [
+      "fastapi/dependencies/utils.py:get_dependant",
+      "fastapi/dependencies/utils.py:get_parameterless_sub_dependant"
+    ],
+    "pool_used": [
+      "fastapi/routing.py:APIRoute [enclosing_class]",
+      "fastapi/routing.py:request_response [calls]",
+      "fastapi/_compat/shared.py:lenient_issubclass [calls]",
+      "fastapi/_compat/v2.py:ModelField [calls]",
+      "fastapi/datastructures.py:DefaultPlaceholder [calls]"
+    ],
+    "selected": null,
+    "selected_source": null,
+    "selected_why": null,
+    "declined_because": "The confused node is already about APIRoute.__init__ itself \u2014 all candidate chunks are either the same function, helpers it calls, or utilities it uses, none of which is more foundational than understanding get_dependant and the Dependant tree concept that the confused node is specifically about.",
+    "outcome": "no_useful_prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  },
+  {
+    "goal": "fastapi-di",
+    "node_index": "6/9",
+    "confused_at": "fastapi/dependencies/utils.py:get_parameterless_sub_dependant",
+    "grade": "off-topic",
+    "dossier_candidates": [],
+    "dossier_sources": {},
+    "skeleton_candidates": [
+      "fastapi/routing.py:APIWebSocketRoute",
+      "fastapi/routing.py:APIWebSocketRoute.__init__",
+      "fastapi/routing.py:APIRoute",
+      "fastapi/background.py:BackgroundTasks",
+      "fastapi/concurrency.py:contextmanager_in_threadpool",
+      "fastapi/exceptions.py:DependencyScopeError",
+      "fastapi/security/oauth2.py:SecurityScopes"
+    ],
+    "skeleton_sources": {
+      "used_by": 3,
+      "module_dependency": 4
+    },
+    "removed_by_exclusion": [
+      "fastapi/routing.py:APIRoute.__init__"
+    ],
+    "pool_used": [
+      "fastapi/routing.py:APIWebSocketRoute [used_by]",
+      "fastapi/routing.py:APIWebSocketRoute.__init__ [used_by]",
+      "fastapi/routing.py:APIRoute [used_by]",
+      "fastapi/background.py:BackgroundTasks [module_dependency]",
+      "fastapi/concurrency.py:contextmanager_in_threadpool [module_dependency]"
+    ],
+    "selected": null,
+    "selected_source": null,
+    "selected_why": null,
+    "declined_because": "All candidates (APIRoute, APIWebSocketRoute, BackgroundTasks, contextmanager_in_threadpool) are either at the same level as the confused node or are consumers/side-topics of it \u2014 none teaches a concept more foundational than get_parameterless_sub_dependant itself that would make that node click.",
+    "outcome": "no_useful_prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  },
+  {
+    "goal": "fastapi-di",
+    "node_index": "3/10",
+    "confused_at": "fastapi/routing.py:APIRoute.__init__",
+    "grade": "off-topic",
+    "dossier_candidates": [],
+    "dossier_sources": {},
+    "skeleton_candidates": [
+      "fastapi/routing.py:APIRoute",
+      "fastapi/_compat/shared.py:lenient_issubclass",
+      "fastapi/_compat/v2.py:ModelField",
+      "fastapi/datastructures.py:DefaultPlaceholder",
+      "fastapi/datastructures.py:Default",
+      "fastapi/dependencies/utils.py:_should_embed_body_fields",
+      "fastapi/dependencies/utils.py:get_body_field",
+      "fastapi/dependencies/utils.py:get_flat_dependant"
+    ],
+    "skeleton_sources": {
+      "enclosing_class": 1,
+      "calls": 4,
+      "module_dependency": 3
+    },
+    "removed_by_exclusion": [
+      "fastapi/dependencies/utils.py:get_dependant",
+      "fastapi/dependencies/models.py:Dependant"
+    ],
+    "pool_used": [
+      "fastapi/routing.py:APIRoute [enclosing_class]",
+      "fastapi/_compat/shared.py:lenient_issubclass [calls]",
+      "fastapi/_compat/v2.py:ModelField [calls]",
+      "fastapi/datastructures.py:DefaultPlaceholder [calls]",
+      "fastapi/datastructures.py:Default [calls]"
+    ],
+    "selected": null,
+    "selected_source": null,
+    "selected_why": null,
+    "declined_because": "The confused node is specifically about how APIRoute.__init__ calls get_dependant to build the Dependant tree at registration time \u2014 all candidate chunks (the full APIRoute class, lenient_issubclass, ModelField, DefaultPlaceholder, Default) are either the same abstraction level as or less foundational than understanding get_dependant itself, and none of them teach the Dependant tree concept that actually unblocks the confused node.",
+    "outcome": "no_useful_prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  },
+  {
+    "goal": "fastapi-di",
+    "node_index": "7/10",
+    "confused_at": "fastapi/routing.py:get_request_handler",
+    "grade": "off-topic",
+    "dossier_candidates": [],
+    "dossier_sources": {},
+    "skeleton_candidates": [
+      "fastapi/routing.py:_AsyncLiftContextManager.__aexit__",
+      "fastapi/routing.py:_DefaultLifespan.__aexit__",
+      "fastapi/routing.py:_extract_endpoint_context",
+      "fastapi/routing.py:serialize_response",
+      "fastapi/datastructures.py:Default",
+      "fastapi/datastructures.py:DefaultPlaceholder",
+      "fastapi/dependencies/utils.py:_should_embed_body_fields",
+      "fastapi/dependencies/utils.py:get_body_field"
+    ],
+    "skeleton_sources": {
+      "calls": 4,
+      "module_dependency": 4
+    },
+    "removed_by_exclusion": [
+      "fastapi/routing.py:get_request_handler",
+      "fastapi/dependencies/utils.py:solve_dependencies",
+      "fastapi/routing.py:request_response"
+    ],
+    "pool_used": [
+      "fastapi/routing.py:_AsyncLiftContextManager.__aexit__ [calls]",
+      "fastapi/routing.py:_DefaultLifespan.__aexit__ [calls]",
+      "fastapi/routing.py:_extract_endpoint_context [calls]",
+      "fastapi/routing.py:serialize_response [calls]",
+      "fastapi/datastructures.py:Default [module_dependency]"
+    ],
+    "selected": null,
+    "selected_source": null,
+    "selected_why": null,
+    "declined_because": "All candidate chunks are either minor utilities (context manager boilerplate, cache helpers, response serialization) or internal markers that are not more foundational than get_request_handler itself \u2014 understanding any of them is not what makes the dependency-injection flow in get_request_handler click for a developer confused about how Dependant and solve_dependencies wire together per-request.",
+    "outcome": "no_useful_prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  },
+  {
+    "goal": "fastapi-di",
+    "node_index": "3/9",
+    "confused_at": "fastapi/dependencies/utils.py:analyze_param",
+    "grade": "off-topic",
+    "dossier_candidates": [],
+    "dossier_sources": {},
+    "skeleton_candidates": [
+      "fastapi/dependencies/utils.py:ensure_multipart_is_installed",
+      "fastapi/dependencies/utils.py:ParamDetails",
+      "fastapi/_compat/shared.py:lenient_issubclass",
+      "fastapi/_compat/shared.py:field_annotation_is_scalar",
+      "fastapi/background.py:BackgroundTasks",
+      "fastapi/concurrency.py:contextmanager_in_threadpool",
+      "fastapi/exceptions.py:DependencyScopeError",
+      "fastapi/security/oauth2.py:SecurityScopes"
+    ],
+    "skeleton_sources": {
+      "calls": 4,
+      "module_dependency": 4
+    },
+    "removed_by_exclusion": [
+      "fastapi/dependencies/utils.py:get_dependant"
+    ],
+    "pool_used": [
+      "fastapi/dependencies/utils.py:ensure_multipart_is_installed [calls]",
+      "fastapi/dependencies/utils.py:ParamDetails [calls]",
+      "fastapi/_compat/shared.py:lenient_issubclass [calls]",
+      "fastapi/_compat/shared.py:field_annotation_is_scalar [calls]",
+      "fastapi/background.py:BackgroundTasks [module_dependency]"
+    ],
+    "selected": null,
+    "selected_source": null,
+    "selected_why": null,
+    "declined_because": "None of the candidate chunks teach a concept more foundational than analyze_param itself\u2014ParamDetails is a simple dataclass it returns, lenient_issubclass and field_annotation_is_scalar are minor helpers, ensure_multipart_is_installed is a peripheral install check, and BackgroundTasks is just one of the injected types already mentioned in the confused node's own description; understanding any of these would not meaningfully unblock understanding how analyze_param classifies parameters.",
+    "outcome": "no_useful_prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  },
+  {
+    "goal": "fastapi-di",
+    "node_index": "6/9",
+    "confused_at": "fastapi/routing.py:request_response",
+    "grade": "off-topic",
+    "dossier_candidates": [
+      "fastapi/middleware/asyncexitstack.py:AsyncExitStackMiddleware"
+    ],
+    "dossier_sources": {
+      "depends_on": 1
+    },
+    "skeleton_candidates": [
+      "fastapi/exceptions.py:FastAPIError",
+      "fastapi/openapi/models.py:Response",
+      "fastapi/datastructures.py:Default",
+      "fastapi/datastructures.py:DefaultPlaceholder",
+      "fastapi/dependencies/utils.py:_should_embed_body_fields",
+      "fastapi/dependencies/utils.py:get_body_field"
+    ],
+    "skeleton_sources": {
+      "calls": 2,
+      "module_dependency": 4
+    },
+    "removed_by_exclusion": [],
+    "pool_used": [
+      "fastapi/middleware/asyncexitstack.py:AsyncExitStackMiddleware [depends_on]",
+      "fastapi/exceptions.py:FastAPIError [calls]",
+      "fastapi/openapi/models.py:Response [calls]",
+      "fastapi/datastructures.py:Default [module_dependency]",
+      "fastapi/datastructures.py:DefaultPlaceholder [module_dependency]"
+    ],
+    "selected": "fastapi/middleware/asyncexitstack.py:AsyncExitStackMiddleware",
+    "selected_source": "depends_on",
+    "selected_why": "AsyncExitStackMiddleware demonstrates the exact pattern\u2014creating an AsyncExitStack as a context manager and storing it on request.scope by name\u2014that request_response replicates for its two nested stacks, so understanding this simpler middleware makes the two-stack setup in request_response immediately recognisable.",
+    "declined_because": null,
+    "outcome": "prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  },
+  {
+    "goal": "fastapi-request",
+    "node_index": "3/10",
+    "confused_at": "fastapi/routing.py:APIRoute.__init__",
+    "grade": "off-topic",
+    "dossier_candidates": [
+      "fastapi/dependencies/utils.py:get_dependant"
+    ],
+    "dossier_sources": {
+      "depends_on": 1
+    },
+    "skeleton_candidates": [
+      "fastapi/routing.py:APIRoute",
+      "fastapi/_compat/shared.py:lenient_issubclass",
+      "fastapi/_compat/v2.py:ModelField",
+      "fastapi/datastructures.py:DefaultPlaceholder",
+      "fastapi/datastructures.py:Default",
+      "fastapi/dependencies/utils.py:_should_embed_body_fields",
+      "fastapi/dependencies/utils.py:get_body_field",
+      "fastapi/dependencies/utils.py:get_dependant"
+    ],
+    "skeleton_sources": {
+      "enclosing_class": 1,
+      "calls": 4,
+      "module_dependency": 3
+    },
+    "removed_by_exclusion": [
+      "fastapi/routing.py:request_response"
+    ],
+    "pool_used": [
+      "fastapi/dependencies/utils.py:get_dependant [depends_on]",
+      "fastapi/routing.py:APIRoute [enclosing_class]",
+      "fastapi/_compat/shared.py:lenient_issubclass [calls]",
+      "fastapi/_compat/v2.py:ModelField [calls]",
+      "fastapi/datastructures.py:DefaultPlaceholder [calls]"
+    ],
+    "selected": null,
+    "selected_source": null,
+    "selected_why": null,
+    "declined_because": "The confused node is already about APIRoute.__init__ as a whole \u2014 get_dependant, ModelField, lenient_issubclass, and DefaultPlaceholder are all called *within* that node, making them details of it rather than prerequisites that unlock understanding of it; the APIRoute class chunk is the confused node itself.",
+    "outcome": "no_useful_prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  },
+  {
+    "goal": "fastapi-request",
+    "node_index": "7/10",
+    "confused_at": "fastapi/dependencies/utils.py:solve_dependencies",
+    "grade": "confused",
+    "dossier_candidates": [],
+    "dossier_sources": {},
+    "skeleton_candidates": [
+      "fastapi/dependencies/utils.py:get_dependant",
+      "fastapi/dependencies/utils.py:_solve_generator",
+      "fastapi/dependencies/utils.py:SolvedDependency",
+      "fastapi/dependencies/utils.py:request_body_to_args",
+      "fastapi/background.py:BackgroundTasks",
+      "fastapi/concurrency.py:contextmanager_in_threadpool",
+      "fastapi/exceptions.py:DependencyScopeError",
+      "fastapi/security/oauth2.py:SecurityScopes"
+    ],
+    "skeleton_sources": {
+      "calls": 4,
+      "module_dependency": 4
+    },
+    "removed_by_exclusion": [
+      "fastapi/routing.py:get_request_handler",
+      "fastapi/dependencies/utils.py:solve_dependencies",
+      "fastapi/dependencies/utils.py:request_params_to_args"
+    ],
+    "pool_used": [
+      "fastapi/dependencies/utils.py:get_dependant [calls]",
+      "fastapi/dependencies/utils.py:_solve_generator [calls]",
+      "fastapi/dependencies/utils.py:SolvedDependency [calls]",
+      "fastapi/dependencies/utils.py:request_body_to_args [calls]",
+      "fastapi/background.py:BackgroundTasks [module_dependency]"
+    ],
+    "selected": "fastapi/dependencies/utils.py:get_dependant",
+    "selected_source": "calls",
+    "selected_why": "solve_dependencies receives and recurses over Dependant objects produced by get_dependant; without knowing what a Dependant contains (its sub-dependencies list, path/body/query param buckets, scope, cache key, etc.) the recursive structure and caching logic in solve_dependencies are opaque.",
+    "declined_because": null,
+    "outcome": "prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  },
+  {
+    "goal": "fastapi-security",
+    "node_index": "3/9",
+    "confused_at": "fastapi/security/api_key.py:APIKeyBase",
+    "grade": "off-topic",
+    "dossier_candidates": [],
+    "dossier_sources": {},
+    "skeleton_candidates": [
+      "fastapi/security/api_key.py:APIKeyBase.__init__",
+      "fastapi/security/api_key.py:APIKeyBase.make_not_authenticated_error",
+      "fastapi/security/api_key.py:APIKeyBase.check_api_key",
+      "fastapi/exceptions.py:HTTPException",
+      "fastapi/openapi/models.py:APIKeyIn",
+      "fastapi/openapi/models.py:APIKey"
+    ],
+    "skeleton_sources": {
+      "defines": 3,
+      "calls": 3
+    },
+    "removed_by_exclusion": [
+      "fastapi/security/base.py:SecurityBase"
+    ],
+    "pool_used": [
+      "fastapi/security/api_key.py:APIKeyBase.__init__ [defines]",
+      "fastapi/security/api_key.py:APIKeyBase.make_not_authenticated_error [defines]",
+      "fastapi/security/api_key.py:APIKeyBase.check_api_key [defines]",
+      "fastapi/exceptions.py:HTTPException [calls]",
+      "fastapi/openapi/models.py:APIKeyIn [calls]"
+    ],
+    "selected": null,
+    "selected_source": null,
+    "selected_why": null,
+    "declined_because": null,
+    "outcome": "generation_failed",
+    "reached_retrieval": false,
+    "errors": [
+      "mutator: prerequisite generation failed: Invalid \\escape: line 1 column 202 (char 201)"
+    ]
+  },
+  {
+    "goal": "fastapi-security",
+    "node_index": "6/9",
+    "confused_at": "fastapi/dependencies/models.py:Dependant._is_security_scheme",
+    "grade": "off-topic",
+    "dossier_candidates": [
+      "fastapi/dependencies/utils.py:get_dependant"
+    ],
+    "dossier_sources": {
+      "used_by": 1
+    },
+    "skeleton_candidates": [
+      "fastapi/dependencies/models.py:Dependant",
+      "fastapi/dependencies/models.py:_unwrapped_call"
+    ],
+    "skeleton_sources": {
+      "enclosing_class": 1,
+      "calls": 1
+    },
+    "removed_by_exclusion": [
+      "fastapi/security/base.py:SecurityBase",
+      "fastapi/openapi/utils.py:get_openapi_security_definitions",
+      "fastapi/dependencies/models.py:Dependant._is_security_scheme"
+    ],
+    "pool_used": [
+      "fastapi/dependencies/utils.py:get_dependant [used_by]",
+      "fastapi/dependencies/models.py:Dependant [enclosing_class]",
+      "fastapi/dependencies/models.py:_unwrapped_call [calls]"
+    ],
+    "selected": "fastapi/dependencies/models.py:_unwrapped_call",
+    "selected_source": "calls",
+    "selected_why": "The isinstance check in _is_security_scheme is only meaningful once you know what object it is actually checking \u2014 _unwrapped_call strips functools.partial wrappers and decorators via inspect.unwrap, so without understanding this step a developer cannot reason about why passing a class vs. an instance, or wrapping a callable, changes the check's outcome.",
+    "declined_because": null,
+    "outcome": "prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  },
+  {
+    "goal": "requests-flow",
+    "node_index": "4/14",
+    "confused_at": "src/requests/sessions.py:Session.request",
+    "grade": "off-topic",
+    "dossier_candidates": [],
+    "dossier_sources": {},
+    "skeleton_candidates": [
+      "src/requests/sessions.py:Session",
+      "src/requests/sessions.py:Session.merge_environment_settings",
+      "src/requests/cookies.py:RequestsCookieJar",
+      "src/requests/models.py:Request",
+      "src/requests/models.py:Response",
+      "src/requests/_internal_utils.py:to_native_string",
+      "src/requests/_types.py:is_prepared",
+      "src/requests/adapters.py:HTTPAdapter"
+    ],
+    "skeleton_sources": {
+      "enclosing_class": 1,
+      "calls": 4,
+      "module_dependency": 3
+    },
+    "removed_by_exclusion": [
+      "src/requests/api.py:request",
+      "src/requests/models.py:Request.__init__",
+      "src/requests/sessions.py:Session.prepare_request",
+      "src/requests/sessions.py:Session.send"
+    ],
+    "pool_used": [
+      "src/requests/sessions.py:Session [enclosing_class]",
+      "src/requests/sessions.py:Session.merge_environment_settings [calls]",
+      "src/requests/cookies.py:RequestsCookieJar [calls]",
+      "src/requests/models.py:Request [calls]",
+      "src/requests/models.py:Response [calls]"
+    ],
+    "selected": null,
+    "selected_source": null,
+    "selected_why": null,
+    "declined_because": "The confused node is already about Session.request()'s call sequence, and all candidate chunks (the Session class itself, merge_environment_settings, RequestsCookieJar, Request, Response) are either the same abstraction level or peripheral details \u2014 none teaches a concept more foundational than understanding how Session.request() orchestrates its steps, which is what the node itself explains.",
+    "outcome": "no_useful_prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  },
+  {
+    "goal": "requests-flow",
+    "node_index": "10/14",
+    "confused_at": "src/requests/sessions.py:Session.send",
+    "grade": "off-topic",
+    "dossier_candidates": [],
+    "dossier_sources": {},
+    "skeleton_candidates": [
+      "src/requests/sessions.py:Session",
+      "src/requests/sessions.py:Session.get_adapter",
+      "src/requests/cookies.py:extract_cookies_to_jar",
+      "src/requests/hooks.py:dispatch_hook",
+      "src/requests/models.py:Request",
+      "src/requests/_internal_utils.py:to_native_string",
+      "src/requests/_types.py:is_prepared",
+      "src/requests/adapters.py:HTTPAdapter"
+    ],
+    "skeleton_sources": {
+      "enclosing_class": 1,
+      "calls": 4,
+      "module_dependency": 3
+    },
+    "removed_by_exclusion": [
+      "src/requests/sessions.py:Session.request",
+      "src/requests/adapters.py:HTTPAdapter.send",
+      "src/requests/sessions.py:SessionRedirectMixin.resolve_redirects"
+    ],
+    "pool_used": [
+      "src/requests/sessions.py:Session [enclosing_class]",
+      "src/requests/sessions.py:Session.get_adapter [calls]",
+      "src/requests/cookies.py:extract_cookies_to_jar [calls]",
+      "src/requests/hooks.py:dispatch_hook [calls]",
+      "src/requests/models.py:Request [calls]"
+    ],
+    "selected": null,
+    "selected_source": null,
+    "selected_why": null,
+    "declined_because": "The confused node is Session.send() itself, which is already fully contained within the Session class chunk offered as a candidate \u2014 understanding Session's state/contract, get_adapter, dispatch_hook, or extract_cookies_to_jar are all subordinate details of send(), not more foundational concepts that must be understood before send() can be read; an intermediate developer can follow send()'s linear flow directly without a prerequisite node.",
+    "outcome": "no_useful_prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  },
+  {
+    "goal": "requests-auth",
+    "node_index": "3/11",
+    "confused_at": "src/requests/sessions.py:merge_setting",
+    "grade": "off-topic",
+    "dossier_candidates": [],
+    "dossier_sources": {},
+    "skeleton_candidates": [
+      "src/requests/sessions.py:session",
+      "src/requests/utils.py:to_key_val_list",
+      "src/requests/_internal_utils.py:to_native_string",
+      "src/requests/_types.py:is_prepared",
+      "src/requests/adapters.py:HTTPAdapter",
+      "src/requests/cookies.py:RequestsCookieJar"
+    ],
+    "skeleton_sources": {
+      "calls": 2,
+      "module_dependency": 4
+    },
+    "removed_by_exclusion": [
+      "src/requests/sessions.py:Session.prepare_request",
+      "src/requests/sessions.py:merge_setting"
+    ],
+    "pool_used": [
+      "src/requests/sessions.py:session [calls]",
+      "src/requests/utils.py:to_key_val_list [calls]",
+      "src/requests/_internal_utils.py:to_native_string [module_dependency]",
+      "src/requests/_types.py:is_prepared [module_dependency]",
+      "src/requests/adapters.py:HTTPAdapter [module_dependency]"
+    ],
+    "selected": null,
+    "selected_source": null,
+    "selected_why": null,
+    "declined_because": "None of the candidate chunks teach the foundational concept actually needed \u2014 how merge_setting itself works (the None-check, dict vs non-dict branching logic) \u2014 as they are either deprecated helpers, type utilities, or the unrelated HTTPAdapter class, none of which would make the merge_setting priority rule click for the developer.",
+    "outcome": "no_useful_prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  },
+  {
+    "goal": "requests-auth",
+    "node_index": "8/11",
+    "confused_at": "src/requests/auth.py:_basic_auth_str",
+    "grade": "confused",
+    "dossier_candidates": [],
+    "dossier_sources": {},
+    "skeleton_candidates": [
+      "src/requests/_internal_utils.py:to_native_string",
+      "src/requests/cookies.py:extract_cookies_to_jar",
+      "src/requests/utils.py:parse_dict_header",
+      "src/requests/models.py:PreparedRequest",
+      "src/requests/models.py:Response"
+    ],
+    "skeleton_sources": {
+      "calls": 1,
+      "module_dependency": 4
+    },
+    "removed_by_exclusion": [
+      "src/requests/auth.py:HTTPBasicAuth.__call__"
+    ],
+    "pool_used": [
+      "src/requests/_internal_utils.py:to_native_string [calls]",
+      "src/requests/cookies.py:extract_cookies_to_jar [module_dependency]",
+      "src/requests/utils.py:parse_dict_header [module_dependency]",
+      "src/requests/models.py:PreparedRequest [module_dependency]",
+      "src/requests/models.py:Response [module_dependency]"
+    ],
+    "selected": "src/requests/_internal_utils.py:to_native_string",
+    "selected_source": "calls",
+    "selected_why": "_basic_auth_str calls to_native_string to convert the final base64-encoded bytes back into a native Python string before returning the 'Basic ...' header value, so understanding this helper clarifies the last step of the encoding pipeline.",
+    "declined_because": null,
+    "outcome": "prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  },
+  {
+    "goal": "requests-auth",
+    "node_index": "3/11",
+    "confused_at": "src/requests/models.py:PreparedRequest.prepare_auth",
+    "grade": "off-topic",
+    "dossier_candidates": [
+      "src/requests/auth.py:HTTPBasicAuth",
+      "src/requests/auth.py:AuthBase.__call__"
+    ],
+    "dossier_sources": {
+      "depends_on": 2
+    },
+    "skeleton_candidates": [
+      "src/requests/models.py:PreparedRequest",
+      "src/requests/models.py:PreparedRequest.prepare_content_length",
+      "src/requests/auth.py:HTTPBasicAuth",
+      "src/requests/utils.py:get_auth_from_url",
+      "src/requests/_internal_utils.py:to_native_string",
+      "src/requests/_internal_utils.py:unicode_is_ascii",
+      "src/requests/_types.py:SupportsRead",
+      "src/requests/cookies.py:_copy_cookie_jar"
+    ],
+    "skeleton_sources": {
+      "enclosing_class": 1,
+      "calls": 3,
+      "module_dependency": 4
+    },
+    "removed_by_exclusion": [
+      "src/requests/models.py:PreparedRequest.prepare",
+      "src/requests/models.py:PreparedRequest.prepare_auth"
+    ],
+    "pool_used": [
+      "src/requests/auth.py:HTTPBasicAuth [depends_on]",
+      "src/requests/auth.py:AuthBase.__call__ [depends_on]",
+      "src/requests/models.py:PreparedRequest [enclosing_class]",
+      "src/requests/models.py:PreparedRequest.prepare_content_length [calls]"
+    ],
+    "selected": null,
+    "selected_source": null,
+    "selected_why": null,
+    "declined_because": "All candidate chunks (HTTPBasicAuth, AuthBase.__call__, PreparedRequest class, prepare_content_length) are either directly referenced within prepare_auth itself or are simple utility helpers \u2014 none is more foundational than prepare_auth in a way that would make the confused node 'click'; an intermediate developer can follow the tuple-to-HTTPBasicAuth conversion, the callable invocation pattern, and the __dict__ merge without a dedicated prerequisite node on any of these pieces.",
+    "outcome": "no_useful_prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  },
+  {
+    "goal": "requests-auth",
+    "node_index": "8/11",
+    "confused_at": "src/requests/hooks.py:dispatch_hook",
+    "grade": "off-topic",
+    "dossier_candidates": [],
+    "dossier_sources": {},
+    "skeleton_candidates": [
+      "src/requests/models.py:Response"
+    ],
+    "skeleton_sources": {
+      "calls": 1
+    },
+    "removed_by_exclusion": [
+      "src/requests/sessions.py:Session.send",
+      "src/requests/auth.py:HTTPDigestAuth.handle_401",
+      "src/requests/hooks.py:dispatch_hook"
+    ],
+    "pool_used": [
+      "src/requests/models.py:Response [calls]"
+    ],
+    "selected": null,
+    "selected_source": null,
+    "selected_why": null,
+    "declined_because": "The Response class is a data object that dispatch_hook operates on, but understanding it is not more foundational than dispatch_hook itself \u2014 the developer's confusion is about the hook-chaining mechanism, and knowing Response's fields and methods does not make that mechanism click; the hook iteration and replacement contract in dispatch_hook is what needs to be learned directly.",
+    "outcome": "no_useful_prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  }
+]

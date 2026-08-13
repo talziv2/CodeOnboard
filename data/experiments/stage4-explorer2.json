@@ -1,0 +1,89 @@
+{
+  "arm": "explorer",
+  "dossier_persisted": true,
+  "lesson_context": {
+    "component": {
+      "file": "src/requests/api.py",
+      "symbol": "request",
+      "role_in_goal": "Module-level convenience function that creates a temporary Session and calls session.request(), enabling auth to be passed at the module level.",
+      "why_it_matters": "Shows the entry point for module-level use: requests.get(url, auth=...) creates a Session and delegates to Session.request()."
+    },
+    "flow_position": [
+      {
+        "file": "src/requests/api.py",
+        "symbol": "request",
+        "what_happens": "User calls requests.get(url, auth=('user', 'pass')); creates a temporary Session and calls session.request(method, url, auth=('user', 'pass'))",
+        "is_current": true,
+        "flow": "Basic HTTP Auth Flow (tuple auth)"
+      },
+      {
+        "file": "src/requests/sessions.py",
+        "symbol": "Session.request",
+        "what_happens": "Creates a Request object with auth=('user', 'pass'), then calls self.prepare_request(req)",
+        "is_current": false,
+        "flow": "Basic HTTP Auth Flow (tuple auth)"
+      },
+      {
+        "file": "src/requests/sessions.py",
+        "symbol": "Session.prepare_request",
+        "what_happens": "Merges request auth with session auth using merge_setting(auth, self.auth); if both are None, attempts to get auth from netrc if trust_env is True; passes merged auth to p.prepare(auth=merged_auth)",
+        "is_current": false,
+        "flow": "Basic HTTP Auth Flow (tuple auth)"
+      }
+    ],
+    "relationships": [
+      {
+        "from_file": "src/requests/api.py",
+        "from_symbol": "request",
+        "to_file": "src/requests/sessions.py",
+        "to_symbol": "Session.request",
+        "kind": "delegates_to",
+        "note": "Module-level request() creates a Session and delegates all parameters including auth to Session.request()"
+      }
+    ],
+    "contracts": [],
+    "prerequisites": [
+      {
+        "concept": "HTTP Authentication headers (Authorization, Proxy-Authorization, WWW-Authenticate)",
+        "why_needed": "Users must understand that auth works by setting HTTP headers; prepare_auth adds Authorization headers, and digest auth parses the WWW-Authenticate header from 401 responses."
+      },
+      {
+        "concept": "Base64 encoding",
+        "why_needed": "HTTPBasicAuth uses base64 to encode username:password for the Authorization header."
+      },
+      {
+        "concept": "Request/response cycle and HTTP status codes",
+        "why_needed": "Understanding digest auth requires knowing that it uses a 401 status code to trigger the challenge-response flow."
+      },
+      {
+        "concept": "Callable objects and the __call__ protocol in Python",
+        "why_needed": "Auth handlers are callable objects that implement __call__(r) \u2192 r. prepare_auth calls auth_handler(self), relying on this protocol."
+      }
+    ]
+  },
+  "lesson": {
+    "walkthrough": "This is the module-level entry point: when you call `requests.get(url, auth=...)`, you're calling this `request()` function. It's a thin wrapper that does one job: create a temporary `Session` and delegate the entire call (all `**kwargs`, including `auth`) to `Session.request()`. The `with` statement ensures the session closes cleanly, avoiding socket leaks.\n\nWhy this matters for auth: the `auth` parameter you pass here flows directly into the Session machinery unchanged. There's no auth logic in this file\u2014this function is purely a convenience shim. The real work happens in `Session.request()` and downstream in `Session.prepare_request()`, where auth is merged with session-level auth, instantiated if needed (e.g., tuple \u2192 `HTTPBasicAuth`), and then applied to the prepared request via a callable handler.\n\nKey insight: module-level `requests.get()` and `requests.post()` (defined elsewhere, not shown) all route through this single `request()` function. So understanding this entry point shows how auth reaches the Session layer, which is where the pluggable auth architecture lives.",
+    "prompt": "Before reading further: why does this function create a fresh `Session()` inside the `with` block instead of using a module-level shared session? What happens to `auth` and other request parameters as they cross from this function into `Session.request()`?",
+    "expected_answer": "A fresh session is created per call to ensure resources (sockets, connections) are properly cleaned up when the context manager exits, preventing resource leaks. The `auth` parameter and all other kwargs are forwarded unchanged via `**kwargs` to `Session.request()`, which then handles merging request-level auth with session-level auth and applying it to the prepared request.",
+    "prompt_kind": "predict-then-reveal"
+  },
+  "grade": {
+    "classification": "confused",
+    "rationale": "The developer misunderstands what the `auth` parameter is (conflating it with URL-based credentials) and does not grasp the flow of how auth is passed from the module-level request() through Session.request(), nor the purpose of creating fresh sessions for resource cleanup."
+  },
+  "candidates": [
+    {
+      "label": "src/requests/sessions.py:Session.request",
+      "source": "depends_on",
+      "rationale": "the confused node delegates_to this: Module-level request() creates a Session and delegates all parameters including auth to Session.request()"
+    }
+  ],
+  "mutation": {
+    "title": "Understand how Session.request() constructs and prepares a request",
+    "anchor": "src/requests/sessions.py:557-653",
+    "symbol": "Session.request",
+    "why": "The module-level request() is only meaningful once you understand what Session.request() does with the forwarded kwargs \u2014 specifically how it wraps them into a Request object, prepares it, and sends it \u2014 making the 'thin wrapper' pattern click."
+  },
+  "d12_fallback_ok": true,
+  "seconds_total": 170.97049355506897
+}

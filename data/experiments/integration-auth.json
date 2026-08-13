@@ -1,0 +1,524 @@
+{
+  "requests-auth": {
+    "explorer": {
+      "nodes": 8,
+      "anchor_accuracy": 1.0,
+      "important_hit": [
+        "src/requests/api.py",
+        "src/requests/auth.py",
+        "src/requests/models.py",
+        "src/requests/sessions.py"
+      ],
+      "important_missed": [],
+      "discovery": 1.0,
+      "nodes_traceable_to_dossier": 8,
+      "confidence": "high",
+      "seconds": 231.55260848999023,
+      "investigation": {
+        "accepted": true,
+        "stop_reason": "turn_budget",
+        "turns": 21,
+        "tool_calls": 44,
+        "rejections": [
+          "The investigation is not yet sufficient: 0 goal-relevant component(s) established; at least 4 are needed to explain this kind of goal; no verified entry point into the goal-relevant behaviour; 0 flow(s) traced; at least 1 needed; 0 confirmed relationship(s); at least 2 needed; 0 contract(s)/abstraction(s) described; at least 1 needed for this goal; no prerequisite concepts identified. Investigate further, or record what blocks you as an open question. Empty entries: components[0] is str, not an object, components[1] is str, not an object, components[2] is str, not an object, components[3] is str, not an object, components[4] is str, not an object, components[5] is str, not an object, components[6] is str, not an object, components[7] is str, not an object.",
+          "The investigation is not yet sufficient: 0 goal-relevant component(s) established; at least 4 are needed to explain this kind of goal; no verified entry point into the goal-relevant behaviour; 0 flow(s) traced; at least 1 needed; 0 confirmed relationship(s); at least 2 needed; 0 contract(s)/abstraction(s) described; at least 1 needed for this goal; no prerequisite concepts identified; `understanding` is empty. Investigate further, or record what blocks you as an open question. Empty entries: components[0] is str, not an object, components[1] is str, not an object, components[2] is str, not an object, components[3] is str, not an object, components[4] is str, not an object, components[5] is str, not an object, components[6] is str, not an object, components[7] is str, not an object.",
+          "The investigation is not yet sufficient: 0 goal-relevant component(s) established; at least 4 are needed to explain this kind of goal; no verified entry point into the goal-relevant behaviour; 0 flow(s) traced; at least 1 needed; 0 confirmed relationship(s); at least 2 needed; 0 contract(s)/abstraction(s) described; at least 1 needed for this goal; no prerequisite concepts identified; `understanding` is empty. Investigate further, or record what blocks you as an open question. Empty entries: components[0] is str, not an object, components[1] is str, not an object, components[2] is str, not an object, components[3] is str, not an object, components[4] is str, not an object, components[5] is str, not an object, components[6] is str, not an object, components[7] is str, not an object.",
+          "The investigation is not yet sufficient: 0 goal-relevant component(s) established; at least 4 are needed to explain this kind of goal; no verified entry point into the goal-relevant behaviour; 0 flow(s) traced; at least 1 needed; 0 confirmed relationship(s); at least 2 needed; 0 contract(s)/abstraction(s) described; at least 1 needed for this goal; no prerequisite concepts identified; `understanding` is empty. Investigate further, or record what blocks you as an open question. Empty entries: components[0] is str, not an object, components[1] is str, not an object, components[2] is str, not an object, components[3] is str, not an object, components[4] is str, not an object, components[5] is str, not an object, components[6] is str, not an object, components[7] is str, not an object.",
+          "The investigation is not yet sufficient: 0 goal-relevant component(s) established; at least 4 are needed to explain this kind of goal; no verified entry point into the goal-relevant behaviour; 0 flow(s) traced; at least 1 needed; 0 confirmed relationship(s); at least 2 needed; 0 contract(s)/abstraction(s) described; at least 1 needed for this goal; no prerequisite concepts identified; `understanding` is empty. Investigate further, or record what blocks you as an open question. Empty entries: components[0] is str, not an object, components[1] is str, not an object, components[2] is str, not an object, components[3] is str, not an object, components[4] is str, not an object, components[5] is str, not an object, components[6] is str, not an object, components[7] is str, not an object.",
+          "The investigation is not yet sufficient: 0 goal-relevant component(s) established; at least 4 are needed to explain this kind of goal; no verified entry point into the goal-relevant behaviour; 0 flow(s) traced; at least 1 needed; 0 confirmed relationship(s); at least 2 needed; 0 contract(s)/abstraction(s) described; at least 1 needed for this goal; no prerequisite concepts identified; `understanding` is empty. Investigate further, or record what blocks you as an open question. Empty entries: components[0] is str, not an object, components[1] is str, not an object, components[2] is str, not an object, components[3] is str, not an object, components[4] is str, not an object, components[5] is str, not an object, components[6] is str, not an object, components[7] is str, not an object.",
+          "The investigation is not yet sufficient: 0 goal-relevant component(s) established; at least 4 are needed to explain this kind of goal; no verified entry point into the goal-relevant behaviour; 0 flow(s) traced; at least 1 needed; 0 confirmed relationship(s); at least 2 needed; 0 contract(s)/abstraction(s) described; at least 1 needed for this goal; no prerequisite concepts identified; `understanding` is empty. Investigate further, or record what blocks you as an open question. Empty entries: components[0] is str, not an object, components[1] is str, not an object, components[2] is str, not an object, components[3] is str, not an object, components[4] is str, not an object, components[5] is str, not an object, components[6] is str, not an object, components[7] is str, not an object.",
+          "The investigation is not yet sufficient: 0 goal-relevant component(s) established; at least 4 are needed to explain this kind of goal; no verified entry point into the goal-relevant behaviour; 0 flow(s) traced; at least 1 needed; 0 confirmed relationship(s); at least 2 needed; 0 contract(s)/abstraction(s) described; at least 1 needed for this goal; no prerequisite concepts identified; `understanding` is empty. Investigate further, or record what blocks you as an open question. Empty entries: components[0] is str, not an object, components[1] is str, not an object, components[2] is str, not an object, components[3] is str, not an object, components[4] is str, not an object, components[5] is str, not an object, components[6] is str, not an object, components[7] is str, not an object.",
+          "The investigation is not yet sufficient: 0 goal-relevant component(s) established; at least 4 are needed to explain this kind of goal; no verified entry point into the goal-relevant behaviour; 0 flow(s) traced; at least 1 needed; 0 confirmed relationship(s); at least 2 needed; 0 contract(s)/abstraction(s) described; at least 1 needed for this goal; no prerequisite concepts identified; `understanding` is empty. Investigate further, or record what blocks you as an open question. Empty entries: components[0] is str, not an object, components[1] is str, not an object, components[2] is str, not an object, components[3] is str, not an object, components[4] is str, not an object, components[5] is str, not an object, components[6] is str, not an object, components[7] is str, not an object.",
+          "The investigation is not yet sufficient: 0 goal-relevant component(s) established; at least 4 are needed to explain this kind of goal; no verified entry point into the goal-relevant behaviour; 0 flow(s) traced; at least 1 needed; 0 confirmed relationship(s); at least 2 needed; 0 contract(s)/abstraction(s) described; at least 1 needed for this goal; no prerequisite concepts identified; `understanding` is empty. Investigate further, or record what blocks you as an open question. Empty entries: components[0] is str, not an object, components[1] is str, not an object, components[2] is str, not an object, components[3] is str, not an object, components[4] is str, not an object, components[5] is str, not an object, components[6] is str, not an object, components[7] is str, not an object.",
+          "The investigation is not yet sufficient: 0 goal-relevant component(s) established; at least 4 are needed to explain this kind of goal; no verified entry point into the goal-relevant behaviour; 0 flow(s) traced; at least 1 needed; 0 confirmed relationship(s); at least 2 needed; 0 contract(s)/abstraction(s) described; at least 1 needed for this goal; no prerequisite concepts identified; `understanding` is empty. Investigate further, or record what blocks you as an open question. Empty entries: components[0] is str, not an object, components[1] is str, not an object, components[2] is str, not an object, components[3] is str, not an object, components[4] is str, not an object, components[5] is str, not an object, components[6] is str, not an object, components[7] is str, not an object.",
+          "1 citation(s) do not resolve against the repository: contract: src/requests/_types.py:AuthType (unknown_symbol). Verify with `symbols` or `propose_anchor`, then correct or drop them."
+        ],
+        "cost_usd": 0.17687904999999998,
+        "seconds": 94.11000000000001,
+        "used_survey": true
+      },
+      "dossier": {
+        "understanding": "Authentication in Requests is applied through a callable object pattern: authentication handlers (AuthBase subclasses) are invoked during request preparation to modify the PreparedRequest's headers. There are three built-in implementations: HTTPBasicAuth (encodes username:password in Base64 as an Authorization header), HTTPProxyAuth (uses Proxy-Authorization header instead), and HTTPDigestAuth (handles challenge-response authentication with 401 retries). Authentication can be provided as a 2-tuple (username, password) which auto-converts to HTTPBasicAuth, as an AuthBase-derived object, or as a custom callable. Auth is merged from multiple sources: explicit request-level auth, session-level auth, and environment sources (.netrc). The prepare_auth method is called last in request preparation, allowing auth handlers to modify fully-prepared requests including hooks for handling 401 responses.",
+        "components": [
+          {
+            "file": "src/requests/auth.py",
+            "symbol": "AuthBase",
+            "role_in_goal": "Base class that all auth handlers derive from; defines the __call__ contract that auth objects must implement to apply authentication to a PreparedRequest.",
+            "why_it_matters": "Establishes the extension point for authentication. Understanding AuthBase shows how any custom auth scheme must be callable and accept a PreparedRequest."
+          },
+          {
+            "file": "src/requests/auth.py",
+            "symbol": "HTTPBasicAuth.__call__",
+            "role_in_goal": "Implements Basic HTTP authentication by setting the Authorization header with Base64-encoded credentials; directly modifies the PreparedRequest.",
+            "why_it_matters": "Shows the simplest auth handler pattern: called with a PreparedRequest, modifies its headers, and returns it. This is the most common auth method."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "PreparedRequest.prepare_auth",
+            "role_in_goal": "Central auth application point: converts 2-tuple auth to HTTPBasicAuth, invokes the auth handler callable, and updates the PreparedRequest with the result. Also extracts auth from URL if not explicitly provided.",
+            "why_it_matters": "This is where authentication is actually applied to requests. It's the critical bridge between the auth parameter and the prepared request headers."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "PreparedRequest.prepare",
+            "role_in_goal": "Orchestrates all request preparation steps including prepare_auth as the final step before prepare_hooks, ensuring auth is applied to a fully-prepared request.",
+            "why_it_matters": "Shows the order of operations: prepare_auth runs last so auth handlers can modify a complete request (method, URL, headers, body, cookies already set)."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session.prepare_request",
+            "role_in_goal": "Merges auth from multiple sources: explicit request auth, session.auth, and environment (.netrc via trust_env); then calls PreparedRequest.prepare with the merged auth value.",
+            "why_it_matters": "Shows how session-level defaults and environment variables are incorporated into auth. Understanding merge_setting and trust_env behavior is essential."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session.request",
+            "role_in_goal": "Entry point at session level: creates a Request object with the auth parameter, then calls prepare_request to integrate it with session defaults.",
+            "why_it_matters": "Shows how user-provided auth reaches the preparation pipeline and how it interacts with session state."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "request",
+            "role_in_goal": "Module-level convenience function that creates a temporary Session and delegates to Session.request, allowing per-request auth without maintaining session state.",
+            "why_it_matters": "Shows that single-request auth flows through the same Session.request mechanism; entry point for understanding how requests.get(url, auth=...) works."
+          }
+        ],
+        "entry_points": [
+          {
+            "file": "src/requests/api.py",
+            "symbol": "request",
+            "how_it_enters": "Module-level request() function creates a temporary Session and passes auth parameter through to Session.request()"
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session.request",
+            "how_it_enters": "Session.request() accepts auth parameter from user code, creates Request object with it, and triggers prepare_request which merges and applies auth"
+          }
+        ],
+        "flows": [
+          {
+            "name": "Basic auth flow from module-level request",
+            "steps": [
+              {
+                "file": "src/requests/api.py",
+                "symbol": "request",
+                "what_happens": "Creates temporary Session and calls Session.request(method, url, auth=...)"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "Creates Request object with auth parameter (line 631), calls prepare_request(req)"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.prepare_request",
+                "what_happens": "Merges request.auth with self.auth via merge_setting (line 551), passes merged auth to PreparedRequest.prepare"
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare",
+                "what_happens": "Calls prepare_auth(auth, url) as final preparation step (line 443), before prepare_hooks"
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare_auth",
+                "what_happens": "Converts 2-tuple to HTTPBasicAuth (line 683), invokes auth_handler(self) to modify headers (line 689), updates self.__dict__ with result"
+              },
+              {
+                "file": "src/requests/auth.py",
+                "symbol": "HTTPBasicAuth.__call__",
+                "what_happens": "Sets r.headers['Authorization'] to Basic auth string (line 112), returns modified PreparedRequest"
+              }
+            ]
+          },
+          {
+            "name": "Auth merging from multiple sources",
+            "steps": [
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.prepare_request",
+                "what_happens": "Gets auth from request.auth (line 536); if None and trust_env, tries get_netrc_auth (line 538)"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "merge_setting",
+                "what_happens": "Receives request auth and self.auth; returns request auth if non-None (line 94), else session auth (line 88)"
+              }
+            ]
+          }
+        ],
+        "relationships": [
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest.prepare_auth",
+            "kind": "calls",
+            "note": "prepare_auth is called as the final step, ensuring auth modifies a fully-prepared request"
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare_auth",
+            "to_file": "src/requests/auth.py",
+            "to_symbol": "AuthBase",
+            "kind": "delegates_to",
+            "note": "prepare_auth invokes the auth handler as a callable, following the AuthBase contract"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.prepare_request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "merge_setting",
+            "kind": "calls",
+            "note": "merge_setting determines final auth value from request and session defaults"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.prepare_request",
+            "kind": "calls",
+            "note": "Session.request passes auth parameter to prepare_request for integration with session state"
+          },
+          {
+            "from_file": "src/requests/api.py",
+            "from_symbol": "request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.request",
+            "kind": "delegates_to",
+            "note": "Module-level request function delegates to Session.request with auth parameter"
+          },
+          {
+            "from_file": "src/requests/auth.py",
+            "from_symbol": "HTTPBasicAuth",
+            "to_file": "src/requests/auth.py",
+            "to_symbol": "AuthBase",
+            "kind": "extends",
+            "note": "HTTPBasicAuth extends AuthBase and implements the __call__ contract"
+          }
+        ],
+        "contracts": [
+          {
+            "file": "src/requests/auth.py",
+            "symbol": "AuthBase.__call__",
+            "contract": "Authentication handlers must be callable and accept a PreparedRequest, returning the same PreparedRequest with auth modifications applied (typically header modifications)."
+          }
+        ],
+        "prerequisites": [
+          {
+            "concept": "Callable objects and callable protocol in Python",
+            "why_needed": "Authentication handlers are invoked as callables; understanding how __call__ works is fundamental to grasping how auth objects modify requests"
+          },
+          {
+            "concept": "Base64 encoding",
+            "file": "src/requests/auth.py",
+            "symbol": "_basic_auth_str",
+            "why_needed": "HTTPBasicAuth uses Base64 to encode username:password credentials in the Authorization header"
+          },
+          {
+            "concept": "HTTP headers and their role in authentication",
+            "why_needed": "Auth is applied by modifying HTTP headers (Authorization, Proxy-Authorization); understanding headers is needed to follow auth mechanisms"
+          },
+          {
+            "concept": "Dictionary merging and priority resolution",
+            "file": "src/requests/sessions.py",
+            "symbol": "merge_setting",
+            "why_needed": "Auth sources are merged with explicit request-level taking priority over session-level; merge_setting implements this logic"
+          }
+        ],
+        "evidence_refs": [
+          {
+            "path": "tests/test_requests.py",
+            "clarifies": "test_set_basicauth (line 563) demonstrates that a 2-tuple auth parameter is converted to HTTPBasicAuth and applied as an Authorization header during request preparation"
+          },
+          {
+            "path": "tests/test_requests.py",
+            "clarifies": "test_basicauth_encodes_byte_strings (line 572) shows that HTTPBasicAuth properly handles byte string credentials and Base64 encoding"
+          }
+        ],
+        "context": [
+          "Authentication in Requests is strictly opt-in: if no auth parameter is provided, no Authorization header is added",
+          "Auth handlers can be stateful (HTTPDigestAuth uses thread-local storage to maintain nonce state across requests)",
+          "HTTPDigestAuth registers response hooks to handle 401 challenges, demonstrating that auth is not just header modification but can participate in the full request-response cycle",
+          "The trust_env session setting enables automatic auth extraction from .netrc files via get_netrc_auth()",
+          "AuthType definition in _types.py allows both high-level tuple syntax and low-level callable objects for flexibility",
+          "prepare_auth is intentionally called last in the preparation sequence so auth handlers can access fully-prepared requests"
+        ],
+        "open_questions": [
+          {
+            "question": "How does HTTPDigestAuth exactly handle the 401 response flow and nonce cache invalidation across redirects?",
+            "why_it_matters": "The survey flagged digest auth as an area needing deeper investigation; while the basic __call__ and handle_401 methods are clear, the full state machine for handling retries and redirects would require reading build_digest_header and handle_redirect in detail, which would help explain stateful auth persistence"
+          }
+        ]
+      },
+      "errors": [],
+      "session_id": "8ba97cf1d88e48e7ac8b593561f6e9c3",
+      "resume_ok": true,
+      "learning_path": [
+        {
+          "step": 1,
+          "title": "Learn the AuthBase callable contract",
+          "file": "src/requests/auth.py",
+          "line_range": [
+            78,
+            82
+          ],
+          "why": "Every auth mechanism in Requests is built on this contract; understanding it first means every subsequent node makes immediate sense.",
+          "understand": "An auth handler is any callable that accepts a PreparedRequest and returns a (modified) PreparedRequest \u2014 AuthBase formalises this as a class with __call__, making auth objects composable and swappable.",
+          "concepts": [
+            "extension_point",
+            "architecture",
+            "auth"
+          ]
+        },
+        {
+          "step": 2,
+          "title": "See the simplest auth handler: HTTPBasicAuth.__call__",
+          "file": "src/requests/auth.py",
+          "line_range": [
+            111,
+            113
+          ],
+          "why": "HTTPBasicAuth is the canonical implementation of the AuthBase contract and the most-used auth type; reading it makes the pattern concrete.",
+          "understand": "Implementing auth means setting exactly one header on the PreparedRequest and returning it \u2014 HTTPBasicAuth does this in two lines by writing a Base64-encoded Authorization header, and this same pattern applies to any custom auth handler you would write.",
+          "concepts": [
+            "component",
+            "auth",
+            "extension_point"
+          ]
+        },
+        {
+          "step": 3,
+          "title": "Trace auth merging across request and session",
+          "file": "src/requests/sessions.py",
+          "line_range": [
+            511,
+            555
+          ],
+          "why": "Auth can come from the per-request call, the Session default, or .netrc; this method is where those sources are resolved into one value.",
+          "understand": "Request-level auth wins over session-level auth (via merge_setting), and if neither is set and trust_env is true, .netrc credentials are tried \u2014 so the auth a handler finally sees is the result of a three-way priority resolution, not simply whatever the caller passed.",
+          "concepts": [
+            "flow",
+            "auth",
+            "component"
+          ]
+        },
+        {
+          "step": 4,
+          "title": "Understand merge_setting's priority logic",
+          "file": "src/requests/sessions.py",
+          "line_range": [
+            76,
+            105
+          ],
+          "why": "merge_setting is the mechanism that enforces request-over-session auth priority; knowing its rule prevents surprises when session.auth appears to be ignored.",
+          "understand": "merge_setting returns the request-level value whenever it is non-None, otherwise falls back to the session-level value \u2014 for auth (a scalar, not a dict) this is a simple precedence rule that you must recognise to predict which credential will actually be sent.",
+          "concepts": [
+            "component",
+            "auth",
+            "architecture"
+          ]
+        },
+        {
+          "step": 5,
+          "title": "See why prepare_auth runs last in PreparedRequest.prepare",
+          "file": "src/requests/models.py",
+          "line_range": [
+            422,
+            449
+          ],
+          "why": "The ordering of preparation steps is a design decision that directly affects what an auth handler can observe and modify.",
+          "understand": "prepare_auth is called after method, URL, headers, cookies, and body are all finalised, so an auth handler receives a complete, fully-formed request \u2014 this is intentional and is what makes schemes like OAuth, which sign the entire request, viable.",
+          "concepts": [
+            "flow",
+            "architecture",
+            "auth"
+          ]
+        },
+        {
+          "step": 6,
+          "title": "Step through PreparedRequest.prepare_auth",
+          "file": "src/requests/models.py",
+          "line_range": [
+            668,
+            695
+          ],
+          "why": "This is the exact moment auth is applied to a request; it converts tuple shorthand, invokes the handler, and reconciles the returned request back into self.",
+          "understand": "prepare_auth normalises a (username, password) 2-tuple into HTTPBasicAuth automatically, invokes the auth callable with the PreparedRequest, then replaces its own internal state with the returned object's state \u2014 meaning the auth handler's header writes persist on self without any additional bookkeeping by the caller.",
+          "concepts": [
+            "component",
+            "flow",
+            "auth"
+          ]
+        },
+        {
+          "step": 7,
+          "title": "Follow the full flow from api.request to header write",
+          "file": "src/requests/api.py",
+          "line_range": [
+            24,
+            71
+          ],
+          "why": "Seeing the complete call chain from the public API entry point to the Authorization header write ties every prior node into one coherent flow.",
+          "understand": "requests.get(url, auth=...) creates a temporary Session, hands auth through Session.request \u2192 Session.prepare_request \u2192 PreparedRequest.prepare \u2192 PreparedRequest.prepare_auth \u2192 auth_handler.__call__, where the header is finally written \u2014 every node in this path is a distinct responsibility, but the data flows through without transformation until prepare_auth.",
+          "concepts": [
+            "flow",
+            "architecture",
+            "auth"
+          ]
+        },
+        {
+          "step": 8,
+          "title": "Recognise the extension point for stateful and challenge-response auth",
+          "file": "src/requests/auth.py",
+          "line_range": [
+            81,
+            82
+          ],
+          "why": "HTTPDigestAuth demonstrates that auth handlers can register response hooks to handle 401 challenges, which is a capability the AuthBase contract enables but the Basic example doesn't reveal.",
+          "understand": "Because auth handlers receive the full PreparedRequest and can attach hooks to it, they can participate in multi-round-trip flows (like Digest's 401 challenge-response) \u2014 the extension point is richer than the Basic example implies, though the exact state machine for nonce management across redirects is not fully established by the investigation.",
+          "concepts": [
+            "extension_point",
+            "auth",
+            "risk"
+          ]
+        }
+      ]
+    },
+    "rag": {
+      "nodes": 7,
+      "anchor_accuracy": 1.0,
+      "important_hit": [
+        "src/requests/auth.py",
+        "src/requests/models.py",
+        "src/requests/sessions.py"
+      ],
+      "important_missed": [
+        "src/requests/api.py"
+      ],
+      "discovery": 0.75,
+      "nodes_traceable_to_dossier": 0,
+      "confidence": "medium",
+      "seconds": 39.87740182876587,
+      "investigation": {},
+      "dossier": null,
+      "errors": [],
+      "session_id": "3deb8168dc95498c95b3f27e373aa862",
+      "resume_ok": true,
+      "learning_path": [
+        {
+          "step": 1,
+          "title": "Understand the AuthBase callable protocol and HTTPBasicAuth",
+          "file": "src/requests/auth.py",
+          "line_range": [
+            111,
+            113
+          ],
+          "why": "Every auth handler in requests is a callable that mutates a PreparedRequest \u2014 understanding this contract is the foundation for everything else.",
+          "understand": "An auth object is simply a callable that receives a PreparedRequest, injects headers (or other state), and returns the modified request; this is the extension point for all auth schemes.",
+          "concepts": [
+            "component",
+            "extension_point",
+            "auth"
+          ]
+        },
+        {
+          "step": 2,
+          "title": "See how HTTPProxyAuth specialises the same callable pattern",
+          "file": "src/requests/auth.py",
+          "line_range": [
+            116,
+            121
+          ],
+          "why": "HTTPProxyAuth shows that the same callable protocol covers proxy auth simply by targeting a different header, illustrating how the pattern scales.",
+          "understand": "Subclassing HTTPBasicAuth and overriding __call__ to write Proxy-Authorization instead of Authorization is all it takes to create a new auth variant \u2014 the session machinery stays untouched.",
+          "concepts": [
+            "component",
+            "auth",
+            "extension_point"
+          ]
+        },
+        {
+          "step": 3,
+          "title": "Trace where auth is stored on a raw Request before preparation",
+          "file": "src/requests/models.py",
+          "line_range": [
+            283,
+            373
+          ],
+          "why": "Request is the user-facing object; its auth field is what developers set, and it feeds directly into PreparedRequest.prepare().",
+          "understand": "The Request class is a plain data holder \u2014 auth is just stored as an attribute here and only actually applied during the prepare() call that produces a PreparedRequest.",
+          "concepts": [
+            "component",
+            "flow",
+            "auth"
+          ]
+        },
+        {
+          "step": 4,
+          "title": "Follow prepare() to see auth application ordering",
+          "file": "src/requests/models.py",
+          "line_range": [
+            422,
+            449
+          ],
+          "why": "prepare() enforces that prepare_auth is called last, which is a critical invariant: auth schemes like OAuth need the fully-formed URL and body before they can sign the request.",
+          "understand": "prepare_auth must run after all other prepare_* steps because auth schemes may need to hash or sign the complete request \u2014 changing this order would silently break HMAC-style auth.",
+          "concepts": [
+            "flow",
+            "risk",
+            "auth"
+          ]
+        },
+        {
+          "step": 5,
+          "title": "Understand how Session stores and merges auth state",
+          "file": "src/requests/sessions.py",
+          "line_range": [
+            442,
+            503
+          ],
+          "why": "Session.auth is the default auth object applied to every request sent through the session; understanding its initialisation shows how per-request auth interacts with session-level auth.",
+          "understand": "self.auth = None at init time means no auth by default; when a request is sent, the session merges its own auth with any per-request auth, with per-request taking precedence.",
+          "concepts": [
+            "component",
+            "architecture",
+            "auth"
+          ]
+        },
+        {
+          "step": 6,
+          "title": "Examine redirect auth stripping and re-application logic",
+          "file": "src/requests/sessions.py",
+          "line_range": [
+            309,
+            332
+          ],
+          "why": "rebuild_auth is a non-obvious security mechanism that runs on every redirect to prevent credential leakage to a different host.",
+          "understand": "If a redirect crosses to a new host, the Authorization header is stripped unconditionally; netrc-based auth may then be re-applied for the new host \u2014 failing to understand this causes hard-to-debug auth failures on multi-hop redirects.",
+          "concepts": [
+            "flow",
+            "risk",
+            "auth"
+          ]
+        },
+        {
+          "step": 7,
+          "title": "Recognise the ValidatedRequest type narrowing contract",
+          "file": "src/requests/_types.py",
+          "line_range": [
+            62,
+            72
+          ],
+          "why": "Auth callables receive a PreparedRequest typed as _ValidatedRequest at call sites, making the post-preparation type contract explicit and preventing misuse of half-prepared requests.",
+          "understand": "The _ValidatedRequest subtype exists solely to assert that url and method are non-None strings after full preparation; auth handlers can rely on these invariants without defensive checks.",
+          "concepts": [
+            "component",
+            "risk",
+            "auth"
+          ]
+        }
+      ]
+    }
+  }
+}

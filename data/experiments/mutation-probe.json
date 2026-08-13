@@ -1,0 +1,96 @@
+[
+  {
+    "goal": "fastapi-di",
+    "node_index": "4/9",
+    "confused_at": "fastapi/dependencies/utils.py:analyze_param",
+    "grade": "off-topic",
+    "prerequisite": null,
+    "outcome": "no prerequisite",
+    "reached_retrieval": true,
+    "errors": [
+      "mutator: prerequisite retrieval failed: retrieve_supporting_chunks is severed for the reliability gate \u2014 the explorer path must not be rescued by retrieval"
+    ]
+  },
+  {
+    "goal": "fastapi-di",
+    "node_index": "5/10",
+    "confused_at": "fastapi/dependencies/utils.py:analyze_param",
+    "grade": "off-topic",
+    "prerequisite": null,
+    "outcome": "no prerequisite",
+    "reached_retrieval": true,
+    "errors": [
+      "mutator: prerequisite retrieval failed: retrieve_supporting_chunks is severed for the reliability gate \u2014 the explorer path must not be rescued by retrieval"
+    ]
+  },
+  {
+    "goal": "fastapi-di",
+    "node_index": "4/9",
+    "confused_at": "fastapi/dependencies/utils.py:get_dependant",
+    "grade": "off-topic",
+    "prerequisite": null,
+    "outcome": "no prerequisite",
+    "reached_retrieval": true,
+    "errors": [
+      "mutator: prerequisite retrieval failed: retrieve_supporting_chunks is severed for the reliability gate \u2014 the explorer path must not be rescued by retrieval"
+    ]
+  },
+  {
+    "goal": "fastapi-request",
+    "node_index": "5/10",
+    "confused_at": "fastapi/routing.py:request_response",
+    "grade": "off-topic",
+    "prerequisite": "fastapi/routing.py:APIRoute.matches \u2014 Understand how APIRoute.matches selects a route and hands off to its app",
+    "outcome": "prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  },
+  {
+    "goal": "fastapi-security",
+    "node_index": "4/9",
+    "confused_at": "fastapi/security/http.py:HTTPBase",
+    "grade": "off-topic",
+    "prerequisite": null,
+    "outcome": "no prerequisite",
+    "reached_retrieval": true,
+    "errors": [
+      "mutator: prerequisite retrieval failed: retrieve_supporting_chunks is severed for the reliability gate \u2014 the explorer path must not be rescued by retrieval"
+    ]
+  },
+  {
+    "goal": "requests-flow",
+    "node_index": "6/14",
+    "confused_at": "src/requests/sessions.py:Session.prepare_request",
+    "grade": "off-topic",
+    "prerequisite": null,
+    "outcome": "no prerequisite",
+    "reached_retrieval": true,
+    "errors": [
+      "mutator: prerequisite retrieval failed: retrieve_supporting_chunks is severed for the reliability gate \u2014 the explorer path must not be rescued by retrieval"
+    ]
+  },
+  {
+    "goal": "requests-auth",
+    "node_index": "5/11",
+    "confused_at": "src/requests/models.py:PreparedRequest.prepare",
+    "grade": "off-topic",
+    "prerequisite": null,
+    "outcome": "no prerequisite",
+    "reached_retrieval": true,
+    "errors": [
+      "mutator: prerequisite retrieval failed: retrieve_supporting_chunks is severed for the reliability gate \u2014 the explorer path must not be rescued by retrieval"
+    ]
+  },
+  {
+    "goal": "requests-auth",
+    "node_index": "5/11",
+    "confused_at": "src/requests/sessions.py:merge_setting",
+    "grade": "off-topic",
+    "prerequisite": null,
+    "outcome": "no prerequisite",
+    "reached_retrieval": true,
+    "errors": [
+      "mutator: prerequisite retrieval failed: retrieve_supporting_chunks is severed for the reliability gate \u2014 the explorer path must not be rescued by retrieval"
+    ]
+  }
+]

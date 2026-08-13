@@ -1,0 +1,1163 @@
+{
+  "requests-auth": {
+    "explorer": {
+      "nodes": 12,
+      "anchor_accuracy": 1.0,
+      "important_hit": [
+        "src/requests/auth.py",
+        "src/requests/models.py",
+        "src/requests/sessions.py"
+      ],
+      "important_missed": [
+        "src/requests/api.py"
+      ],
+      "discovery": 0.75,
+      "nodes_traceable_to_dossier": 12,
+      "confidence": "high",
+      "seconds": 175.1715795993805,
+      "investigation": {
+        "accepted": true,
+        "stop_reason": "turn_budget",
+        "turns": 21,
+        "tool_calls": 39,
+        "rejections": [
+          "1 citation(s) do not resolve against the repository: contract: src/requests/_types.py:AuthType (unknown_symbol). Verify with `symbols` or `propose_anchor`, then correct or drop them."
+        ],
+        "cost_usd": 0.1841402,
+        "seconds": 133.9380000000001,
+        "used_survey": true
+      },
+      "dossier": {
+        "understanding": "Authentication in Requests is applied through a flexible callable interface: an auth parameter (either a tuple for basic auth, an AuthBase subclass, or any callable) is passed through the request preparation flow and invoked on a PreparedRequest to inject credentials. For synchronous authentication (HTTPBasicAuth), this happens once during preparation by adding an Authorization header. For challenge-response authentication (HTTPDigestAuth), it registers a response hook that watches for 401 responses, extracts authentication challenges, and automatically retries the request with a computed Digest header. The authentication system integrates with the Session's credential merging and with netrc file support.",
+        "components": [
+          {
+            "file": "src/requests/auth.py",
+            "symbol": "AuthBase",
+            "role_in_goal": "Base class defining the auth callable interface that all authentication handlers must implement",
+            "why_it_matters": "Understanding AuthBase.__call__ signature is essential to know what auth handlers receive (a PreparedRequest) and what they return (a modified PreparedRequest). This is the contract all auth implementations follow."
+          },
+          {
+            "file": "src/requests/auth.py",
+            "symbol": "HTTPBasicAuth.__call__",
+            "role_in_goal": "Implements basic authentication by computing and injecting the Authorization header into the request",
+            "why_it_matters": "Shows the simplest case of auth application: a handler receives a PreparedRequest, modifies it by adding the Authorization header with base64-encoded credentials, and returns it. This is the canonical example of how auth handlers work."
+          },
+          {
+            "file": "src/requests/auth.py",
+            "symbol": "HTTPDigestAuth.__call__",
+            "role_in_goal": "Implements digest authentication initialization, registering response hooks for challenge handling and nonce caching",
+            "why_it_matters": "Demonstrates the two-phase auth pattern: (1) initial request preparation with cached nonce if available, and (2) response hooks registered to handle 401 challenges asynchronously. This is how Requests handles interactive/challenge-response auth schemes."
+          },
+          {
+            "file": "src/requests/auth.py",
+            "symbol": "HTTPDigestAuth.handle_401",
+            "role_in_goal": "Response hook that processes 401 responses by extracting the WWW-Authenticate challenge and retrying the request with computed Digest credentials",
+            "why_it_matters": "Shows how auth is applied after the initial request is received. It rewrites the request's Authorization header and resends it, demonstrating that auth can be applied both before sending and in response to server challenges."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "PreparedRequest.prepare_auth",
+            "role_in_goal": "Central location where auth is applied to a PreparedRequest during preparation. Handles tuple auth as a special case by converting to HTTPBasicAuth, then invokes the auth handler",
+            "why_it_matters": "This is where the auth parameter is actually invoked. It shows how tuples are converted to HTTPBasicAuth instances, and how auth handlers modify the prepared request. Understanding the order (prepare_auth runs last, after body is prepared) is critical for OAuth and similar schemes."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "PreparedRequest.prepare",
+            "role_in_goal": "Orchestrates the full request preparation pipeline, calling prepare_auth as the final step",
+            "why_it_matters": "Shows that prepare_auth is deliberately called last (before hooks) to ensure auth handlers work on fully-prepared requests. The comment 'prepare_auth must be last to enable authentication schemes such as OAuth' documents this design."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session.prepare_request",
+            "role_in_goal": "Merges request-level and session-level auth before passing to PreparedRequest.prepare",
+            "why_it_matters": "Shows how auth is merged from multiple sources: request auth overrides session auth. Also shows auth extraction from netrc files when trust_env is True. This is where the authentication cascade originates."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session.request",
+            "role_in_goal": "Entry point that creates a Request with the auth parameter and delegates to prepare_request, then sends it",
+            "why_it_matters": "Shows the user-facing API where auth is first accepted as a parameter. It documents that auth can be a tuple or callable, and it's the start of the auth flow through the Session."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "merge_setting",
+            "role_in_goal": "Function that merges request-level and session-level settings, including auth, with request-level taking precedence",
+            "why_it_matters": "Explains the priority: if request auth is provided, it wins; if not, session auth is used. For non-dict auth (like callables), request auth takes complete precedence."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session.send",
+            "role_in_goal": "Sends the PreparedRequest through the adapter and dispatches response hooks, including auth-related hooks from digest auth",
+            "why_it_matters": "Shows where auth's response hooks are actually executed. The dispatch_hook call at line 784 runs handle_401 and handle_redirect hooks registered by HTTPDigestAuth, enabling challenge-response auth."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "request",
+            "role_in_goal": "Module-level convenience function that creates a temporary Session and delegates to Session.request with auth parameter",
+            "why_it_matters": "Entry point for single-request auth use cases like requests.get(url, auth=(user, pass)). Shows how auth flows through the convenience API."
+          },
+          {
+            "file": "src/requests/hooks.py",
+            "symbol": "dispatch_hook",
+            "role_in_goal": "Mechanism for invoking registered response hooks, including auth challenge handlers",
+            "why_it_matters": "Shows how digest auth's handle_401 hook is invoked as a response hook. Understanding dispatch_hook explains how auth can react to responses after transmission."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "RequestHooksMixin.register_hook",
+            "role_in_goal": "Allows auth handlers like HTTPDigestAuth to register response hooks that will be invoked after a response is received",
+            "why_it_matters": "Shows the mechanism by which HTTPDigestAuth registers handle_401 and handle_redirect. This enables the callback-based, non-blocking auth challenge response pattern."
+          }
+        ],
+        "entry_points": [
+          {
+            "file": "src/requests/api.py",
+            "symbol": "request",
+            "how_it_enters": "Module-level convenience functions (get, post, etc.) call this function with an auth parameter. Creates a temporary Session and delegates to Session.request(method=..., url=..., auth=auth, ...)."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session.request",
+            "how_it_enters": "User creates a Session object and calls session.request(method, url, auth=..., ...) or convenience methods like session.get(url, auth=...). Auth is first accepted as a parameter here."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Request.__init__",
+            "how_it_enters": "Session.request creates a Request object with the auth parameter passed to __init__, storing it on self.auth for later preparation."
+          }
+        ],
+        "flows": [
+          {
+            "name": "Basic authentication flow (tuple or HTTPBasicAuth)",
+            "steps": [
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "User calls session.request(..., auth=(user, pass)) or auth=HTTPBasicAuth(user, pass). Auth parameter is stored in Request object created at line 623-634."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.prepare_request",
+                "what_happens": "Called at line 635. Merges request auth with session auth using merge_setting at line 551. If request.auth is None and session.auth exists, session auth is used. If trust_env and both are None, netrc auth is extracted at lines 537-538."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare",
+                "what_happens": "Called at line 541 with merged auth. Sequentially prepares method, url, headers, cookies, body. At line 443, calls prepare_auth with the merged auth value, which is the last preparation step."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare_auth",
+                "what_happens": "If auth is None, tries to extract auth from URL. If auth is a 2-tuple, converts to HTTPBasicAuth(username, password) at line 683. Calls auth_handler(self) at line 689, invoking the auth callable on the prepared request."
+              },
+              {
+                "file": "src/requests/auth.py",
+                "symbol": "HTTPBasicAuth.__call__",
+                "what_happens": "Receives PreparedRequest. Computes base64-encoded Authorization header using _basic_auth_str at line 112. Sets r.headers['Authorization'] with the computed header. Returns the modified PreparedRequest."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Called at line 651 with the prepared request that now has the Authorization header. At line 777, sends it through the adapter, which transmits it over the network."
+              }
+            ]
+          },
+          {
+            "name": "Digest authentication flow with challenge response",
+            "steps": [
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "User calls session.request(..., auth=HTTPDigestAuth(user, pass)). Auth parameter is stored in Request object."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.prepare_request",
+                "what_happens": "Merges auth using merge_setting, same as basic auth flow. HTTPDigestAuth instance is passed through to PreparedRequest.prepare."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare_auth",
+                "what_happens": "Receives HTTPDigestAuth instance. It's not a tuple and not None, so goes to line 686 as auth_handler. Calls HTTPDigestAuth instance (invokes __call__) at line 689."
+              },
+              {
+                "file": "src/requests/auth.py",
+                "symbol": "HTTPDigestAuth.__call__",
+                "what_happens": "Initializes per-thread state at line 323. If cached nonce exists (line 325), builds digest header and injects into Authorization header at line 330. Saves body position at lines 331-338 for potential retries. Registers response hooks at lines 339-340: handle_401 and handle_redirect. Returns the modified PreparedRequest."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Sends the request at line 777 through adapter. Receives response (possibly 401 Unauthorized). At line 784, dispatches response hook 'response' via dispatch_hook."
+              },
+              {
+                "file": "src/requests/hooks.py",
+                "symbol": "dispatch_hook",
+                "what_happens": "Gets the 'response' hooks list from the request's hooks dict (which includes handle_401 registered by HTTPDigestAuth). Invokes each hook, passing the response object. For handle_401, passes the 401 response."
+              },
+              {
+                "file": "src/requests/auth.py",
+                "symbol": "HTTPDigestAuth.handle_401",
+                "what_happens": "Receives the 401 response. At line 291, extracts WWW-Authenticate header. If it contains 'digest' and num_401_calls < 2 (line 293), increments call counter and parses challenge at line 296. At line 302, copies the original request. At lines 307-311, builds digest header with the challenge parameters and sets Authorization header. At line 312, resends the copied request via r.connection.send(prep, **kwargs). Returns the new response."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Returns the final response from the hook dispatcher at line 784. The response is now either the original 401 or the new response from the automatic retry (if digest auth succeeded)."
+              }
+            ]
+          },
+          {
+            "name": "Authentication with Session defaults",
+            "steps": [
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.__init__",
+                "what_happens": "User creates session = requests.Session(). At line 450, self.auth is initialized to None. User can later set session.auth = HTTPBasicAuth(user, pass) or any auth handler."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "User calls session.get(url) without an auth parameter. auth parameter in the request method is None. Session is passed to prepare_request."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.prepare_request",
+                "what_happens": "At line 536, request.auth is None. At line 551, merge_setting(None, self.auth) is called. Since request auth is None and session auth exists, session auth is returned at line 88 of merge_setting. This merged auth is passed to prepare."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare_auth",
+                "what_happens": "Receives the session-level auth. Invokes it, applying the session's default authentication to the request, same as if it had been passed explicitly."
+              }
+            ]
+          }
+        ],
+        "relationships": [
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.prepare_request",
+            "kind": "calls",
+            "note": "Session.request creates a Request with auth, then calls prepare_request to merge it with session defaults and prepare it."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.prepare_request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "merge_setting",
+            "kind": "calls",
+            "note": "Merges request auth and session auth with request auth taking precedence (line 551)."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.prepare_request",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest.prepare",
+            "kind": "calls",
+            "note": "Passes merged auth to prepare, which will invoke it in prepare_auth."
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest.prepare_auth",
+            "kind": "calls",
+            "note": "Calls prepare_auth as the final preparation step, ensuring auth handlers work on fully-prepared requests."
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare_auth",
+            "to_file": "src/requests/auth.py",
+            "to_symbol": "HTTPBasicAuth",
+            "kind": "constructs",
+            "note": "If auth is a 2-tuple, constructs HTTPBasicAuth(username, password) at line 683."
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare_auth",
+            "to_file": "src/requests/auth.py",
+            "to_symbol": "AuthBase",
+            "kind": "calls",
+            "note": "Invokes any auth handler (callable that accepts PreparedRequest) at line 689, modifying the request."
+          },
+          {
+            "from_file": "src/requests/auth.py",
+            "from_symbol": "HTTPBasicAuth.__call__",
+            "to_file": "src/requests/auth.py",
+            "to_symbol": "_basic_auth_str",
+            "kind": "calls",
+            "note": "Computes the base64-encoded Authorization header value."
+          },
+          {
+            "from_file": "src/requests/auth.py",
+            "from_symbol": "HTTPDigestAuth.__call__",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "RequestHooksMixin.register_hook",
+            "kind": "calls",
+            "note": "Registers handle_401 and handle_redirect response hooks at lines 339-340 for challenge-response handling."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/hooks.py",
+            "to_symbol": "dispatch_hook",
+            "kind": "calls",
+            "note": "Dispatches response hooks at line 784, invoking auth-related hooks like HTTPDigestAuth.handle_401."
+          },
+          {
+            "from_file": "src/requests/auth.py",
+            "from_symbol": "HTTPDigestAuth.handle_401",
+            "to_file": "src/requests/auth.py",
+            "to_symbol": "HTTPDigestAuth.build_digest_header",
+            "kind": "calls",
+            "note": "Builds the computed Digest Authorization header from the challenge parameters at lines 307-309."
+          },
+          {
+            "from_file": "src/requests/api.py",
+            "from_symbol": "request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.request",
+            "kind": "delegates_to",
+            "note": "Module-level convenience functions delegate to a Session for the actual request, passing auth through."
+          }
+        ],
+        "contracts": [
+          {
+            "file": "src/requests/auth.py",
+            "symbol": "AuthBase",
+            "contract": "An auth handler must be callable, accepting a PreparedRequest and returning a modified PreparedRequest. Signature: __call__(self, r: PreparedRequest) -> PreparedRequest. The handler must update r in-place or return a new PreparedRequest; commonly modifies r.headers to add authentication. See HTTPBasicAuth.__call__ and HTTPDigestAuth.__call__ for examples."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "PreparedRequest.prepare_auth",
+            "contract": "Takes an AuthType parameter that can be (1) a 2-tuple (username, password) automatically converted to HTTPBasicAuth, (2) an AuthBase subclass or callable accepting PreparedRequest and returning PreparedRequest, or (3) None for no auth. Callables receive the fully-prepared request so they can make auth decisions based on full context."
+          }
+        ],
+        "prerequisites": [
+          {
+            "concept": "HTTP authentication headers: Authorization and Proxy-Authorization headers, base64 encoding for Basic Auth, Digest Auth challenge-response protocol (RFC 2617)",
+            "why_needed": "To understand what HTTPBasicAuth and HTTPDigestAuth actually inject into requests and how they compute their values."
+          },
+          {
+            "concept": "Python callables and callable protocol: objects with __call__ methods are callable",
+            "why_needed": "Auth handlers are invoked as `auth_handler(prepared_request)`, treating them as functions. Understanding the callable pattern is essential to follow the auth flow."
+          },
+          {
+            "concept": "Request-response cycle and hooks: the idea that code can register callbacks to be invoked when certain events happen (e.g., response received)",
+            "why_needed": "Digest auth uses hooks to detect 401 responses and retry. Understanding hooks enables understanding how auth reacts to server responses."
+          },
+          {
+            "concept": "Context managers and with statements: resource management in Python",
+            "why_needed": "api.request() uses `with Session() as session` to ensure clean teardown. Understanding context managers explains why the Session is safe to use in convenience functions."
+          },
+          {
+            "concept": "File-like object protocol: objects with tell() and seek() methods for position tracking",
+            "why_needed": "HTTPDigestAuth saves and restores request body position (lines 331-338, 289-290) to enable body retransmission on 401. Understanding tell/seek is necessary to follow this."
+          }
+        ],
+        "evidence_refs": [
+          {
+            "path": "src/requests/auth.py",
+            "clarifies": "HTTPBasicAuth and HTTPDigestAuth are the two standard auth implementations. HTTPBasicAuth injects a single Authorization header. HTTPDigestAuth registers response hooks for challenge handling. Both implement AuthBase.__call__ contract."
+          },
+          {
+            "path": "src/requests/models.py",
+            "clarifies": "PreparedRequest.prepare_auth is where auth is actually applied. It shows the tuple-to-HTTPBasicAuth conversion and the auth handler invocation pattern."
+          },
+          {
+            "path": "src/requests/sessions.py",
+            "clarifies": "Session.prepare_request shows how request-level and session-level auth are merged. Session.request is the user-facing entry point. Session.send dispatches response hooks where auth challenges are handled."
+          },
+          {
+            "path": "src/requests/api.py",
+            "clarifies": "Module-level convenience functions (get, post, etc.) create temporary Sessions and delegate to Session.request, showing the flow for single-request authentication."
+          }
+        ],
+        "context": [
+          "Authentication in Requests is fundamentally pluggable: any callable that modifies a PreparedRequest can serve as an auth handler. The library provides HTTPBasicAuth and HTTPDigestAuth as standard implementations, but users can implement custom auth (OAuth, NTLM, etc.) by subclassing AuthBase or providing any callable.",
+          "The two-phase application of auth reflects HTTP reality: basic auth is pre-computed and sent with every request, while digest auth requires a server challenge (401 response) to compute credentials. Requests handles both transparently by using hooks for the challenge-response case.",
+          "Auth is applied last during request preparation (lines 445-446 comment in models.py: 'prepare_auth must be last to enable authentication schemes such as OAuth'). This is crucial because OAuth and similar schemes need the full prepared request (URL, method, body, headers) to compute their signatures.",
+          "Session-level auth allows credentials to be set once and applied to all requests made through that session, reducing boilerplate. Request-level auth always takes precedence, allowing per-request credential override.",
+          "The netrc integration (lines 537-538 in sessions.py) provides automatic credential loading from ~/.netrc files when trust_env=True, enabling seamless authentication without explicit credentials in code.",
+          "HTTPDigestAuth's per-thread state management (threading.local at line 145 in auth.py) ensures that nonce counting and challenge caching work correctly in multithreaded environments.",
+          "Digest auth's handle_401 hook limits retries to once (num_401_calls < 2) to prevent infinite retry loops if the server keeps rejecting credentials."
+        ],
+        "open_questions": [
+          {
+            "question": "What happens when a custom auth handler raises an exception? Is it caught and handled gracefully, or does it propagate to the caller?",
+            "why_it_matters": "Understanding error handling for auth handlers is important for robustness. If an exception in auth causes the request to fail entirely, users need to know this for error handling."
+          },
+          {
+            "question": "How does HTTPDigestAuth handle multiple 4xx responses other than 401 (e.g., 403 Forbidden)? The handle_401 method has a generic 400-499 check at line 282, suggesting it might attempt digest auth on 403, 404, etc., which seems incorrect.",
+            "why_it_matters": "The code at line 282 checks `not 400 <= r.status_code < 500`, suggesting it might attempt digest auth on various error codes. Clarifying the intent would help understand the robustness of digest auth."
+          },
+          {
+            "question": "When resolve_redirects processes redirects, does it reapply authentication? The SessionRedirectMixin has rebuild_auth method, but its integration with auth handlers is not clear from code inspection.",
+            "why_it_matters": "Understanding auth behavior across redirects is important for security (e.g., stripping auth when redirecting to a different domain) and for proper credential reuse."
+          }
+        ]
+      },
+      "errors": [],
+      "session_id": "eee5bf5f79624aa6a841a8dff865e085",
+      "resume_ok": true,
+      "learning_path": [
+        {
+          "step": 1,
+          "title": "Learn the auth callable contract that everything builds on",
+          "file": "src/requests/auth.py",
+          "line_range": [
+            78,
+            82
+          ],
+          "why": "Every part of the auth system assumes this contract; understanding it first makes every downstream node immediately legible",
+          "understand": "An auth handler is any callable that accepts a PreparedRequest and returns a modified PreparedRequest \u2014 AuthBase formalises this as a single __call__ signature, making auth handlers interchangeable with plain functions or lambdas",
+          "concepts": [
+            "architecture",
+            "extension_point",
+            "auth"
+          ]
+        },
+        {
+          "step": 2,
+          "title": "See the simplest auth implementation: HTTPBasicAuth",
+          "file": "src/requests/auth.py",
+          "line_range": [
+            111,
+            113
+          ],
+          "why": "HTTPBasicAuth is the canonical one-liner that shows exactly what an auth handler must do: mutate the PreparedRequest's headers and return it",
+          "understand": "Basic auth fulfils the contract by computing a base64-encoded Authorization header in a single step \u2014 receiving a PreparedRequest and returning it modified, with no need for any server interaction",
+          "concepts": [
+            "component",
+            "auth",
+            "flow"
+          ]
+        },
+        {
+          "step": 3,
+          "title": "Trace how auth enters and flows through Session.request",
+          "file": "src/requests/sessions.py",
+          "line_range": [
+            557,
+            653
+          ],
+          "why": "This is the public API surface where auth is first accepted; understanding it places all subsequent steps in context",
+          "understand": "Session.request accepts auth as a tuple or callable, wraps it in a Request object, and delegates immediately to prepare_request \u2014 the auth value is not touched here, just carried forward",
+          "concepts": [
+            "flow",
+            "component",
+            "auth"
+          ]
+        },
+        {
+          "step": 4,
+          "title": "Understand how session-level and request-level auth are merged",
+          "file": "src/requests/sessions.py",
+          "line_range": [
+            76,
+            105
+          ],
+          "why": "Auth can come from two places simultaneously; knowing the precedence rule is essential before reading prepare_request",
+          "understand": "For non-dict values like auth callables, merge_setting returns the request-level value when present and falls back to the session-level value \u2014 request auth always wins, enabling per-request credential overrides",
+          "concepts": [
+            "component",
+            "auth",
+            "flow"
+          ]
+        },
+        {
+          "step": 5,
+          "title": "See where netrc fallback and merge happen in Session.prepare_request",
+          "file": "src/requests/sessions.py",
+          "line_range": [
+            511,
+            555
+          ],
+          "why": "This is where the three auth sources \u2014 request, session, and netrc \u2014 are resolved into a single value before preparation",
+          "understand": "prepare_request applies the auth cascade: request auth beats session auth (via merge_setting), and netrc credentials are injected only when both are absent and trust_env is True \u2014 the resolved auth is then passed to PreparedRequest.prepare",
+          "concepts": [
+            "flow",
+            "component",
+            "auth"
+          ]
+        },
+        {
+          "step": 6,
+          "title": "Understand why auth is invoked last in the preparation pipeline",
+          "file": "src/requests/models.py",
+          "line_range": [
+            422,
+            449
+          ],
+          "why": "The ordering of prepare steps is a deliberate design constraint that auth implementers must respect",
+          "understand": "prepare_auth is the final preparation step by design \u2014 auth handlers receive a fully-built PreparedRequest (URL, method, headers, body all set) so they can compute signatures over the complete request, which is required for schemes like OAuth",
+          "concepts": [
+            "architecture",
+            "flow",
+            "auth"
+          ]
+        },
+        {
+          "step": 7,
+          "title": "Examine where the auth callable is actually invoked on the request",
+          "file": "src/requests/models.py",
+          "line_range": [
+            668,
+            695
+          ],
+          "why": "This is the precise call site where any auth handler \u2014 basic, digest, or custom \u2014 modifies the request",
+          "understand": "prepare_auth normalises a 2-tuple to HTTPBasicAuth, then calls auth_handler(self) on the fully-prepared request; it updates the PreparedRequest in place from the returned object and recomputes Content-Length, accommodating auth handlers that change the body",
+          "concepts": [
+            "component",
+            "flow",
+            "auth"
+          ]
+        },
+        {
+          "step": 8,
+          "title": "Learn how HTTPDigestAuth registers hooks for challenge-response auth",
+          "file": "src/requests/auth.py",
+          "line_range": [
+            321,
+            343
+          ],
+          "why": "Digest auth introduces a two-phase pattern that is fundamentally different from basic auth and requires understanding hooks",
+          "understand": "HTTPDigestAuth.__call__ optionally pre-fills the Authorization header from a cached nonce, then registers handle_401 and handle_redirect as response hooks \u2014 the real credential computation is deferred until a 401 arrives, demonstrating the challenge-response pattern inside the same callable contract",
+          "concepts": [
+            "component",
+            "flow",
+            "auth",
+            "extension_point"
+          ]
+        },
+        {
+          "step": 9,
+          "title": "See how response hooks are registered on a PreparedRequest",
+          "file": "src/requests/models.py",
+          "line_range": [
+            258,
+            269
+          ],
+          "why": "Digest auth's challenge-response behaviour depends on this mechanism; understanding it explains how a hook registered during preparation can act on the live response",
+          "understand": "register_hook appends a callable to the named event list on the PreparedRequest's hooks dict; callables registered here persist through transmission and are dispatched by Session.send after the response arrives",
+          "concepts": [
+            "component",
+            "extension_point",
+            "auth"
+          ]
+        },
+        {
+          "step": 10,
+          "title": "Follow how Session.send fires response hooks including auth handlers",
+          "file": "src/requests/sessions.py",
+          "line_range": [
+            745,
+            822
+          ],
+          "why": "Session.send is where the digest auth cycle closes \u2014 the adapter sends the request and hooks on the response run handle_401",
+          "understand": "After the adapter returns a response, Session.send calls dispatch_hook('response', ...) which invokes every registered response hook in order; the return value of each hook replaces the response, so handle_401 can transparently substitute a retried response for the original 401",
+          "concepts": [
+            "flow",
+            "component",
+            "auth"
+          ]
+        },
+        {
+          "step": 11,
+          "title": "Understand how dispatch_hook invokes auth callbacks",
+          "file": "src/requests/hooks.py",
+          "line_range": [
+            32,
+            48
+          ],
+          "why": "dispatch_hook is the glue between Session.send and every registered hook including handle_401",
+          "understand": "dispatch_hook iterates the hook list for a given event and replaces the data with each hook's non-None return value \u2014 this chained replacement is why handle_401 can return a completely new response that Session.send treats as the authoritative result",
+          "concepts": [
+            "component",
+            "flow",
+            "auth"
+          ]
+        },
+        {
+          "step": 12,
+          "title": "Trace the full digest challenge-response retry inside handle_401",
+          "file": "src/requests/auth.py",
+          "line_range": [
+            273,
+            319
+          ],
+          "why": "This is the most complex part of the auth system \u2014 it shows request rewriting, body position rewinding, cookie propagation, and retry limiting all working together",
+          "understand": "handle_401 parses the WWW-Authenticate challenge, copies the original PreparedRequest, injects a freshly computed Digest Authorization header, and resends it directly via r.connection.send \u2014 the retry is limited to one attempt (num_401_calls < 2) to prevent infinite loops, and the original 401 is appended to history",
+          "concepts": [
+            "component",
+            "flow",
+            "auth",
+            "risk"
+          ]
+        }
+      ]
+    }
+  },
+  "fastapi-di": {
+    "explorer": {
+      "nodes": 10,
+      "anchor_accuracy": 1.0,
+      "important_hit": [
+        "fastapi/dependencies/models.py",
+        "fastapi/dependencies/utils.py",
+        "fastapi/params.py",
+        "fastapi/routing.py"
+      ],
+      "important_missed": [
+        "fastapi/param_functions.py"
+      ],
+      "discovery": 0.8,
+      "nodes_traceable_to_dossier": 10,
+      "confidence": "high",
+      "seconds": 200.2418074607849,
+      "investigation": {
+        "accepted": true,
+        "stop_reason": "reported",
+        "turns": 20,
+        "tool_calls": 39,
+        "rejections": [
+          "The investigation is not yet sufficient: 0 goal-relevant component(s) established; at least 4 are needed to explain this kind of goal; no verified entry point into the goal-relevant behaviour; 0 flow(s) traced; at least 1 needed; 0 confirmed relationship(s); at least 2 needed; 0 contract(s)/abstraction(s) described; at least 1 needed for this goal; no prerequisite concepts identified. Investigate further, or record what blocks you as an open question. Empty entries: `components` arrived as str, not a list of objects \u2014 emit it as a JSON array of objects."
+        ],
+        "cost_usd": 0.1767975,
+        "seconds": 156.62500000000045,
+        "used_survey": true
+      },
+      "dossier": {
+        "understanding": "\nFastAPI's dependency injection system is a declarative mechanism that allows endpoint functions and other dependencies to declare their parameter requirements through function signatures and annotations. At the core is the Dependant model\u2014a hierarchical structure that analyzes and stores metadata about a function's parameters, distinguishing between direct request data (path/query/header/cookie/body params), other dependencies (via Depends/Security), and special-case parameters (Request, Response, BackgroundTasks, etc.). During route registration, get_dependant recursively analyzes the endpoint function's signature to build a dependency tree. At request time, solve_dependencies asynchronously resolves this entire tree by recursively calling dependencies, extracting values from the request (path params, query params, etc.), executing dependency callables (with async/sync/generator support), and caching results to avoid duplicate calls. The system supports advanced features like dependency overrides (for testing), scoped caching, generator-based context managers (for resource lifecycle), and OAuth2 security scopes.\n",
+        "components": [
+          {
+            "file": "fastapi/dependencies/models.py",
+            "symbol": "Dependant",
+            "role_in_goal": "Core data model that holds all metadata about a function's dependencies and parameters. Stores lists of path/query/header/cookie/body parameters, nested dependencies, caching configuration, and callable reference. This is the central data structure that represents a single point in the dependency graph.",
+            "why_it_matters": "Understanding Dependant is essential because the entire DI system is built around constructing and traversing trees of these objects. It defines what information is tracked and how dependencies are organized hierarchically."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "get_dependant",
+            "role_in_goal": "Builds a Dependant tree by recursively analyzing a function's signature. Extracts type annotations, discovers parameters annotated with Depends/Security, creates ModelFields for query/path/body params, and recursively processes sub-dependencies. This is the analysis phase that builds the dependency graph at route registration time.",
+            "why_it_matters": "This function is where FastAPI learns about a function's dependencies. It bridges the gap between what's written in the function signature and the internal representation. Shows how Depends annotations are discovered and how sub-dependencies are recursively resolved."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "analyze_param",
+            "role_in_goal": "Examines a single function parameter and determines whether it's a dependency (Depends/Security), a request parameter (Query/Path/Body), or a special type (Request/Response). Returns ParamDetails describing what the parameter is and how to handle it.",
+            "why_it_matters": "This is the parameter classification logic that decides what category each function parameter belongs to. Essential for understanding how annotations like Query, Depends, etc. are detected and how the DI system distinguishes between dependency injection vs parameter extraction."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "solve_dependencies",
+            "role_in_goal": "Asynchronously resolves the entire dependency tree for a request by recursively processing all sub-dependencies, executing callables (with async/sync/generator support), extracting request parameters, and caching results per request. This is where the actual runtime resolution happens.",
+            "why_it_matters": "This is the execution phase\u2014where dependencies are actually called and their results collected. Shows how async/sync/generator dependencies are handled differently, how caching works, how dependency overrides are applied, and how request values are extracted."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "add_non_field_param_to_dependency",
+            "role_in_goal": "Detects special parameter types (Request, Response, BackgroundTasks, SecurityScopes, etc.) and stores their parameter names in the Dependant so they can be injected directly from the request scope rather than requiring callable dependencies.",
+            "why_it_matters": "Shows how FastAPI provides built-in special injections beyond user dependencies. Important for understanding that not all injected values come from Depends\u2014some are framework-provided."
+          },
+          {
+            "file": "fastapi/params.py",
+            "symbol": "Depends",
+            "role_in_goal": "User-facing class that marks a parameter as a dependency to be resolved. Stores the dependency callable, caching preference, and scope. This is the annotation users write to declare dependencies.",
+            "why_it_matters": "This is the public API that developers use to declare dependencies. Understanding its structure shows what information is captured when a dependency is declared, including whether caching should be used and what scope the dependency has."
+          },
+          {
+            "file": "fastapi/params.py",
+            "symbol": "Security",
+            "role_in_goal": "Extends Depends to add OAuth2 scopes support. Dependencies declared with Security can have scopes that affect caching and are passed to security schemes.",
+            "why_it_matters": "Shows how the DI system integrates with security by allowing scoped dependencies. Demonstrates that caching strategy depends on both the callable and the security scopes\u2014different scopes create different cache keys."
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "APIRoute.__init__",
+            "role_in_goal": "Route registration entry point that calls get_dependant to analyze the endpoint function's dependencies, stores the resulting Dependant tree, and processes route-level dependencies. Prepares everything needed for dependency resolution at request time.",
+            "why_it_matters": "Shows when and how the dependency analysis phase happens\u2014during route registration, not at request time. Demonstrates how route-level dependencies (from the dependencies parameter) are added to the endpoint's dependency tree."
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "get_request_handler",
+            "role_in_goal": "Creates the ASGI app callable that handles each request. Reads the request body, calls solve_dependencies to resolve the dependency tree, then invokes the endpoint function with the resolved values, and handles response serialization.",
+            "why_it_matters": "This is the request-time integration point where solve_dependencies is actually called. Shows the complete flow: extract body, resolve dependencies, call endpoint, serialize response. Essential for understanding the full request lifecycle."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "SolvedDependency",
+            "role_in_goal": "Data class returned by solve_dependencies containing the resolved dependency values, validation errors, background tasks, response object, and dependency cache.",
+            "why_it_matters": "Represents the output of dependency resolution. Shows what information is collected and passed forward for the endpoint to use."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "_solve_generator",
+            "role_in_goal": "Handles generator and async generator dependencies as context managers, entering them into an AsyncExitStack for proper lifecycle management. Supports dependencies that yield values for setup/teardown logic.",
+            "why_it_matters": "Shows how FastAPI handles dependencies that perform resource setup and cleanup. Important for understanding lifecycle management and why the system tracks function callability (is_gen_callable, is_async_gen_callable)."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "get_parameterless_sub_dependant",
+            "role_in_goal": "Creates a Dependant for route-level dependencies (those passed via the dependencies parameter). Called during route registration to wrap parameterless dependencies into Dependant objects that can be processed like any other dependency.",
+            "why_it_matters": "Shows how route-level dependencies are handled\u2014they're converted to Dependant objects with no parameters, then processed the same way as endpoint parameters marked with Depends."
+          }
+        ],
+        "entry_points": [
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "APIRoute.__init__",
+            "how_it_enters": "When a route is registered (e.g., @app.get('/path')), APIRoute.__init__ is called, which calls get_dependant to analyze the endpoint function and build the dependency graph. This happens at application startup."
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "get_request_handler",
+            "how_it_enters": "The ASGI app created by get_request_handler is called for each HTTP request. Inside, it calls solve_dependencies to resolve the dependency tree and pass the resolved values to the endpoint function."
+          }
+        ],
+        "flows": [
+          {
+            "name": "Dependency analysis at route registration",
+            "steps": [
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "APIRoute.__init__",
+                "what_happens": "Route registration begins. Stores endpoint function and calls get_dependant with the endpoint function and route path."
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "get_dependant",
+                "what_happens": "Gets the function signature via get_typed_signature, then iterates through each parameter in the signature."
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "analyze_param",
+                "what_happens": "For each parameter, extracts the type annotation and checks for FastAPI annotations (Depends, Query, Path, etc.). Returns ParamDetails indicating whether the parameter is a dependency or a request parameter."
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "get_dependant",
+                "what_happens": "If the parameter is a Depends/Security, recursively calls get_dependant on the dependency callable (line 334-342), creating a tree. If it's a request parameter, creates a ModelField and stores it in the appropriate list (path_params, query_params, etc.)."
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "add_non_field_param_to_dependency",
+                "what_happens": "For special types like Request or Response, records the parameter name in the Dependant so they can be injected later."
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "APIRoute.__init__",
+                "what_happens": "Returns the fully built Dependant tree. Route stores it as self.dependant for use at request time."
+              }
+            ]
+          },
+          {
+            "name": "Dependency resolution at request time",
+            "steps": [
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "get_request_handler",
+                "what_happens": "ASGI app function receives a request. Reads body if needed (JSON or form data). Gets the Dependant tree from the route."
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "get_request_handler",
+                "what_happens": "Calls solve_dependencies with the request, the Dependant tree, body, and other context (line 457-464)."
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "For each sub-dependency in dependant.dependencies (recursive), checks if there's an override via dependency_overrides_provider (for testing). Recursively calls solve_dependencies on sub-dependencies."
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "After recursive resolution, checks the dependency cache (line 664-665). If cached, uses cached value. Otherwise, determines if the dependency is a generator/async-generator/coroutine/sync function (lines 667-680)."
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "_solve_generator",
+                "what_happens": "If the dependency is a generator or async-generator, wraps it as an async context manager and enters it into the AsyncExitStack for lifecycle management."
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "Stores the resolved value in the cache (line 684), stores it in the values dict with the parameter name as key (line 682)."
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "Extracts request parameters (path, query, header, cookie, body) from the request using request_params_to_args and request_body_to_args, adding them to values dict (lines 685-712)."
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "Injects special framework parameters: Request, WebSocket, Response, BackgroundTasks, SecurityScopes (lines 713-728)."
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "Returns a SolvedDependency containing the collected values dict, any validation errors, background tasks, response object, and the filled dependency cache."
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "get_request_handler",
+                "what_happens": "Receives SolvedDependency. If no errors, calls the endpoint function with **solved_result.values (line 498, 678), passing all resolved values as keyword arguments."
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "get_request_handler",
+                "what_happens": "Serializes the endpoint's return value according to response_model and returns it as a response to the client."
+              }
+            ]
+          },
+          {
+            "name": "Dependency caching within a request",
+            "steps": [
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "Maintains a dependency_cache dict that maps cache_key to resolved values. Initialized empty or passed in (lines 626-627)."
+              },
+              {
+                "file": "fastapi/dependencies/models.py",
+                "symbol": "Dependant.cache_key",
+                "what_happens": "Computed as (callable, sorted_oauth_scopes_tuple, computed_scope). Two dependencies with the same cache key will be considered the same for caching purposes."
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "Before calling a dependency (line 664), checks if sub_dependant.use_cache is True and the cache_key is already in dependency_cache. If yes, reuses the cached result (line 665)."
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "After calling a dependency (line 683-684), stores the result in the cache if use_cache is True, allowing future references to the same dependency in the same request to use the cached value."
+              }
+            ]
+          }
+        ],
+        "relationships": [
+          {
+            "from_file": "fastapi/routing.py",
+            "from_symbol": "APIRoute.__init__",
+            "to_file": "fastapi/dependencies/utils.py",
+            "to_symbol": "get_dependant",
+            "kind": "calls",
+            "note": "Route registration analyzes endpoint dependencies by calling get_dependant to build the dependency tree (line 949-950)"
+          },
+          {
+            "from_file": "fastapi/dependencies/utils.py",
+            "from_symbol": "get_dependant",
+            "to_file": "fastapi/dependencies/utils.py",
+            "to_symbol": "analyze_param",
+            "kind": "calls",
+            "note": "For each parameter in the endpoint signature, analyze_param classifies it as dependency, request param, or special type (line 311-316)"
+          },
+          {
+            "from_file": "fastapi/dependencies/utils.py",
+            "from_symbol": "get_dependant",
+            "to_file": "fastapi/dependencies/utils.py",
+            "to_symbol": "get_dependant",
+            "kind": "calls",
+            "note": "Recursive call when a Depends/Security annotation is discovered, builds sub-dependency tree (line 334)"
+          },
+          {
+            "from_file": "fastapi/routing.py",
+            "from_symbol": "APIRoute.__init__",
+            "to_file": "fastapi/dependencies/utils.py",
+            "to_symbol": "get_parameterless_sub_dependant",
+            "kind": "calls",
+            "note": "Processes route-level dependencies (from dependencies parameter) by converting them to Dependant objects (line 955)"
+          },
+          {
+            "from_file": "fastapi/routing.py",
+            "from_symbol": "get_request_handler",
+            "to_file": "fastapi/dependencies/utils.py",
+            "to_symbol": "solve_dependencies",
+            "kind": "calls",
+            "note": "Request handler resolves the dependency tree at request time to get actual values for injection (line 457)"
+          },
+          {
+            "from_file": "fastapi/dependencies/utils.py",
+            "from_symbol": "solve_dependencies",
+            "to_file": "fastapi/dependencies/utils.py",
+            "to_symbol": "solve_dependencies",
+            "kind": "calls",
+            "note": "Recursive call to resolve sub-dependencies before resolving the parent (line 649)"
+          },
+          {
+            "from_file": "fastapi/dependencies/utils.py",
+            "from_symbol": "solve_dependencies",
+            "to_file": "fastapi/dependencies/utils.py",
+            "to_symbol": "_solve_generator",
+            "kind": "calls",
+            "note": "When a dependency is a generator or async-generator, delegates to _solve_generator for context manager handling (line 672)"
+          },
+          {
+            "from_file": "fastapi/dependencies/utils.py",
+            "from_symbol": "solve_dependencies",
+            "to_file": "fastapi/dependencies/utils.py",
+            "to_symbol": "get_dependant",
+            "kind": "calls",
+            "note": "When applying dependency overrides, re-analyzes the override callable with get_dependant (line 641)"
+          },
+          {
+            "from_file": "fastapi/dependencies/models.py",
+            "from_symbol": "Dependant",
+            "to_file": "fastapi/dependencies/models.py",
+            "to_symbol": "Dependant.cache_key",
+            "kind": "delegates_to",
+            "note": "Dependant instances are cached using the cache_key property which computes a unique key per callable+scopes+scope"
+          },
+          {
+            "from_file": "fastapi/routing.py",
+            "from_symbol": "get_request_handler",
+            "to_file": "fastapi/dependencies/models.py",
+            "to_symbol": "Dependant",
+            "kind": "uses",
+            "note": "The request handler receives a Dependant tree from the route and passes it to solve_dependencies for resolution"
+          }
+        ],
+        "contracts": [
+          {
+            "file": "fastapi/dependencies/models.py",
+            "symbol": "Dependant",
+            "contract": "A Dependant is a tree node representing a function's dependencies and parameters. Must store lists of path_params, query_params, header_params, cookie_params, body_params (ModelField lists), a dependencies list (sub-Dependants), special parameter names (request_param_name, response_param_name, etc.), and a callable. Must provide cache_key, oauth_scopes, and methods to determine if the callable is async/generator/etc. Serves as the contract between analysis (get_dependant) and resolution (solve_dependencies)."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "analyze_param",
+            "contract": "Given a parameter name, annotation, default value, and whether it's a path param, returns a ParamDetails indicating: (1) type_annotation\u2014the underlying type; (2) depends\u2014a Depends/Security object if the parameter is a dependency, or None; (3) field\u2014a ModelField if the parameter is a request param, or None. Only one of depends or field should be non-None. Used by get_dependant to classify each parameter."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "solve_dependencies",
+            "contract": "Async function that recursively resolves a Dependant tree for a given request. Takes a Request/WebSocket, a Dependant tree, optional body, response, background_tasks, dependency_overrides_provider, dependency_cache, and embed_body_fields. Returns a SolvedDependency containing: values dict (parameter name \u2192 resolved value), errors list, background_tasks, response object, and updated dependency_cache. Must handle async/sync/generator callables, extract request parameters, inject special types, and apply caching."
+          },
+          {
+            "file": "fastapi/params.py",
+            "symbol": "Depends",
+            "contract": "User-facing class holding a dependency callable, use_cache flag, and optional scope. When used as a parameter annotation (e.g., param: int = Depends(some_func)), signals to FastAPI that the parameter should be resolved by calling some_func. Instances are immutable and used as markers during signature analysis."
+          }
+        ],
+        "prerequisites": [
+          {
+            "concept": "Function signatures and annotations in Python",
+            "why_needed": "The DI system works by inspecting function signatures and type annotations to determine what dependencies and parameters are needed. Understanding inspect.signature and typing.Annotated is essential."
+          },
+          {
+            "concept": "Async/await and Python coroutines",
+            "why_needed": "The system differentiates between sync and async dependencies and executes them appropriately. Understanding how to check if a function is a coroutine and how to await is essential."
+          },
+          {
+            "concept": "Generator and async generator functions",
+            "why_needed": "FastAPI supports dependencies that are generators (with yield) for setup/teardown logic. Understanding context managers and generator mechanics is needed to understand _solve_generator."
+          },
+          {
+            "concept": "Dictionary and caching patterns",
+            "why_needed": "The dependency cache uses a dict keyed by cache_key tuples. Understanding how to use dicts as caches and cache key computation is important."
+          },
+          {
+            "concept": "Recursive data structures and tree traversal",
+            "why_needed": "The Dependant structure is recursive (dependencies list contains sub-Dependants). Both get_dependant and solve_dependencies traverse this tree recursively."
+          },
+          {
+            "concept": "Pydantic ModelField and field validation",
+            "why_needed": "Request parameters are represented as ModelField objects that handle validation and serialization. Understanding what ModelField is helps understand how query/path/body params are represented."
+          },
+          {
+            "concept": "ASGI request/response model",
+            "why_needed": "The DI system integrates with ASGI by receiving Request/WebSocket objects and returning Response objects. Understanding basic ASGI concepts helps understand the request/response flow."
+          }
+        ],
+        "evidence_refs": [
+          {
+            "path": "tests/test_dependency_cache.py",
+            "clarifies": "Shows practical dependency injection usage. Demonstrates that dependencies are cached within a request (test_sub_counter shows dep_counter called once when referenced twice), but without cache when use_cache=False (test_sub_counter_no_cache). Security with scopes creates separate cache entries (test_security_cache)."
+          }
+        ],
+        "context": [
+          "The DI system is split into two phases: analysis (get_dependant, called at route registration) and resolution (solve_dependencies, called at request time). This separation allows FastAPI to build the dependency graph once and reuse it for many requests.",
+          "Caching is per-request, not global. The same dependency function called twice in the same request returns the same value (same cache_key), but different requests start with an empty cache. This is done via the dependency_cache dict passed through solve_dependencies recursively.",
+          "The system supports dependency overrides for testing via dependency_overrides_provider (typically the FastAPI app instance). When a dependency is overridden, solve_dependencies re-analyzes the override callable with get_dependant.",
+          "Generator dependencies are wrapped as context managers and entered into an AsyncExitStack so cleanup code (after yield) runs when the request finishes or the request-scoped AsyncExitStack exits.",
+          "Special parameters like Request, Response, BackgroundTasks, and SecurityScopes are injected directly without requiring user code\u2014add_non_field_param_to_dependency detects their types and records their names in the Dependant.",
+          "OAuth2 Security dependencies can have scopes that affect caching. Dependencies with different scopes have different cache keys even if the callable is the same."
+        ],
+        "open_questions": [
+          {
+            "question": "Exactly how does AsyncExitStack scope work between function-scoped and request-scoped dependencies? The code references both fastapi_inner_astack (request-scoped) and fastapi_function_astack (function-scoped) but the setup of these stacks was not traced.",
+            "why_it_matters": "Understanding lifecycle management and cleanup order is important for advanced use cases with nested dependencies that have different scopes."
+          },
+          {
+            "question": "How does dependency_overrides_provider.dependency_overrides get populated? The code checks for overrides but the mechanism for setting them was not investigated.",
+            "why_it_matters": "Understanding how to use dependency overrides for testing is a practical feature users need to know about, but the configuration mechanism was not fully traced."
+          }
+        ]
+      },
+      "errors": [],
+      "session_id": "704780c6f7c34c349ae4f820fdece1ee",
+      "resume_ok": true,
+      "learning_path": [
+        {
+          "step": 1,
+          "title": "Learn the public API: Depends and Security",
+          "file": "fastapi/params.py",
+          "line_range": [
+            746,
+            749
+          ],
+          "why": "These are the annotations users write to declare dependencies, so understanding their fields is the entry point to the whole system.",
+          "understand": "Depends wraps a callable plus two flags (use_cache, scope) that control caching and lifecycle; Security extends it with OAuth2 scopes, and those three fields drive nearly every downstream decision.",
+          "concepts": [
+            "component",
+            "extension_point",
+            "auth"
+          ]
+        },
+        {
+          "step": 2,
+          "title": "Understand the Dependant data model",
+          "file": "fastapi/dependencies/models.py",
+          "line_range": [
+            32,
+            193
+          ],
+          "why": "Every phase of the DI system\u2014analysis, resolution, caching\u2014reads from or writes to this structure, so its fields define what information the system tracks.",
+          "understand": "Dependant is a recursive tree node that partitions a function's parameters into typed lists (path/query/header/cookie/body params, sub-Dependants) plus special-injection slots and a callable reference; the tree is built once at registration and traversed on every request.",
+          "concepts": [
+            "component",
+            "architecture",
+            "flow"
+          ]
+        },
+        {
+          "step": 3,
+          "title": "See how cache_key makes per-request deduplication work",
+          "file": "fastapi/dependencies/models.py",
+          "line_range": [
+            63,
+            71
+          ],
+          "why": "Caching is one of the most misunderstood DI behaviours; understanding the key reveals exactly when two references to the same dependency are collapsed into one call.",
+          "understand": "cache_key is a tuple of (callable, sorted-oauth-scopes, scope-string), so two Depends annotations sharing a callable are deduplicated unless they differ by Security scopes or dependency scope; this key is used both for lookup and storage inside the per-request dependency_cache dict.",
+          "concepts": [
+            "component",
+            "risk",
+            "auth"
+          ]
+        },
+        {
+          "step": 4,
+          "title": "Trace parameter classification in analyze_param",
+          "file": "fastapi/dependencies/utils.py",
+          "line_range": [
+            393,
+            559
+          ],
+          "why": "This is where each function parameter is sorted into one of three buckets\u2014dependency, request field, or special type\u2014which determines how it will be handled in every later phase.",
+          "understand": "analyze_param unwraps Annotated, then returns a ParamDetails where exactly one of (depends, field) is set: depends for Depends/Security annotations (from either Annotated metadata or a default value), a ModelField for Query/Path/Body etc., and neither for special built-in types like Request or Response.",
+          "concepts": [
+            "component",
+            "flow"
+          ]
+        },
+        {
+          "step": 5,
+          "title": "See how special built-in injections are recorded",
+          "file": "fastapi/dependencies/utils.py",
+          "line_range": [
+            362,
+            383
+          ],
+          "why": "Knowing that Request, Response, BackgroundTasks, and SecurityScopes are injected without Depends clarifies the full set of things FastAPI can inject.",
+          "understand": "add_non_field_param_to_dependency detects framework types by subclass check and writes the parameter name into the matching slot on Dependant (e.g., request_param_name); at resolve time, solve_dependencies reads those slots to inject live request objects directly\u2014no user-written callable involved.",
+          "concepts": [
+            "component",
+            "extension_point"
+          ]
+        },
+        {
+          "step": 6,
+          "title": "Follow dependency tree construction in get_dependant",
+          "file": "fastapi/dependencies/utils.py",
+          "line_range": [
+            286,
+            359
+          ],
+          "why": "This is the analysis phase that converts a raw function signature into the Dependant tree the rest of the system consumes.",
+          "understand": "get_dependant iterates the function's typed signature, calls analyze_param for each parameter, then either recurses into get_dependant for Depends parameters (appending sub-Dependants to dependencies), delegates to add_non_field_param_to_dependency for special types, or appends a ModelField to the appropriate param list\u2014making the tree construction fully recursive and self-similar.",
+          "concepts": [
+            "flow",
+            "component"
+          ]
+        },
+        {
+          "step": 7,
+          "title": "See how route registration wires get_dependant into APIRoute",
+          "file": "fastapi/routing.py",
+          "line_range": [
+            812,
+            976
+          ],
+          "why": "This is the moment the Dependant tree is actually built and stored, separating the analysis phase from request-time resolution.",
+          "understand": "During route registration, APIRoute.__init__ calls get_dependant on the endpoint and calls get_parameterless_sub_dependant for each entry in the route-level dependencies list, appending all resulting sub-Dependants into the endpoint Dependant's dependencies; the completed tree is stored as self.dependant and reused for every subsequent request.",
+          "concepts": [
+            "flow",
+            "architecture"
+          ]
+        },
+        {
+          "step": 8,
+          "title": "Understand generator dependencies and lifecycle management",
+          "file": "fastapi/dependencies/utils.py",
+          "line_range": [
+            578,
+            586
+          ],
+          "why": "Generator-based dependencies (yield-style setup/teardown) are a widely used pattern; understanding how they're wrapped explains why cleanup code runs reliably after the request ends.",
+          "understand": "_solve_generator wraps the generator callable in contextmanager (or asynccontextmanager) and enters the resulting context manager into the appropriate AsyncExitStack, so the code after yield executes when the stack exits\u2014request-scoped generators use the inner request stack while function-scoped generators use the per-call function stack. Note: the exact setup and exit ordering of these two stacks was not fully traced in the investigation.",
+          "concepts": [
+            "component",
+            "flow",
+            "risk"
+          ]
+        },
+        {
+          "step": 9,
+          "title": "Walk through full runtime resolution in solve_dependencies",
+          "file": "fastapi/dependencies/utils.py",
+          "line_range": [
+            598,
+            735
+          ],
+          "why": "This is the execution engine of the DI system; tracing it reveals how all earlier concepts\u2014the tree, caching, overrides, generator lifecycle, and special injections\u2014come together for each request.",
+          "understand": "solve_dependencies recurses depth-first through dependant.dependencies, applying overrides (by re-running get_dependant on the replacement callable), checking the per-request cache before each call, dispatching to _solve_generator for yield-based deps or awaiting/threadpool-running regular callables, then extracts request params and injects special framework types, finally returning a SolvedDependency whose values dict is passed as **kwargs to the endpoint.",
+          "concepts": [
+            "flow",
+            "component",
+            "architecture"
+          ]
+        },
+        {
+          "step": 10,
+          "title": "See the complete request lifecycle in get_request_handler",
+          "file": "fastapi/routing.py",
+          "line_range": [
+            351,
+            729
+          ],
+          "why": "This is the outermost integration point that ties body parsing, dependency resolution, endpoint invocation, and response serialization into the single ASGI callable FastAPI exposes per route.",
+          "understand": "get_request_handler closes over the pre-built Dependant tree and returns an async ASGI app that, per request, parses the body, calls solve_dependencies to obtain the resolved values dict, calls the endpoint with **solved_result.values, and serializes the return value\u2014making the two-phase design (analysis at registration, resolution at runtime) concrete and complete.",
+          "concepts": [
+            "flow",
+            "architecture"
+          ]
+        }
+      ]
+    }
+  }
+}

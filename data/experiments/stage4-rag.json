@@ -1,0 +1,22 @@
+{
+  "arm": "rag",
+  "dossier_persisted": false,
+  "lesson": {
+    "walkthrough": "Auth in `requests` is not middleware\u2014it's a callable contract. Every auth handler (like `HTTPBasicAuth`) inherits from `AuthBase`, which defines a single protocol: `__call__(self, r: PreparedRequest) -> PreparedRequest`.\n\nWhen you pass `auth=HTTPBasicAuth('user', 'pass')` to a request, the library calls that object like a function, passing in the `PreparedRequest` (the finalized HTTP request object before sending). The auth handler's job is simple: mutate the request's headers and return it.\n\n`HTTPBasicAuth.__call__` does exactly this:\n1. Computes the Basic auth header value via `_basic_auth_str()` (encoding username:password in base64)\n2. Sets `r.headers[\"Authorization\"]` to that value\n3. Returns the mutated request\n\nThis is the entire contract. No dependency injection, no middleware chain, no side channels\u2014just a function that writes one header. This makes auth handlers trivial to compose (chain multiple auth handlers by nesting calls), test (pass a mock `PreparedRequest`), and extend (any callable matching the signature works, even if it doesn't inherit from `AuthBase`).\n\nThe `AuthBase` class enforces the interface by raising `NotImplementedError` if subclasses don't override `__call__`, but it's not a strict ABC\u2014it's a documentation contract. The real power is that the protocol is so minimal that custom auth is just a few lines of code.",
+    "prompt": "Before reading the explanation: if someone wrote a custom auth handler that didn't inherit from `AuthBase` but was just a plain function `def my_auth(r): r.headers[\"X-Token\"] = \"...\" ; return r`, would it work when passed as `auth=my_auth` to a requests call? Why or why not?",
+    "expected_answer": "Yes, it would work. The only requirement is that the object be callable and accept a `PreparedRequest`, mutate it, and return it. Since `AuthBase.__call__` just raises `NotImplementedError`, there's no enforcement\u2014inheritance is optional. The library calls whatever you pass as `auth` as a function, so any callable matching the signature works, inheritance or not.",
+    "prompt_kind": "predict-then-reveal"
+  },
+  "grade": {
+    "classification": "off-topic",
+    "rationale": "The developer's response describes basic auth credentials in URLs rather than addressing the callable contract or whether custom functions work as auth handlers, demonstrating no engagement with the actual question."
+  },
+  "mutation": {
+    "title": "Understand Python's __call__ protocol for making objects callable",
+    "anchor": "src/requests/auth.py:78-82",
+    "symbol": "AuthBase",
+    "why": "Before understanding how HTTPBasicAuth.__call__ fulfills the auth contract, a developer must understand that defining __call__ on a class makes its instances callable like functions \u2014 which is the entire mechanism enabling auth objects to be passed and invoked as handlers."
+  },
+  "d12_fallback_ok": true,
+  "seconds_total": 79.46950626373291
+}

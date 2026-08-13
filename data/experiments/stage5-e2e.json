@@ -1,0 +1,514 @@
+[
+  {
+    "attempt": 1,
+    "goal": "requests-auth",
+    "goal_type": "understand_component",
+    "repo": "requests",
+    "investigation": {
+      "stop_reason": "turn_budget",
+      "turns": 22,
+      "tool_calls": 27,
+      "submissions": 2,
+      "rejections": [
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: `components` arrived as XML-style tool markup inside a single string value (it begins '<item>\\n<parameter name=\"file\">src/reques') \u2014 the tool input must be JSON, so this field has to be a JSON array of objects; these item-level keys arrived at the top level of the dossier: `role_in_goal`, `symbol`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable.",
+        "3 citation(s) do not resolve against the repository: component: src/requests/_types.py:AuthType (unknown_symbol); relationship_to: src/requests/models.py:PreparedRequest.register_hook (unknown_symbol); contract: src/requests/_types.py:AuthType (unknown_symbol). Verify with `symbols` or `propose_anchor`, then correct or drop them."
+      ],
+      "repair_turns": 1,
+      "duplicate_calls": 0,
+      "seconds": 82.88999999999942,
+      "input_tokens": 1278,
+      "output_tokens": 9602,
+      "cache_read_tokens": 317694,
+      "cache_write_tokens": 49392,
+      "cache_hit_ratio": 0.8624458416131869,
+      "cost_usd": 0.1427974,
+      "contract_met": false,
+      "harness_errors": [],
+      "grounding_first": 1.0,
+      "anchors_first": 0,
+      "grounding_final": 0.9454545454545454,
+      "anchors_final": 55,
+      "unresolved_final": [
+        "component: src/requests/_types.py:AuthType (unknown_symbol)",
+        "relationship_to: src/requests/models.py:PreparedRequest.register_hook (unknown_symbol)",
+        "contract: src/requests/_types.py:AuthType (unknown_symbol)"
+      ],
+      "unmet_final": [],
+      "structural_final": []
+    },
+    "pipeline_seconds": 213.8047637939453,
+    "errors": [],
+    "invariants": {
+      "nodes": 7,
+      "anchors_resolve": true,
+      "unresolved_anchors": [],
+      "no_fabricated_evidence": true,
+      "nodes_outside_dossier_evidence": [],
+      "single_chain": true,
+      "has_current_node": true
+    },
+    "confidence": "medium",
+    "persistence": {
+      "graph_reloaded": true,
+      "nodes_reloaded": 7,
+      "symbols_kept": 7,
+      "dossier_reloaded": true,
+      "resume_point": true
+    },
+    "session": {
+      "lesson_rendered": true,
+      "used_fallback_lesson": false,
+      "seconds": 5.988189458847046,
+      "walkthrough": "AuthBase is the **contract** all auth handlers in requests must satisfy. It's an abstract base class with a single method: `__call__(self, r: PreparedRequest) -> PreparedRequest`. Here's what that means for the auth system: 1. **The contract**: Any auth handler\u2014whether built-in (HTTPBasicAuth, HTTPDigestAuth) or custom\u2014must be callable and accept a PreparedRequest, modify it (typically adding an \u2026"
+    },
+    "mutation": {
+      "grade": "confused",
+      "outcome": "no prerequisite",
+      "prerequisite": null,
+      "reached_retrieval": false,
+      "errors": []
+    },
+    "file_trace": {
+      "src/requests/auth.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "src/requests/sessions.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "src/requests/models.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "src/requests/api.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": false
+      }
+    },
+    "discovery": 0.75,
+    "graph_files": [
+      "src/requests/auth.py",
+      "src/requests/models.py",
+      "src/requests/sessions.py",
+      "src/requests/utils.py"
+    ],
+    "node_titles": [
+      "src/requests/auth.py:AuthBase \u2014 Understand the AuthBase contract",
+      "src/requests/auth.py:HTTPBasicAuth \u2014 See the contract implemented: HTTPBasicAuth",
+      "src/requests/models.py:PreparedRequest.prepare_auth \u2014 Trace where auth is actually applied: prepare_auth",
+      "src/requests/utils.py:get_auth_from_url \u2014 Follow the URL-embedded credential fallback: get_auth_from_url",
+      "src/requests/sessions.py:Session.prepare_request \u2014 Understand auth precedence and netrc fallback in Session.prepare_request",
+      "src/requests/auth.py:HTTPDigestAuth \u2014 Understand stateful auth and the 401-challenge pattern: HTTPDigestAuth",
+      "src/requests/sessions.py:SessionRedirectMixin.rebuild_auth \u2014 See auth stripped and reapplied across redirects: rebuild_auth"
+    ],
+    "session_id": "020ab23dbcbd4d0291b38e4e6268b216",
+    "stage": "ok",
+    "ok": true,
+    "seconds": 225.25147533416748,
+    "rag_calls": {}
+  },
+  {
+    "attempt": 2,
+    "goal": "requests-flow",
+    "goal_type": "understand_system",
+    "repo": "requests",
+    "investigation": {
+      "stop_reason": "turn_budget",
+      "turns": 21,
+      "tool_calls": 37,
+      "submissions": 1,
+      "rejections": [],
+      "repair_turns": 0,
+      "duplicate_calls": 0,
+      "seconds": 74.15599999999904,
+      "input_tokens": 597,
+      "output_tokens": 9157,
+      "cache_read_tokens": 386449,
+      "cache_write_tokens": 48350,
+      "cache_hit_ratio": 0.8875805014285846,
+      "cost_usd": 0.1454644,
+      "contract_met": true,
+      "harness_errors": [],
+      "grounding_first": 1.0,
+      "anchors_first": 71,
+      "grounding_final": 1.0,
+      "anchors_final": 71,
+      "unresolved_final": [],
+      "unmet_final": [],
+      "structural_final": []
+    },
+    "pipeline_seconds": 120.80159974098206,
+    "errors": [],
+    "invariants": {
+      "nodes": 14,
+      "anchors_resolve": true,
+      "unresolved_anchors": [],
+      "no_fabricated_evidence": true,
+      "nodes_outside_dossier_evidence": [],
+      "single_chain": true,
+      "has_current_node": true
+    },
+    "confidence": "high",
+    "persistence": {
+      "graph_reloaded": true,
+      "nodes_reloaded": 14,
+      "symbols_kept": 14,
+      "dossier_reloaded": true,
+      "resume_point": true
+    },
+    "session": {
+      "lesson_rendered": true,
+      "used_fallback_lesson": false,
+      "seconds": 7.660041570663452,
+      "walkthrough": "When you call `requests.get(url)`, you're invoking this one-liner in `api.py`. It immediately delegates to the `request()` function\u2014also in the same module\u2014passing `'get'` as the HTTP method. This is the **entry point** into a delegation chain that spans two layers: 1. **This module (`api.py`)** owns the **convenience API**\u2014the 7 public functions (`get`, `post`, `put`, etc.) that users call. Each\u2026"
+    },
+    "mutation": {
+      "grade": "partial",
+      "outcome": "no prerequisite",
+      "prerequisite": null,
+      "reached_retrieval": false,
+      "errors": []
+    },
+    "file_trace": {
+      "src/requests/api.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "src/requests/sessions.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "src/requests/models.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "src/requests/adapters.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      }
+    },
+    "discovery": 1.0,
+    "graph_files": [
+      "src/requests/adapters.py",
+      "src/requests/api.py",
+      "src/requests/hooks.py",
+      "src/requests/models.py",
+      "src/requests/sessions.py"
+    ],
+    "node_titles": [
+      "src/requests/api.py:get \u2014 Trace the public entry point into the lifecycle",
+      "src/requests/api.py:request \u2014 Understand why a temporary Session is created and destroyed",
+      "src/requests/sessions.py:Session.request \u2014 See the full orchestration inside Session.request",
+      "src/requests/models.py:Request.__init__ \u2014 Learn how Request holds raw parameters before preparation",
+      "src/requests/sessions.py:Session.prepare_request \u2014 See how session defaults are merged in prepare_request",
+      "src/requests/models.py:PreparedRequest.prepare \u2014 Understand PreparedRequest.prepare as the serialization orchestrator",
+      "src/requests/models.py:PreparedRequest.prepare_url \u2014 Trace URL normalization and query-param encoding",
+      "src/requests/models.py:PreparedRequest.prepare_body \u2014 See how body data is serialized into bytes",
+      "src/requests/sessions.py:Session.send \u2014 Follow Session.send as it selects an adapter and dispatches hooks",
+      "src/requests/sessions.py:Session.get_adapter \u2014 See adapter routing via get_adapter",
+      "src/requests/adapters.py:HTTPAdapter.send \u2014 Understand HTTPAdapter.send as the urllib3 boundary",
+      "src/requests/adapters.py:HTTPAdapter.build_response \u2014 See how the urllib3 response becomes a requests Response",
+      "src/requests/models.py:Response.content \u2014 Understand lazy content loading via Response.content and iter_content",
+      "src/requests/hooks.py:dispatch_hook \u2014 See the hook system as a response interception point"
+    ],
+    "session_id": "ea72f51b3f3b4cb9acec0c57bc8efe24",
+    "stage": "ok",
+    "ok": true,
+    "seconds": 133.98013305664062,
+    "rag_calls": {}
+  },
+  {
+    "attempt": 3,
+    "goal": "fastapi-di",
+    "goal_type": "understand_component",
+    "repo": "fastapi",
+    "investigation": {
+      "stop_reason": "turn_budget",
+      "turns": 22,
+      "tool_calls": 38,
+      "submissions": 2,
+      "rejections": [
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: these item-level keys arrived at the top level of the dossier: `role_in_goal`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable."
+      ],
+      "repair_turns": 1,
+      "duplicate_calls": 0,
+      "seconds": 145.0619999999999,
+      "input_tokens": 1225,
+      "output_tokens": 17529,
+      "cache_read_tokens": 398598,
+      "cache_write_tokens": 55762,
+      "cache_hit_ratio": 0.8749146701493684,
+      "cost_usd": 0.19843229999999998,
+      "contract_met": true,
+      "harness_errors": [],
+      "grounding_first": 1.0,
+      "anchors_first": 0,
+      "grounding_final": 1.0,
+      "anchors_final": 53,
+      "unresolved_final": [],
+      "unmet_final": [],
+      "structural_final": []
+    },
+    "pipeline_seconds": 185.8956639766693,
+    "errors": [],
+    "invariants": {
+      "nodes": 9,
+      "anchors_resolve": true,
+      "unresolved_anchors": [],
+      "no_fabricated_evidence": true,
+      "nodes_outside_dossier_evidence": [],
+      "single_chain": true,
+      "has_current_node": true
+    },
+    "confidence": "high",
+    "persistence": {
+      "graph_reloaded": true,
+      "nodes_reloaded": 9,
+      "symbols_kept": 9,
+      "dossier_reloaded": true,
+      "resume_point": true
+    },
+    "session": {
+      "lesson_rendered": true,
+      "used_fallback_lesson": false,
+      "seconds": 9.215893983840942,
+      "walkthrough": "Depends() is FastAPI's public API for declaring a dependency. It's a simple factory function that wraps a user-provided callable into a `params.Depends` instance\u2014a marker object that the framework reads later. Here's what matters: **What Depends() does:** It takes three arguments: - `dependency`: the actual callable (function, class, etc.) to inject - `use_cache` (default True): whether to reuse \u2026"
+    },
+    "mutation": {
+      "grade": "off-topic",
+      "outcome": "no prerequisite",
+      "prerequisite": null,
+      "reached_retrieval": false,
+      "errors": []
+    },
+    "file_trace": {
+      "fastapi/dependencies/utils.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "fastapi/dependencies/models.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "fastapi/params.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": false
+      },
+      "fastapi/param_functions.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "fastapi/routing.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      }
+    },
+    "discovery": 0.8,
+    "graph_files": [
+      "fastapi/applications.py",
+      "fastapi/dependencies/models.py",
+      "fastapi/dependencies/utils.py",
+      "fastapi/param_functions.py",
+      "fastapi/routing.py"
+    ],
+    "node_titles": [
+      "fastapi/param_functions.py:Depends \u2014 Learn the declarative surface: what Depends() is",
+      "fastapi/dependencies/models.py:Dependant \u2014 Understand the internal graph node: Dependant",
+      "fastapi/routing.py:APIRoute.__init__ \u2014 Trace how route registration kicks off the build phase",
+      "fastapi/dependencies/utils.py:analyze_param \u2014 See how a single parameter is classified: analyze_param",
+      "fastapi/dependencies/utils.py:add_non_field_param_to_dependency \u2014 See how special framework types are injected without Depends",
+      "fastapi/dependencies/utils.py:get_dependant \u2014 See how the dependency tree is built recursively: get_dependant",
+      "fastapi/dependencies/utils.py:solve_dependencies \u2014 Understand the runtime resolver: solve_dependencies",
+      "fastapi/routing.py:get_request_handler \u2014 Follow a full request through the runtime: get_request_handler",
+      "fastapi/applications.py:FastAPI \u2014 Understand dependency overrides via the FastAPI app object"
+    ],
+    "session_id": "23a92439e6494c41807201afd0f0cea9",
+    "stage": "ok",
+    "ok": true,
+    "seconds": 199.75164580345154,
+    "rag_calls": {}
+  },
+  {
+    "attempt": 4,
+    "goal": "fastapi-request",
+    "goal_type": "understand_system",
+    "repo": "fastapi",
+    "investigation": {
+      "stop_reason": "turn_budget",
+      "turns": 21,
+      "tool_calls": 30,
+      "submissions": 1,
+      "rejections": [
+        "The investigation is not yet sufficient: 0 goal-relevant component(s) established; at least 3 are needed to explain this kind of goal. Investigate further, or record what blocks you as an open question. 1 citation(s) do not resolve against the repository: entry_point: fastapi/__init__.py:FastAPI (unknown_symbol). Verify with `symbols` or `propose_anchor`, then correct or drop them."
+      ],
+      "repair_turns": 0,
+      "duplicate_calls": 0,
+      "seconds": 80.76499999999942,
+      "input_tokens": 595,
+      "output_tokens": 8825,
+      "cache_read_tokens": 423945,
+      "cache_write_tokens": 62169,
+      "cache_hit_ratio": 0.871044094109622,
+      "cost_usd": 0.16482575,
+      "contract_met": false,
+      "harness_errors": [],
+      "grounding_first": 0.9782608695652174,
+      "anchors_first": 46,
+      "grounding_final": 0.9782608695652174,
+      "anchors_final": 46,
+      "unresolved_final": [
+        "entry_point: fastapi/__init__.py:FastAPI (unknown_symbol)"
+      ],
+      "unmet_final": [
+        "0 goal-relevant component(s) established; at least 3 are needed to explain this kind of goal"
+      ],
+      "structural_final": []
+    },
+    "pipeline_seconds": 183.18806791305542,
+    "errors": [],
+    "invariants": {
+      "nodes": 12,
+      "anchors_resolve": true,
+      "unresolved_anchors": [],
+      "no_fabricated_evidence": true,
+      "nodes_outside_dossier_evidence": [],
+      "single_chain": true,
+      "has_current_node": true
+    },
+    "confidence": "medium",
+    "persistence": {
+      "graph_reloaded": true,
+      "nodes_reloaded": 12,
+      "symbols_kept": 12,
+      "dossier_reloaded": true,
+      "resume_point": true
+    },
+    "session": {
+      "lesson_rendered": true,
+      "used_fallback_lesson": false,
+      "seconds": 8.529528379440308,
+      "walkthrough": "FastAPI.__call__ is the ASGI entry point\u2014the moment an HTTP request reaches your app. It receives three parameters from the ASGI server (uvicorn, etc.): **scope** (connection metadata: path, method, headers), **receive** (async callable that reads request body chunks), and **send** (async callable that writes the response). The method does two things: 1. **Sets root_path if configured** \u2014 modifie\u2026"
+    },
+    "mutation": {
+      "grade": "off-topic",
+      "outcome": "no prerequisite",
+      "prerequisite": null,
+      "reached_retrieval": false,
+      "errors": []
+    },
+    "file_trace": {
+      "fastapi/routing.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "fastapi/applications.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "fastapi/dependencies/utils.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "fastapi/encoders.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": false,
+        "in_dossier": false,
+        "in_graph": false
+      }
+    },
+    "discovery": 0.75,
+    "graph_files": [
+      "fastapi/applications.py",
+      "fastapi/dependencies/utils.py",
+      "fastapi/exception_handlers.py",
+      "fastapi/middleware/asyncexitstack.py",
+      "fastapi/routing.py"
+    ],
+    "node_titles": [
+      "fastapi/applications.py:FastAPI.__call__ \u2014 Trace the ASGI entry point into FastAPI",
+      "fastapi/applications.py:FastAPI.__init__ \u2014 See how app startup wires exception handlers and the router",
+      "fastapi/applications.py:FastAPI.build_middleware_stack \u2014 Understand how the middleware stack is assembled around the router",
+      "fastapi/middleware/asyncexitstack.py:AsyncExitStackMiddleware \u2014 Meet AsyncExitStackMiddleware and the outermost cleanup-stack pattern",
+      "fastapi/routing.py:APIRoute.__init__ \u2014 Understand how a route is registered and its dependency graph built statically",
+      "fastapi/dependencies/utils.py:get_dependant \u2014 Learn how function signatures become a Dependant tree",
+      "fastapi/routing.py:request_response \u2014 Trace request_response: the ASGI wrapper that owns the inner cleanup stacks",
+      "fastapi/routing.py:get_request_handler \u2014 Understand the core request handler: body parsing through response wrapping",
+      "fastapi/dependencies/utils.py:solve_dependencies \u2014 Follow solve_dependencies recursively resolving the dependency graph at runtime",
+      "fastapi/routing.py:run_endpoint_function \u2014 See how sync vs async endpoints are dispatched without blocking the event loop",
+      "fastapi/routing.py:serialize_response \u2014 Understand response validation and serialization against response_model",
+      "fastapi/exception_handlers.py:request_validation_exception_handler \u2014 See how validation errors become 422 responses"
+    ],
+    "session_id": "420d772c36a14510836f48369364e04b",
+    "stage": "ok",
+    "ok": true,
+    "seconds": 197.75781154632568,
+    "rag_calls": {}
+  }
+]

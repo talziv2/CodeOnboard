@@ -1,0 +1,41 @@
+{
+  "requests-auth": {
+    "explorer": {
+      "failed": true,
+      "errors": [
+        "goal_investigation failed: run_tool() got multiple values for argument 'name'"
+      ],
+      "seconds": 72.18395853042603,
+      "investigation": {},
+      "dossier": null
+    }
+  },
+  "fastapi-di": {
+    "explorer": {
+      "failed": true,
+      "errors": [
+        "mentor_agent: dossier contains no resolvable evidence"
+      ],
+      "seconds": 51.37179756164551,
+      "investigation": {
+        "accepted": false,
+        "stop_reason": "turn_budget",
+        "turns": 21,
+        "tool_calls": 32,
+        "rejections": [
+          "The investigation is not yet sufficient: 0 goal-relevant component(s) established; at least 4 are needed to explain this kind of goal; no verified entry point into the goal-relevant behaviour; 0 flow(s) traced; at least 1 needed; 0 confirmed relationship(s); at least 2 needed; 0 contract(s)/abstraction(s) described; at least 1 needed for this goal; no prerequisite concepts identified. Investigate further, or record what blocks you as an open question. Empty entries: `components` arrived as str, not a list of objects \u2014 emit it as a JSON array of objects."
+        ],
+        "cost_usd": 0.13073555,
+        "seconds": 50.71900000000005,
+        "used_survey": true
+      },
+      "dossier": {
+        "understanding": "FastAPI's dependency injection system works by introspecting endpoint function signatures at route registration time, building a dependency tree called a Dependant that represents the callable and all its parameter dependencies, then at request time resolving that tree by extracting values from the request (path params, query params, headers, body) and recursively calling dependencies (which may have their own dependencies). Dependencies can be simple functions, async functions, or generator functions (context managers) with two scopes: \"function\" (cleaned up after the endpoint runs) and \"request\" (cleaned up after the response is sent). The system supports caching so the same dependency isn't called multiple times in one request, and it allows overriding dependencies for testing.",
+        "components": "\n<component>\n<parameter name=\"file\">fastapi/dependencies/models.py",
+        "symbol": "Dependant",
+        "role_in_goal": "The core data structure that represents a single callable and its parameters/dependencies. Every endpoint and every dependency is represented as a Dependant. It holds: the call (the function), path_params, query_params, header_params, cookie_params, body_params (extracted from request), dependencies (nested sub-dependants), and metadata like cache_key, scope, oauth_scopes. Properties like is_gen_callable, is_async_gen_callable, and is_coroutine_callable determine how to invoke the callable.",
+        "why_it_matters": "To understand DI, you must understand Dependant because it's the tree structure that gets built once at route registration and then solved at request time. All other components operate on Dependants."
+      }
+    }
+  }
+}

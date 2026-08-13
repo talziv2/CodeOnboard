@@ -1,0 +1,88 @@
+{
+  "arm": "explorer",
+  "dossier_persisted": true,
+  "lesson_context": {
+    "component": {
+      "file": "src/requests/auth.py",
+      "symbol": "AuthBase",
+      "role_in_goal": "Base class defining the authentication protocol as a callable that accepts and returns a PreparedRequest",
+      "why_it_matters": "All auth implementations inherit from AuthBase; understanding its __call__ contract is essential to understanding how any auth object applies credentials"
+    },
+    "flow_position": [],
+    "relationships": [
+      {
+        "from_file": "src/requests/models.py",
+        "from_symbol": "PreparedRequest.prepare_auth",
+        "to_file": "src/requests/auth.py",
+        "to_symbol": "AuthBase",
+        "kind": "delegates_to",
+        "note": "Invokes auth handler as callable: auth_handler(self) which implements AuthBase.__call__"
+      },
+      {
+        "from_file": "src/requests/auth.py",
+        "from_symbol": "HTTPBasicAuth",
+        "to_file": "src/requests/auth.py",
+        "to_symbol": "AuthBase",
+        "kind": "extends",
+        "note": "HTTPBasicAuth inherits from AuthBase and implements __call__"
+      },
+      {
+        "from_file": "src/requests/auth.py",
+        "from_symbol": "HTTPDigestAuth",
+        "to_file": "src/requests/auth.py",
+        "to_symbol": "AuthBase",
+        "kind": "extends",
+        "note": "HTTPDigestAuth inherits from AuthBase and implements multi-step authentication via hooks"
+      }
+    ],
+    "contracts": [
+      {
+        "file": "src/requests/auth.py",
+        "symbol": "AuthBase",
+        "contract": "AuthBase.__call__(self, r: PreparedRequest) -> PreparedRequest: Any auth implementation must be callable, accept a PreparedRequest, modify it, and return it"
+      },
+      {
+        "file": "src/requests/models.py",
+        "symbol": "PreparedRequest.prepare_auth",
+        "contract": "prepare_auth(auth: AuthType, url: str = '') handles auth=None (extracts from URL), auth tuple (converts to HTTPBasicAuth), or auth callable (invokes directly)"
+      }
+    ],
+    "prerequisites": [
+      {
+        "concept": "HTTP Authorization header",
+        "why_needed": "All auth implementations work by setting the Authorization (or Proxy-Authorization) header in the HTTP request"
+      },
+      {
+        "concept": "Callable protocol in Python",
+        "why_needed": "Auth objects are used as callables: auth_handler(request) invokes __call__; understanding Python's callable protocol is essential"
+      },
+      {
+        "concept": "Request preparation pipeline",
+        "why_needed": "Auth is applied at the end of a multi-step PreparedRequest.prepare() sequence; understanding why auth comes last (after body/headers) is critical"
+      },
+      {
+        "concept": "Base64 encoding",
+        "why_needed": "HTTPBasicAuth encodes credentials as Base64(username:password); understanding the encoding is necessary to verify the mechanism"
+      }
+    ]
+  },
+  "lesson": {
+    "walkthrough": "AuthBase is Requests' authentication protocol contract. Every auth mechanism in this library\u2014HTTPBasicAuth, HTTPDigestAuth, OAuth, custom auth\u2014inherits from this class and implements a single method: `__call__(self, r: PreparedRequest) -> PreparedRequest`.\n\nHere's what that means in practice: when you pass an `auth` parameter to a request (e.g., `requests.get(url, auth=my_auth_handler)`), Requests will invoke your auth object as a callable during request preparation. Your auth handler receives the nearly-complete PreparedRequest, modifies it (typically by setting the `Authorization` header with encoded credentials), and returns the modified request. That's the entire contract.\n\nWhy this design? Auth is intentional placed *last* in the preparation pipeline\u2014after the body and other headers are set. This lets complex schemes like Digest auth inspect the full request before computing a response digest, and it lets OAuth work on complete requests. For schemes needing multi-step negotiation (like Digest's 401 retry), auth can also register hooks on the PreparedRequest that fire later during transmission.\n\nThe `NotImplementedError` here enforces that subclasses must override `__call__`. When you look at HTTPBasicAuth or HTTPDigestAuth later, you'll see they each implement this method differently: Basic auth encodes credentials and sets the header immediately; Digest auth registers a hook for lazy computation.\n\nTl;dr: Auth objects are tiny callables that stamp credentials onto requests. Understanding this protocol makes every auth implementation in the codebase immediately readable.",
+    "prompt": "Before reading the explanation above: if a custom auth handler receives a PreparedRequest and modifies it (say, adding a custom Authorization header), what must it do with that request object before returning from `__call__`? Why do you think Requests designed it this way rather than returning None and having the framework apply modifications internally?",
+    "expected_answer": "The handler must return the modified PreparedRequest object itself. By returning the request, the auth handler makes it explicit that it owns the mutation and confirms the request is ready to send. This design keeps auth logic self-contained and composable: each auth implementation is responsible for its own modifications and knows exactly what it changed. It also allows chaining or conditional logic\u2014the handler can inspect the request and decide whether to modify it.",
+    "prompt_kind": "predict-then-reveal"
+  },
+  "grade": {
+    "classification": "off-topic",
+    "rationale": "The developer demonstrates no understanding of the PreparedRequest contract, the callable pattern, or how auth handlers work in this system; their answer suggests confusion about basic HTTP authentication mechanisms rather than engagement with the actual question."
+  },
+  "candidates": [],
+  "mutation": {
+    "title": "Understand how Python __call__ makes objects callable",
+    "anchor": "src/requests/auth.py:78-82",
+    "symbol": "AuthBase",
+    "why": "The entire AuthBase contract is expressed through __call__, so a developer must understand that defining __call__ on a class makes its instances usable as functions before they can grasp why auth objects can be passed anywhere a callable is expected."
+  },
+  "d12_fallback_ok": true,
+  "seconds_total": 170.4804813861847
+}

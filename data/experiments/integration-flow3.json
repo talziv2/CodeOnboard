@@ -1,0 +1,617 @@
+{
+  "requests-flow": {
+    "explorer": {
+      "nodes": 12,
+      "anchor_accuracy": 1.0,
+      "important_hit": [
+        "src/requests/adapters.py",
+        "src/requests/api.py",
+        "src/requests/models.py",
+        "src/requests/sessions.py"
+      ],
+      "important_missed": [],
+      "discovery": 1.0,
+      "nodes_traceable_to_dossier": 12,
+      "confidence": "high",
+      "seconds": 128.71954703330994,
+      "investigation": {
+        "accepted": true,
+        "stop_reason": "reported",
+        "turns": 18,
+        "tool_calls": 37,
+        "rejections": [],
+        "cost_usd": 0.11459810000000001,
+        "seconds": 82.125,
+        "used_survey": true
+      },
+      "dossier": {
+        "understanding": "When `requests.get(url)` is called, it enters through the module-level API, which creates a temporary Session and delegates to Session.request(). The session constructs a high-level Request object from the provided parameters, then prepares it into a low-level PreparedRequest with fully encoded headers, URL, body, and cookies merged with session state. The PreparedRequest is sent via an HTTPAdapter (which wraps urllib3) that handles TLS configuration, retries, and timeout. The raw urllib3 response is then wrapped into a Requests Response object. If redirects are enabled (default), the session automatically follows them by re-preparing and re-sending modified requests. Finally, hooks are dispatched, cookies are persisted, the response content is optionally downloaded, and the Response is returned to the caller. The Session context manager ensures all adapters are properly closed.",
+        "components": [
+          {
+            "file": "src/requests/api.py",
+            "symbol": "get",
+            "role_in_goal": "Entry point for module-level GET requests; calls request() with method='get'",
+            "why_it_matters": "This is where requests.get(url) begins; demonstrates the simple facade that delegates to the request() function"
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "request",
+            "role_in_goal": "Primary module-level request function that creates a temporary Session and delegates to Session.request()",
+            "why_it_matters": "Shows the pattern: temporary Session with context manager ensures proper cleanup; all real work goes through Session.request()"
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session.request",
+            "role_in_goal": "Orchestrates the entire request lifecycle: constructs Request, prepares it, applies environment settings, and calls send()",
+            "why_it_matters": "Core orchestration point; demonstrates the three key phases: (1) Request construction, (2) preparation, (3) sending. Shows where kwargs are processed and merged with session defaults"
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Request",
+            "role_in_goal": "User-friendly container for HTTP parameters; stores raw user input (method, url, params, data, headers, cookies, auth, etc.)",
+            "why_it_matters": "Represents the initial, unprocessed request; essential to understand that this is just a container before preparation"
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session.prepare_request",
+            "role_in_goal": "Merges Request with Session defaults and converts it to a PreparedRequest with all encoding done",
+            "why_it_matters": "Transformation point where cookies are merged, headers are combined, auth is resolved from environment if needed, and everything is encoded. Shows the separation between user-facing and wire-level representations"
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "PreparedRequest.prepare",
+            "role_in_goal": "Encodes all components into wire format: prepares method, URL with query params, headers, cookies, body, and auth",
+            "why_it_matters": "Shows the detailed preparation steps in order: method normalization \u2192 URL parsing and encoding \u2192 header validation \u2192 cookie serialization \u2192 body preparation \u2192 auth injection \u2192 hook registration. This is where the request becomes immutable and ready to send"
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session.send",
+            "role_in_goal": "Selects appropriate adapter, sends request via adapter, handles timing, response hooks, cookie persistence, and redirect resolution",
+            "why_it_matters": "Central dispatch point after preparation; shows how adapters are selected, how the actual send happens, how hooks are fired post-response, how cookies flow back into the session, and how redirect handling is orchestrated"
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "HTTPAdapter.send",
+            "role_in_goal": "Performs the actual network transmission: gets/creates connection, configures TLS, calls urllib3.urlopen(), catches exceptions, wraps raw response",
+            "why_it_matters": "The network boundary; demonstrates how requests delegates to urllib3 for actual I/O while handling TLS config, timeout resolution, retry policy, and error mapping"
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "HTTPAdapter.build_response",
+            "role_in_goal": "Wraps urllib3's raw response into a Requests Response object with headers, cookies, encoding, and context",
+            "why_it_matters": "Conversion point from urllib3 to Requests API; shows how status, headers, encoding, cookies are extracted and the response context is preserved"
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Response",
+            "role_in_goal": "Returned to user; provides interface to status code, headers, content, text, cookies, elapsed time, and history; can be used as context manager",
+            "why_it_matters": "Final deliverable to the user; understanding what it contains and what properties/methods are available is critical for using the response"
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "SessionRedirectMixin.resolve_redirects",
+            "role_in_goal": "Generator that handles HTTP redirects by re-preparing and re-sending modified requests, updating history and extracting new cookies",
+            "why_it_matters": "Shows the automated redirect loop logic: detects redirect status, copies and modifies the request, handles auth stripping, method downgrade, and body rewindability; critical for understanding redirect behavior"
+          },
+          {
+            "file": "src/requests/hooks.py",
+            "symbol": "dispatch_hook",
+            "role_in_goal": "Invokes user-defined response hooks after response is received",
+            "why_it_matters": "Shows the hook mechanism: allows user callbacks to inspect/transform the response before it returns; demonstrates the extensibility point"
+          }
+        ],
+        "entry_points": [
+          {
+            "file": "src/requests/api.py",
+            "symbol": "get",
+            "how_it_enters": "Direct call: requests.get(url) invokes this function, which calls request('get', url, params=params, **kwargs)"
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "request",
+            "how_it_enters": "Called by get() and other HTTP method functions in api.py; creates a temporary Session context manager and delegates to Session.request()"
+          }
+        ],
+        "flows": [
+          {
+            "name": "Complete request lifecycle for requests.get(url)",
+            "steps": [
+              {
+                "file": "src/requests/api.py",
+                "symbol": "get",
+                "what_happens": "get(url, params=None, **kwargs) calls request('get', url, params=params, **kwargs)"
+              },
+              {
+                "file": "src/requests/api.py",
+                "symbol": "request",
+                "what_happens": "request(method, url, **kwargs) creates a temporary Session using context manager (with statement) and calls session.request(method=method, url=url, **kwargs)"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.__init__",
+                "what_happens": "Session is created with default headers, cookies, proxies, auth=None, stream=False, verify=True, and adapters mounted for http:// and https:// prefixes using HTTPAdapter instances"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "Converts bytes URL to string, constructs a Request object with method.upper(), url, headers, files, data, json, params, auth, cookies, hooks. Then calls prepare_request(req) to merge session state into a PreparedRequest"
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "Request",
+                "what_happens": "Request.__init__ stores user-provided values (method, url, params, data, headers, cookies, auth, files, json, hooks) with empty defaults where needed; serves as a container to pass to prepare_request()"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.prepare_request",
+                "what_happens": "Merges request cookies into RequestsCookieJar with session cookies, resolves auth from netrc if trust_env=True and no explicit auth, creates a new PreparedRequest(), and calls p.prepare() with merged settings (headers, params, auth, cookies from session + request)"
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare",
+                "what_happens": "Orchestrates encoding in order: prepare_method(method) \u2192 prepare_url(url, params) with query encoding \u2192 prepare_headers(headers) with validation \u2192 prepare_cookies(cookies) \u2192 prepare_body(data, files, json) \u2192 prepare_auth(auth, url) \u2192 prepare_hooks(hooks). Result is an immutable, wire-ready request"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "After preparation, calls merge_environment_settings() to get proxies/stream/verify/cert from environment if trust_env=True, builds send_kwargs with timeout and allow_redirects, then calls self.send(prep, **send_kwargs)"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Sets defaults from session (stream, verify, cert, proxies if not in kwargs), gets appropriate adapter via get_adapter(url), records start time, calls adapter.send(request, **kwargs), computes elapsed time, dispatches 'response' hooks, extracts and persists cookies from response"
+              },
+              {
+                "file": "src/requests/adapters.py",
+                "symbol": "HTTPAdapter.send",
+                "what_happens": "Gets/creates a urllib3 connection pool, configures TLS with cert_verify(), resolves timeout tuple, builds request URL, adds headers, calls conn.urlopen(method, url, body, headers, timeout, retries, etc.), catches urllib3 exceptions and maps them to Requests exceptions, returns build_response()"
+              },
+              {
+                "file": "src/requests/adapters.py",
+                "symbol": "HTTPAdapter.build_response",
+                "what_happens": "Wraps urllib3 response into a Requests Response: sets status_code, headers, encoding, raw pointer, url, extracts cookies, stores request and adapter references"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "After adapter.send() returns Response, if allow_redirects=True, calls resolve_redirects(r, request, **kwargs) generator to follow any redirects (loops via send() for each), else stores next redirect in r._next for manual access"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "SessionRedirectMixin.resolve_redirects",
+                "what_happens": "Generator that loops while redirect target exists: copies prepared request, updates history, consumes response body, checks max_redirects limit, strips auth/body for non-307/308 status codes, rebuilds method/auth/proxies/cookies for new URL, calls self.send() recursively with allow_redirects=False, yields response"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "After all redirects complete (if any), stores history on response, dispatches hooks, and if not stream=True, accesses r.content to trigger full download before returning"
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "Response",
+                "what_happens": "Response object is returned to user with status_code, headers, cookies, request, elapsed, history; user can access .text, .json(), .content, call .raise_for_status(), etc."
+              },
+              {
+                "file": "src/requests/api.py",
+                "symbol": "request",
+                "what_happens": "Session context manager calls __exit__() which calls session.close(), closing all adapters and releasing urllib3 connections. Response is returned to caller"
+              }
+            ]
+          }
+        ],
+        "relationships": [
+          {
+            "from_file": "src/requests/api.py",
+            "from_symbol": "get",
+            "to_file": "src/requests/api.py",
+            "to_symbol": "request",
+            "kind": "calls",
+            "note": "get() is a convenience wrapper that calls request() with method='get'"
+          },
+          {
+            "from_file": "src/requests/api.py",
+            "from_symbol": "request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session",
+            "kind": "constructs",
+            "note": "request() creates a temporary Session instance using context manager"
+          },
+          {
+            "from_file": "src/requests/api.py",
+            "from_symbol": "request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.request",
+            "kind": "calls",
+            "note": "request() delegates the actual work to session.request()"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "Request",
+            "kind": "constructs",
+            "note": "Session.request() creates a Request object from user parameters"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.prepare_request",
+            "kind": "calls",
+            "note": "Session.request() prepares the Request into a PreparedRequest with session state merged in"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.send",
+            "kind": "calls",
+            "note": "Session.request() sends the prepared request"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.prepare_request",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest.prepare",
+            "kind": "calls",
+            "note": "prepare_request() calls the prepare() method on a new PreparedRequest to encode all components"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.get_adapter",
+            "kind": "calls",
+            "note": "send() looks up the appropriate adapter (HTTPAdapter) for the URL scheme"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "HTTPAdapter.send",
+            "kind": "calls",
+            "note": "send() delegates the actual network transmission to the adapter's send() method"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/hooks.py",
+            "to_symbol": "dispatch_hook",
+            "kind": "calls",
+            "note": "send() fires the 'response' hook after receiving the response from adapter"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "SessionRedirectMixin.resolve_redirects",
+            "kind": "calls",
+            "note": "send() calls resolve_redirects() if allow_redirects=True to follow redirects"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "SessionRedirectMixin.resolve_redirects",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.send",
+            "kind": "calls",
+            "note": "resolve_redirects() recursively calls send() for each redirect with allow_redirects=False to prevent infinite loops"
+          },
+          {
+            "from_file": "src/requests/adapters.py",
+            "from_symbol": "HTTPAdapter.send",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "HTTPAdapter.build_response",
+            "kind": "calls",
+            "note": "HTTPAdapter.send() wraps the urllib3 response into a Requests Response object"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.__init__",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "HTTPAdapter",
+            "kind": "constructs",
+            "note": "Session creates HTTPAdapter instances and mounts them for http:// and https:// prefixes"
+          }
+        ],
+        "contracts": [
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Request",
+            "contract": "Request(method, url, headers, files, data, params, auth, cookies, hooks, json) stores user input and provides no processing. Request.prepare() returns a PreparedRequest. Can be constructed by users or created internally by Session.request()."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "PreparedRequest",
+            "contract": "PreparedRequest.prepare(method, url, headers, files, data, params, auth, cookies, hooks, json) encodes all components into wire format. Result has method, url, headers, body, and _cookies set in immutable form. Can be sent via Session.send() or adapter.send()."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session",
+            "contract": "Session.request(method, url, ...) prepares and sends a request, returning a Response. Session.send(prepared_request, ...) sends an already-prepared request. Session.prepare_request(request) converts a Request to a PreparedRequest. Session can be used as context manager to ensure cleanup."
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "HTTPAdapter",
+            "contract": "Adapter.send(prepared_request, stream, timeout, verify, cert, proxies) performs network I/O and returns a Response. Must handle TLS config, timeout resolution, exception mapping, and response wrapping. Subclasses must implement send() and close()."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Response",
+            "contract": "Response contains status_code, headers, cookies, url, elapsed, request, history. Provides properties: .text, .content, .json(), .ok, .is_redirect. Can check status with .raise_for_status(). Can be used as context manager."
+          },
+          {
+            "file": "src/requests/hooks.py",
+            "symbol": "dispatch_hook",
+            "contract": "dispatch_hook(key, hooks, data, **kwargs) calls all hooks registered for the given key with the data and kwargs. Hooks are callables that may transform and return the data, or return None to keep original data. Used for 'response' hook post-send."
+          }
+        ],
+        "prerequisites": [
+          {
+            "concept": "HTTP protocol basics",
+            "why_needed": "Understanding methods (GET, POST), status codes, headers, redirects, and request/response structure is essential to follow what the library is encoding and sending"
+          },
+          {
+            "concept": "Context managers in Python",
+            "why_needed": "requests.get() uses 'with Session()' syntax; understanding __enter__ and __exit__ explains resource cleanup at the end of the request"
+          },
+          {
+            "concept": "Python decorators and hooks/callbacks",
+            "why_needed": "The hook system allows user-defined callbacks to fire at specific points; dispatch_hook shows how callables are invoked"
+          },
+          {
+            "concept": "URL parsing and encoding",
+            "why_needed": "PreparedRequest.prepare_url() handles query string encoding, IDNA domain encoding, and URL normalization; required to understand how parameters become wire format"
+          },
+          {
+            "concept": "Character encoding (UTF-8, Latin-1, etc.)",
+            "why_needed": "PreparedRequest.prepare_body() handles encoding data/json/files; Response.text uses encoding detection; chardet/charset_normalizer are optional dependencies"
+          },
+          {
+            "concept": "Generators in Python",
+            "why_needed": "resolve_redirects() is a generator function that yields responses; understanding yield and generator semantics is needed to follow redirect flow"
+          },
+          {
+            "concept": "urllib3 basics",
+            "why_needed": "HTTPAdapter wraps urllib3; understanding that urllib3 provides PoolManager, HTTPConnectionPool, and urlopen() is needed to see the boundary between requests and urllib3"
+          }
+        ],
+        "evidence_refs": [
+          {
+            "path": "src/requests/api.py",
+            "clarifies": "Module-level convenience functions; get() shows the pattern of delegating to request() which creates a temporary Session"
+          },
+          {
+            "path": "src/requests/sessions.py",
+            "clarifies": "Core session logic: request() orchestration, prepare_request() merging session state, send() dispatching to adapters and handling redirects, resolve_redirects() generator for redirect loops"
+          },
+          {
+            "path": "src/requests/models.py",
+            "clarifies": "Request and PreparedRequest distinction; Request is user-facing container, PreparedRequest is immutable wire format with all encoding done"
+          },
+          {
+            "path": "src/requests/adapters.py",
+            "clarifies": "HTTPAdapter as the network boundary; send() configures urllib3, handles exceptions, and build_response() wraps raw responses"
+          },
+          {
+            "path": "src/requests/hooks.py",
+            "clarifies": "Hook dispatch mechanism; shows how user callbacks are invoked post-response"
+          }
+        ],
+        "context": [
+          "Session is used in two ways: (1) module-level convenience functions like get() create temporary sessions that close after each request, (2) users can create persistent Session objects to reuse connections and share state across multiple requests",
+          "The Request/PreparedRequest split is intentional: Request is mutable and user-friendly; PreparedRequest is immutable and wire-ready. Session.prepare_request() is the conversion point where session state (headers, cookies, auth) is merged in",
+          "Cookies flow in multiple directions: from user parameters \u2192 merged with session cookies in prepare_request() \u2192 included in request body \u2192 extracted from response \u2192 persisted back to session.cookies",
+          "Redirects are handled entirely in Session.send() via the resolve_redirects() generator; the user does not see redirect requests directly unless they set allow_redirects=False and manually access r._next or call the generator with yield_requests=True",
+          "The HTTPAdapter manages connection pooling via urllib3's PoolManager; mounting different adapters for http:// and https:// allows protocol-specific behavior",
+          "Exceptions from urllib3 (ProtocolError, MaxRetryError, SSLError, etc.) are caught in HTTPAdapter.send() and re-raised as Requests exceptions (ConnectionError, ConnectTimeout, SSLError, etc.)",
+          "The elapsed time in Response.elapsed is measured from just before the adapter.send() call to just after, so it only includes the network round-trip, not request preparation or response content consumption",
+          "If stream=True, response.content is not automatically consumed; if stream=False (default), the full content is downloaded before returning to the user"
+        ],
+        "open_questions": [
+          {
+            "question": "How does authentication header injection via prepare_auth() interact with custom auth handlers (classes extending AuthBase), and what is the exact contract for callable auth objects that can transform requests?",
+            "why_it_matters": "The goal asks for end-to-end request lifecycle; authentication is a key part, but the exact behavior of custom auth handlers (e.g., Digest auth retry-on-401) was not traced in detail"
+          },
+          {
+            "question": "What happens to the request body when streaming (stream=True): is it fully buffered on the response object, or does it remain on the raw urllib3 response and must be consumed by the user?",
+            "why_it_matters": "Response.content property and streaming behavior are mentioned in Session.send() but the exact implementation of lazy vs eager consumption was not fully explored"
+          },
+          {
+            "question": "How does the retry mechanism in HTTPAdapter (retries parameter passed to urlopen) work, and what types of retries are handled by urllib3 vs caught and re-mapped by Requests?",
+            "why_it_matters": "HTTPAdapter.send() passes self.max_retries to urllib3.urlopen() but the detail of retry logic and exception handling was not fully traced"
+          }
+        ]
+      },
+      "errors": [],
+      "session_id": "2ef354c24e8b4d35a41fb50b0f032c1b",
+      "resume_ok": true,
+      "learning_path": [
+        {
+          "step": 1,
+          "title": "Trace the entry point: get() and request()",
+          "file": "src/requests/api.py",
+          "line_range": [
+            24,
+            71
+          ],
+          "why": "This is where requests.get(url) actually begins; understanding that get() is a thin wrapper and that request() creates a temporary Session with a context manager establishes the outermost frame of the entire lifecycle.",
+          "understand": "requests.get() delegates immediately to request(), which wraps everything in a temporary Session context manager to guarantee connection cleanup, then hands off all real work to Session.request().",
+          "concepts": [
+            "flow",
+            "architecture",
+            "component"
+          ]
+        },
+        {
+          "step": 2,
+          "title": "Understand Session initialization and adapter mounting",
+          "file": "src/requests/sessions.py",
+          "line_range": [
+            395,
+            898
+          ],
+          "why": "Session is the object that orchestrates everything; knowing what state it holds by default (headers, cookies, verify, stream, max_redirects, mounted HTTPAdapters) explains where session-level defaults come from throughout the rest of the lifecycle.",
+          "understand": "A Session carries persistent state (headers, cookies, auth, TLS settings) and mounts two HTTPAdapter instances at init \u2014 one for http:// and one for https:// \u2014 which are the objects that will ultimately touch the network.",
+          "concepts": [
+            "component",
+            "architecture"
+          ]
+        },
+        {
+          "step": 3,
+          "title": "Meet the Request/PreparedRequest split",
+          "file": "src/requests/models.py",
+          "line_range": [
+            283,
+            373
+          ],
+          "why": "The two-object design is the core abstraction in requests; grasping the difference between a mutable user-facing container and an immutable wire-ready object is prerequisite to understanding every subsequent step.",
+          "understand": "Request is a plain container for user-supplied parameters with no encoding; PreparedRequest is the fully encoded, immutable wire representation \u2014 every preparation step transforms one into the other.",
+          "concepts": [
+            "architecture",
+            "component"
+          ]
+        },
+        {
+          "step": 4,
+          "title": "Follow Session.request() orchestrating the lifecycle",
+          "file": "src/requests/sessions.py",
+          "line_range": [
+            557,
+            653
+          ],
+          "why": "This method is the true orchestration hub: it constructs the Request, calls prepare_request(), merges environment settings, and calls send() \u2014 seeing it in one place reveals the three-phase structure of the whole lifecycle.",
+          "understand": "Session.request() sequences three distinct phases \u2014 (1) construct a Request from user args, (2) prepare it into a PreparedRequest with session state merged in, (3) send it \u2014 making it the single place where the entire lifecycle is stitched together.",
+          "concepts": [
+            "flow",
+            "component"
+          ]
+        },
+        {
+          "step": 5,
+          "title": "Understand how session state is merged during prepare_request()",
+          "file": "src/requests/sessions.py",
+          "line_range": [
+            511,
+            555
+          ],
+          "why": "This is where per-request parameters collide with session-level defaults for cookies, headers, auth, and params; missing this step makes the origin of many request fields invisible.",
+          "understand": "prepare_request() merges the request's cookies with the session's CookieJar, resolves auth from netrc when trust_env is set, and deep-merges headers/params/hooks before handing a fully merged set of arguments to PreparedRequest.prepare().",
+          "concepts": [
+            "flow",
+            "component",
+            "architecture"
+          ]
+        },
+        {
+          "step": 6,
+          "title": "Trace the encoding pipeline inside PreparedRequest.prepare()",
+          "file": "src/requests/models.py",
+          "line_range": [
+            422,
+            449
+          ],
+          "why": "This is where raw Python objects become bytes on the wire; the ordered sequence of sub-prepare calls (method \u2192 URL \u2192 headers \u2192 cookies \u2192 body \u2192 auth \u2192 hooks) shows exactly how encoding happens and why auth must come last.",
+          "understand": "PreparedRequest.prepare() is an ordered pipeline that encodes each HTTP component in sequence, with auth intentionally placed last so authentication schemes can inspect the fully formed request before injecting credentials.",
+          "concepts": [
+            "flow",
+            "component"
+          ]
+        },
+        {
+          "step": 7,
+          "title": "See Session.send() dispatch and post-response handling",
+          "file": "src/requests/sessions.py",
+          "line_range": [
+            745,
+            822
+          ],
+          "why": "send() is the junction point between preparation and network I/O: it selects the adapter, times the call, fires response hooks, persists cookies back to the session, and triggers redirect resolution.",
+          "understand": "Session.send() selects the right adapter by URL prefix, delegates network I/O to it, then performs all post-response housekeeping \u2014 elapsed time, response hooks, cookie persistence, and redirect chaining \u2014 before returning the final Response.",
+          "concepts": [
+            "flow",
+            "component",
+            "architecture"
+          ]
+        },
+        {
+          "step": 8,
+          "title": "Understand the network boundary: HTTPAdapter.send()",
+          "file": "src/requests/adapters.py",
+          "line_range": [
+            636,
+            750
+          ],
+          "why": "This is where requests actually crosses the network boundary via urllib3; understanding TLS configuration, timeout resolution, and the exception-mapping layer explains the most common failure modes a developer will encounter.",
+          "understand": "HTTPAdapter.send() handles all urllib3-specific concerns \u2014 connection pooling, TLS verification, timeout normalization, and mapping urllib3 exceptions to requests exceptions \u2014 providing a clean abstraction so the rest of the library never deals with urllib3 directly.",
+          "concepts": [
+            "component",
+            "flow",
+            "risk"
+          ]
+        },
+        {
+          "step": 9,
+          "title": "See urllib3 response wrapped into a Response object",
+          "file": "src/requests/adapters.py",
+          "line_range": [
+            365,
+            401
+          ],
+          "why": "build_response() is where the raw urllib3 HTTPResponse becomes the requests.Response the user receives; understanding what is extracted here (status, headers, encoding, cookies, elapsed) clarifies what the Response object truly contains.",
+          "understand": "build_response() constructs a Response by mapping urllib3 attributes to requests fields, extracts Set-Cookie headers into a CookieJar, and stores references to the originating PreparedRequest and adapter \u2014 everything the caller sees on the returned object is set here.",
+          "concepts": [
+            "component",
+            "flow"
+          ]
+        },
+        {
+          "step": 10,
+          "title": "Understand redirect resolution as a recursive send loop",
+          "file": "src/requests/sessions.py",
+          "line_range": [
+            186,
+            307
+          ],
+          "why": "Redirects are transparent to the caller but involve re-preparing and re-sending requests in a loop; understanding this generator explains the history list, auth/body stripping on non-307/308, and the max_redirects guard.",
+          "understand": "resolve_redirects() is a generator that iterates over redirect chains by copying and mutating the PreparedRequest for each hop, stripping auth and body on non-307/308 responses, merging cookies at each step, and calling Session.send() recursively with allow_redirects=False to prevent loops.",
+          "concepts": [
+            "flow",
+            "component",
+            "architecture"
+          ]
+        },
+        {
+          "step": 11,
+          "title": "Understand hooks as the extensibility point post-response",
+          "file": "src/requests/hooks.py",
+          "line_range": [
+            32,
+            48
+          ],
+          "why": "dispatch_hook() is called by Session.send() after the response is received; understanding how callbacks are invoked and can transform the Response completes the picture of what can happen between network I/O and the return value.",
+          "understand": "dispatch_hook() iterates over all callables registered for a hook key (e.g. 'response'), passes the Response through each in order, and replaces the response with any non-None return value \u2014 giving user code a chance to inspect or transform the response before it reaches the caller.",
+          "concepts": [
+            "extension_point",
+            "flow"
+          ]
+        },
+        {
+          "step": 12,
+          "title": "Explore the Response object returned to the caller",
+          "file": "src/requests/models.py",
+          "line_range": [
+            730,
+            1180
+          ],
+          "why": "Response is the final deliverable; understanding its attributes, lazy content properties, streaming behavior, and context-manager support closes the end-to-end story from the user's perspective.",
+          "understand": "Response exposes status_code, headers, cookies, elapsed, and history as direct attributes, provides .text/.json()/.content as decoded views of the body (with content eagerly downloaded unless stream=True), and uses raise_for_status() for error checking \u2014 it is the complete result of the entire lifecycle.",
+          "concepts": [
+            "component",
+            "flow"
+          ]
+        }
+      ]
+    }
+  }
+}

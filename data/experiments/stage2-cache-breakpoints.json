@@ -1,0 +1,4089 @@
+{
+  "model": "claude-haiku-4-5",
+  "budget": {
+    "max_turns": 18,
+    "max_tool_calls": 120,
+    "max_result_chars": 500000,
+    "max_seconds": 720.0
+  },
+  "cells": [
+    [
+      "default",
+      "two"
+    ],
+    [
+      "structural",
+      "two"
+    ],
+    [
+      "structural",
+      "one"
+    ]
+  ],
+  "rows": [
+    {
+      "repo": "requests",
+      "policy": "default",
+      "cache": "two",
+      "stop_reason": "turn_budget",
+      "errors": [],
+      "behavior": {
+        "turns": 19,
+        "tool_calls": 46,
+        "failed_calls": 0,
+        "calls_by_tool": {
+          "list_files": 1,
+          "read_file": 28,
+          "symbols": 17
+        },
+        "read_calls": 28,
+        "outline_reads": 0,
+        "source_lines_read": 2863,
+        "source_chars_read": 109688,
+        "largest_read_lines": 219,
+        "large_reads": 5,
+        "whole_file_reads": 10,
+        "structural_calls": 17,
+        "tool_output_chars": 133248,
+        "duplicate_calls": 0,
+        "overlapping_reads": 1,
+        "reread_lines": 1,
+        "narrowing_structural_calls": 13,
+        "average_read_lines": 102.25,
+        "structural_share": 0.37777777777777777,
+        "waste_share": 0.021739130434782608,
+        "wasted_calls": 1,
+        "narrowing_share": 0.7647058823529411
+      },
+      "evidence": {
+        "setup.py": "source_read",
+        "src/requests/__init__.py": "source_read",
+        "src/requests/_internal_utils.py": "source_read",
+        "src/requests/_types.py": "source_read",
+        "src/requests/adapters.py": "source_read",
+        "src/requests/api.py": "source_read",
+        "src/requests/auth.py": "source_read",
+        "src/requests/certs.py": "source_read",
+        "src/requests/compat.py": "source_read",
+        "src/requests/cookies.py": "source_read",
+        "src/requests/exceptions.py": "outlined",
+        "src/requests/help.py": "source_read",
+        "src/requests/hooks.py": "source_read",
+        "src/requests/models.py": "source_read",
+        "src/requests/packages.py": "source_read",
+        "src/requests/sessions.py": "source_read",
+        "src/requests/status_codes.py": "source_read",
+        "src/requests/structures.py": "source_read",
+        "src/requests/utils.py": "outlined"
+      },
+      "progression": [
+        19,
+        19,
+        19,
+        19,
+        19,
+        19,
+        19,
+        19,
+        19,
+        19,
+        19,
+        19,
+        19,
+        19,
+        19,
+        19,
+        19,
+        19,
+        19
+      ],
+      "quality": {
+        "produced": true,
+        "accepted": false,
+        "rejections": 1,
+        "required_subsystems": 19,
+        "covered": 19,
+        "skipped": 0,
+        "unaccounted": 0,
+        "unknown_names": 2,
+        "skip_reasons": [],
+        "first_grounding": 0.9759036144578314,
+        "first_anchors": 83,
+        "first_unresolved": 2,
+        "final_grounding": 0.9759036144578314,
+        "final_anchors": 83,
+        "entry_points": 10,
+        "core_abstractions": 5,
+        "flows": 3,
+        "flow_steps": 20,
+        "widest_flow_files": 4,
+        "boundaries": 11,
+        "docs": 2,
+        "responsibility_chars": 2572,
+        "accounted_ratio": 1.0,
+        "covered_ratio": 1.0,
+        "average_responsibility_chars": 135.3684210526316
+      },
+      "cost": {
+        "api_calls": 19,
+        "input_tokens": 4445,
+        "output_tokens": 10329,
+        "cache_write_tokens": 100259,
+        "cache_read_tokens": 438600,
+        "cost_usd": 0.22527375,
+        "uncached_cost_usd": 0.594949,
+        "seconds": 85.62499999999999,
+        "prompt_tokens": 543304,
+        "cache_hit_rate": 0.8072828471721173,
+        "caching_saved_usd": 0.36967524999999996,
+        "write_share": 0.18453572953631853,
+        "cost_per_1k_prompt_tokens": 0.0004146366490951659
+      },
+      "important": {
+        "covered": [
+          "sessions.py",
+          "adapters.py",
+          "models.py",
+          "auth.py",
+          "api.py"
+        ],
+        "skipped": [],
+        "missing": []
+      },
+      "survey": {
+        "architecture": "Requests is a human-friendly HTTP library for Python that provides a simple, high-level interface for making HTTP requests. It abstracts urllib3's lower-level networking operations into a user-friendly API. The library follows a layered architecture: entry points in `api.py` delegate to `Session` objects, which manage lifecycle and state; `Session` creates `Request` objects, prepares them into `PreparedRequest` objects via composition, then delegates actual transmission to adapter classes like `HTTPAdapter`. The adapters wrap urllib3's PoolManager to handle network I/O. Responses are wrapped in a `Response` object that provides convenient methods for accessing content, status, headers, and cookies.",
+        "subsystems": [
+          {
+            "name": "api",
+            "responsibility": "Provides module-level convenience functions (get, post, put, patch, delete, head, options, request) that create temporary sessions and make single HTTP requests.",
+            "key_file": "src/requests/api.py"
+          },
+          {
+            "name": "sessions",
+            "responsibility": "Manages persistent session state including cookies, headers, proxies, auth, and connection pooling; orchestrates the request-response cycle with redirect handling.",
+            "key_file": "src/requests/sessions.py",
+            "key_symbol": "Session"
+          },
+          {
+            "name": "models",
+            "responsibility": "Defines core data structures: Request (user-created), PreparedRequest (serialized for transmission), and Response (server response with content access methods).",
+            "key_file": "src/requests/models.py",
+            "key_symbol": "Request"
+          },
+          {
+            "name": "adapters",
+            "responsibility": "Implements transport adapters that convert PreparedRequest objects into urllib3 requests and build Response objects from urllib3 responses; HTTPAdapter handles HTTP/HTTPS connections.",
+            "key_file": "src/requests/adapters.py",
+            "key_symbol": "HTTPAdapter"
+          },
+          {
+            "name": "auth",
+            "responsibility": "Provides HTTP authentication handlers (Basic, Digest, Proxy) that modify PreparedRequest objects by adding Authorization headers.",
+            "key_file": "src/requests/auth.py",
+            "key_symbol": "AuthBase"
+          },
+          {
+            "name": "cookies",
+            "responsibility": "Manages cookie handling via RequestsCookieJar and helper functions that extract cookies from responses and merge them across requests.",
+            "key_file": "src/requests/cookies.py",
+            "key_symbol": "RequestsCookieJar"
+          },
+          {
+            "name": "structures",
+            "responsibility": "Provides data structure utilities: CaseInsensitiveDict for headers and LookupDict for status code lookups.",
+            "key_file": "src/requests/structures.py",
+            "key_symbol": "CaseInsensitiveDict"
+          },
+          {
+            "name": "utils",
+            "responsibility": "Utility functions for URL encoding, header parsing, encoding detection, proxy resolution, and helper methods used throughout the library.",
+            "key_file": "src/requests/utils.py"
+          },
+          {
+            "name": "exceptions",
+            "responsibility": "Defines exception hierarchy including RequestException (base), HTTPError, Timeout variants, ConnectionError, and JSON/URL/Schema validation errors.",
+            "key_file": "src/requests/exceptions.py",
+            "key_symbol": "RequestException"
+          },
+          {
+            "name": "hooks",
+            "responsibility": "Implements event hook system allowing callers to register callbacks on responses; provides dispatch_hook to execute hooks in the request pipeline.",
+            "key_file": "src/requests/hooks.py",
+            "key_symbol": "dispatch_hook"
+          },
+          {
+            "name": "status_codes",
+            "responsibility": "Provides the `codes` lookup dictionary mapping human-readable status names to HTTP status code numbers.",
+            "key_file": "src/requests/status_codes.py"
+          },
+          {
+            "name": "_types",
+            "responsibility": "Defines type aliases and protocols for internal use (not public API): UriType, ParamsType, DataType, BodyType, AuthType, etc., plus runtime typeguard is_prepared().",
+            "key_file": "src/requests/_types.py"
+          },
+          {
+            "name": "_internal_utils",
+            "responsibility": "Internal utility functions: to_native_string() for encoding conversion and unicode_is_ascii() for hostname validation.",
+            "key_file": "src/requests/_internal_utils.py"
+          },
+          {
+            "name": "compat",
+            "responsibility": "Compatibility shim layer providing unified imports from Python 3 standard library (urllib.parse, http.cookiejar, etc.) and character detection library resolution.",
+            "key_file": "src/requests/compat.py"
+          },
+          {
+            "name": "help",
+            "responsibility": "Debugging utility that collects and formats system, Python, and dependency information for bug reports.",
+            "key_file": "src/requests/help.py",
+            "key_symbol": "info"
+          },
+          {
+            "name": "packages",
+            "responsibility": "Backwards-compatibility shim that re-exports urllib3 and idna as requests.packages.* and makes chardet available at that path.",
+            "key_file": "src/requests/packages.py"
+          },
+          {
+            "name": "certs",
+            "responsibility": "Returns the path to the default CA certificate bundle from the certifi package.",
+            "key_file": "src/requests/certs.py"
+          },
+          {
+            "name": "setup.py",
+            "responsibility": "Project build and packaging configuration; delegates to setuptools after checking Python 3.10+ requirement.",
+            "key_file": "setup.py"
+          },
+          {
+            "name": "__init__.py",
+            "responsibility": "Package initialization: validates dependency versions, optionally injects pyopenssl for SNI support, exports public API, and configures logging.",
+            "key_file": "src/requests/__init__.py"
+          }
+        ],
+        "skipped": [
+          {
+            "name": "docs configuration",
+            "reason": "Documentation build configuration; not runtime library code."
+          },
+          {
+            "name": "tests",
+            "reason": "Test suite; not runtime library code."
+          }
+        ],
+        "entry_points": [
+          {
+            "file": "src/requests/api.py",
+            "symbol": "request",
+            "what_it_starts": "The primary entry point for making HTTP requests. It creates a Session, calls session.request(), and returns a Response."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "get",
+            "what_it_starts": "Convenience function that calls request() with method='get' and optional params; a typical entry point for simple GET requests."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "post",
+            "what_it_starts": "Convenience function that calls request() with method='post' and optional data/json payloads."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "put",
+            "what_it_starts": "Convenience function that calls request() with method='put'."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "patch",
+            "what_it_starts": "Convenience function that calls request() with method='patch'."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "delete",
+            "what_it_starts": "Convenience function that calls request() with method='delete'."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "head",
+            "what_it_starts": "Convenience function that calls request() with method='head' and disables redirects by default."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "options",
+            "what_it_starts": "Convenience function that calls request() with method='options'."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "session",
+            "what_it_starts": "Factory function that returns a new Session instance for persistent request management."
+          },
+          {
+            "file": "src/requests/help.py",
+            "symbol": "main",
+            "what_it_starts": "CLI entry point that calls info() and prints system/dependency information as JSON."
+          }
+        ],
+        "core_abstractions": [
+          {
+            "file": "src/requests/models.py",
+            "symbol": "PreparedRequest",
+            "role": "The central abstraction representing a request ready for transmission: fully serialized method, URL, headers, cookies, and body. All requests flow through this state before being sent by adapters."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Response",
+            "role": "The central abstraction representing a server's response: status code, headers, body (lazy-loaded), cookies, and metadata. Callers interact primarily with Response objects to access results."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session",
+            "role": "Stateful context that persists cookies, headers, proxies, and auth across multiple requests; routes requests through adapters and handles redirects."
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "BaseAdapter",
+            "role": "Abstract base for transport adapters defining the interface (send() and close()); HTTPAdapter is the concrete implementation."
+          },
+          {
+            "file": "src/requests/auth.py",
+            "symbol": "AuthBase",
+            "role": "Base class for authentication handlers that are callable and modify PreparedRequest objects by adding authentication headers."
+          }
+        ],
+        "relationships": [
+          {
+            "from_file": "src/requests/api.py",
+            "from_symbol": "request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.request",
+            "kind": "delegates_to",
+            "note": "Module-level request() creates a Session context and delegates to Session.request()."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "Request",
+            "kind": "constructs",
+            "note": "Session.request() creates a Request from parameters, then prepares it."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.prepare_request",
+            "kind": "calls",
+            "note": "Session.request() calls prepare_request() to convert Request into PreparedRequest."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.send",
+            "kind": "calls",
+            "note": "Session.request() calls send() to transmit the prepared request."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "BaseAdapter.send",
+            "kind": "delegates_to",
+            "note": "Session.send() retrieves an adapter for the URL scheme and delegates transmission to adapter.send()."
+          },
+          {
+            "from_file": "src/requests/adapters.py",
+            "from_symbol": "HTTPAdapter.send",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "Response",
+            "kind": "constructs",
+            "note": "HTTPAdapter.send() builds a Response object from urllib3 response via build_response()."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "SessionRedirectMixin.resolve_redirects",
+            "kind": "calls",
+            "note": "Session.send() calls resolve_redirects() to handle HTTP redirects when allow_redirects=True."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.__init__",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "HTTPAdapter",
+            "kind": "constructs",
+            "note": "Session.__init__() mounts HTTPAdapter instances for http:// and https:// schemes."
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "Request.prepare",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest",
+            "kind": "constructs",
+            "note": "Request.prepare() creates and initializes a PreparedRequest."
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare",
+            "to_file": "src/requests/auth.py",
+            "to_symbol": "AuthBase",
+            "kind": "calls",
+            "note": "PreparedRequest.prepare_auth() invokes the auth callable to add Authorization headers."
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare_cookies",
+            "to_file": "src/requests/cookies.py",
+            "to_symbol": "get_cookie_header",
+            "kind": "calls",
+            "note": "PreparedRequest.prepare_cookies() uses get_cookie_header() to serialize cookies into Cookie header."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "SessionRedirectMixin.resolve_redirects",
+            "to_file": "src/requests/cookies.py",
+            "to_symbol": "extract_cookies_to_jar",
+            "kind": "calls",
+            "note": "resolve_redirects() extracts Set-Cookie headers from redirect responses into the session's cookie jar."
+          },
+          {
+            "from_file": "src/requests/hooks.py",
+            "from_symbol": "dispatch_hook",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "Response",
+            "kind": "calls",
+            "note": "dispatch_hook() invokes registered response hooks with a Response object after transmission."
+          },
+          {
+            "from_file": "src/requests/__init__.py",
+            "from_symbol": "check_compatibility",
+            "to_file": "src/requests/exceptions.py",
+            "to_symbol": "RequestsDependencyWarning",
+            "kind": "constructs",
+            "note": "Package init checks dependency versions and issues warnings via RequestsDependencyWarning."
+          }
+        ],
+        "flows": [
+          {
+            "name": "Simple GET request using module-level API",
+            "steps": [
+              {
+                "file": "src/requests/api.py",
+                "symbol": "get",
+                "what_happens": "User calls requests.get(url, params=...). The function calls request('get', url, params=params, **kwargs)."
+              },
+              {
+                "file": "src/requests/api.py",
+                "symbol": "request",
+                "what_happens": "Creates a Session context, calls session.request(method='GET', url=url, ...), and returns the result."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "Constructs a Request object from method, url, params, headers, etc. Calls prepare_request(req) to convert it to PreparedRequest."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.prepare_request",
+                "what_happens": "Calls req.prepare() on the Request, which delegates to PreparedRequest.prepare(), encoding method, URL, headers, body, auth, and cookies."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Gets the appropriate adapter (HTTPAdapter for https), calls adapter.send(prep_request, ...), and dispatches response hooks."
+              },
+              {
+                "file": "src/requests/adapters.py",
+                "symbol": "HTTPAdapter.send",
+                "what_happens": "Gets a connection from urllib3 PoolManager, calls conn.urlopen() with prepared request details, and wraps the urllib3 response in requests.Response."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "Response.content",
+                "what_happens": "User accesses r.content property, which lazily reads bytes from the raw urllib3 response stream if not already consumed."
+              }
+            ]
+          },
+          {
+            "name": "POST request with JSON body and authentication",
+            "steps": [
+              {
+                "file": "src/requests/api.py",
+                "symbol": "post",
+                "what_happens": "User calls requests.post(url, json=data, auth=(user,pass)). Function calls request('POST', url, json=data, auth=auth, **kwargs)."
+              },
+              {
+                "file": "src/requests/api.py",
+                "symbol": "request",
+                "what_happens": "Creates Session and calls session.request(...) with json and auth parameters."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "Creates Request with json and auth, calls prepare_request()."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare_body",
+                "what_happens": "Serializes json parameter to UTF-8 bytes and sets Content-Type: application/json header."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare_auth",
+                "what_happens": "If auth is a tuple, wraps it as HTTPBasicAuth(user, pass), calls auth(request) to add Authorization header with Base64-encoded credentials."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Calls adapter.send(prep_request, ...) to transmit the request with JSON body and Authorization header."
+              },
+              {
+                "file": "src/requests/adapters.py",
+                "symbol": "HTTPAdapter.send",
+                "what_happens": "Sends prepared request via urllib3, builds Response from result."
+              }
+            ]
+          },
+          {
+            "name": "Redirect handling flow",
+            "steps": [
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "After receiving initial response, if allow_redirects=True, calls resolve_redirects(response, request, ...)."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "SessionRedirectMixin.resolve_redirects",
+                "what_happens": "Checks if response is a redirect (3xx). If yes, gets redirect target from Location header via get_redirect_target()."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "SessionRedirectMixin.resolve_redirects",
+                "what_happens": "Copies prepared request, updates URL to redirect target, strips sensitive headers (Content-Length, etc.) for non-307/308 redirects."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "SessionRedirectMixin.resolve_redirects",
+                "what_happens": "Extracts cookies from response via extract_cookies_to_jar(), rebuilds auth and proxies for new URL."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "SessionRedirectMixin.resolve_redirects",
+                "what_happens": "Recursively calls self.send() with the updated request, continuing until no more redirects or max_redirects limit reached."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Collects all redirect responses into history list and returns final response with .history attribute set."
+              }
+            ]
+          }
+        ],
+        "boundaries": [
+          {
+            "file": "src/requests/__init__.py",
+            "symbol": "check_compatibility",
+            "kind": "external_dependency",
+            "note": "Validates urllib3, charset_normalizer/chardet, and cryptography versions at import time; warns if incompatible versions are installed."
+          },
+          {
+            "file": "src/requests/__init__.py",
+            "symbol": "pyopenssl.inject_into_urllib3",
+            "kind": "external_dependency",
+            "note": "Optionally injects pyopenssl into urllib3 for SNI support in environments without stdlib SNI support."
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "HTTPAdapter.send",
+            "kind": "external_dependency",
+            "note": "Delegates to urllib3.poolmanager.PoolManager.urlopen() for actual HTTP/HTTPS connection and transmission."
+          },
+          {
+            "file": "src/requests/compat.py",
+            "symbol": "_resolve_char_detection",
+            "kind": "external_dependency",
+            "note": "Attempts to import charset_normalizer or chardet for character encoding detection; site-configurable by editing module."
+          },
+          {
+            "file": "src/requests/certs.py",
+            "symbol": "where",
+            "kind": "external_dependency",
+            "note": "Imports and re-exports certifi.where() for default CA bundle path; can be patched by packagers."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Response.content",
+            "kind": "extension_point",
+            "note": "Lazy-loads response body from raw urllib3 response; can be overridden by subclasses or by streaming chunks with iter_content()."
+          },
+          {
+            "file": "src/requests/hooks.py",
+            "symbol": "dispatch_hook",
+            "kind": "extension_point",
+            "note": "Allows user-registered callbacks on responses via hooks parameter; hooks receive Response and can modify/return it."
+          },
+          {
+            "file": "src/requests/auth.py",
+            "symbol": "AuthBase",
+            "kind": "extension_point",
+            "note": "Base class for custom auth handlers; users can subclass and pass auth instance to requests to implement custom authentication schemes."
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "BaseAdapter",
+            "kind": "extension_point",
+            "note": "Abstract base for transport adapters; users can subclass and mount custom adapters via Session.mount() to support new URL schemes or custom transport."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "SessionRedirectMixin",
+            "kind": "extension_point",
+            "note": "Mixin class that can be subclassed/overridden to customize redirect handling logic (resolve_redirects, rebuild_auth, rebuild_proxies, etc.)."
+          },
+          {
+            "file": "src/requests/cookies.py",
+            "symbol": "RequestsCookieJar",
+            "kind": "extension_point",
+            "note": "Subclass of http.cookiejar.CookieJar; users can pass custom CookieJar instances to Session.cookies or request() to customize cookie handling."
+          }
+        ],
+        "conventions": [
+          "PreparedRequest is the canonical 'ready-to-send' request representation; all requests are normalized to this form before transmission and assertions like `assert _is_prepared(request)` are used to verify readiness.",
+          "Session objects are context managers (with statement) and should be closed; module-level functions create temporary sessions automatically.",
+          "CaseInsensitiveDict is used for all header dictionaries to match HTTP header case-insensitivity semantics.",
+          "Auth handlers are callables that receive a PreparedRequest and return it after modification; they implement the __call__ method of AuthBase.",
+          "Adapters are scheme-specific transport handlers mounted via Session.mount(prefix, adapter) and retrieved via Session.get_adapter(url).",
+          "Hooks are registered as {'event': [callable, ...]} dicts and dispatched via dispatch_hook(); response is the only standard hook event.",
+          "Cookies are persisted in Session.cookies (RequestsCookieJar) across requests and automatically included in outgoing requests and extracted from responses.",
+          "Redirects are followed by default (allow_redirects=True) unless explicitly disabled; redirect history is stored in Response.history.",
+          "Request preparation is multi-step: prepare_method, prepare_url, prepare_headers, prepare_cookies, prepare_body, prepare_auth, prepare_hooks.",
+          "urllib3 exceptions are caught and re-raised as requests exceptions (ConnectionError, Timeout, SSLError, etc.) for consistent error handling."
+        ],
+        "testing_posture": "The repository includes 14 test files under tests/ covering: test_requests.py (3000+ lines with 246 symbols, comprehensive request/response behavior), test_lowlevel.py (428 lines, 14 symbols for low-level protocol details), test_utils.py (990 lines, 76 symbols for utility functions), test_structures.py (91 lines, 17 symbols for data structures), test_help.py, test_hooks.py, test_adapters.py, test_packages.py (packaging compatibility), test_testserver.py (165 lines, 12 symbols for test server infrastructure), and conftest.py (58 lines, 4 symbols for pytest configuration). Tests appear to use a local test server (tests/testserver/server.py, 176 lines, 15 symbols) for integration testing.",
+        "docs": [
+          {
+            "path": "docs/conf.py",
+            "what_it_covers": "Sphinx documentation build configuration; not examined in detail."
+          },
+          {
+            "path": "docs/_themes/flask_theme_support.py",
+            "what_it_covers": "Sphinx theme support code; not examined in detail."
+          }
+        ],
+        "needs_investigation": [
+          {
+            "area": "PreparedRequest.prepare_body encoding logic",
+            "open_question": "What exact behaviors and edge cases are handled in the multipart file encoding (via _encode_files) and parameter encoding (via _encode_params) when handling different data types (dicts, lists, generators, file objects)? Are there specific ordering or transformation guarantees?"
+          },
+          {
+            "area": "HTTPAdapter connection pooling and retry logic",
+            "open_question": "How does HTTPAdapter.init_poolmanager() configure urllib3 connection pools (size, block, timeout)? What retry strategies are applied via the max_retries parameter and how do they interact with timeout and redirect handling?"
+          },
+          {
+            "area": "Response content streaming and resource lifecycle",
+            "open_question": "What are the exact conditions under which Response.raw connection objects are kept open vs. closed? How do iter_content(), iter_lines(), and the stream parameter interact with connection pooling?"
+          },
+          {
+            "area": "Session state persistence across parallel requests",
+            "open_question": "Are Session objects thread-safe for concurrent requests? What synchronization mechanisms protect cookies, adapters, and proxies from race conditions?"
+          },
+          {
+            "area": "Utils module implementation details",
+            "open_question": "The utils.py file (1153 lines, 46 symbols) contains complex logic for proxy resolution, encoding detection, URL normalization, and authentication parsing that was only partially reviewed. What are the complete behaviors of functions like should_bypass_proxies, resolve_proxies, get_encoding_from_headers, and prepend_scheme_if_needed?"
+          }
+        ]
+      },
+      "rejections": [
+        "2 citation(s) do not resolve against the repository: boundary: src/requests/__init__.py:pyopenssl.inject_into_urllib3 (unknown_symbol); boundary: src/requests/certs.py:where (unknown_symbol). Use `symbols` or `propose_anchor` to find the real location, then correct or drop them. These names are not subsystems in the inventory and were ignored: docs configuration, tests."
+      ],
+      "seconds_total": 85.6219789981842,
+      "run": 1
+    },
+    {
+      "repo": "requests",
+      "policy": "default",
+      "cache": "two",
+      "stop_reason": "turn_budget",
+      "errors": [],
+      "behavior": {
+        "turns": 19,
+        "tool_calls": 39,
+        "failed_calls": 0,
+        "calls_by_tool": {
+          "symbols": 18,
+          "read_file": 19,
+          "list_files": 2
+        },
+        "read_calls": 19,
+        "outline_reads": 0,
+        "source_lines_read": 2426,
+        "source_chars_read": 92968,
+        "largest_read_lines": 219,
+        "large_reads": 7,
+        "whole_file_reads": 5,
+        "structural_calls": 18,
+        "tool_output_chars": 114251,
+        "duplicate_calls": 0,
+        "overlapping_reads": 1,
+        "reread_lines": 4,
+        "narrowing_structural_calls": 11,
+        "average_read_lines": 127.6842105263158,
+        "structural_share": 0.4864864864864865,
+        "waste_share": 0.02564102564102564,
+        "wasted_calls": 1,
+        "narrowing_share": 0.6111111111111112
+      },
+      "evidence": {
+        "setup.py": "untouched",
+        "src/requests/__init__.py": "source_read",
+        "src/requests/_internal_utils.py": "outlined",
+        "src/requests/_types.py": "outlined",
+        "src/requests/adapters.py": "source_read",
+        "src/requests/api.py": "source_read",
+        "src/requests/auth.py": "source_read",
+        "src/requests/certs.py": "outlined",
+        "src/requests/compat.py": "outlined",
+        "src/requests/cookies.py": "outlined",
+        "src/requests/exceptions.py": "source_read",
+        "src/requests/help.py": "source_read",
+        "src/requests/hooks.py": "source_read",
+        "src/requests/models.py": "source_read",
+        "src/requests/packages.py": "outlined",
+        "src/requests/sessions.py": "source_read",
+        "src/requests/status_codes.py": "source_read",
+        "src/requests/structures.py": "outlined",
+        "src/requests/utils.py": "source_read"
+      },
+      "progression": [
+        1,
+        5,
+        5,
+        5,
+        5,
+        5,
+        9,
+        13,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18
+      ],
+      "quality": {
+        "produced": true,
+        "accepted": false,
+        "rejections": 1,
+        "required_subsystems": 19,
+        "covered": 19,
+        "skipped": 0,
+        "unaccounted": 0,
+        "unknown_names": 2,
+        "skip_reasons": [],
+        "first_grounding": 0.9797979797979798,
+        "first_anchors": 99,
+        "first_unresolved": 2,
+        "final_grounding": 0.9797979797979798,
+        "final_anchors": 99,
+        "entry_points": 10,
+        "core_abstractions": 6,
+        "flows": 3,
+        "flow_steps": 25,
+        "widest_flow_files": 4,
+        "boundaries": 10,
+        "docs": 1,
+        "responsibility_chars": 2110,
+        "accounted_ratio": 1.0,
+        "covered_ratio": 1.0,
+        "average_responsibility_chars": 111.05263157894737
+      },
+      "cost": {
+        "api_calls": 19,
+        "input_tokens": 4438,
+        "output_tokens": 9867,
+        "cache_write_tokens": 85618,
+        "cache_read_tokens": 395108,
+        "cost_usd": 0.2003063,
+        "uncached_cost_usd": 0.534499,
+        "seconds": 74.75000000000003,
+        "prompt_tokens": 485164,
+        "cache_hit_rate": 0.8143802920249648,
+        "caching_saved_usd": 0.33419269999999995,
+        "write_share": 0.1764722856601067,
+        "cost_per_1k_prompt_tokens": 0.0004128630731051768
+      },
+      "important": {
+        "covered": [
+          "sessions.py",
+          "adapters.py",
+          "models.py",
+          "auth.py",
+          "api.py"
+        ],
+        "skipped": [],
+        "missing": []
+      },
+      "survey": {
+        "architecture": "Requests is a Python HTTP library that provides a user-friendly interface for making HTTP requests. It abstracts away the complexity of urllib3 (a lower-level HTTP client) through a layered architecture: high-level convenience functions (get, post, etc.) delegate to a Session object, which orchestrates request preparation, adapter selection, and response handling. The core flow involves building a Request object from user parameters, preparing it into a PreparedRequest with fully resolved headers/body/cookies, sending it through an adapter (HTTPAdapter wraps urllib3), handling redirects, and returning a Response object with the server's data.",
+        "subsystems": [
+          {
+            "name": "setup.py",
+            "responsibility": "Package configuration and installation metadata for the requests library.",
+            "key_file": "setup.py"
+          },
+          {
+            "name": "src/requests/__init__.py",
+            "responsibility": "Top-level package initialization that checks dependency compatibility and exports the public API.",
+            "key_file": "src/requests/__init__.py"
+          },
+          {
+            "name": "src/requests/api.py",
+            "responsibility": "Module-level HTTP convenience functions (get, post, put, patch, delete, options, head, request) that create temporary sessions for single requests.",
+            "key_file": "src/requests/api.py",
+            "key_symbol": "request"
+          },
+          {
+            "name": "src/requests/sessions.py",
+            "responsibility": "Session class for persistent connection management, cookie handling, and redirect processing; includes the core request/send workflow and SessionRedirectMixin for HTTP redirect handling.",
+            "key_file": "src/requests/sessions.py",
+            "key_symbol": "Session"
+          },
+          {
+            "name": "src/requests/models.py",
+            "responsibility": "Core data models: Request (user-facing), PreparedRequest (ready to send), Response (server reply), and RequestEncodingMixin (parameter/body encoding).",
+            "key_file": "src/requests/models.py",
+            "key_symbol": "Request"
+          },
+          {
+            "name": "src/requests/adapters.py",
+            "responsibility": "Transport adapters that interface with urllib3; HTTPAdapter handles connection pooling, TLS verification, proxy management, and converts urllib3 responses to Requests Response objects.",
+            "key_file": "src/requests/adapters.py",
+            "key_symbol": "HTTPAdapter"
+          },
+          {
+            "name": "src/requests/auth.py",
+            "responsibility": "Authentication handlers including BasicAuth, ProxyAuth, and DigestAuth that modify prepared requests with authorization credentials.",
+            "key_file": "src/requests/auth.py",
+            "key_symbol": "AuthBase"
+          },
+          {
+            "name": "src/requests/cookies.py",
+            "responsibility": "Cookie handling: RequestsCookieJar extends standard CookieJar, provides cookie merging, extraction from responses, and utilities for cookie manipulation.",
+            "key_file": "src/requests/cookies.py",
+            "key_symbol": "RequestsCookieJar"
+          },
+          {
+            "name": "src/requests/structures.py",
+            "responsibility": "Helper data structures: CaseInsensitiveDict for HTTP headers and LookupDict for status codes.",
+            "key_file": "src/requests/structures.py",
+            "key_symbol": "CaseInsensitiveDict"
+          },
+          {
+            "name": "src/requests/exceptions.py",
+            "responsibility": "Exception hierarchy for all error conditions (RequestException root, plus specific subclasses for timeouts, redirects, SSL errors, etc.).",
+            "key_file": "src/requests/exceptions.py",
+            "key_symbol": "RequestException"
+          },
+          {
+            "name": "src/requests/hooks.py",
+            "responsibility": "Hook system for registering callbacks; currently supports only response hooks that modify responses before return.",
+            "key_file": "src/requests/hooks.py",
+            "key_symbol": "dispatch_hook"
+          },
+          {
+            "name": "src/requests/utils.py",
+            "responsibility": "Utility functions for proxy resolution, authentication, encoding detection, URL parsing, header manipulation, and other common operations.",
+            "key_file": "src/requests/utils.py"
+          },
+          {
+            "name": "src/requests/certs.py",
+            "responsibility": "Certificate management; provides location of CA bundle via certifi.",
+            "key_file": "src/requests/certs.py"
+          },
+          {
+            "name": "src/requests/status_codes.py",
+            "responsibility": "Provides a lookup dictionary mapping HTTP status code names to numbers and vice versa.",
+            "key_file": "src/requests/status_codes.py",
+            "key_symbol": "codes"
+          },
+          {
+            "name": "src/requests/_internal_utils.py",
+            "responsibility": "Internal utilities for string conversion and ASCII validation.",
+            "key_file": "src/requests/_internal_utils.py"
+          },
+          {
+            "name": "src/requests/_types.py",
+            "responsibility": "Type definitions and type hints for request/response parameters and validation of prepared requests.",
+            "key_file": "src/requests/_types.py"
+          },
+          {
+            "name": "src/requests/compat.py",
+            "responsibility": "Python 2/3 compatibility shims and character detection imports.",
+            "key_file": "src/requests/compat.py"
+          },
+          {
+            "name": "src/requests/help.py",
+            "responsibility": "Diagnostic utilities for generating bug reports with system and dependency information.",
+            "key_file": "src/requests/help.py"
+          },
+          {
+            "name": "src/requests/packages.py",
+            "responsibility": "Package metadata and version information.",
+            "key_file": "src/requests/packages.py"
+          }
+        ],
+        "skipped": [
+          {
+            "name": "docs/ directory",
+            "reason": "Documentation build configuration; not part of the runtime library"
+          },
+          {
+            "name": "tests/ directory",
+            "reason": "Test suite; not part of the runtime library"
+          }
+        ],
+        "entry_points": [
+          {
+            "file": "src/requests/api.py",
+            "symbol": "request",
+            "what_it_starts": "Top-level module-level HTTP request function that creates a session, calls its request method, and returns a Response"
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "get",
+            "what_it_starts": "Convenience function for GET requests; delegates to module-level request()"
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "post",
+            "what_it_starts": "Convenience function for POST requests with body and json parameters; delegates to module-level request()"
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "put",
+            "what_it_starts": "Convenience function for PUT requests; delegates to module-level request()"
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "patch",
+            "what_it_starts": "Convenience function for PATCH requests; delegates to module-level request()"
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "delete",
+            "what_it_starts": "Convenience function for DELETE requests; delegates to module-level request()"
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "head",
+            "what_it_starts": "Convenience function for HEAD requests with allow_redirects defaulting to False; delegates to module-level request()"
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "options",
+            "what_it_starts": "Convenience function for OPTIONS requests; delegates to module-level request()"
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session",
+            "what_it_starts": "Session class for persistent HTTP connections; can be used directly or via api module functions"
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "session",
+            "what_it_starts": "Context manager factory that returns a Session instance"
+          }
+        ],
+        "core_abstractions": [
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Request",
+            "role": "User-created request object containing method, url, headers, data, params, auth, cookies; converted to PreparedRequest before sending"
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "PreparedRequest",
+            "role": "Immutable request object with fully resolved method, url, headers, body, cookies; sent by adapters; contains _body_position for resetting on redirects"
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Response",
+            "role": "Server response container with status_code, headers, content, text, json(); supports context manager, iteration, and boolean evaluation on status code"
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session",
+            "role": "Stateful connection manager holding cookies, auth, proxies, and adapter configuration; coordinates request preparation, sending, and redirect handling"
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "HTTPAdapter",
+            "role": "Transport layer wrapping urllib3; handles TLS config, proxy management, connection pooling, and converts urllib3 HTTPResponse to Requests Response"
+          },
+          {
+            "file": "src/requests/exceptions.py",
+            "symbol": "RequestException",
+            "role": "Base exception class for all library errors; subclasses distinguish connection, timeout, redirect, SSL, and content errors"
+          }
+        ],
+        "relationships": [
+          {
+            "from_file": "src/requests/api.py",
+            "from_symbol": "request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session",
+            "kind": "constructs",
+            "note": "request() function creates a Session in a context manager and calls its request() method"
+          },
+          {
+            "from_file": "src/requests/api.py",
+            "from_symbol": "get",
+            "to_file": "src/requests/api.py",
+            "to_symbol": "request",
+            "kind": "calls",
+            "note": "get() and other HTTP verb functions delegate to module-level request() function"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "Request",
+            "kind": "constructs",
+            "note": "Session.request() creates a Request object from parameters"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.prepare_request",
+            "kind": "calls",
+            "note": "Session.request() calls prepare_request() to convert Request to PreparedRequest"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.prepare_request",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest",
+            "kind": "constructs",
+            "note": "prepare_request() creates and configures a PreparedRequest with session settings merged in"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.send",
+            "kind": "calls",
+            "note": "Session.request() calls send() with the prepared request and merged settings"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.get_adapter",
+            "kind": "calls",
+            "note": "send() selects the appropriate adapter (HTTPAdapter) based on URL scheme"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "HTTPAdapter.send",
+            "kind": "calls",
+            "note": "send() delegates to adapter.send() to perform the actual HTTP transmission"
+          },
+          {
+            "from_file": "src/requests/adapters.py",
+            "from_symbol": "HTTPAdapter.send",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "HTTPAdapter.get_connection_with_tls_context",
+            "kind": "calls",
+            "note": "HTTPAdapter.send() obtains a connection from the pool with TLS configuration"
+          },
+          {
+            "from_file": "src/requests/adapters.py",
+            "from_symbol": "HTTPAdapter.send",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "HTTPAdapter.build_response",
+            "kind": "calls",
+            "note": "HTTPAdapter.send() wraps urllib3 response in Requests Response object"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "SessionRedirectMixin.resolve_redirects",
+            "kind": "calls",
+            "note": "send() handles redirect chains using resolve_redirects() when allow_redirects=True"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "SessionRedirectMixin.resolve_redirects",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.send",
+            "kind": "calls",
+            "note": "resolve_redirects() recursively calls send() for each redirect target"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/hooks.py",
+            "to_symbol": "dispatch_hook",
+            "kind": "calls",
+            "note": "send() dispatches response hooks before returning to allow user callbacks"
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest.prepare_url",
+            "kind": "calls",
+            "note": "prepare() orchestrates preparation steps: method, url, headers, body, auth, cookies"
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "Request.prepare",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest",
+            "kind": "constructs",
+            "note": "Request.prepare() creates a PreparedRequest and calls its prepare() method"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.__init__",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "HTTPAdapter",
+            "kind": "constructs",
+            "note": "Session initialization mounts HTTPAdapter instances for http:// and https:// schemes"
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare_auth",
+            "to_file": "src/requests/auth.py",
+            "to_symbol": "AuthBase",
+            "kind": "calls",
+            "note": "prepare_auth() calls auth handlers to add Authorization header"
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare_cookies",
+            "to_file": "src/requests/cookies.py",
+            "to_symbol": "RequestsCookieJar",
+            "kind": "calls",
+            "note": "prepare_cookies() constructs Cookie header from request's cookie jar"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.prepare_request",
+            "to_file": "src/requests/cookies.py",
+            "to_symbol": "merge_cookies",
+            "kind": "calls",
+            "note": "prepare_request() merges session cookies with request cookies"
+          }
+        ],
+        "flows": [
+          {
+            "name": "Basic GET request via module-level function",
+            "steps": [
+              {
+                "file": "src/requests/api.py",
+                "symbol": "get",
+                "what_happens": "User calls requests.get(url); function receives url and optional params"
+              },
+              {
+                "file": "src/requests/api.py",
+                "symbol": "request",
+                "what_happens": "get() delegates to request() with method='GET', which creates Session in context manager"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.__init__",
+                "what_happens": "Session initializes with default headers, auth, proxies, cookies, and mounts HTTPAdapter for http/https"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "Session.request() creates Request object from method and url, then calls prepare_request()"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.prepare_request",
+                "what_happens": "Converts Request to PreparedRequest; merges session headers/cookies/auth with request values"
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare",
+                "what_happens": "Orchestrates preparation: method, url encoding, headers, body, auth headers, cookies, hooks"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Calls get_adapter() to select HTTPAdapter, measures elapsed time, calls adapter.send()"
+              },
+              {
+                "file": "src/requests/adapters.py",
+                "symbol": "HTTPAdapter.send",
+                "what_happens": "Gets connection from pool, calls urllib3's urlopen(), wraps response in Requests Response"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Applies response hooks, extracts cookies, handles redirects if allow_redirects=True, returns Response"
+              }
+            ]
+          },
+          {
+            "name": "POST request with data and redirect handling",
+            "steps": [
+              {
+                "file": "src/requests/api.py",
+                "symbol": "post",
+                "what_happens": "User calls requests.post(url, data=...); creates Session and calls session.request('POST', url, data=data)"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "Creates Request with method='POST', data payload, and other parameters"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.prepare_request",
+                "what_happens": "Prepares request with merged session settings and auth"
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare_body",
+                "what_happens": "Encodes data parameter as form-urlencoded or json; sets Content-Length header"
+              },
+              {
+                "file": "src/requests/adapters.py",
+                "symbol": "HTTPAdapter.send",
+                "what_happens": "Sends POST to server; receives 302 redirect response"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "SessionRedirectMixin.resolve_redirects",
+                "what_happens": "Detects redirect; copies request, clears body for GET-like method, updates URL from Location header"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Recursively sends redirected request; collects history"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Final response assembled with history chain and returned to user"
+              }
+            ]
+          },
+          {
+            "name": "Session usage with persistent cookies and custom auth",
+            "steps": [
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "session",
+                "what_happens": "User creates session context manager with requests.Session()"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.__init__",
+                "what_happens": "Session initialized with empty cookies jar and default settings"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "First request to login endpoint; can set auth parameter to HTTPBasicAuth or custom AuthBase"
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare_auth",
+                "what_happens": "Auth handler called; modifies request headers with Authorization header"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "After response, extract_cookies_to_jar() stores Set-Cookie headers in session.cookies"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "Second request to protected endpoint; prepare_request() automatically adds stored cookies"
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare_cookies",
+                "what_happens": "Session cookies merged with any request-specific cookies and added to Cookie header"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.close",
+                "what_happens": "Context manager exit closes all adapters, releasing connection pools"
+              }
+            ]
+          }
+        ],
+        "boundaries": [
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "HTTPAdapter.send",
+            "kind": "external_dependency",
+            "note": "HTTPAdapter delegates actual HTTP transport to urllib3's PoolManager.urlopen(); Requests wraps urllib3 responses and exceptions"
+          },
+          {
+            "file": "src/requests/certs.py",
+            "symbol": "where",
+            "kind": "external_dependency",
+            "note": "Certificate location obtained from certifi library via certs.where()"
+          },
+          {
+            "file": "src/requests/cookies.py",
+            "symbol": "RequestsCookieJar",
+            "kind": "extension_point",
+            "note": "Session.cookies can be any CookieJar-compatible object; RequestsCookieJar extends stdlib http.cookiejar.CookieJar"
+          },
+          {
+            "file": "src/requests/auth.py",
+            "symbol": "AuthBase",
+            "kind": "extension_point",
+            "note": "Users can subclass AuthBase and provide callable that modifies PreparedRequest with auth credentials"
+          },
+          {
+            "file": "src/requests/hooks.py",
+            "symbol": "dispatch_hook",
+            "kind": "extension_point",
+            "note": "Response hooks allow users to register callables that receive and can modify the response before it is returned"
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "BaseAdapter",
+            "kind": "extension_point",
+            "note": "Users can subclass BaseAdapter to implement custom transport protocols; Session.mount(prefix, adapter) registers adapters"
+          },
+          {
+            "file": "src/requests/__init__.py",
+            "symbol": "check_compatibility",
+            "kind": "trust_boundary",
+            "note": "Dependency version checks validate urllib3, chardet/charset_normalizer, and cryptography versions at import time"
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "_urllib3_request_context",
+            "kind": "trust_boundary",
+            "note": "TLS configuration (verify, cert) translated from Requests API to urllib3 parameters; controls certificate validation"
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "PreparedRequest",
+            "kind": "trust_boundary",
+            "note": "PreparedRequest contains all data ready to send; once created, should not be modified except by authentication/redirect handlers"
+          },
+          {
+            "file": "src/requests/utils.py",
+            "symbol": "resolve_proxies",
+            "kind": "trust_boundary",
+            "note": "Proxy resolution consults environment variables and trust_env flag; controls proxy usage for requests"
+          }
+        ],
+        "needs_investigation": [
+          {
+            "area": "PreparedRequest body handling and file-like object streaming",
+            "open_question": "How does PreparedRequest handle file-like bodies, chunked encoding, and body rewindability for retry/redirect scenarios? What is the _body_position mechanism for exactly?"
+          },
+          {
+            "area": "HTTPAdapter connection pooling and TLS context management",
+            "open_question": "What is the detailed interaction between HTTPAdapter.get_connection_with_tls_context(), init_poolmanager(), and proxy_manager_for()? How are TLS contexts cached and reused?"
+          },
+          {
+            "area": "Response.content and lazy loading",
+            "open_question": "How does Response.content lazily load and cache response body? What is the interaction with stream parameter and urllib3's preload_content flag?"
+          },
+          {
+            "area": "DigestAuth and stateful authentication",
+            "open_question": "How does HTTPDigestAuth handle per-thread state, nonce caching, and challenge-response cycles? What is init_per_thread_state() responsibility?"
+          },
+          {
+            "area": "Custom hooks and filter chains",
+            "open_question": "The hook system only has response hooks; are there other hook points historically or planned? How do hooks compose if multiple are registered?"
+          },
+          {
+            "area": "Multipart form encoding and file uploads",
+            "open_question": "How does PreparedRequest._encode_files() construct multipart boundaries and handle different file tuple formats (filename, fileobj, content_type, custom_headers)?"
+          }
+        ],
+        "testing_posture": "The repository includes a comprehensive test suite in the tests/ directory with test_requests.py containing 246 test cases covering core HTTP operations, redirects, authentication, and error handling. Tests also cover adapters, structures, utilities, hooks, and a test server. Testing appears comprehensive for HTTP semantics but specific advanced features were not examined.",
+        "docs": [
+          {
+            "path": "docs/",
+            "what_it_covers": "Documentation build configuration and theme support; the actual user documentation is external at https://requests.readthedocs.io"
+          }
+        ]
+      },
+      "rejections": [
+        "2 citation(s) do not resolve against the repository: boundary: src/requests/certs.py:where (unknown_symbol); subsystem: src/requests/status_codes.py:codes (unknown_symbol). Use `symbols` or `propose_anchor` to find the real location, then correct or drop them. These names are not subsystems in the inventory and were ignored: docs/ directory, tests/ directory."
+      ],
+      "seconds_total": 74.75092482566833,
+      "run": 2
+    },
+    {
+      "repo": "requests",
+      "policy": "structural",
+      "cache": "two",
+      "stop_reason": "turn_budget",
+      "errors": [],
+      "behavior": {
+        "turns": 19,
+        "tool_calls": 33,
+        "failed_calls": 1,
+        "calls_by_tool": {
+          "list_files": 3,
+          "read_file": 17,
+          "symbols": 13
+        },
+        "read_calls": 17,
+        "outline_reads": 0,
+        "source_lines_read": 1903,
+        "source_chars_read": 74464,
+        "largest_read_lines": 219,
+        "large_reads": 5,
+        "whole_file_reads": 7,
+        "structural_calls": 12,
+        "tool_output_chars": 96746,
+        "duplicate_calls": 0,
+        "overlapping_reads": 2,
+        "reread_lines": 9,
+        "narrowing_structural_calls": 5,
+        "average_read_lines": 111.94117647058823,
+        "structural_share": 0.41379310344827586,
+        "waste_share": 0.06060606060606061,
+        "wasted_calls": 2,
+        "narrowing_share": 0.4166666666666667
+      },
+      "evidence": {
+        "setup.py": "untouched",
+        "src/requests/__init__.py": "source_read",
+        "src/requests/_internal_utils.py": "source_read",
+        "src/requests/_types.py": "source_read",
+        "src/requests/adapters.py": "source_read",
+        "src/requests/api.py": "source_read",
+        "src/requests/auth.py": "outlined",
+        "src/requests/certs.py": "source_read",
+        "src/requests/compat.py": "source_read",
+        "src/requests/cookies.py": "outlined",
+        "src/requests/exceptions.py": "outlined",
+        "src/requests/help.py": "outlined",
+        "src/requests/hooks.py": "source_read",
+        "src/requests/models.py": "source_read",
+        "src/requests/packages.py": "source_read",
+        "src/requests/sessions.py": "source_read",
+        "src/requests/status_codes.py": "outlined",
+        "src/requests/structures.py": "outlined",
+        "src/requests/utils.py": "outlined"
+      },
+      "progression": [
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18
+      ],
+      "quality": {
+        "produced": true,
+        "accepted": false,
+        "rejections": 1,
+        "required_subsystems": 19,
+        "covered": 19,
+        "skipped": 0,
+        "unaccounted": 0,
+        "unknown_names": 2,
+        "skip_reasons": [],
+        "first_grounding": 0.9605263157894737,
+        "first_anchors": 76,
+        "first_unresolved": 3,
+        "final_grounding": 0.9605263157894737,
+        "final_anchors": 76,
+        "entry_points": 5,
+        "core_abstractions": 4,
+        "flows": 3,
+        "flow_steps": 20,
+        "widest_flow_files": 4,
+        "boundaries": 10,
+        "docs": 2,
+        "responsibility_chars": 2399,
+        "accounted_ratio": 1.0,
+        "covered_ratio": 1.0,
+        "average_responsibility_chars": 126.26315789473684
+      },
+      "cost": {
+        "api_calls": 19,
+        "input_tokens": 4615,
+        "output_tokens": 8779,
+        "cache_write_tokens": 73596,
+        "cache_read_tokens": 324130,
+        "cost_usd": 0.172918,
+        "uncached_cost_usd": 0.446236,
+        "seconds": 74.90699999999998,
+        "prompt_tokens": 402341,
+        "cache_hit_rate": 0.8056101665005555,
+        "caching_saved_usd": 0.27331800000000006,
+        "write_share": 0.18291946383788876,
+        "cost_per_1k_prompt_tokens": 0.0004297797142225127
+      },
+      "important": {
+        "covered": [
+          "sessions.py",
+          "adapters.py",
+          "models.py",
+          "auth.py",
+          "api.py"
+        ],
+        "skipped": [],
+        "missing": []
+      },
+      "survey": {
+        "architecture": "Requests is a Python HTTP library designed for human-friendly HTTP client usage. It abstracts over urllib3 to provide a simple, high-level API for making HTTP requests and handling responses. The library is organized around core abstractions: Request and PreparedRequest model the request phase, Response models the response, Session manages request state and lifecycle, and HTTPAdapter handles the actual network transport via urllib3. The flow is: user creates a Request \u2192 prepares it (encoding URL, headers, body, auth, cookies) \u2192 sends it via adapter \u2192 receives Response \u2192 handles redirects, cookies, and encoding transparently.",
+        "subsystems": [
+          {
+            "name": "api.py",
+            "responsibility": "Provides module-level convenience functions (get, post, put, patch, delete, head, options, request) that create ephemeral sessions and execute single HTTP requests.",
+            "key_file": "src/requests/api.py"
+          },
+          {
+            "name": "models.py",
+            "responsibility": "Defines Request, PreparedRequest, and Response classes that represent HTTP requests, prepared/serialized requests, and server responses respectively.",
+            "key_file": "src/requests/models.py",
+            "key_symbol": "Request"
+          },
+          {
+            "name": "sessions.py",
+            "responsibility": "Implements Session class for stateful request handling with cookie persistence, connection pooling via adapters, and redirect resolution logic.",
+            "key_file": "src/requests/sessions.py",
+            "key_symbol": "Session"
+          },
+          {
+            "name": "adapters.py",
+            "responsibility": "Implements BaseAdapter and HTTPAdapter that translate PreparedRequest objects into urllib3 connections and send them, translating urllib3 exceptions to Requests exceptions.",
+            "key_file": "src/requests/adapters.py",
+            "key_symbol": "HTTPAdapter"
+          },
+          {
+            "name": "auth.py",
+            "responsibility": "Implements authentication schemes (AuthBase, HTTPBasicAuth, HTTPProxyAuth, HTTPDigestAuth) that modify PreparedRequest objects to include authentication credentials.",
+            "key_file": "src/requests/auth.py",
+            "key_symbol": "AuthBase"
+          },
+          {
+            "name": "cookies.py",
+            "responsibility": "Manages cookie handling via RequestsCookieJar (wrapper over stdlib cookiejar) and helper functions to extract/merge cookies between requests and responses.",
+            "key_file": "src/requests/cookies.py",
+            "key_symbol": "RequestsCookieJar"
+          },
+          {
+            "name": "exceptions.py",
+            "responsibility": "Defines the exception hierarchy (RequestException root, HTTPError, ConnectionError, Timeout, etc.) used throughout the library.",
+            "key_file": "src/requests/exceptions.py",
+            "key_symbol": "RequestException"
+          },
+          {
+            "name": "structures.py",
+            "responsibility": "Provides CaseInsensitiveDict for case-insensitive header access and LookupDict for status code lookups.",
+            "key_file": "src/requests/structures.py",
+            "key_symbol": "CaseInsensitiveDict"
+          },
+          {
+            "name": "utils.py",
+            "responsibility": "Contains utility functions for URL manipulation, encoding/decoding, proxy selection, header parsing, and environment variable integration.",
+            "key_file": "src/requests/utils.py"
+          },
+          {
+            "name": "hooks.py",
+            "responsibility": "Implements hook system allowing registration and dispatch of callback functions at response handling points.",
+            "key_file": "src/requests/hooks.py"
+          },
+          {
+            "name": "status_codes.py",
+            "responsibility": "Provides HTTP status code constants via a LookupDict for human-friendly access (e.g., codes.ok, codes.not_found).",
+            "key_file": "src/requests/status_codes.py"
+          },
+          {
+            "name": "help.py",
+            "responsibility": "Implements diagnostic functions to report system information and installed dependencies for debugging/support purposes.",
+            "key_file": "src/requests/help.py"
+          },
+          {
+            "name": "certs.py",
+            "responsibility": "Wraps certifi.where() to return the path to the default CA certificate bundle for SSL verification.",
+            "key_file": "src/requests/certs.py"
+          },
+          {
+            "name": "compat.py",
+            "responsibility": "Provides compatibility utilities and imports for urllib3, chardet/charset_normalizer, JSON handling, and Python standard library imports.",
+            "key_file": "src/requests/compat.py"
+          },
+          {
+            "name": "packages.py",
+            "responsibility": "Maintains backwards-compatible namespace access to vendored dependencies (urllib3, idna, chardet) as requests.packages.*",
+            "key_file": "src/requests/packages.py"
+          },
+          {
+            "name": "_internal_utils.py",
+            "responsibility": "Provides low-level utility functions (to_native_string, unicode_is_ascii) and header validation regexes for internal use.",
+            "key_file": "src/requests/_internal_utils.py"
+          },
+          {
+            "name": "_types.py",
+            "responsibility": "Defines type aliases and protocols used throughout the library for type hints (UriType, ParamsType, DataType, etc.).",
+            "key_file": "src/requests/_types.py"
+          },
+          {
+            "name": "__init__.py",
+            "responsibility": "Package entry point that performs dependency version checking, SSL/SNI setup, and exports the public API.",
+            "key_file": "src/requests/__init__.py"
+          },
+          {
+            "name": "setup.py",
+            "responsibility": "Package setup and distribution configuration.",
+            "key_file": "setup.py"
+          }
+        ],
+        "skipped": [
+          {
+            "name": "documentation files (docs/)",
+            "reason": "Generated documentation configuration and theme support, not part of runtime library code"
+          },
+          {
+            "name": "test suite (tests/)",
+            "reason": "Test code for validation, not part of the runtime library"
+          }
+        ],
+        "entry_points": [
+          {
+            "file": "src/requests/api.py",
+            "symbol": "request",
+            "what_it_starts": "Module-level API entry point creating a temporary Session and delegating to Session.request()"
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "get",
+            "what_it_starts": "Convenience function for GET requests via request()"
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "post",
+            "what_it_starts": "Convenience function for POST requests via request()"
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session.request",
+            "what_it_starts": "Core request orchestration: creates Request \u2192 prepares it \u2192 sends via adapter \u2192 handles redirects"
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "session",
+            "what_it_starts": "Module-level function that returns a new Session instance"
+          }
+        ],
+        "core_abstractions": [
+          {
+            "file": "src/requests/models.py",
+            "symbol": "PreparedRequest",
+            "role": "Core request abstraction: the fully serialized HTTP request ready to send (URL, headers, body, cookies, auth all prepared)"
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Response",
+            "role": "Core response abstraction: encapsulates server response with status code, headers, body, cookies, encoding handling"
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session",
+            "role": "Core session abstraction: manages adapter registry, cookie jar, configuration defaults, and coordinates request/response lifecycle"
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "HTTPAdapter",
+            "role": "Core transport abstraction: sends PreparedRequest via urllib3 and wraps response/exception handling"
+          }
+        ],
+        "relationships": [
+          {
+            "from_file": "src/requests/api.py",
+            "from_symbol": "request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session",
+            "kind": "constructs",
+            "note": "request() creates a Session context manager to execute a single request"
+          },
+          {
+            "from_file": "src/requests/api.py",
+            "from_symbol": "get",
+            "to_file": "src/requests/api.py",
+            "to_symbol": "request",
+            "kind": "delegates_to",
+            "note": "All HTTP method convenience functions delegate to request()"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "Request",
+            "kind": "constructs",
+            "note": "Session.request creates a Request from the parameters"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.prepare_request",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest",
+            "kind": "constructs",
+            "note": "Prepares a Request into a SendableRequest with merged session settings"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "HTTPAdapter.send",
+            "kind": "delegates_to",
+            "note": "Session obtains adapter via get_adapter() and delegates actual sending to it"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "SessionRedirectMixin",
+            "kind": "extends",
+            "note": "Session extends SessionRedirectMixin to inherit redirect resolution logic"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.resolve_redirects",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.send",
+            "kind": "calls",
+            "note": "Redirect handler recursively calls send() for each redirect response"
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "Request.prepare",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest",
+            "kind": "constructs",
+            "note": "Request.prepare() creates and populates a PreparedRequest"
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest.prepare_url",
+            "kind": "calls",
+            "note": "PreparedRequest.prepare orchestrates a sequence of prepare_* methods"
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest.prepare_body",
+            "kind": "calls",
+            "note": "PreparedRequest.prepare calls prepare_body to encode request body"
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest.prepare_auth",
+            "kind": "calls",
+            "note": "PreparedRequest.prepare calls prepare_auth (must be last per auth plugins)"
+          },
+          {
+            "from_file": "src/requests/adapters.py",
+            "from_symbol": "HTTPAdapter.send",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "Response",
+            "kind": "constructs",
+            "note": "HTTPAdapter.send builds a Response object from urllib3 response via build_response()"
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.mount",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "HTTPAdapter",
+            "kind": "registers",
+            "note": "Sessions register HTTPAdapters for protocol prefixes (http://, https://)"
+          },
+          {
+            "from_file": "src/requests/cookies.py",
+            "from_symbol": "extract_cookies_to_jar",
+            "to_file": "src/requests/cookies.py",
+            "to_symbol": "RequestsCookieJar",
+            "kind": "calls",
+            "note": "Cookie extraction populates the session's RequestsCookieJar after each response"
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare_auth",
+            "to_file": "src/requests/auth.py",
+            "to_symbol": "AuthBase",
+            "kind": "delegates_to",
+            "note": "Auth preparation calls the auth callable which modifies headers"
+          }
+        ],
+        "flows": [
+          {
+            "name": "Simple GET Request",
+            "steps": [
+              {
+                "file": "src/requests/api.py",
+                "symbol": "get",
+                "what_happens": "User calls requests.get('https://example.com'); delegates to request() with method='GET'"
+              },
+              {
+                "file": "src/requests/api.py",
+                "symbol": "request",
+                "what_happens": "Creates a temporary Session context manager and calls session.request(method='GET', url=...)"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "Constructs Request object from parameters, calls prepare_request() to merge with session config"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.prepare_request",
+                "what_happens": "Creates PreparedRequest, calls p.prepare() to encode URL/headers/body/auth/cookies, merges session settings"
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare",
+                "what_happens": "Orchestrates prepare_url, prepare_headers, prepare_body, prepare_auth, prepare_cookies in sequence"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Retrieves HTTPAdapter via get_adapter(), calls adapter.send(prep_request) with timeout/verify settings"
+              },
+              {
+                "file": "src/requests/adapters.py",
+                "symbol": "HTTPAdapter.send",
+                "what_happens": "Obtains urllib3 connection, calls conn.urlopen() to send request, catches urllib3 exceptions and translates to Requests exceptions"
+              },
+              {
+                "file": "src/requests/adapters.py",
+                "symbol": "HTTPAdapter.build_response",
+                "what_happens": "Wraps urllib3 response in Response object with status, headers, body, encoding"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Extracts cookies from response, handles redirects if allow_redirects=True, returns final Response"
+              }
+            ]
+          },
+          {
+            "name": "POST Request with JSON",
+            "steps": [
+              {
+                "file": "src/requests/api.py",
+                "symbol": "post",
+                "what_happens": "User calls requests.post(url, json={...}); delegates to request('POST', url, json={...})"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "Creates Request with json parameter, calls prepare_request()"
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare_body",
+                "what_happens": "If json is provided, serializes it to JSON string and sets Content-Type header"
+              },
+              {
+                "file": "src/requests/adapters.py",
+                "symbol": "HTTPAdapter.send",
+                "what_happens": "Sends PreparedRequest.body (JSON string) via urllib3, receives response"
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "Response.json",
+                "what_happens": "User accesses r.json() to decode response body back to Python objects"
+              }
+            ]
+          },
+          {
+            "name": "Redirect Handling",
+            "steps": [
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Initial request sent, receives 301/302 response with Location header"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "SessionRedirectMixin.resolve_redirects",
+                "what_happens": "Called if allow_redirects=True; extracts Location header, copies PreparedRequest, updates URL"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "SessionRedirectMixin.rebuild_method",
+                "what_happens": "For 303, changes method to GET; for others, preserves or removes body per spec"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "SessionRedirectMixin.rebuild_auth",
+                "what_happens": "Strips Authorization header if hostname changed to prevent credential leakage"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "SessionRedirectMixin.resolve_redirects",
+                "what_happens": "Recursively calls self.send() with updated PreparedRequest; accumulates responses in history list"
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Final response returned with .history list containing all intermediate redirects"
+              }
+            ]
+          }
+        ],
+        "boundaries": [
+          {
+            "file": "src/requests/__init__.py",
+            "symbol": "check_compatibility",
+            "kind": "trust_boundary",
+            "note": "Module initialization verifies urllib3, chardet/charset_normalizer versions; warns if incompatible"
+          },
+          {
+            "file": "src/requests/__init__.py",
+            "symbol": "ssl",
+            "kind": "external_dependency",
+            "note": "Uses stdlib ssl to detect SNI support; optionally injects pyopenssl via urllib3 for SNI fallback"
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "HTTPAdapter.send",
+            "kind": "external_dependency",
+            "note": "Delegates actual network I/O to urllib3 (PoolManager, HTTPConnectionPool); catches urllib3 exceptions"
+          },
+          {
+            "file": "src/requests/cookies.py",
+            "symbol": "RequestsCookieJar",
+            "kind": "extension_point",
+            "note": "Extends http.cookiejar.CookieJar; users can swap Session.cookies with compatible CookieJar subclass"
+          },
+          {
+            "file": "src/requests/auth.py",
+            "symbol": "AuthBase",
+            "kind": "extension_point",
+            "note": "Abstract base for authentication; users subclass and pass as auth= parameter to implement custom schemes"
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "BaseAdapter",
+            "kind": "extension_point",
+            "note": "Abstract transport adapter; users can subclass and mount() to Session for custom protocol handlers (e.g., SOCKS)"
+          },
+          {
+            "file": "src/requests/hooks.py",
+            "symbol": "dispatch_hook",
+            "kind": "extension_point",
+            "note": "Users register response hook callbacks to intercept and modify responses before return"
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Response.iter_content",
+            "kind": "extension_point",
+            "note": "Response content iteration allows streaming consumption; chunk_size parameter controls buffer"
+          },
+          {
+            "file": "src/requests/utils.py",
+            "symbol": "resolve_proxies",
+            "kind": "external_dependency",
+            "note": "Integrates with system environment (http_proxy, https_proxy, no_proxy) via urllib.request.getproxies"
+          },
+          {
+            "file": "src/requests/certs.py",
+            "symbol": "where",
+            "kind": "external_dependency",
+            "note": "CA bundle path from certifi package; packagers can override to point to system CA bundle"
+          }
+        ],
+        "needs_investigation": [
+          {
+            "area": "PreparedRequest body encoding and streaming",
+            "open_question": "How does PreparedRequest.prepare_body() handle different data types (dict, list, file-like, generator) and when does it stream vs buffer? What is the exact contract for _body_position tracking?"
+          },
+          {
+            "area": "Authentication interaction with redirect handling",
+            "open_question": "How do auth schemes like HTTPDigestAuth interact with multi-step redirects? Are auth headers preserved, re-computed, or stripped based on URL changes?"
+          },
+          {
+            "area": "Connection pooling and adapter lifecycle",
+            "open_question": "How does HTTPAdapter manage urllib3 PoolManager? What triggers init_poolmanager() vs reuse? How do max_retries, pool_size, and pool_block affect behavior?"
+          },
+          {
+            "area": "Response streaming and content consumption",
+            "open_question": "What is the exact contract between stream=True, iter_content(), and Response.content? How are partial reads handled on redirects?"
+          },
+          {
+            "area": "Charset detection and encoding fallback",
+            "open_question": "How does Response.text use apparent_encoding and the chardet/charset_normalizer fallback? What is the priority order and when does each kick in?"
+          }
+        ],
+        "testing_posture": "The repository includes a comprehensive test suite under tests/ with ~3000 lines in test_requests.py (the main integration test file), plus test files for specific subsystems (test_adapters.py, test_utils.py, test_cookies.py, test_structures.py, test_hooks.py, test_help.py, test_lowlevel.py). Tests rely on a local testserver (tests/testserver/server.py) to serve HTTP responses for integration testing. Testing appears to be focused on integration tests and subsystem-level unit tests rather than extensive mocking.",
+        "conventions": [
+          "Request preparation is a multi-step process with strict ordering: PreparedRequest.prepare() calls prepare_method, prepare_url, prepare_headers, prepare_cookies, prepare_body, prepare_auth, prepare_hooks in sequence. prepare_auth must be last to allow auth schemes to modify a fully prepared request.",
+          "Session merges user parameters with session defaults in a specific way: session settings are base layer, request parameters override. CaseInsensitiveDict is used for headers; standard dict for most other settings.",
+          "All HTTP methods (GET, POST, etc.) are ultimately routed through Session.request() or api.request(); convenience functions in api.py are thin wrappers.",
+          "Cookies are managed as a session concern: extracted from responses after each request, merged with per-request cookies, and reused in subsequent requests. RequestsCookieJar wraps stdlib cookiejar.",
+          "Redirects are handled by SessionRedirectMixin.resolve_redirects() which yields Response objects in order (original \u2192 redirects \u2192 final). History is attached to final response; original response is in history[0].",
+          "Auth modification happens at prepare_auth() time, not in the adapter. Auth callables receive PreparedRequest and return it after modification.",
+          "Exceptions follow a hierarchy rooted at RequestException; adapter translates urllib3 exceptions into Requests exceptions.",
+          "Hooks are registered as dicts mapping event names to callables/lists of callables; currently only 'response' hook is supported.",
+          "Case-insensitive header access is universal via CaseInsensitiveDict; URLs and body encoding use utils functions.",
+          "Type hints use internal _types module with TypeAlias definitions; public API documented via docstrings rather than type stubs."
+        ],
+        "docs": [
+          {
+            "path": "src/requests/__init__.py",
+            "what_it_covers": "Module docstring provides basic usage examples (GET, POST) and overview; dependency version checking logic"
+          },
+          {
+            "path": "src/requests/api.py",
+            "what_it_covers": "Each function (request, get, post, put, patch, delete, head, options) has extensive docstrings describing parameters, return type, and basic usage examples"
+          }
+        ]
+      },
+      "rejections": [
+        "3 citation(s) do not resolve against the repository: boundary: src/requests/__init__.py:ssl (unknown_symbol); boundary: src/requests/certs.py:where (unknown_symbol); relationship_from: src/requests/sessions.py:Session.resolve_redirects (unknown_symbol). Use `symbols` or `propose_anchor` to find the real location, then correct or drop them. These names are not subsystems in the inventory and were ignored: documentation files (docs/), test suite (tests/)."
+      ],
+      "seconds_total": 74.90814566612244,
+      "run": 1
+    },
+    {
+      "repo": "requests",
+      "policy": "structural",
+      "cache": "two",
+      "stop_reason": "turn_budget",
+      "errors": [],
+      "behavior": {
+        "turns": 19,
+        "tool_calls": 34,
+        "failed_calls": 1,
+        "calls_by_tool": {
+          "list_files": 3,
+          "read_file": 18,
+          "symbols": 13
+        },
+        "read_calls": 18,
+        "outline_reads": 0,
+        "source_lines_read": 2202,
+        "source_chars_read": 84352,
+        "largest_read_lines": 219,
+        "large_reads": 5,
+        "whole_file_reads": 8,
+        "structural_calls": 12,
+        "tool_output_chars": 107236,
+        "duplicate_calls": 0,
+        "overlapping_reads": 2,
+        "reread_lines": 8,
+        "narrowing_structural_calls": 5,
+        "average_read_lines": 122.33333333333333,
+        "structural_share": 0.4,
+        "waste_share": 0.058823529411764705,
+        "wasted_calls": 2,
+        "narrowing_share": 0.4166666666666667
+      },
+      "evidence": {
+        "setup.py": "untouched",
+        "src/requests/__init__.py": "source_read",
+        "src/requests/_internal_utils.py": "outlined",
+        "src/requests/_types.py": "outlined",
+        "src/requests/adapters.py": "source_read",
+        "src/requests/api.py": "source_read",
+        "src/requests/auth.py": "outlined",
+        "src/requests/certs.py": "source_read",
+        "src/requests/compat.py": "source_read",
+        "src/requests/cookies.py": "outlined",
+        "src/requests/exceptions.py": "outlined",
+        "src/requests/help.py": "source_read",
+        "src/requests/hooks.py": "source_read",
+        "src/requests/models.py": "source_read",
+        "src/requests/packages.py": "source_read",
+        "src/requests/sessions.py": "source_read",
+        "src/requests/status_codes.py": "source_read",
+        "src/requests/structures.py": "outlined",
+        "src/requests/utils.py": "outlined"
+      },
+      "progression": [
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18
+      ],
+      "quality": {
+        "produced": true,
+        "accepted": false,
+        "rejections": 1,
+        "required_subsystems": 19,
+        "covered": 19,
+        "skipped": 0,
+        "unaccounted": 0,
+        "unknown_names": 2,
+        "skip_reasons": [],
+        "first_grounding": 0.9701492537313433,
+        "first_anchors": 67,
+        "first_unresolved": 2,
+        "final_grounding": 0.9701492537313433,
+        "final_anchors": 67,
+        "entry_points": 4,
+        "core_abstractions": 4,
+        "flows": 3,
+        "flow_steps": 17,
+        "widest_flow_files": 3,
+        "boundaries": 9,
+        "docs": 2,
+        "responsibility_chars": 2022,
+        "accounted_ratio": 1.0,
+        "covered_ratio": 1.0,
+        "average_responsibility_chars": 106.42105263157895
+      },
+      "cost": {
+        "api_calls": 19,
+        "input_tokens": 4614,
+        "output_tokens": 8208,
+        "cache_write_tokens": 81588,
+        "cache_read_tokens": 339274,
+        "cost_usd": 0.1815664,
+        "uncached_cost_usd": 0.466516,
+        "seconds": 71.67099999999999,
+        "prompt_tokens": 425476,
+        "cache_hit_rate": 0.7973986781863137,
+        "caching_saved_usd": 0.2849496,
+        "write_share": 0.19175699686938863,
+        "cost_per_1k_prompt_tokens": 0.00042673711325668187
+      },
+      "important": {
+        "covered": [
+          "sessions.py",
+          "adapters.py",
+          "models.py",
+          "auth.py",
+          "api.py"
+        ],
+        "skipped": [],
+        "missing": []
+      },
+      "survey": {
+        "architecture": "Requests is a human-friendly HTTP library for Python. It provides a high-level interface for making HTTP requests while abstracting the complexity of network communication. The library is built around a few core abstractions: Sessions manage persistence and configuration across requests; Request and PreparedRequest objects represent the declarative and wire-ready forms of an HTTP request respectively; Response objects encapsulate server responses; and Adapters handle the actual network I/O through urllib3. The flow proceeds from API-level entry points (get, post, etc.) through Session, which coordinates request preparation, hooks, cookies, redirects, and adapters. HTTPAdapter interfaces with urllib3's connection pooling and HTTP handling. Throughout, the design separates concerns: models handle request/response structure, sessions handle orchestration and state, adapters handle transport, and utilities handle encoding, cookies, proxies, and validation.",
+        "subsystems": [
+          {
+            "name": "src/requests/api.py",
+            "responsibility": "Provides module-level HTTP verb functions (get, post, put, patch, delete, head, options, request) that create temporary sessions and dispatch requests.",
+            "key_file": "src/requests/api.py",
+            "key_symbol": "request"
+          },
+          {
+            "name": "src/requests/sessions.py",
+            "responsibility": "Implements Session class that manages cookie persistence, connection pooling, configuration merging, redirect resolution, and request dispatch through adapters.",
+            "key_file": "src/requests/sessions.py",
+            "key_symbol": "Session"
+          },
+          {
+            "name": "src/requests/models.py",
+            "responsibility": "Defines Request, PreparedRequest, and Response classes representing HTTP request/response data structures and their lifecycle.",
+            "key_file": "src/requests/models.py",
+            "key_symbol": "Response"
+          },
+          {
+            "name": "src/requests/adapters.py",
+            "responsibility": "Implements BaseAdapter and HTTPAdapter classes that translate PreparedRequest objects into urllib3 calls and build Response objects from urllib3 responses.",
+            "key_file": "src/requests/adapters.py",
+            "key_symbol": "HTTPAdapter"
+          },
+          {
+            "name": "src/requests/auth.py",
+            "responsibility": "Provides authentication handlers (HTTPBasicAuth, HTTPProxyAuth, HTTPDigestAuth) implementing the auth callable protocol.",
+            "key_file": "src/requests/auth.py",
+            "key_symbol": "AuthBase"
+          },
+          {
+            "name": "src/requests/cookies.py",
+            "responsibility": "Manages cookie handling via RequestsCookieJar, merges cookies, extracts cookies from responses, and wraps stdlib cookiejar.",
+            "key_file": "src/requests/cookies.py",
+            "key_symbol": "RequestsCookieJar"
+          },
+          {
+            "name": "src/requests/exceptions.py",
+            "responsibility": "Defines exception hierarchy for requests (RequestException and subclasses for network, HTTP, timeout, and validation errors).",
+            "key_file": "src/requests/exceptions.py",
+            "key_symbol": "RequestException"
+          },
+          {
+            "name": "src/requests/structures.py",
+            "responsibility": "Implements CaseInsensitiveDict for headers and LookupDict for status codes.",
+            "key_file": "src/requests/structures.py",
+            "key_symbol": "CaseInsensitiveDict"
+          },
+          {
+            "name": "src/requests/utils.py",
+            "responsibility": "Utility functions for encoding, proxies, headers, cookies, URLs, and environment integration.",
+            "key_file": "src/requests/utils.py"
+          },
+          {
+            "name": "src/requests/hooks.py",
+            "responsibility": "Provides hook system allowing callbacks on responses via dispatch_hook and default_hooks.",
+            "key_file": "src/requests/hooks.py",
+            "key_symbol": "dispatch_hook"
+          },
+          {
+            "name": "src/requests/compat.py",
+            "responsibility": "Handles compatibility imports and version detection for urllib3, chardet/charset_normalizer, and JSON libraries.",
+            "key_file": "src/requests/compat.py"
+          },
+          {
+            "name": "src/requests/__init__.py",
+            "responsibility": "Exports public API (functions and classes) and performs dependency compatibility checks at import time.",
+            "key_file": "src/requests/__init__.py"
+          },
+          {
+            "name": "src/requests/_types.py",
+            "responsibility": "Defines type hints and TypedDicts for requests API signatures and internal validation.",
+            "key_file": "src/requests/_types.py",
+            "key_symbol": "RequestKwargs"
+          },
+          {
+            "name": "src/requests/_internal_utils.py",
+            "responsibility": "Provides internal utility functions for string encoding and ASCII checking.",
+            "key_file": "src/requests/_internal_utils.py",
+            "key_symbol": "to_native_string"
+          },
+          {
+            "name": "src/requests/status_codes.py",
+            "responsibility": "Exposes HTTP status codes via LookupDict with multiple name aliases (codes.ok, codes.not_found, etc.).",
+            "key_file": "src/requests/status_codes.py",
+            "key_symbol": "codes"
+          },
+          {
+            "name": "src/requests/certs.py",
+            "responsibility": "Provides access to the default CA certificate bundle location via certifi.",
+            "key_file": "src/requests/certs.py"
+          },
+          {
+            "name": "src/requests/packages.py",
+            "responsibility": "Re-exports urllib3 and chardet/charset_normalizer as requests.packages.* for backwards compatibility.",
+            "key_file": "src/requests/packages.py"
+          },
+          {
+            "name": "src/requests/help.py",
+            "responsibility": "Provides debug information collection function (info) that gathers system, dependency, and SSL configuration details.",
+            "key_file": "src/requests/help.py",
+            "key_symbol": "info"
+          },
+          {
+            "name": "setup.py",
+            "responsibility": "Package configuration and metadata.",
+            "key_file": "setup.py"
+          }
+        ],
+        "skipped": [
+          {
+            "name": "tests/",
+            "reason": "Test suite; not part of the runtime library."
+          },
+          {
+            "name": "docs/",
+            "reason": "Documentation build files; not part of the runtime library."
+          }
+        ],
+        "entry_points": [
+          {
+            "file": "src/requests/api.py",
+            "symbol": "request",
+            "what_it_starts": "An HTTP request cycle: creates a temporary Session, constructs a Request, prepares it, and sends it through the adapter."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "get",
+            "what_it_starts": "A GET request, by delegating to request() with method='get'."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "post",
+            "what_it_starts": "A POST request with optional data or JSON payload, by delegating to request()."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session",
+            "what_it_starts": "A persistent session object managing cookies, proxies, and configuration across multiple requests."
+          }
+        ],
+        "core_abstractions": [
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session",
+            "role": "Orchestrator of all requests: manages state (cookies, auth, proxies, defaults), prepares requests, dispatches through adapters, and handles redirects."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Response",
+            "role": "Encapsulates server responses: status code, headers, content (lazy or immediate), encoding detection, cookies, and utility methods (json, raise_for_status)."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "PreparedRequest",
+            "role": "Fully serializable HTTP request with method, URL, headers, body, and cookies prepared for network transmission."
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "HTTPAdapter",
+            "role": "Transport adapter that converts PreparedRequest into urllib3 calls, manages connection pools, certificates, and proxies."
+          }
+        ],
+        "relationships": [
+          {
+            "from_file": "src/requests/api.py",
+            "from_symbol": "request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.request",
+            "kind": "calls",
+            "note": "API entry point delegates to Session.request() after creating a temporary session."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "Request",
+            "kind": "constructs",
+            "note": "Session.request() constructs a Request object from parameters."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.prepare_request",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest",
+            "kind": "constructs",
+            "note": "prepare_request() constructs PreparedRequest by merging session settings with request data."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "HTTPAdapter.send",
+            "kind": "delegates_to",
+            "note": "Session.send() retrieves the appropriate adapter via get_adapter() and delegates network transmission to it."
+          },
+          {
+            "from_file": "src/requests/adapters.py",
+            "from_symbol": "HTTPAdapter.send",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "Response",
+            "kind": "constructs",
+            "note": "HTTPAdapter.send() calls build_response() to construct Response from urllib3 response."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "SessionRedirectMixin.resolve_redirects",
+            "kind": "calls",
+            "note": "Session.send() calls resolve_redirects() to handle HTTP redirects if allow_redirects=True."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.__init__",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "HTTPAdapter",
+            "kind": "constructs",
+            "note": "Session initializes HTTPAdapter instances and mounts them for http:// and https:// schemes."
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare",
+            "to_file": "src/requests/auth.py",
+            "to_symbol": "AuthBase",
+            "kind": "calls",
+            "note": "PreparedRequest.prepare_auth() applies auth handler (callable) to the request."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/hooks.py",
+            "to_symbol": "dispatch_hook",
+            "kind": "calls",
+            "note": "Session.send() dispatches response hooks after receiving response from adapter."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session",
+            "to_file": "src/requests/cookies.py",
+            "to_symbol": "RequestsCookieJar",
+            "kind": "constructs",
+            "note": "Session constructs and maintains RequestsCookieJar to persist cookies across requests."
+          }
+        ],
+        "flows": [
+          {
+            "name": "Simple GET request (module level)",
+            "steps": [
+              {
+                "file": "src/requests/api.py",
+                "symbol": "get",
+                "what_happens": "Entry point: get() calls request('get', url, params=params, **kwargs)."
+              },
+              {
+                "file": "src/requests/api.py",
+                "symbol": "request",
+                "what_happens": "Creates a temporary Session context, calls session.request(method, url, **kwargs)."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "Constructs Request(method, url, ...), calls prepare_request() to get PreparedRequest, merges environment settings, calls self.send()."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.prepare_request",
+                "what_happens": "Merges request headers/params/auth/cookies with session defaults, returns PreparedRequest."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Retrieves HTTPAdapter via get_adapter(), calls adapter.send(prepared_request, ...), dispatches response hooks, extracts and persists cookies, handles redirects if allowed."
+              },
+              {
+                "file": "src/requests/adapters.py",
+                "symbol": "HTTPAdapter.send",
+                "what_happens": "Gets urllib3 connection, sets TLS/cert parameters, calls conn.urlopen(), catches urllib3 exceptions and translates to requests exceptions, calls build_response()."
+              },
+              {
+                "file": "src/requests/adapters.py",
+                "symbol": "HTTPAdapter.build_response",
+                "what_happens": "Wraps urllib3 response in Response object, sets status, headers, cookies, raw stream."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Returns Response (or follows redirects and returns final Response)."
+              }
+            ]
+          },
+          {
+            "name": "Redirect handling",
+            "steps": [
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "After receiving initial response, checks allow_redirects flag and calls resolve_redirects()."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "SessionRedirectMixin.resolve_redirects",
+                "what_happens": "Generator loop: checks if response is redirect, extracts location header, validates max_redirects, rebuilds method/auth/proxies, copies request, calls self.send() recursively for each redirect."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "SessionRedirectMixin.should_strip_auth",
+                "what_happens": "Decides whether to remove Authorization header based on hostname/scheme/port changes."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "SessionRedirectMixin.rebuild_method",
+                "what_happens": "Downgrades POST to GET for 303 responses."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Collects redirect responses into history list, returns final Response with history attached."
+              }
+            ]
+          },
+          {
+            "name": "Response content access and encoding",
+            "steps": [
+              {
+                "file": "src/requests/models.py",
+                "symbol": "Response.__init__",
+                "what_happens": "Creates Response with _content=False (lazy), _content_consumed=False."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "Response.content",
+                "what_happens": "Property that lazily reads raw stream, handles decompression, detects encoding, caches in _content."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "Response.text",
+                "what_happens": "Property that accesses content and decodes using detected or specified encoding."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "Response.json",
+                "what_happens": "Property that parses response text as JSON using complexjson module."
+              }
+            ]
+          }
+        ],
+        "boundaries": [
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "HTTPAdapter.send",
+            "kind": "external_dependency",
+            "note": "Delegates to urllib3.poolmanager.PoolManager.urlopen() for actual network I/O; handles urllib3 exceptions and translates them to requests exceptions."
+          },
+          {
+            "file": "src/requests/__init__.py",
+            "symbol": "check_compatibility",
+            "kind": "external_dependency",
+            "note": "Validates versions of urllib3, chardet/charset_normalizer, and cryptography at import time; issues warnings if incompatible."
+          },
+          {
+            "file": "src/requests/compat.py",
+            "symbol": "_resolve_char_detection",
+            "kind": "external_dependency",
+            "note": "Attempts to import chardet or charset_normalizer for character detection in responses; requests can run with neither but warns."
+          },
+          {
+            "file": "src/requests/certs.py",
+            "symbol": "where",
+            "kind": "external_dependency",
+            "note": "Relies on certifi.where() to provide CA certificate bundle path for TLS verification."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Response.content",
+            "kind": "extension_point",
+            "note": "Response.iter_content() is overloadable for streaming; users can iterate over chunks without buffering full body."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "PreparedRequest.prepare_auth",
+            "kind": "extension_point",
+            "note": "Auth parameter accepts callable (AuthBase subclass or custom function) that modifies request headers."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session.send",
+            "kind": "extension_point",
+            "note": "Hooks system allows custom callables on 'response' event to inspect/modify responses before return."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session.mount",
+            "kind": "extension_point",
+            "note": "Allows mounting custom adapter implementations for specific URL schemes."
+          },
+          {
+            "file": "src/requests/utils.py",
+            "symbol": "should_bypass_proxies",
+            "kind": "external_dependency",
+            "note": "Reads environment variables (NO_PROXY, etc.) and system proxy configuration to determine proxy bypass rules."
+          }
+        ],
+        "needs_investigation": [
+          {
+            "area": "Connection pooling and pool management",
+            "open_question": "How does HTTPAdapter initialize and manage urllib3 PoolManager/ProxyManager instances? What are the pooling parameters (size, connections, timeout)?"
+          },
+          {
+            "area": "Certificate and TLS verification details",
+            "open_question": "What does cert_verify() do exactly, and how are client certificates, CA bundles, and hostname verification coordinated with urllib3?"
+          },
+          {
+            "area": "Multipart form encoding",
+            "open_question": "How does PreparedRequest.prepare_body() handle multipart file uploads, and what is the interaction with urllib3.fields.RequestField?"
+          },
+          {
+            "area": "Retry and backoff behavior",
+            "open_question": "How are urllib3 Retry objects configured and passed to the poolmanager, and what retry semantics are exposed?"
+          },
+          {
+            "area": "Stream vs. non-stream behavior",
+            "open_question": "How does the stream parameter propagate through Session.send to HTTPAdapter, and what is the contract for raw response handling?"
+          },
+          {
+            "area": "Encoding detection and fallback",
+            "open_question": "How does Response.apparent_encoding chain through chardet vs. charset_normalizer, and what is the UTF-8 vs. Latin-1 fallback logic?"
+          }
+        ],
+        "testing_posture": "Tests reside in tests/ directory with a test suite split across test_requests.py (3053 LOC, 246 test functions), test_utils.py (990 LOC, 76 functions), test_lowlevel.py (428 LOC, 14 functions), test_structures.py, test_hooks.py, and others. A conftest.py provides fixtures. Tests include a testserver submodule with a local HTTP server (server.py, 176 LOC) for integration testing. Testing covers HTTP verbs, redirects, cookies, auth, proxies, TLS, streaming, encoding, and exception cases.",
+        "conventions": [
+          "Request/Response/PreparedRequest objects are immutable by design after creation; modifications happen during prepare phase.",
+          "Session is the primary stateful container; module-level functions (get, post, etc.) are stateless wrappers around temporary sessions.",
+          "Adapters are pluggable via Session.mount() for custom transports; HTTPAdapter is the only built-in.",
+          "Hooks use a dispatch registry keyed by event name ('response' is the only standard hook); they are called in order and can modify data.",
+          "Environment variables (http_proxy, https_proxy, no_proxy, etc.) influence session behavior when trust_env=True.",
+          "Type hints use TypedDict (RequestKwargs, etc.) for precise API documentation; _types.py defines the canonical signatures.",
+          "Exceptions form a hierarchy rooted in RequestException for all errors.",
+          "Lazy content evaluation: Response._content is False until accessed, enabling streaming without buffering.",
+          "CaseInsensitiveDict is used throughout for headers to match HTTP semantics.",
+          "Cookies use stdlib http.cookiejar.CookieJar internally but wrapped in RequestsCookieJar for consistency."
+        ],
+        "docs": [
+          {
+            "path": "docs/conf.py",
+            "what_it_covers": "Sphinx documentation build configuration."
+          },
+          {
+            "path": "docs/_themes/flask_theme_support.py",
+            "what_it_covers": "Documentation theme support utilities."
+          }
+        ]
+      },
+      "rejections": [
+        "2 citation(s) do not resolve against the repository: boundary: src/requests/certs.py:where (unknown_symbol); subsystem: src/requests/status_codes.py:codes (unknown_symbol). Use `symbols` or `propose_anchor` to find the real location, then correct or drop them. These names are not subsystems in the inventory and were ignored: tests/, docs/."
+      ],
+      "seconds_total": 71.67698740959167,
+      "run": 2
+    },
+    {
+      "repo": "requests",
+      "policy": "structural",
+      "cache": "one",
+      "stop_reason": "turn_budget",
+      "errors": [],
+      "behavior": {
+        "turns": 19,
+        "tool_calls": 32,
+        "failed_calls": 0,
+        "calls_by_tool": {
+          "symbols": 18,
+          "list_files": 1,
+          "read_file": 13
+        },
+        "read_calls": 13,
+        "outline_reads": 0,
+        "source_lines_read": 1698,
+        "source_chars_read": 67585,
+        "largest_read_lines": 219,
+        "large_reads": 5,
+        "whole_file_reads": 2,
+        "structural_calls": 18,
+        "tool_output_chars": 89463,
+        "duplicate_calls": 0,
+        "overlapping_reads": 1,
+        "reread_lines": 5,
+        "narrowing_structural_calls": 7,
+        "average_read_lines": 130.6153846153846,
+        "structural_share": 0.5806451612903226,
+        "waste_share": 0.03125,
+        "wasted_calls": 1,
+        "narrowing_share": 0.3888888888888889
+      },
+      "evidence": {
+        "setup.py": "untouched",
+        "src/requests/__init__.py": "source_read",
+        "src/requests/_internal_utils.py": "outlined",
+        "src/requests/_types.py": "outlined",
+        "src/requests/adapters.py": "source_read",
+        "src/requests/api.py": "source_read",
+        "src/requests/auth.py": "source_read",
+        "src/requests/certs.py": "outlined",
+        "src/requests/compat.py": "outlined",
+        "src/requests/cookies.py": "source_read",
+        "src/requests/exceptions.py": "outlined",
+        "src/requests/help.py": "outlined",
+        "src/requests/hooks.py": "outlined",
+        "src/requests/models.py": "source_read",
+        "src/requests/packages.py": "outlined",
+        "src/requests/sessions.py": "source_read",
+        "src/requests/status_codes.py": "outlined",
+        "src/requests/structures.py": "outlined",
+        "src/requests/utils.py": "outlined"
+      },
+      "progression": [
+        4,
+        8,
+        12,
+        16,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18
+      ],
+      "quality": {
+        "produced": true,
+        "accepted": true,
+        "rejections": 0,
+        "required_subsystems": 19,
+        "covered": 19,
+        "skipped": 0,
+        "unaccounted": 0,
+        "unknown_names": 1,
+        "skip_reasons": [],
+        "first_grounding": 1.0,
+        "first_anchors": 78,
+        "first_unresolved": 0,
+        "final_grounding": 1.0,
+        "final_anchors": 78,
+        "entry_points": 10,
+        "core_abstractions": 8,
+        "flows": 3,
+        "flow_steps": 22,
+        "widest_flow_files": 4,
+        "boundaries": 9,
+        "docs": 2,
+        "responsibility_chars": 1238,
+        "accounted_ratio": 1.0,
+        "covered_ratio": 1.0,
+        "average_responsibility_chars": 65.15789473684211
+      },
+      "cost": {
+        "api_calls": 19,
+        "input_tokens": 4608,
+        "output_tokens": 8488,
+        "cache_write_tokens": 69649,
+        "cache_read_tokens": 319611,
+        "cost_usd": 0.16607035,
+        "uncached_cost_usd": 0.436308,
+        "seconds": 72.43799999999999,
+        "prompt_tokens": 393868,
+        "cache_hit_rate": 0.8114672936110575,
+        "caching_saved_usd": 0.27023765,
+        "write_share": 0.17683335533732114,
+        "cost_per_1k_prompt_tokens": 0.0004216396102247453
+      },
+      "important": {
+        "covered": [
+          "sessions.py",
+          "adapters.py",
+          "models.py",
+          "auth.py",
+          "api.py"
+        ],
+        "skipped": [],
+        "missing": []
+      },
+      "survey": {
+        "architecture": "Requests is a Python HTTP client library providing a high-level, human-friendly interface for making HTTP requests. The architecture consists of a simple public API (module-level functions) that delegates to a Session object, which orchestrates request preparation, transmission via adapters, and response handling. The core flow is: user calls module-level function \u2192 Session.request \u2192 PreparedRequest construction \u2192 HTTPAdapter.send \u2192 urllib3 transport \u2192 Response construction and return. Sessions manage persistent state like cookies, headers, authentication, and connection pooling through adapters.",
+        "subsystems": [
+          {
+            "name": "setup.py",
+            "responsibility": "Package configuration and build metadata for the requests library.",
+            "key_file": "setup.py"
+          },
+          {
+            "name": "src/requests/__init__.py",
+            "responsibility": "Library initialization, dependency checking, and public API exports.",
+            "key_file": "src/requests/__init__.py"
+          },
+          {
+            "name": "src/requests/_internal_utils.py",
+            "responsibility": "Internal utility functions for string conversion and ASCII detection.",
+            "key_file": "src/requests/_internal_utils.py"
+          },
+          {
+            "name": "src/requests/_types.py",
+            "responsibility": "Type definitions and type hints for the requests library.",
+            "key_file": "src/requests/_types.py"
+          },
+          {
+            "name": "src/requests/adapters.py",
+            "responsibility": "HTTP transport adapters that handle the actual network I/O via urllib3.",
+            "key_file": "src/requests/adapters.py",
+            "key_symbol": "HTTPAdapter"
+          },
+          {
+            "name": "src/requests/api.py",
+            "responsibility": "Module-level convenience functions (get, post, put, patch, delete, etc.) for simple one-off requests.",
+            "key_file": "src/requests/api.py",
+            "key_symbol": "request"
+          },
+          {
+            "name": "src/requests/auth.py",
+            "responsibility": "Authentication handlers including Basic Auth, Proxy Auth, and Digest Auth.",
+            "key_file": "src/requests/auth.py",
+            "key_symbol": "AuthBase"
+          },
+          {
+            "name": "src/requests/certs.py",
+            "responsibility": "Certificate bundle management for SSL/TLS verification.",
+            "key_file": "src/requests/certs.py"
+          },
+          {
+            "name": "src/requests/compat.py",
+            "responsibility": "Compatibility utilities for Python version differences.",
+            "key_file": "src/requests/compat.py"
+          },
+          {
+            "name": "src/requests/cookies.py",
+            "responsibility": "Cookie handling including CookieJar management and mock request/response wrappers for compatibility.",
+            "key_file": "src/requests/cookies.py",
+            "key_symbol": "RequestsCookieJar"
+          },
+          {
+            "name": "src/requests/exceptions.py",
+            "responsibility": "Custom exception hierarchy for requests-specific errors.",
+            "key_file": "src/requests/exceptions.py",
+            "key_symbol": "RequestException"
+          },
+          {
+            "name": "src/requests/help.py",
+            "responsibility": "Diagnostic utilities for system information and dependency reporting.",
+            "key_file": "src/requests/help.py"
+          },
+          {
+            "name": "src/requests/hooks.py",
+            "responsibility": "Event hook dispatching system for extensibility.",
+            "key_file": "src/requests/hooks.py",
+            "key_symbol": "dispatch_hook"
+          },
+          {
+            "name": "src/requests/models.py",
+            "responsibility": "Core data models: Request, PreparedRequest, and Response classes.",
+            "key_file": "src/requests/models.py",
+            "key_symbol": "Response"
+          },
+          {
+            "name": "src/requests/packages.py",
+            "responsibility": "Package management and version information.",
+            "key_file": "src/requests/packages.py"
+          },
+          {
+            "name": "src/requests/sessions.py",
+            "responsibility": "Session management, redirect handling, and request orchestration.",
+            "key_file": "src/requests/sessions.py",
+            "key_symbol": "Session"
+          },
+          {
+            "name": "src/requests/status_codes.py",
+            "responsibility": "HTTP status code lookup and aliases.",
+            "key_file": "src/requests/status_codes.py"
+          },
+          {
+            "name": "src/requests/structures.py",
+            "responsibility": "Data structures like CaseInsensitiveDict and LookupDict.",
+            "key_file": "src/requests/structures.py",
+            "key_symbol": "CaseInsensitiveDict"
+          },
+          {
+            "name": "src/requests/utils.py",
+            "responsibility": "Utility functions for URL handling, proxies, encoding, headers, and various helpers.",
+            "key_file": "src/requests/utils.py"
+          }
+        ],
+        "skipped": [
+          {
+            "name": "test files",
+            "reason": "Test infrastructure and test cases (in tests/ directory) are testing code, not part of the runtime library"
+          }
+        ],
+        "entry_points": [
+          {
+            "file": "src/requests/api.py",
+            "symbol": "request",
+            "what_it_starts": "Constructs a Session, calls Session.request(), and returns a Response. This is the main entry point for one-off requests."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "get",
+            "what_it_starts": "Convenience wrapper that calls request('get', url, ...). Entry point for GET requests."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "post",
+            "what_it_starts": "Convenience wrapper that calls request('post', url, ...). Entry point for POST requests."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "put",
+            "what_it_starts": "Convenience wrapper that calls request('put', url, ...). Entry point for PUT requests."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "patch",
+            "what_it_starts": "Convenience wrapper that calls request('patch', url, ...). Entry point for PATCH requests."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "delete",
+            "what_it_starts": "Convenience wrapper that calls request('delete', url, ...). Entry point for DELETE requests."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "head",
+            "what_it_starts": "Convenience wrapper that calls request('head', url, ...). Entry point for HEAD requests."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "options",
+            "what_it_starts": "Convenience wrapper that calls request('options', url, ...). Entry point for OPTIONS requests."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session",
+            "what_it_starts": "Stateful session object providing persistent request handling with cookies, pooling, and configuration."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "session",
+            "what_it_starts": "Factory function that returns a new Session context manager instance."
+          }
+        ],
+        "core_abstractions": [
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Request",
+            "role": "User-facing mutable request object containing method, url, headers, data, auth, and other parameters before preparation."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "PreparedRequest",
+            "role": "Immutable request object with fully encoded method, url, headers, body, and cookies ready for transmission."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Response",
+            "role": "Response object wrapping the server's HTTP response with status, headers, content, cookies, and convenience methods."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session",
+            "role": "Orchestrates the full request-response cycle: preparation, sending, redirect resolution, cookie persistence, and environment merging."
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "BaseAdapter",
+            "role": "Abstract base for protocol-specific adapters that handle transmission via external libraries."
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "HTTPAdapter",
+            "role": "Concrete adapter managing urllib3 pool managers, TLS verification, proxies, and response building."
+          },
+          {
+            "file": "src/requests/auth.py",
+            "symbol": "AuthBase",
+            "role": "Base class for authentication handlers callable on a PreparedRequest to add auth headers."
+          },
+          {
+            "file": "src/requests/structures.py",
+            "symbol": "CaseInsensitiveDict",
+            "role": "Dictionary implementation used for headers to provide case-insensitive access."
+          }
+        ],
+        "relationships": [
+          {
+            "from_file": "src/requests/api.py",
+            "from_symbol": "request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session",
+            "kind": "constructs",
+            "note": "request() creates a temporary Session to call its request() method."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "Request",
+            "kind": "constructs",
+            "note": "Session.request creates a Request from parameters and then prepares it."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.prepare_request",
+            "kind": "calls",
+            "note": "Session.request calls prepare_request to convert Request to PreparedRequest."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.send",
+            "kind": "calls",
+            "note": "Session.request sends the prepared request via send()."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "HTTPAdapter.send",
+            "kind": "delegates_to",
+            "note": "Session.send retrieves the appropriate adapter and delegates transmission to it."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "SessionRedirectMixin.resolve_redirects",
+            "kind": "calls",
+            "note": "Session.send handles redirect resolution if allow_redirects is True."
+          },
+          {
+            "from_file": "src/requests/adapters.py",
+            "from_symbol": "HTTPAdapter.send",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "HTTPAdapter.build_response",
+            "kind": "calls",
+            "note": "HTTPAdapter.send constructs a Response from the urllib3 response."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.prepare_request",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest",
+            "kind": "constructs",
+            "note": "prepare_request constructs and populates a PreparedRequest with merged settings."
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "Request.prepare",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest.prepare",
+            "kind": "calls",
+            "note": "Request.prepare calls PreparedRequest.prepare to encode the request."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/hooks.py",
+            "to_symbol": "dispatch_hook",
+            "kind": "calls",
+            "note": "Session.send dispatches response hooks after receiving a response."
+          }
+        ],
+        "flows": [
+          {
+            "name": "Simple GET request (module-level API)",
+            "steps": [
+              {
+                "file": "src/requests/api.py",
+                "symbol": "get",
+                "what_happens": "User calls requests.get(url) which is a convenience function."
+              },
+              {
+                "file": "src/requests/api.py",
+                "symbol": "request",
+                "what_happens": "get() calls request('get', url, ...) with default allow_redirects=True."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.__init__",
+                "what_happens": "request() creates a context-managed Session, initializing headers, cookies, adapters (http/https), and defaults."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "Session.request constructs a Request object from parameters and calls prepare_request."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.prepare_request",
+                "what_happens": "Merges session and request settings, creates PreparedRequest, encodes URL/headers/cookies/body."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare",
+                "what_happens": "Encodes method, URL (with params), headers, cookies, body, and auth into transmissible form."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Retrieves HTTPAdapter for the URL scheme, passes PreparedRequest to adapter.send()."
+              },
+              {
+                "file": "src/requests/adapters.py",
+                "symbol": "HTTPAdapter.send",
+                "what_happens": "Gets urllib3 connection, configures TLS/proxies, calls urllib3's urlopen(), handles exceptions."
+              },
+              {
+                "file": "src/requests/adapters.py",
+                "symbol": "HTTPAdapter.build_response",
+                "what_happens": "Wraps urllib3 response in a requests Response object with decoded content."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Dispatches response hooks, persists cookies, checks for redirects (none in simple GET)."
+              },
+              {
+                "file": "src/requests/api.py",
+                "symbol": "request",
+                "what_happens": "Returns Response and closes the Session context manager."
+              }
+            ]
+          },
+          {
+            "name": "Request with redirect handling",
+            "steps": [
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "After initial adapter.send(), receives a 3xx response and allow_redirects=True."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "SessionRedirectMixin.resolve_redirects",
+                "what_happens": "Generator that yields follow-up requests: extracts redirect location, checks auth stripping, rebuilds method/proxies."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "SessionRedirectMixin.should_strip_auth",
+                "what_happens": "Determines if Authorization header should be removed (hostname/scheme/port changes)."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "For each redirect from resolve_redirects, recursively calls adapter.send() until non-redirect or limit reached."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Builds history list and returns final Response with all previous responses in .history."
+              }
+            ]
+          },
+          {
+            "name": "POST request with data encoding",
+            "steps": [
+              {
+                "file": "src/requests/api.py",
+                "symbol": "post",
+                "what_happens": "User calls requests.post(url, data={...}) which calls request('post', url, data=data, ...)."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "Creates Request with data parameter and calls prepare_request."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare_body",
+                "what_happens": "Encodes data dict as form-urlencoded, multipart (if files), or JSON depending on content."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare_headers",
+                "what_happens": "Sets Content-Type, Content-Length, and merges session/request headers."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare_auth",
+                "what_happens": "Applies auth handler (callable) to add Authorization header if provided."
+              },
+              {
+                "file": "src/requests/adapters.py",
+                "symbol": "HTTPAdapter.send",
+                "what_happens": "Sends fully prepared request body to urllib3 which transmits it to the server."
+              }
+            ]
+          }
+        ],
+        "boundaries": [
+          {
+            "file": "src/requests/__init__.py",
+            "symbol": "check_compatibility",
+            "kind": "external_dependency",
+            "note": "Verifies urllib3, chardet/charset_normalizer, and optionally cryptography versions at import time."
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "HTTPAdapter.send",
+            "kind": "external_dependency",
+            "note": "Delegates actual HTTP transmission to urllib3 PoolManager.urlopen() and proxies from urllib3.poolmanager."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "PreparedRequest.prepare_url",
+            "kind": "external_dependency",
+            "note": "Uses idna library for internationalized domain name encoding when preparing URLs."
+          },
+          {
+            "file": "src/requests/cookies.py",
+            "symbol": "RequestsCookieJar",
+            "kind": "extension_point",
+            "note": "Extends http.cookiejar.CookieJar; users can provide custom CookieJar implementations."
+          },
+          {
+            "file": "src/requests/auth.py",
+            "symbol": "AuthBase",
+            "kind": "extension_point",
+            "note": "Base class for custom authentication handlers; users subclass and implement __call__."
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "BaseAdapter",
+            "kind": "extension_point",
+            "note": "Abstract adapter class; users can implement custom protocol adapters (e.g., FTP, file:// schemes)."
+          },
+          {
+            "file": "src/requests/hooks.py",
+            "symbol": "dispatch_hook",
+            "kind": "extension_point",
+            "note": "Hook system allows registering callbacks on 'response' events during request lifecycle."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session.mount",
+            "kind": "extension_point",
+            "note": "Users can mount custom adapters for specific URL prefixes (e.g., s.mount('https://', MyAdapter()))."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Response",
+            "kind": "trust_boundary",
+            "note": "Response.raw holds the underlying urllib3 HTTPResponse which may be consumed or streamed by the user."
+          }
+        ],
+        "conventions": [
+          "Request preparation is split into two phases: Request (mutable user input) is converted to PreparedRequest (immutable transmission form) before sending.",
+          "Session is the primary stateful object; module-level API functions create temporary Sessions for one-off requests.",
+          "Merging of settings follows a pattern: request-level settings override session-level defaults which override environment.",
+          "Auth handlers are callables receiving PreparedRequest and returning modified PreparedRequest with Authorization headers.",
+          "Adapters are protocol handlers registered per scheme (http://, https://); custom adapters can be mounted.",
+          "Cookies are managed through RequestsCookieJar (extending http.cookiejar.CookieJar) with automatic persistence across requests in a Session.",
+          "Response content is lazily loaded unless stream=False; .content and .text properties trigger full download.",
+          "Redirects are resolved as a generator by SessionRedirectMixin, with configurable max_redirects limit.",
+          "Exception hierarchy extends RequestException; specific errors (ConnectionError, Timeout, etc.) preserve the request for debugging.",
+          "Hook system (via dispatch_hook) allows extensible callbacks at response time without subclassing."
+        ],
+        "needs_investigation": [
+          {
+            "area": "PreparedRequest encoding details",
+            "open_question": "How exactly does PreparedRequest._encode_params, _encode_files, and prepare_body handle all the various data type combinations (list of tuples, dicts, bytes, file-like objects)?"
+          },
+          {
+            "area": "Proxy and TLS configuration",
+            "open_question": "The full details of how HTTPAdapter.init_poolmanager, proxy_manager_for, and get_connection_with_tls_context interact to configure urllib3 for different proxy types (http, https, socks) and TLS scenarios."
+          },
+          {
+            "area": "Response content streaming and decoding",
+            "open_question": "How Response.iter_content, Response.iter_lines, Response.content, and Response.text interact with streaming, decompression, and character encoding detection."
+          },
+          {
+            "area": "Session.merge_environment_settings",
+            "open_question": "The complete logic for merging environment variables (proxies, trust_env, netrc auth) into request settings."
+          },
+          {
+            "area": "Digest authentication flow",
+            "open_question": "The full HTTPDigestAuth.handle_401 flow including 401 response handling, nonce caching per thread, and replay protection."
+          },
+          {
+            "area": "Cookie domain/path matching",
+            "open_question": "How RequestsCookieJar._find and _find_no_duplicates implement cookie matching against request URLs with domain/path policies."
+          }
+        ],
+        "testing_posture": "The repository includes a comprehensive test suite in the tests/ directory with 14 test files. Key test modules include test_requests.py (246 symbols, primary integration tests), test_lowlevel.py (14 symbols, low-level functionality), test_utils.py (76 symbols, utility function tests), test_structures.py (17 symbols), and test_adapters.py. A testserver subdirectory provides a test HTTP server (server.py with 15 symbols) for live integration testing. Tests use pytest fixtures defined in conftest.py and compatibility helpers in tests/compat.py.",
+        "docs": [
+          {
+            "path": "README.rst",
+            "what_it_covers": "High-level overview of the requests library, basic usage examples, and feature summary (likely in repository root, not examined)"
+          },
+          {
+            "path": "docstrings in source files",
+            "what_it_covers": "Extensive docstrings in api.py, sessions.py, models.py, auth.py, and other modules documenting parameters, return types, and usage patterns"
+          }
+        ]
+      },
+      "rejections": [],
+      "seconds_total": 72.44941735267639,
+      "run": 1
+    },
+    {
+      "repo": "requests",
+      "policy": "structural",
+      "cache": "one",
+      "stop_reason": "turn_budget",
+      "errors": [],
+      "behavior": {
+        "turns": 19,
+        "tool_calls": 50,
+        "failed_calls": 1,
+        "calls_by_tool": {
+          "list_files": 3,
+          "read_file": 19,
+          "symbols": 15,
+          "neighbors": 3,
+          "search_code": 2,
+          "propose_anchor": 8
+        },
+        "read_calls": 19,
+        "outline_reads": 0,
+        "source_lines_read": 1985,
+        "source_chars_read": 77138,
+        "largest_read_lines": 219,
+        "large_reads": 5,
+        "whole_file_reads": 6,
+        "structural_calls": 20,
+        "tool_output_chars": 113335,
+        "duplicate_calls": 0,
+        "overlapping_reads": 3,
+        "reread_lines": 15,
+        "narrowing_structural_calls": 9,
+        "average_read_lines": 104.47368421052632,
+        "structural_share": 0.5128205128205128,
+        "waste_share": 0.06,
+        "wasted_calls": 3,
+        "narrowing_share": 0.45
+      },
+      "evidence": {
+        "setup.py": "source_read",
+        "src/requests/__init__.py": "source_read",
+        "src/requests/_internal_utils.py": "outlined",
+        "src/requests/_types.py": "outlined",
+        "src/requests/adapters.py": "source_read",
+        "src/requests/api.py": "source_read",
+        "src/requests/auth.py": "outlined",
+        "src/requests/certs.py": "source_read",
+        "src/requests/compat.py": "source_read",
+        "src/requests/cookies.py": "outlined",
+        "src/requests/exceptions.py": "outlined",
+        "src/requests/help.py": "outlined",
+        "src/requests/hooks.py": "outlined",
+        "src/requests/models.py": "source_read",
+        "src/requests/packages.py": "source_read",
+        "src/requests/sessions.py": "source_read",
+        "src/requests/status_codes.py": "outlined",
+        "src/requests/structures.py": "outlined",
+        "src/requests/utils.py": "outlined"
+      },
+      "progression": [
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        19,
+        19,
+        19,
+        19,
+        19,
+        19
+      ],
+      "quality": {
+        "produced": true,
+        "accepted": false,
+        "rejections": 1,
+        "required_subsystems": 19,
+        "covered": 19,
+        "skipped": 0,
+        "unaccounted": 0,
+        "unknown_names": 2,
+        "skip_reasons": [],
+        "first_grounding": 0.978021978021978,
+        "first_anchors": 91,
+        "first_unresolved": 2,
+        "final_grounding": 0.978021978021978,
+        "final_anchors": 91,
+        "entry_points": 10,
+        "core_abstractions": 9,
+        "flows": 3,
+        "flow_steps": 19,
+        "widest_flow_files": 4,
+        "boundaries": 11,
+        "docs": 1,
+        "responsibility_chars": 2177,
+        "accounted_ratio": 1.0,
+        "covered_ratio": 1.0,
+        "average_responsibility_chars": 114.57894736842105
+      },
+      "cost": {
+        "api_calls": 19,
+        "input_tokens": 4625,
+        "output_tokens": 11372,
+        "cache_write_tokens": 89466,
+        "cache_read_tokens": 436568,
+        "cost_usd": 0.21697429999999998,
+        "uncached_cost_usd": 0.587519,
+        "seconds": 87.71799999999996,
+        "prompt_tokens": 530659,
+        "cache_hit_rate": 0.8226902775605427,
+        "caching_saved_usd": 0.37054470000000006,
+        "write_share": 0.16859414426213443,
+        "cost_per_1k_prompt_tokens": 0.000408877075485387
+      },
+      "important": {
+        "covered": [
+          "sessions.py",
+          "adapters.py",
+          "models.py",
+          "auth.py",
+          "api.py"
+        ],
+        "skipped": [],
+        "missing": []
+      },
+      "survey": {
+        "architecture": "The Requests library is a human-friendly HTTP client library for Python. It provides a simple API for making HTTP requests (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS) and handling responses. The architecture follows a layered approach: public-facing API functions (in `api.py`) delegate to a Session class that manages state and coordination, which in turn delegates to HTTP adapters that use urllib3 for the actual network communication. Requests, PreparedRequests, and Responses are the core data model objects that represent HTTP messages at different stages of preparation and transmission.",
+        "subsystems": [
+          {
+            "name": "setup.py",
+            "responsibility": "Project packaging and build configuration.",
+            "key_file": "setup.py"
+          },
+          {
+            "name": "src/requests/__init__.py",
+            "responsibility": "Package initialization and public API exports, including dependency compatibility checks and SSL setup.",
+            "key_file": "src/requests/__init__.py"
+          },
+          {
+            "name": "src/requests/_internal_utils.py",
+            "responsibility": "Internal utility functions for string conversion and character detection.",
+            "key_file": "src/requests/_internal_utils.py"
+          },
+          {
+            "name": "src/requests/_types.py",
+            "responsibility": "Type definitions and type aliases for request parameters and validation helpers.",
+            "key_file": "src/requests/_types.py"
+          },
+          {
+            "name": "src/requests/adapters.py",
+            "responsibility": "HTTP adapter implementations that manage connection pooling and translate PreparedRequests into urllib3 calls, with HTTPAdapter being the primary implementation.",
+            "key_file": "src/requests/adapters.py"
+          },
+          {
+            "name": "src/requests/api.py",
+            "responsibility": "High-level public API functions (get, post, put, patch, delete, head, options, request) that create ephemeral sessions and delegate to Session.request().",
+            "key_file": "src/requests/api.py"
+          },
+          {
+            "name": "src/requests/auth.py",
+            "responsibility": "Authentication handlers including AuthBase, HTTPBasicAuth, HTTPProxyAuth, and HTTPDigestAuth for attaching authentication to requests.",
+            "key_file": "src/requests/auth.py"
+          },
+          {
+            "name": "src/requests/certs.py",
+            "responsibility": "Returns the path to the certifi CA certificate bundle for SSL verification.",
+            "key_file": "src/requests/certs.py"
+          },
+          {
+            "name": "src/requests/compat.py",
+            "responsibility": "Compatibility layer providing imports for Python 3 standard library modules and detecting character detection libraries (chardet or charset_normalizer).",
+            "key_file": "src/requests/compat.py"
+          },
+          {
+            "name": "src/requests/cookies.py",
+            "responsibility": "Cookie handling with RequestsCookieJar (a subclass of CookieJar), cookie merging, and helper functions for extracting cookies from responses.",
+            "key_file": "src/requests/cookies.py"
+          },
+          {
+            "name": "src/requests/exceptions.py",
+            "responsibility": "Exception hierarchy for network and HTTP errors including RequestException, ConnectionError, Timeout, HTTPError, and others.",
+            "key_file": "src/requests/exceptions.py"
+          },
+          {
+            "name": "src/requests/help.py",
+            "responsibility": "Debugging and diagnostic functions providing system information and dependency versions.",
+            "key_file": "src/requests/help.py"
+          },
+          {
+            "name": "src/requests/hooks.py",
+            "responsibility": "Hook system providing event dispatching for request lifecycle events (currently used for response hooks).",
+            "key_file": "src/requests/hooks.py"
+          },
+          {
+            "name": "src/requests/models.py",
+            "responsibility": "Core data model classes: Request (user-created), PreparedRequest (fully prepared bytes-ready), and Response (server response), plus encoding and hook mixins.",
+            "key_file": "src/requests/models.py"
+          },
+          {
+            "name": "src/requests/packages.py",
+            "responsibility": "Backwards compatibility shim making urllib3 and character detection libraries available under requests.packages namespace.",
+            "key_file": "src/requests/packages.py"
+          },
+          {
+            "name": "src/requests/sessions.py",
+            "responsibility": "Session class managing cookie persistence, connection pooling, configuration merging, and redirect handling through SessionRedirectMixin.",
+            "key_file": "src/requests/sessions.py"
+          },
+          {
+            "name": "src/requests/status_codes.py",
+            "responsibility": "HTTP status code constants made available through a LookupDict for convenient access.",
+            "key_file": "src/requests/status_codes.py"
+          },
+          {
+            "name": "src/requests/structures.py",
+            "responsibility": "Custom data structures: CaseInsensitiveDict for headers and LookupDict for attribute-style access to status codes.",
+            "key_file": "src/requests/structures.py"
+          },
+          {
+            "name": "src/requests/utils.py",
+            "responsibility": "Utility functions for URL handling, proxy resolution, encoding detection, header parsing, and other HTTP-related helper operations.",
+            "key_file": "src/requests/utils.py"
+          }
+        ],
+        "skipped": [
+          {
+            "name": "test files",
+            "reason": "Test infrastructure and test cases are implementation tests, not part of the library code itself."
+          },
+          {
+            "name": "documentation files",
+            "reason": "User documentation in docs/ directory is not part of the library implementation."
+          }
+        ],
+        "entry_points": [
+          {
+            "file": "src/requests/api.py",
+            "symbol": "request",
+            "what_it_starts": "Creates an ephemeral Session and invokes Session.request() with the given HTTP method, URL, and parameters, returning a Response."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "get",
+            "what_it_starts": "Convenience function that calls request('GET', ...) with optional params parameter."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "post",
+            "what_it_starts": "Convenience function that calls request('POST', ...) with optional data and json parameters."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "put",
+            "what_it_starts": "Convenience function that calls request('PUT', ...) with optional data parameter."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "patch",
+            "what_it_starts": "Convenience function that calls request('PATCH', ...) with optional data parameter."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "delete",
+            "what_it_starts": "Convenience function that calls request('DELETE', ...) with standard request parameters."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "head",
+            "what_it_starts": "Convenience function that calls request('HEAD', ...) with allow_redirects defaulting to False."
+          },
+          {
+            "file": "src/requests/api.py",
+            "symbol": "options",
+            "what_it_starts": "Convenience function that calls request('OPTIONS', ...) with standard request parameters."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session",
+            "what_it_starts": "Class providing session context with cookie persistence, connection pooling, and configuration merging. Instantiable directly or as a context manager."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "session",
+            "what_it_starts": "Deprecated convenience function that returns a new Session instance."
+          }
+        ],
+        "core_abstractions": [
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Request",
+            "role": "User-created HTTP request object containing method, URL, headers, data, auth, cookies, and hooks. Prepared into a PreparedRequest for transmission."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "PreparedRequest",
+            "role": "Fully prepared, transmission-ready HTTP request with serialized body, resolved headers, and encoded URL. Created from Request or directly by Session.prepare_request(). Sent by adapters."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Response",
+            "role": "Server's HTTP response containing status_code, headers, content, cookies, and request metadata. Supports lazy content reading and context manager protocol."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session",
+            "role": "Coordinator managing request lifecycle: prepares requests, resolves configuration, dispatches to adapters, handles redirects, and persists cookies across multiple requests."
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "HTTPAdapter",
+            "role": "Manages urllib3 connection pooling and translates PreparedRequests into urllib3 HTTP calls, building Response objects from urllib3 responses."
+          },
+          {
+            "file": "src/requests/exceptions.py",
+            "symbol": "RequestException",
+            "role": "Base exception class for all Requests-specific errors, allowing unified exception handling."
+          },
+          {
+            "file": "src/requests/structures.py",
+            "symbol": "CaseInsensitiveDict",
+            "role": "Dictionary providing case-insensitive key access used for HTTP headers throughout the library."
+          },
+          {
+            "file": "src/requests/cookies.py",
+            "symbol": "RequestsCookieJar",
+            "role": "CookieJar subclass providing convenient dict-like access and merging operations for managing cookies across requests."
+          },
+          {
+            "file": "src/requests/auth.py",
+            "symbol": "AuthBase",
+            "role": "Base class for authentication handlers that modify PreparedRequests with appropriate auth headers."
+          }
+        ],
+        "relationships": [
+          {
+            "from_file": "src/requests/api.py",
+            "from_symbol": "request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session",
+            "kind": "constructs",
+            "note": "The high-level request() function creates an ephemeral Session as a context manager for a single request."
+          },
+          {
+            "from_file": "src/requests/api.py",
+            "from_symbol": "request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.request",
+            "kind": "calls",
+            "note": "request() delegates to Session.request() after creating a session."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "Request",
+            "kind": "constructs",
+            "note": "Session.request() creates a Request object from method, URL, and parameters."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.prepare_request",
+            "kind": "calls",
+            "note": "Session.request() calls prepare_request() to merge session settings with the Request."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.prepare_request",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest",
+            "kind": "constructs",
+            "note": "Session.prepare_request() creates and populates a PreparedRequest from a Request and session configuration."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.request",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.send",
+            "kind": "calls",
+            "note": "Session.request() calls send() to transmit the prepared request."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.get_adapter",
+            "kind": "calls",
+            "note": "Session.send() retrieves the appropriate adapter (HTTPAdapter) for the request's URL scheme."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "HTTPAdapter.send",
+            "kind": "delegates_to",
+            "note": "Session.send() delegates the actual transmission to the adapter's send() method."
+          },
+          {
+            "from_file": "src/requests/adapters.py",
+            "from_symbol": "HTTPAdapter.send",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "HTTPAdapter.get_connection_with_tls_context",
+            "kind": "calls",
+            "note": "HTTPAdapter.send() obtains a urllib3 connection with TLS context."
+          },
+          {
+            "from_file": "src/requests/adapters.py",
+            "from_symbol": "HTTPAdapter.send",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "HTTPAdapter.build_response",
+            "kind": "calls",
+            "note": "HTTPAdapter.send() constructs a Response object from the urllib3 response."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "SessionRedirectMixin.resolve_redirects",
+            "kind": "calls",
+            "note": "Session.send() calls resolve_redirects() if allow_redirects=True to follow HTTP redirects."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "SessionRedirectMixin.resolve_redirects",
+            "to_file": "src/requests/sessions.py",
+            "to_symbol": "Session.send",
+            "kind": "calls",
+            "note": "resolve_redirects() recursively calls send() for each redirect target."
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest.prepare_method",
+            "kind": "calls",
+            "note": "PreparedRequest.prepare() calls prepare_method() to validate and set the HTTP method."
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest.prepare_url",
+            "kind": "calls",
+            "note": "PreparedRequest.prepare() calls prepare_url() to encode the URL and merge query parameters."
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest.prepare_headers",
+            "kind": "calls",
+            "note": "PreparedRequest.prepare() calls prepare_headers() to normalize headers."
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest.prepare_body",
+            "kind": "calls",
+            "note": "PreparedRequest.prepare() calls prepare_body() to serialize data/json/files into the request body."
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare",
+            "to_file": "src/requests/models.py",
+            "to_symbol": "PreparedRequest.prepare_auth",
+            "kind": "calls",
+            "note": "PreparedRequest.prepare() calls prepare_auth() to apply authentication to the request."
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "PreparedRequest.prepare_auth",
+            "to_file": "src/requests/auth.py",
+            "to_symbol": "AuthBase",
+            "kind": "calls",
+            "note": "prepare_auth() invokes auth handlers (AuthBase subclasses) to modify the request with credentials."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.__init__",
+            "to_file": "src/requests/adapters.py",
+            "to_symbol": "HTTPAdapter",
+            "kind": "constructs",
+            "note": "Session.__init__() creates default HTTPAdapter instances and mounts them for http:// and https:// schemes."
+          },
+          {
+            "from_file": "src/requests/sessions.py",
+            "from_symbol": "Session.send",
+            "to_file": "src/requests/cookies.py",
+            "to_symbol": "RequestsCookieJar",
+            "kind": "configures",
+            "note": "Session.send() extracts and persists cookies from responses into its RequestsCookieJar."
+          },
+          {
+            "from_file": "src/requests/models.py",
+            "from_symbol": "Response",
+            "to_file": "src/requests/structures.py",
+            "to_symbol": "CaseInsensitiveDict",
+            "kind": "constructs",
+            "note": "Response uses CaseInsensitiveDict for its headers attribute."
+          }
+        ],
+        "flows": [
+          {
+            "name": "Module-level API request (simplest flow)",
+            "steps": [
+              {
+                "file": "src/requests/api.py",
+                "symbol": "get",
+                "what_happens": "User calls requests.get(url) at module level. get() function calls request('GET', url)."
+              },
+              {
+                "file": "src/requests/api.py",
+                "symbol": "request",
+                "what_happens": "request() function creates a context-managed Session and delegates to Session.request('GET', url)."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "Session.request() creates a Request object with method='GET', prepares it with Session.prepare_request(), and calls send()."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Session.send() gets the appropriate HTTPAdapter, calls adapter.send(), extracts cookies from response, handles redirects if needed, and returns Response."
+              },
+              {
+                "file": "src/requests/adapters.py",
+                "symbol": "HTTPAdapter.send",
+                "what_happens": "HTTPAdapter.send() gets a urllib3 connection, makes the HTTP call via conn.urlopen(), catches urllib3 exceptions, and returns a Response built from the urllib3 response."
+              },
+              {
+                "file": "src/requests/__init__.py",
+                "symbol": "request",
+                "what_happens": "The Response is returned to user code."
+              }
+            ]
+          },
+          {
+            "name": "Session-based request with authentication and redirects",
+            "steps": [
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.__init__",
+                "what_happens": "User creates Session(), which initializes default headers, HTTPAdapter instances for http and https, empty cookies and configuration."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.post",
+                "what_happens": "User calls session.post(url, data=data, auth=auth). post() delegates to Session.request('POST', url, data=data, auth=auth)."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.request",
+                "what_happens": "Session.request() creates a Request, calls prepare_request() which merges session defaults with request-specific settings, applies auth, and merges cookies."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Session.send() dispatches to HTTPAdapter.send() with the PreparedRequest. Receives Response and extracts cookies into session.cookies."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "SessionRedirectMixin.resolve_redirects",
+                "what_happens": "If the response is a redirect (3xx status), resolve_redirects() copies the prepared request, updates the URL and method per HTTP spec, extracts cookies from the redirect response, and recursively calls send() with allow_redirects=False to get the next response."
+              },
+              {
+                "file": "src/requests/sessions.py",
+                "symbol": "Session.send",
+                "what_happens": "Final response is returned with all redirect history preserved in Response.history and cookies persisted in session."
+              }
+            ]
+          },
+          {
+            "name": "Request preparation and encoding",
+            "steps": [
+              {
+                "file": "src/requests/models.py",
+                "symbol": "Request.__init__",
+                "what_happens": "User creates Request(method, url, headers, data, json, params, auth, cookies). Request stores these attributes and initializes hooks."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "Request.prepare",
+                "what_happens": "User calls request.prepare() or Session.prepare_request() which creates a PreparedRequest and calls its prepare() method."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare",
+                "what_happens": "PreparedRequest.prepare() sequentially calls prepare_method(), prepare_url(params), prepare_headers(), prepare_body(data/json/files), prepare_auth(), and prepare_hooks()."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare_url",
+                "what_happens": "prepare_url() encodes query params, merges them with the URL, and handles IDNA encoding for international domain names."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare_body",
+                "what_happens": "prepare_body() serializes data dict as form-encoded, json as JSON string, or files as multipart/form-data. Calls urllib3's encode_multipart_formdata for file uploads."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest.prepare_auth",
+                "what_happens": "prepare_auth() invokes the auth handler (if provided) to add Authorization header or other auth credentials to the request."
+              },
+              {
+                "file": "src/requests/models.py",
+                "symbol": "PreparedRequest",
+                "what_happens": "The fully prepared, transmission-ready PreparedRequest is returned with method, url, headers, and body all resolved to bytes/strings ready for network transmission."
+              }
+            ]
+          }
+        ],
+        "boundaries": [
+          {
+            "file": "src/requests/__init__.py",
+            "symbol": "check_compatibility",
+            "kind": "external_dependency",
+            "note": "Verifies compatibility of urllib3, chardet, and charset_normalizer dependencies at import time, raising warnings if versions are incompatible."
+          },
+          {
+            "file": "src/requests/__init__.py",
+            "symbol": "check_compatibility",
+            "kind": "extension_point",
+            "note": "The pyopenssl injection point (urllib3.contrib.pyopenssl.inject_into_urllib3()) allows SSL/TLS enhancements when standard library lacks SNI support."
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "HTTPAdapter.send",
+            "kind": "external_dependency",
+            "note": "Delegates all low-level HTTP communication to urllib3 (conn.urlopen()), and wraps urllib3 exceptions into Requests exceptions."
+          },
+          {
+            "file": "src/requests/certs.py",
+            "symbol": "where",
+            "kind": "external_dependency",
+            "note": "Imports from certifi package to locate the system's CA certificate bundle for SSL/TLS verification."
+          },
+          {
+            "file": "src/requests/compat.py",
+            "symbol": "_resolve_char_detection",
+            "kind": "external_dependency",
+            "note": "Attempts to import either chardet or charset_normalizer for character encoding detection in responses."
+          },
+          {
+            "file": "src/requests/auth.py",
+            "symbol": "AuthBase",
+            "kind": "extension_point",
+            "note": "Users can subclass AuthBase and implement __call__() to add custom authentication schemes to requests."
+          },
+          {
+            "file": "src/requests/adapters.py",
+            "symbol": "BaseAdapter",
+            "kind": "extension_point",
+            "note": "Users can subclass BaseAdapter to provide custom transport implementations (SOCKS proxies via HTTPAdapter subclass shown in code)."
+          },
+          {
+            "file": "src/requests/sessions.py",
+            "symbol": "Session.mount",
+            "kind": "extension_point",
+            "note": "Session.mount() allows registering custom adapters for URL schemes, enabling users to provide alternate transports or custom behavior."
+          },
+          {
+            "file": "src/requests/hooks.py",
+            "symbol": "dispatch_hook",
+            "kind": "extension_point",
+            "note": "Hook system allows users to register callables on 'response' event to intercept and modify responses."
+          },
+          {
+            "file": "src/requests/models.py",
+            "symbol": "Response.iter_content",
+            "kind": "trust_boundary",
+            "note": "Response content is lazily read from urllib3 via iter_content(), allowing streaming and memory-efficient handling of large response bodies."
+          },
+          {
+            "file": "src/requests/utils.py",
+            "symbol": "resolve_proxies",
+            "kind": "external_dependency",
+            "note": "resolve_proxies() checks environment variables (http_proxy, https_proxy, etc.) to determine proxy settings, delegating to urllib's proxy detection."
+          }
+        ],
+        "needs_investigation": [
+          {
+            "area": "TLS/SSL context handling in HTTPAdapter",
+            "open_question": "What is the exact flow of how HTTPAdapter.get_connection_with_tls_context() and HTTPAdapter.cert_verify() interact with urllib3's poolmanager to establish SSL contexts, and how custom certificates and verification are applied?"
+          },
+          {
+            "area": "Digest authentication state management",
+            "open_question": "How does HTTPDigestAuth handle per-thread state initialization and nonce tracking across multiple requests, and what is the contract between init_per_thread_state() and the rest of the authentication flow?"
+          },
+          {
+            "area": "Body rewinding and streaming behavior",
+            "open_question": "What are the precise conditions under which PreparedRequest._body_position is set/used, and how does rewind_body() work with different file-like objects in redirect scenarios?"
+          },
+          {
+            "area": "Encoding detection and content decoding",
+            "open_question": "How does Response.apparent_encoding combine chardet/charset_normalizer detection with explicit encoding headers, and what is the interaction with stream_decode_response_unicode()?"
+          },
+          {
+            "area": "Hook system design",
+            "open_question": "Beyond the response hook shown in send(), are there other hook points, and how do hooks integrate with authentication and request preparation?"
+          }
+        ],
+        "testing_posture": "The repository includes comprehensive test coverage in `tests/test_requests.py` (3053 lines, 246 test functions) covering basic request building, HTTP methods, authentication, cookies, redirects, proxies, SSL/TLS, and various edge cases. There are also specialized test modules for adapters, utilities, structures, hooks, and lowlevel functionality. Tests appear to use a fixture-based approach with httpbin for live HTTP testing. The test infrastructure includes a custom testserver module for SSL testing.",
+        "docs": [
+          {
+            "path": "docs/",
+            "what_it_covers": "User documentation including quickstart guide, installation, API reference, authentication, advanced usage, and community information (support, vulnerabilities, contributions)."
+          }
+        ],
+        "conventions": [
+          "The library uses a Request \u2192 PreparedRequest \u2192 Response model where Request is user-friendly and PreparedRequest is network-ready, following the principle of separation between intent and implementation.",
+          "Session is the recommended interface for multiple requests as it maintains state (cookies, headers, auth, proxies). For single requests, the module-level API functions create ephemeral sessions internally.",
+          "HTTP methods (get, post, etc.) are provided at both module level (api.py functions) and Session level, with Session variants being preferred for request reuse.",
+          "Configuration merging is layered: session defaults \u2192 request-specific overrides \u2192 environment settings, allowing flexible composition of settings.",
+          "Adapters abstract transport implementation, allowing pluggable HTTP implementations. HTTPAdapter is the default, using urllib3 for connection pooling.",
+          "Exception hierarchy groups related errors under RequestException, allowing catch-all or specific error handling.",
+          "CaseInsensitiveDict is used throughout for HTTP headers to match HTTP spec semantics (headers are case-insensitive).",
+          "Cookies are persisted in RequestsCookieJar across requests within a session, supporting both dict-like and CookieJar-compatible interfaces.",
+          "Redirect handling is implemented as a generator in SessionRedirectMixin.resolve_redirects(), allowing flexible redirect policies while maintaining history.",
+          "Authentication is pluggable via AuthBase subclasses, allowing custom schemes beyond basic, digest, and proxy auth.",
+          "The library checks dependency compatibility at import time and provides warnings for mismatched versions, ensuring predictable behavior."
+        ]
+      },
+      "rejections": [
+        "2 citation(s) do not resolve against the repository: boundary: src/requests/certs.py:where (unknown_symbol); flow:Module-level API request (simplest flow): src/requests/__init__.py:request (unknown_symbol). Use `symbols` or `propose_anchor` to find the real location, then correct or drop them. These names are not subsystems in the inventory and were ignored: test files, documentation files."
+      ],
+      "seconds_total": 87.70672178268433,
+      "run": 2
+    }
+  ],
+  "consistency": {
+    "requests/default/two": {
+      "runs": 2,
+      "covered_overlap": 1.0,
+      "anchor_overlap": 0.6346153846153846,
+      "cost_spread_usd": 0.024967450000000002,
+      "turn_spread": 0
+    },
+    "requests/structural/two": {
+      "runs": 2,
+      "covered_overlap": 1.0,
+      "anchor_overlap": 0.5306122448979592,
+      "cost_spread_usd": 0.0086484,
+      "turn_spread": 0
+    },
+    "requests/structural/one": {
+      "runs": 2,
+      "covered_overlap": 1.0,
+      "anchor_overlap": 0.7608695652173914,
+      "cost_spread_usd": 0.050903949999999976,
+      "turn_spread": 0
+    }
+  },
+  "total_cost_usd": 1.1631091
+}

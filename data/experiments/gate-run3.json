@@ -1,0 +1,327 @@
+[
+  {
+    "attempt": 1,
+    "goal": "fastapi-di",
+    "goal_type": "understand_component",
+    "repo": "fastapi",
+    "investigation": {
+      "stop_reason": "turn_budget",
+      "turns": 21,
+      "tool_calls": 28,
+      "submissions": 1,
+      "rejections": [],
+      "repair_turns": 0,
+      "duplicate_calls": 0,
+      "seconds": 80.21900000000005,
+      "input_tokens": 577,
+      "output_tokens": 8256,
+      "cache_read_tokens": 349884,
+      "cache_write_tokens": 54473,
+      "cache_hit_ratio": 0.8640519195720784,
+      "cost_usd": 0.14493665,
+      "contract_met": true,
+      "harness_errors": [],
+      "grounding_first": 1.0,
+      "anchors_first": 53,
+      "grounding_final": 1.0,
+      "anchors_final": 53,
+      "unresolved_final": [],
+      "unmet_final": [],
+      "structural_final": []
+    },
+    "pipeline_seconds": 223.89135599136353,
+    "errors": [],
+    "invariants": {
+      "nodes": 10,
+      "anchors_resolve": true,
+      "unresolved_anchors": [],
+      "no_fabricated_evidence": true,
+      "nodes_outside_dossier_evidence": [],
+      "single_chain": true,
+      "has_current_node": true
+    },
+    "confidence": "high",
+    "persistence": {
+      "graph_reloaded": true,
+      "nodes_reloaded": 10,
+      "symbols_kept": 10,
+      "dossier_reloaded": true,
+      "resume_point": true
+    },
+    "session": {
+      "lesson_rendered": true,
+      "used_fallback_lesson": false,
+      "seconds": 7.202511548995972,
+      "walkthrough": "Depends() is FastAPI's public API for declaring a dependency. It's a thin wrapper factory that takes three things: a callable (the dependency function), use_cache (whether to reuse the result within a request), and scope (when generator setup/teardown happens). It immediately returns a params.Depends instance\u2014a marker object that FastAPI's internals recognize later. The key insight: Depends() doe\u2026"
+    },
+    "mutation": {
+      "grade": "off-topic",
+      "outcome": "no prerequisite",
+      "prerequisite": null,
+      "reached_retrieval": false,
+      "errors": []
+    },
+    "file_trace": {
+      "fastapi/dependencies/utils.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "fastapi/dependencies/models.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "fastapi/params.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "fastapi/param_functions.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "fastapi/routing.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      }
+    },
+    "discovery": 1.0,
+    "graph_files": [
+      "fastapi/dependencies/models.py",
+      "fastapi/dependencies/utils.py",
+      "fastapi/param_functions.py",
+      "fastapi/params.py",
+      "fastapi/routing.py"
+    ],
+    "node_titles": [
+      "fastapi/param_functions.py:Depends \u2014 Declare a dependency with Depends()",
+      "fastapi/params.py:Depends \u2014 Understand the Depends marker dataclass",
+      "fastapi/dependencies/models.py:Dependant \u2014 Meet the Dependant: the dependency graph node",
+      "fastapi/dependencies/utils.py:analyze_param \u2014 Parse a parameter: how analyze_param classifies each argument",
+      "fastapi/dependencies/utils.py:add_non_field_param_to_dependency \u2014 Detect special injectable types without calling them",
+      "fastapi/dependencies/utils.py:get_dependant \u2014 Build the dependency tree at route registration time",
+      "fastapi/routing.py:APIRoute.__init__ \u2014 See tree construction triggered by route registration",
+      "fastapi/dependencies/utils.py:solve_dependencies \u2014 Resolve the dependency tree at request time",
+      "fastapi/routing.py:get_request_handler \u2014 Wire the handler: get_request_handler creates the ASGI app",
+      "fastapi/routing.py:run_endpoint_function \u2014 Inject resolved values: run_endpoint_function as the final step"
+    ],
+    "session_id": "e2e8dc725bf04ffbbd14a1ce5a08245c",
+    "stage": "ok",
+    "ok": true,
+    "seconds": 235.62882375717163,
+    "rag_calls": {}
+  },
+  {
+    "attempt": 2,
+    "goal": "fastapi-di",
+    "goal_type": "understand_component",
+    "repo": "fastapi",
+    "investigation": {
+      "stop_reason": "reported",
+      "turns": 20,
+      "tool_calls": 29,
+      "submissions": 2,
+      "rejections": [
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: `components` arrived as XML-style tool markup inside a single string value (it begins '<parameter name=\"component\">\\n<parameter ') \u2014 the tool input must be JSON, so this field has to be a JSON array of objects; these item-level keys arrived at the top level of the dossier: `role_in_goal`, `symbol`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable."
+      ],
+      "repair_turns": 0,
+      "duplicate_calls": 0,
+      "seconds": 100.67199999999957,
+      "input_tokens": 491,
+      "output_tokens": 10778,
+      "cache_read_tokens": 383295,
+      "cache_write_tokens": 24410,
+      "cache_hit_ratio": 0.9389974424051191,
+      "cost_usd": 0.123223,
+      "contract_met": true,
+      "harness_errors": [],
+      "grounding_first": 1.0,
+      "anchors_first": 0,
+      "grounding_final": 1.0,
+      "anchors_final": 56,
+      "unresolved_final": [],
+      "unmet_final": [],
+      "structural_final": []
+    },
+    "pipeline_seconds": 178.28450202941895,
+    "errors": [],
+    "invariants": {
+      "nodes": 9,
+      "anchors_resolve": true,
+      "unresolved_anchors": [],
+      "no_fabricated_evidence": true,
+      "nodes_outside_dossier_evidence": [],
+      "single_chain": true,
+      "has_current_node": true
+    },
+    "confidence": "high",
+    "persistence": {
+      "graph_reloaded": true,
+      "nodes_reloaded": 9,
+      "symbols_kept": 9,
+      "dossier_reloaded": true,
+      "resume_point": true
+    },
+    "session": {
+      "lesson_rendered": false,
+      "used_fallback_lesson": true,
+      "seconds": 10.380983352661133,
+      "walkthrough": "The lesson for this node could not be generated automatically. Please read the source file `fastapi/param_functions.py` lines 2283\u20132369 directly."
+    },
+    "stage": "session_start",
+    "ok": false,
+    "cause": "teaching produced no lesson; placeholder served",
+    "seconds": 188.95839095115662,
+    "rag_calls": {}
+  },
+  {
+    "attempt": 3,
+    "goal": "fastapi-di",
+    "goal_type": "understand_component",
+    "repo": "fastapi",
+    "investigation": {
+      "stop_reason": "turn_budget",
+      "turns": 22,
+      "tool_calls": 29,
+      "submissions": 2,
+      "rejections": [
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: `components` arrived as XML-style tool markup inside a single string value (it begins '<parameter name=\"component\">\\n<parameter ') \u2014 the tool input must be JSON, so this field has to be a JSON array of objects; these item-level keys arrived at the top level of the dossier: `role_in_goal`, `symbol`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable."
+      ],
+      "repair_turns": 1,
+      "duplicate_calls": 0,
+      "seconds": 98.8119999999999,
+      "input_tokens": 1338,
+      "output_tokens": 10254,
+      "cache_read_tokens": 375845,
+      "cache_write_tokens": 45621,
+      "cache_hit_ratio": 0.8889343525605244,
+      "cost_usd": 0.14721875,
+      "contract_met": true,
+      "harness_errors": [],
+      "grounding_first": 1.0,
+      "anchors_first": 0,
+      "grounding_final": 1.0,
+      "anchors_final": 51,
+      "unresolved_final": [],
+      "unmet_final": [],
+      "structural_final": []
+    },
+    "pipeline_seconds": 140.82546710968018,
+    "errors": [],
+    "invariants": {
+      "nodes": 10,
+      "anchors_resolve": true,
+      "unresolved_anchors": [],
+      "no_fabricated_evidence": true,
+      "nodes_outside_dossier_evidence": [],
+      "single_chain": true,
+      "has_current_node": true
+    },
+    "confidence": "high",
+    "persistence": {
+      "graph_reloaded": true,
+      "nodes_reloaded": 10,
+      "symbols_kept": 10,
+      "dossier_reloaded": true,
+      "resume_point": true
+    },
+    "session": {
+      "lesson_rendered": true,
+      "used_fallback_lesson": false,
+      "seconds": 7.805409908294678,
+      "walkthrough": "A `Dependant` is a node in FastAPI's dependency graph\u2014a data structure that represents both your route handler and every dependency it needs. It holds four key pieces: 1. **The callable**: `call` is the function/class to execute. 2. **Parameters by source**: `path_params`, `query_params`, `header_params`, `cookie_params`, `body_params`\u2014each a list of `ModelField` objects extracted from the functi\u2026"
+    },
+    "mutation": {
+      "grade": "off-topic",
+      "outcome": "no prerequisite",
+      "prerequisite": null,
+      "reached_retrieval": false,
+      "errors": []
+    },
+    "file_trace": {
+      "fastapi/dependencies/utils.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "fastapi/dependencies/models.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "fastapi/params.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "fastapi/param_functions.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "fastapi/routing.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      }
+    },
+    "discovery": 1.0,
+    "graph_files": [
+      "fastapi/dependencies/models.py",
+      "fastapi/dependencies/utils.py",
+      "fastapi/param_functions.py",
+      "fastapi/params.py",
+      "fastapi/routing.py"
+    ],
+    "node_titles": [
+      "fastapi/dependencies/models.py:Dependant \u2014 Understand the Dependant data structure",
+      "fastapi/params.py:Depends \u2014 Trace how Depends() marks a parameter as a dependency",
+      "fastapi/param_functions.py:Depends \u2014 Understand the public Depends() API entry point",
+      "fastapi/routing.py:APIRoute.__init__ \u2014 See how route registration triggers build-time analysis",
+      "fastapi/dependencies/utils.py:analyze_param \u2014 Learn how a single parameter is classified at build time",
+      "fastapi/dependencies/utils.py:get_dependant \u2014 Follow the recursive build-time traversal in get_dependant",
+      "fastapi/dependencies/utils.py:get_flat_dependant \u2014 See how the dependency tree is flattened for validation",
+      "fastapi/dependencies/utils.py:solve_dependencies \u2014 Understand the runtime resolution loop in solve_dependencies",
+      "fastapi/routing.py:get_request_handler \u2014 See how resolved values reach the endpoint in get_request_handler and run_endpoint_function",
+      "fastapi/routing.py:run_endpoint_function \u2014 Examine the final endpoint invocation in run_endpoint_function"
+    ],
+    "session_id": "61e52ccba74943f495f7002962a6466e",
+    "stage": "ok",
+    "ok": true,
+    "seconds": 153.44124507904053,
+    "rag_calls": {}
+  }
+]

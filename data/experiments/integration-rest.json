@@ -1,0 +1,910 @@
+{
+  "requests-flow": {
+    "explorer": {
+      "failed": true,
+      "errors": [
+        "goal_investigation failed: 'str' object has no attribute 'get'"
+      ],
+      "seconds": 110.34682893753052
+    },
+    "rag": {
+      "nodes": 9,
+      "anchor_accuracy": 1.0,
+      "important_hit": [
+        "src/requests/adapters.py",
+        "src/requests/api.py",
+        "src/requests/models.py",
+        "src/requests/sessions.py"
+      ],
+      "important_missed": [],
+      "discovery": 1.0,
+      "nodes_traceable_to_dossier": 0,
+      "confidence": "high",
+      "seconds": 48.38210463523865,
+      "investigation": {},
+      "dossier": null,
+      "errors": [],
+      "session_id": "ad3a4e3239534f458c2628f82a4408c4",
+      "resume_ok": true,
+      "learning_path": [
+        {
+          "step": 1,
+          "title": "Trace the entry point: api.request() wraps a Session",
+          "file": "src/requests/api.py",
+          "line_range": [
+            24,
+            71
+          ],
+          "why": "requests.get() calls api.request(), which is the real entry point \u2014 it creates a throwaway Session and delegates immediately, so understanding this shows the public API is just a thin wrapper.",
+          "understand": "Every convenience function (get, post, etc.) is syntactic sugar over a one-shot Session; the Session is the true unit of execution.",
+          "concepts": [
+            "flow",
+            "architecture",
+            "component"
+          ]
+        },
+        {
+          "step": 2,
+          "title": "Understand Session state and adapter registration",
+          "file": "src/requests/sessions.py",
+          "line_range": [
+            442,
+            503
+          ],
+          "why": "Session.__init__ shows what persistent state is maintained (headers, cookies, auth, proxies, verify, adapters) and pre-mounts HTTPAdapter for both http:// and https://, which is the bridge to urllib3.",
+          "understand": "The Session is the central coordinator \u2014 it owns all defaults, mounts the protocol adapters, and merges per-request overrides before anything is sent.",
+          "concepts": [
+            "architecture",
+            "component",
+            "extension_point"
+          ]
+        },
+        {
+          "step": 3,
+          "title": "See how Request is modelled and prepared",
+          "file": "src/requests/models.py",
+          "line_range": [
+            283,
+            373
+          ],
+          "why": "Session.request() builds a Request object from the user's arguments, then calls prepare() on it \u2014 understanding this model shows the separation between user-facing parameters and the wire-ready PreparedRequest.",
+          "understand": "Request is a plain data container; calling .prepare() validates, encodes, and merges cookies/headers/auth into a PreparedRequest that is actually serialised and sent.",
+          "concepts": [
+            "component",
+            "flow"
+          ]
+        },
+        {
+          "step": 4,
+          "title": "Examine cookie and header merging during prepare",
+          "file": "src/requests/models.py",
+          "line_range": [
+            697,
+            718
+          ],
+          "why": "prepare_cookies illustrates the pattern used across all prepare_* steps: session-level state is merged with request-level state into the final PreparedRequest headers, making it a critical correctness boundary.",
+          "understand": "The prepare phase is a one-shot merge \u2014 session defaults + per-request overrides collapse into immutable HTTP headers; calling prepare_cookies twice is a no-op unless the Cookie header is manually cleared.",
+          "concepts": [
+            "flow",
+            "risk",
+            "component"
+          ]
+        },
+        {
+          "step": 5,
+          "title": "Understand the hooks system that fires around the response",
+          "file": "src/requests/hooks.py",
+          "line_range": [
+            32,
+            48
+          ],
+          "why": "dispatch_hook is called by Session.send() after a response arrives, giving user-registered callbacks a chance to inspect or mutate the Response \u2014 understanding this closes the lifecycle loop.",
+          "understand": "The hooks system is a lightweight event bus; the 'response' hook is the primary extension point for post-processing (logging, metrics, retrying) without subclassing.",
+          "concepts": [
+            "extension_point",
+            "flow",
+            "component"
+          ]
+        },
+        {
+          "step": 6,
+          "title": "Follow Session through redirect resolution",
+          "file": "src/requests/sessions.py",
+          "line_range": [
+            127,
+            392
+          ],
+          "why": "SessionRedirectMixin.resolve_redirects drives the redirect loop \u2014 it rebuilds auth, strips credentials when crossing hosts, re-merges cookies, and calls send() again, so a single requests.get() may issue many underlying HTTP exchanges.",
+          "understand": "Redirects are handled entirely in Python above the adapter layer; each hop re-prepares auth and proxy state, which is where credential-leaking bugs historically surface.",
+          "concepts": [
+            "flow",
+            "risk",
+            "component"
+          ]
+        },
+        {
+          "step": 7,
+          "title": "Trace the abstract send contract on BaseAdapter",
+          "file": "src/requests/adapters.py",
+          "line_range": [
+            128,
+            151
+          ],
+          "why": "BaseAdapter.send() is the boundary between the requests layer and the transport layer \u2014 seeing that it raises NotImplementedError shows this is a defined extension point that HTTPAdapter fulfils with urllib3.",
+          "understand": "send() is the single seam between session logic and network I/O; swapping the adapter (e.g. for testing or alternate transports) is how the entire HTTP stack can be replaced.",
+          "concepts": [
+            "architecture",
+            "extension_point",
+            "component"
+          ]
+        },
+        {
+          "step": 8,
+          "title": "See how HTTPAdapter resolves connections via urllib3 pools",
+          "file": "src/requests/adapters.py",
+          "line_range": [
+            512,
+            553
+          ],
+          "why": "get_connection (now superseded by get_connection_with_tls_context) shows how the adapter selects a proxy-aware or direct urllib3 connection pool, which is the last step before bytes hit the network.",
+          "understand": "HTTPAdapter translates requests' proxy dict and URL into a urllib3 HTTPConnectionPool; connection pooling and TLS happen entirely inside urllib3, invisible to the sessions layer.",
+          "concepts": [
+            "component",
+            "flow",
+            "architecture"
+          ]
+        },
+        {
+          "step": 9,
+          "title": "Understand the Response model returned to the caller",
+          "file": "src/requests/models.py",
+          "line_range": [
+            763,
+            808
+          ],
+          "why": "Response.__init__ shows every attribute the caller receives \u2014 status_code, headers (a CaseInsensitiveDict), cookies, history, elapsed, and raw \u2014 completing the end-to-end picture.",
+          "understand": "Response is a structured wrapper around urllib3's raw HTTPResponse; the history list records any redirect chain, and elapsed measures only header receipt time, not body download.",
+          "concepts": [
+            "component",
+            "flow",
+            "risk"
+          ]
+        }
+      ]
+    }
+  },
+  "fastapi-di": {
+    "explorer": {
+      "nodes": 11,
+      "anchor_accuracy": 1.0,
+      "important_hit": [
+        "fastapi/dependencies/models.py",
+        "fastapi/dependencies/utils.py",
+        "fastapi/params.py",
+        "fastapi/routing.py"
+      ],
+      "important_missed": [
+        "fastapi/param_functions.py"
+      ],
+      "discovery": 0.8,
+      "nodes_traceable_to_dossier": 11,
+      "confidence": "high",
+      "seconds": 202.78100180625916,
+      "investigation": {
+        "accepted": true,
+        "stop_reason": "reported",
+        "turns": 19,
+        "tool_calls": 37,
+        "rejections": [],
+        "cost_usd": 0.1219891,
+        "seconds": 84.2650000000001,
+        "used_survey": true
+      },
+      "dossier": {
+        "understanding": "FastAPI's dependency injection system is a declarative framework that extracts function parameters from HTTP requests (path, query, headers, cookies, body) and injects resolved dependencies as arguments to endpoint functions. Dependencies are declared via the `Depends()` marker in function signatures or decorator lists, and are recursively resolved before endpoint execution. The system works in two phases: (1) **Analysis at route registration time**: `get_dependant()` introspects the endpoint function signature to build a `Dependant` tree that maps parameters to their sources and marks sub-dependencies; (2) **Resolution at request time**: `solve_dependencies()` recursively invokes the dependency tree, validates parameters against Pydantic models, caches results within a request, and passes resolved values as kwargs to the endpoint. Special handling exists for async generators (context managers), request scoping, and dependency overrides.",
+        "components": [
+          {
+            "file": "fastapi/params.py",
+            "symbol": "Depends",
+            "role_in_goal": "User-facing marker for declaring a parameter is a dependency to be resolved rather than extracted from request data. Holds the dependency callable and configuration flags (cache, scope).",
+            "why_it_matters": "This is the primary public API users interact with. Understanding what it holds (dependency callable, use_cache, scope) is essential to understanding how FastAPI identifies dependencies."
+          },
+          {
+            "file": "fastapi/dependencies/models.py",
+            "symbol": "Dependant",
+            "role_in_goal": "Core data structure representing a single endpoint or dependency function and its parameter requirements. Contains lists of path/query/header/body/cookie parameters, nested dependencies, and metadata about how to call it.",
+            "why_it_matters": "This is the canonical representation FastAPI builds during route registration and uses during request resolution. Every parameter extraction and invocation decision flows through this structure."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "get_dependant",
+            "role_in_goal": "Analyzes a callable's signature at route registration time, introspects each parameter, and constructs a `Dependant` tree. Detects `Depends()` markers and recursively builds sub-Dependants for nested dependencies.",
+            "why_it_matters": "This is the analysis engine that converts user code (endpoint function with parameters) into the internal dependency tree. Understanding its parameter classification logic is essential to understanding when a parameter is treated as a dependency vs extracted from request data."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "analyze_param",
+            "role_in_goal": "Examines a single parameter to determine if it's a `Depends`, a field annotation (Path/Query/Body/etc.), or a special type like Request/Response. Handles both explicit annotations and default values.",
+            "why_it_matters": "This is the fine-grained classification function. It implements the logic that distinguishes a dependency (marked with `Depends()`) from request parameters (marked with `Query()`, etc.) or special injectables (Request). Shows how Annotated types are unpacked."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "solve_dependencies",
+            "role_in_goal": "The runtime dependency resolution engine. Recursively invokes each dependency in the tree, validates request parameters, caches results, handles generator dependencies (context managers), and builds a dict of resolved values to pass to the endpoint.",
+            "why_it_matters": "This is where the actual magic happens at request time. Understanding its flow explains how dependencies are invoked, cached, validated, and how their results flow into the endpoint function. Shows both sync and async execution paths."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "get_parameterless_sub_dependant",
+            "role_in_goal": "Creates a Dependant for dependencies declared in the `dependencies` decorator argument (parameter-less dependencies). Wraps `get_dependant()` with fixed parameters.",
+            "why_it_matters": "Shows how both parameter-level and decorator-level dependencies are treated as Dependants, establishing that the two syntaxes are merged into a unified dependency tree."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "_solve_generator",
+            "role_in_goal": "Handles async/sync generator dependencies as context managers using AsyncExitStack, enabling resource management (setup/teardown) for dependencies with yield.",
+            "why_it_matters": "Explains how lifecycle dependencies work and how FastAPI ensures cleanup happens after the request, showing the integration with AsyncExitStack for proper resource management."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "request_params_to_args",
+            "role_in_goal": "Extracts and validates path/query/header/cookie parameters from the request, using Pydantic ModelField validation. Returns a dict of parameter name \u2192 validated value.",
+            "why_it_matters": "Shows how the leaf parameters (non-dependencies) are extracted and validated from the request, completing the picture of what gets passed to the endpoint."
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "APIRoute.__init__",
+            "role_in_goal": "Route registration: calls `get_dependant()` on the endpoint, prepends decorator-level dependencies via `get_parameterless_sub_dependant()`, and creates the request handler via `get_request_handler()`.",
+            "why_it_matters": "This shows the initialization seam where the Dependant tree is built and wired into the route. Shows how decorator dependencies are merged with parameter-level dependencies."
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "get_request_handler",
+            "role_in_goal": "Creates the ASGI app function that handles a single request. Reads the request body, calls `solve_dependencies()` to resolve the dependency tree, invokes the endpoint with resolved values, and returns the response.",
+            "why_it_matters": "This is where the request-time flow is orchestrated. Shows the integration point between dependency resolution and endpoint invocation, including error handling and response serialization."
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "run_endpoint_function",
+            "role_in_goal": "Calls the endpoint function with resolved dependency values, handling both async and sync endpoints via thread pool execution.",
+            "why_it_matters": "Simple but important: shows how the resolved dependency dict is passed as kwargs to the endpoint, completing the dependency injection flow."
+          },
+          {
+            "file": "fastapi/dependencies/models.py",
+            "symbol": "Dependant.cache_key",
+            "role_in_goal": "Generates a cache key from the dependency callable and OAuth scopes, used to cache resolved dependencies within a request to avoid redundant re-execution.",
+            "why_it_matters": "Explains how FastAPI avoids calling the same dependency multiple times in a single request, a core performance optimization."
+          }
+        ],
+        "entry_points": [
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "APIRoute.__init__",
+            "how_it_enters": "Called when a route is registered via decorators (@app.get, @app.post, etc.) or included via include_router(). Initiates the analysis phase by calling get_dependant() on the endpoint function."
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "get_request_handler",
+            "how_it_enters": "Called during route initialization to create the request handler function. At request time, the returned ASGI app function is invoked with the Request object."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "solve_dependencies",
+            "how_it_enters": "Called from within the request handler (get_request_handler) for each incoming request, after the request body has been read. Recursively resolves the dependency tree."
+          }
+        ],
+        "flows": [
+          {
+            "name": "Route Registration and Dependency Analysis",
+            "steps": [
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "APIRoute.__init__",
+                "what_happens": "Route registration: stores endpoint callable and creates the dependant tree by calling get_dependant(path_format, endpoint, scope='function')"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "get_dependant",
+                "what_happens": "Calls get_typed_signature(endpoint) to extract the function's signature, then iterates over all parameters, calling analyze_param() on each"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "analyze_param",
+                "what_happens": "Examines parameter annotation and default value: if it's a Depends marker, returns depends=<Depends>; if it's a FieldInfo (Query/Path/Body/etc.), returns field=<ModelField>; if it's Request/Response/SecurityScopes, marks it for special injection"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "get_dependant",
+                "what_happens": "For each Depends found, recursively calls get_dependant() on the dependency callable to build the sub-dependency tree. Adds the sub-Dependant to dependant.dependencies. For non-Depends parameters, adds them to the appropriate list (path_params, query_params, etc.)"
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "APIRoute.__init__",
+                "what_happens": "Prepends decorator-level dependencies from the dependencies= argument by calling get_parameterless_sub_dependant() for each, inserting them at the front of dependant.dependencies. Stores the complete Dependant tree."
+              }
+            ]
+          },
+          {
+            "name": "Request-Time Dependency Resolution",
+            "steps": [
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "get_request_handler",
+                "what_happens": "Request arrives; reads request body if needed (JSON or form), then calls solve_dependencies(request, dependant, body, ...) to resolve all dependencies"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "Iterates over dependant.dependencies (nested dependencies). For each sub_dependant, recursively calls solve_dependencies() to resolve its own dependencies first"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "Checks if dependency result is cached (via dependency_cache and cache_key); if found in cache, reuses it. If not cached and the dependency is a generator, calls _solve_generator() to manage it as a context manager"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "_solve_generator",
+                "what_happens": "Wraps the generator in a contextmanager, enters it via stack.enter_async_context(), storing the yielded value for later, and registering cleanup to run after the request"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "For non-generator dependencies: if async, awaits the call; if sync, runs in threadpool. Caches the result and stores it in values dict under the dependency's parameter name"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "Extracts path/query/header/cookie parameters via request_params_to_args(), validating each against its ModelField. Body parameters validated via request_body_to_args(). All extracted values added to values dict"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "Injects special parameters: if endpoint has request_param_name set, adds the Request object; if security_scopes_param_name set, adds SecurityScopes; same for background_tasks, response, etc."
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "Returns SolvedDependency with values dict (all resolved dependencies + extracted request parameters) and errors list"
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "get_request_handler",
+                "what_happens": "Receives solved_result with values dict. If no validation errors, calls run_endpoint_function(dependant, values, is_coroutine) to invoke the endpoint with all resolved kwargs"
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "run_endpoint_function",
+                "what_happens": "Calls dependant.call(**solved_result.values) with all resolved dependencies and extracted parameters as keyword arguments. Returns the result."
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "get_request_handler",
+                "what_happens": "Serializes the returned value (validation + JSON encoding), constructs HTTP response, returns it. AsyncExitStack cleanup happens automatically on request completion."
+              }
+            ]
+          }
+        ],
+        "relationships": [
+          {
+            "from_file": "fastapi/routing.py",
+            "from_symbol": "APIRoute.__init__",
+            "to_file": "fastapi/dependencies/utils.py",
+            "to_symbol": "get_dependant",
+            "kind": "calls",
+            "note": "Route registration initiates dependency analysis by calling get_dependant on the endpoint function"
+          },
+          {
+            "from_file": "fastapi/routing.py",
+            "from_symbol": "APIRoute.__init__",
+            "to_file": "fastapi/dependencies/utils.py",
+            "to_symbol": "get_parameterless_sub_dependant",
+            "kind": "calls",
+            "note": "Route initialization processes decorator-level dependencies via get_parameterless_sub_dependant"
+          },
+          {
+            "from_file": "fastapi/dependencies/utils.py",
+            "from_symbol": "get_dependant",
+            "to_file": "fastapi/dependencies/utils.py",
+            "to_symbol": "analyze_param",
+            "kind": "calls",
+            "note": "Parameter analysis determines if a parameter is a dependency, request parameter, or special injectable"
+          },
+          {
+            "from_file": "fastapi/dependencies/utils.py",
+            "from_symbol": "get_dependant",
+            "to_file": "fastapi/dependencies/utils.py",
+            "to_symbol": "get_dependant",
+            "kind": "calls",
+            "note": "Recursive call for each Depends found in parameters, building the dependency tree"
+          },
+          {
+            "from_file": "fastapi/routing.py",
+            "from_symbol": "get_request_handler",
+            "to_file": "fastapi/dependencies/utils.py",
+            "to_symbol": "solve_dependencies",
+            "kind": "calls",
+            "note": "Request handler calls solve_dependencies to resolve the entire dependency tree at request time"
+          },
+          {
+            "from_file": "fastapi/dependencies/utils.py",
+            "from_symbol": "solve_dependencies",
+            "to_file": "fastapi/dependencies/utils.py",
+            "to_symbol": "solve_dependencies",
+            "kind": "calls",
+            "note": "Recursive call for each nested dependency in dependant.dependencies"
+          },
+          {
+            "from_file": "fastapi/dependencies/utils.py",
+            "from_symbol": "solve_dependencies",
+            "to_file": "fastapi/dependencies/utils.py",
+            "to_symbol": "_solve_generator",
+            "kind": "calls",
+            "note": "For generator/async_generator dependencies, wraps them as context managers for lifecycle management"
+          },
+          {
+            "from_file": "fastapi/dependencies/utils.py",
+            "from_symbol": "solve_dependencies",
+            "to_file": "fastapi/dependencies/utils.py",
+            "to_symbol": "request_params_to_args",
+            "kind": "calls",
+            "note": "Extracts and validates request parameters (path, query, headers, cookies) for the endpoint"
+          },
+          {
+            "from_file": "fastapi/routing.py",
+            "from_symbol": "get_request_handler",
+            "to_file": "fastapi/routing.py",
+            "to_symbol": "run_endpoint_function",
+            "kind": "calls",
+            "note": "Request handler invokes the endpoint function with resolved dependencies as kwargs"
+          },
+          {
+            "from_file": "fastapi/dependencies/models.py",
+            "from_symbol": "Dependant",
+            "to_file": "fastapi/params.py",
+            "to_symbol": "Depends",
+            "kind": "configures",
+            "note": "Dependant tree is built from Depends markers found during parameter analysis"
+          },
+          {
+            "from_file": "fastapi/dependencies/utils.py",
+            "from_symbol": "solve_dependencies",
+            "to_file": "fastapi/dependencies/models.py",
+            "to_symbol": "Dependant.cache_key",
+            "kind": "uses",
+            "note": "Cache key is used to store and retrieve cached dependency results within a request"
+          }
+        ],
+        "contracts": [
+          {
+            "file": "fastapi/params.py",
+            "symbol": "Depends",
+            "contract": "A frozen dataclass with fields: dependency (Callable), use_cache (bool, default True), scope (Literal['function', 'request'], optional). Used to annotate parameters or as default values. Signals to FastAPI that the parameter should be resolved via dependency injection."
+          },
+          {
+            "file": "fastapi/dependencies/models.py",
+            "symbol": "Dependant",
+            "contract": "Dataclass representing a callable and its parameters. Must have: call (the callable), path_params/query_params/header_params/cookie_params/body_params (lists of ModelField), dependencies (list of sub-Dependants), name (parameter name or None), and metadata fields (request_param_name, response_param_name, scope, use_cache, cache_key property, computed_scope property). Callers expect to traverse dependencies recursively and inspect parameter types."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "get_dependant",
+            "contract": "Takes a callable and path, returns a Dependant with all parameters classified. For each parameter with Depends in signature, recursively builds sub-Dependants. Must handle Annotated types, default values, Request/Response/special injectables. Validates that generator-scoped dependencies don't depend on function-scoped dependencies."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "solve_dependencies",
+            "contract": "Async function that takes a Dependant, Request/WebSocket, and request body. Returns SolvedDependency with values dict (parameter name \u2192 resolved value), errors list, and dependency_cache for reuse. Must recursively resolve nested dependencies, validate parameters, handle generators as context managers, and cache results per cache_key."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "analyze_param",
+            "contract": "Returns ParamDetails with type_annotation, depends (Depends or None), and field (ModelField or None). Must extract Annotated metadata, handle Depends in both Annotated and default values, and create FieldInfo for request parameters with proper defaults."
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "get_request_handler",
+            "contract": "Returns an ASGI app function (Request \u2192 Coroutine[Response]). The function must read request body, call solve_dependencies, handle validation errors, invoke the endpoint, serialize the response, and ensure AsyncExitStack cleanup runs."
+          }
+        ],
+        "prerequisites": [
+          {
+            "concept": "ASGI request/response model",
+            "why_needed": "Dependency injection is tightly coupled to the request lifecycle: dependencies are resolved per-request, and cleanup happens after the response is sent. Understanding Request/Response objects and the ASGI application contract is necessary to follow how dependencies flow through the request handler."
+          },
+          {
+            "concept": "Python type hints and introspection (inspect module)",
+            "why_needed": "The dependency system relies on inspecting function signatures (inspect.signature), type annotations (typing module), and determining callable types (generators, async, coroutines). Understanding how Python exposes this metadata is essential to understand how get_dependant analyzes endpoints."
+          },
+          {
+            "concept": "Pydantic BaseModel and FieldInfo validation",
+            "why_needed": "Request parameters are validated as Pydantic ModelFields. Understanding how Pydantic validates data, handles errors, and stores field metadata (aliases, defaults, etc.) is required to understand parameter extraction and validation in solve_dependencies and request_params_to_args."
+          },
+          {
+            "concept": "Python async/await and generators",
+            "why_needed": "Dependencies can be async functions, sync functions, async generators, or sync generators. The system must handle all four cases with different execution strategies (await, thread pool, context managers). Understanding these patterns is required to follow solve_dependencies."
+          },
+          {
+            "concept": "Python context managers and contextlib (contextmanager, AsyncExitStack)",
+            "why_needed": "Dependencies with yield statements are treated as context managers, and their cleanup is managed via AsyncExitStack. Understanding how context managers work and how AsyncExitStack orchestrates async entry/exit is essential to understand lifecycle dependencies."
+          },
+          {
+            "concept": "Recursive data structures and tree traversal",
+            "why_needed": "The Dependant class forms a tree of nested dependencies. Understanding how to build and traverse such structures recursively is essential to follow how get_dependant builds the tree and how solve_dependencies resolves it."
+          }
+        ],
+        "evidence_refs": [
+          {
+            "path": "tests/test_dependency_overrides.py",
+            "clarifies": "Shows how dependencies are declared via Depends() both in function parameters and in decorator arguments. Tests demonstrate that both syntaxes (parameter-level and decorator-level) are treated uniformly and can be overridden."
+          }
+        ],
+        "context": [
+          "The dependency system is split cleanly into two phases: (1) Analysis at route registration time (get_dependant) builds a tree structure; (2) Resolution at request time (solve_dependencies) traverses and executes that tree.",
+          "Caching via cache_key ensures dependencies are only called once per request, even if multiple endpoints depend on them.",
+          "Dependency overrides are handled during solve_dependencies by checking dependency_overrides_provider and re-analyzing the overridden callable.",
+          "Generator dependencies (yield) are automatically converted to context managers and managed by AsyncExitStack, enabling resource cleanup after the request.",
+          "Special parameters like Request, Response, BackgroundTasks, and SecurityScopes are injected automatically without being part of the dependency tree; analyze_param recognizes these types.",
+          "Parameters can be annotated with Depends in three ways: as a default value (backwards compat), in Annotated metadata, or extracted from the type annotation itself if no explicit Depends is present and the parameter has a default Depends marker.",
+          "Errors in dependency resolution (validation failures) are collected in an errors list and returned; the request handler checks this list and raises RequestValidationError if any are present.",
+          "The system supports both sync and async endpoints and dependencies, using run_in_threadpool for sync functions to avoid blocking the event loop."
+        ],
+        "open_questions": [
+          {
+            "question": "How does dependency_overrides_provider.dependency_overrides work and how are overrides typically registered by users?",
+            "why_it_matters": "The code references dependency_overrides but the testing of this mechanism requires understanding how the provider is set up. The implementation shows it's checked in solve_dependencies but the user-facing API for registering overrides is not covered in the files inspected."
+          },
+          {
+            "question": "What is the exact contract and lifecycle of the AsyncExitStack objects (fastapi_inner_astack, fastapi_function_astack, fastapi_middleware_astack) stored in request.scope?",
+            "why_it_matters": "solve_dependencies expects these stacks to be present and uses them to manage resource cleanup for dependencies. Understanding where and when these are created and how they differ in scope would complete the picture of lifecycle management."
+          },
+          {
+            "question": "How do SecurityScopes and OAuth2 scopes interact with the dependency system?",
+            "why_it_matters": "The Dependant model includes oauth_scopes and security-related properties, but the investigated code does not show how Security() markers with scopes parameter feed into the resolution process. This is referenced but not fully traced."
+          }
+        ]
+      },
+      "errors": [],
+      "session_id": "6c63b5aab2ba4dce9cf427e8d1cbcb49",
+      "resume_ok": true,
+      "learning_path": [
+        {
+          "step": 1,
+          "title": "Learn the Depends marker: the user-facing API",
+          "file": "fastapi/params.py",
+          "line_range": [
+            746,
+            749
+          ],
+          "why": "Everything in the DI system flows from this small data class; understanding its three fields (dependency, use_cache, scope) is the entry point to every other concept.",
+          "understand": "Depends is just a frozen dataclass that carries a callable and two flags \u2014 FastAPI reads these fields during both analysis and resolution, so the marker itself does no work.",
+          "concepts": [
+            "component",
+            "architecture",
+            "dependency injection"
+          ]
+        },
+        {
+          "step": 2,
+          "title": "Study the Dependant tree: the internal dependency model",
+          "file": "fastapi/dependencies/models.py",
+          "line_range": [
+            32,
+            193
+          ],
+          "why": "Every analysis and resolution decision operates on Dependant instances; you cannot follow any other code without knowing what this structure holds and how it nests.",
+          "understand": "A Dependant is the canonical internal representation of one callable's parameter requirements \u2014 it holds typed parameter lists, a list of child Dependants for sub-dependencies, and metadata about how to call and cache the callable.",
+          "concepts": [
+            "component",
+            "architecture",
+            "dependency injection"
+          ]
+        },
+        {
+          "step": 3,
+          "title": "Understand the cache_key property: per-request deduplication",
+          "file": "fastapi/dependencies/models.py",
+          "line_range": [
+            63,
+            71
+          ],
+          "why": "The cache_key drives the single most important optimization in the DI system \u2014 ensuring each dependency callable is invoked at most once per request regardless of how many endpoints declare it.",
+          "understand": "cache_key is a tuple of (callable, sorted-oauth-scopes, scope-string) used as a dict key; if the same key is already in dependency_cache when solve_dependencies runs, the result is reused without re-invoking the callable.",
+          "concepts": [
+            "component",
+            "dependency injection",
+            "risk"
+          ]
+        },
+        {
+          "step": 4,
+          "title": "Trace route registration: how APIRoute builds the Dependant tree",
+          "file": "fastapi/routing.py",
+          "line_range": [
+            812,
+            976
+          ],
+          "why": "This is the seam where user code (an endpoint function decorated with @app.get etc.) is converted into an internal Dependant tree, and where decorator-level dependencies are merged in.",
+          "understand": "At registration time APIRoute.__init__ calls get_dependant() on the endpoint, then prepends any decorator-level Depends (from the dependencies= argument) via get_parameterless_sub_dependant(), producing one complete Dependant tree that is stored and reused for every request.",
+          "concepts": [
+            "flow",
+            "architecture",
+            "dependency injection"
+          ]
+        },
+        {
+          "step": 5,
+          "title": "Follow parameter classification in analyze_param",
+          "file": "fastapi/dependencies/utils.py",
+          "line_range": [
+            393,
+            559
+          ],
+          "why": "This function contains the branching logic that decides whether a single parameter is a dependency, a request field, or a special injectable \u2014 it is the classification heart of the analysis phase.",
+          "understand": "analyze_param unwraps Annotated types, looks for Depends or FieldInfo in the annotation and default value (with strict mutual-exclusion rules), and returns a ParamDetails whose depends or field slot drives how get_dependant treats the parameter.",
+          "concepts": [
+            "component",
+            "flow",
+            "dependency injection"
+          ]
+        },
+        {
+          "step": 6,
+          "title": "Trace the recursive tree-building in get_dependant",
+          "file": "fastapi/dependencies/utils.py",
+          "line_range": [
+            286,
+            359
+          ],
+          "why": "get_dependant orchestrates the full analysis phase: it iterates every parameter, calls analyze_param, and for each Depends recursively calls itself \u2014 this is where the Dependant tree is physically constructed.",
+          "understand": "get_dependant walks the signature, routes each parameter to the right list (path_params, query_params, body_params, or dependencies), and for every Depends it finds it recurses to produce a child Dependant, building the complete tree bottom-up before returning.",
+          "concepts": [
+            "flow",
+            "component",
+            "dependency injection"
+          ]
+        },
+        {
+          "step": 7,
+          "title": "See how decorator-level dependencies unify with parameter-level ones",
+          "file": "fastapi/dependencies/utils.py",
+          "line_range": [
+            123,
+            135
+          ],
+          "why": "Understanding that both syntaxes (parameter-level Depends and decorator dependencies= list) converge into the same Dependant.dependencies list explains why they are interchangeable at runtime.",
+          "understand": "get_parameterless_sub_dependant is a thin wrapper over get_dependant that creates a nameless sub-Dependant for a decorator-declared dependency; these are prepended to the root dependant.dependencies so the same resolution logic handles them identically.",
+          "concepts": [
+            "component",
+            "dependency injection",
+            "architecture"
+          ]
+        },
+        {
+          "step": 8,
+          "title": "Understand request-time resolution in solve_dependencies",
+          "file": "fastapi/dependencies/utils.py",
+          "line_range": [
+            598,
+            735
+          ],
+          "why": "This async function is the runtime engine \u2014 it recursively invokes the dependency tree, validates request parameters, applies caching, and returns the final values dict that is passed to the endpoint.",
+          "understand": "solve_dependencies recursively resolves children first (depth-first), checks the cache before invoking any callable, dispatches generators to _solve_generator, awaits coroutines or threadpools sync functions, then extracts and validates all request parameters, collecting everything into one values dict; any validation errors are accumulated and returned rather than raised immediately.",
+          "concepts": [
+            "flow",
+            "component",
+            "dependency injection"
+          ]
+        },
+        {
+          "step": 9,
+          "title": "Understand generator dependencies and lifecycle management",
+          "file": "fastapi/dependencies/utils.py",
+          "line_range": [
+            578,
+            586
+          ],
+          "why": "yield-based dependencies (the most common pattern for resource management) are handled by this function, and without understanding it the cleanup half of the dependency lifecycle is invisible.",
+          "understand": "_solve_generator wraps a generator dependency in contextmanager (or asynccontextmanager), enters it via AsyncExitStack.enter_async_context(), and returns the yielded value \u2014 the stack then guarantees the generator's cleanup code runs after the request, with scope (request vs function) determining which stack is used.",
+          "concepts": [
+            "component",
+            "dependency injection",
+            "risk"
+          ]
+        },
+        {
+          "step": 10,
+          "title": "See parameter extraction and validation in request_params_to_args",
+          "file": "fastapi/dependencies/utils.py",
+          "line_range": [
+            784,
+            866
+          ],
+          "why": "Leaf parameters (path, query, header, cookie) are not dependencies but must still be extracted and validated before they are merged into the same values dict that dependencies produce.",
+          "understand": "request_params_to_args iterates the Dependant's typed parameter lists, reads raw values from the request mapping, validates each through Pydantic ModelField, and returns a (values, errors) pair that solve_dependencies merges into its own accumulator.",
+          "concepts": [
+            "component",
+            "flow",
+            "dependency injection"
+          ]
+        },
+        {
+          "step": 11,
+          "title": "Trace request handling end-to-end in get_request_handler and run_endpoint_function",
+          "file": "fastapi/routing.py",
+          "line_range": [
+            351,
+            729
+          ],
+          "why": "This is the outer shell that ties body parsing, dependency resolution, endpoint invocation, and response serialization together \u2014 seeing it completes the full request lifecycle picture.",
+          "understand": "get_request_handler returns a closure that reads the body, calls solve_dependencies with the pre-built Dependant, raises RequestValidationError if errors exist, then calls run_endpoint_function(**solved_result.values) to invoke the endpoint with every resolved and extracted value as a keyword argument.",
+          "concepts": [
+            "flow",
+            "architecture",
+            "dependency injection"
+          ]
+        }
+      ]
+    },
+    "rag": {
+      "nodes": 9,
+      "anchor_accuracy": 1.0,
+      "important_hit": [
+        "fastapi/dependencies/models.py",
+        "fastapi/dependencies/utils.py",
+        "fastapi/param_functions.py",
+        "fastapi/params.py",
+        "fastapi/routing.py"
+      ],
+      "important_missed": [],
+      "discovery": 1.0,
+      "nodes_traceable_to_dossier": 0,
+      "confidence": "high",
+      "seconds": 45.26384925842285,
+      "investigation": {},
+      "dossier": null,
+      "errors": [],
+      "session_id": "f7a4c065a30349709752f6161cb1a0ee",
+      "resume_ok": true,
+      "learning_path": [
+        {
+          "step": 1,
+          "title": "Understand the Depends dataclass as the DI declaration primitive",
+          "file": "fastapi/params.py",
+          "line_range": [
+            746,
+            749
+          ],
+          "why": "Every dependency declaration in FastAPI ultimately resolves to this dataclass \u2014 it's the raw data carrier that the rest of the DI system reads.",
+          "understand": "Depends is a plain dataclass holding a callable, a use_cache flag, and a scope; it carries no logic itself but acts as the marker that triggers DI resolution.",
+          "concepts": [
+            "component",
+            "architecture"
+          ]
+        },
+        {
+          "step": 2,
+          "title": "Trace how Depends() factory wraps and returns the params.Depends instance",
+          "file": "fastapi/param_functions.py",
+          "line_range": [
+            2283,
+            2369
+          ],
+          "why": "This is the public API surface \u2014 understanding what the factory forwards (dependency, use_cache, scope) clarifies what contract callers are actually binding.",
+          "understand": "The Depends() function is a thin factory that constructs params.Depends; the scope parameter controls generator lifecycle (function vs. request), making it a critical knob for cleanup ordering.",
+          "concepts": [
+            "component",
+            "extension_point"
+          ]
+        },
+        {
+          "step": 3,
+          "title": "Study the Dependant model \u2014 the resolved dependency graph node",
+          "file": "fastapi/dependencies/models.py",
+          "line_range": [
+            32,
+            193
+          ],
+          "why": "Dependant is the internal tree node FastAPI builds for every endpoint and sub-dependency; its fields reveal exactly what information the DI engine tracks per callable.",
+          "understand": "Each Dependant holds categorised parameter lists (path, query, body, etc.), a list of child Dependants, cache_key for deduplication, and computed_scope to determine which AsyncExitStack manages generator teardown.",
+          "concepts": [
+            "component",
+            "architecture"
+          ]
+        },
+        {
+          "step": 4,
+          "title": "See how get_parameterless_sub_dependant bridges a Depends marker into a Dependant node",
+          "file": "fastapi/dependencies/utils.py",
+          "line_range": [
+            123,
+            135
+          ],
+          "why": "This is the seam where a raw params.Depends annotation (from the endpoint signature or route-level dependencies list) is converted into a Dependant tree node.",
+          "understand": "get_parameterless_sub_dependant delegates to get_dependant using the Depends.dependency callable, threading scope and OAuth scopes through \u2014 this is the moment the dependency tree starts being built.",
+          "concepts": [
+            "component",
+            "flow"
+          ]
+        },
+        {
+          "step": 5,
+          "title": "Observe how APIRoute wires the dependency tree at route registration time",
+          "file": "fastapi/routing.py",
+          "line_range": [
+            812,
+            976
+          ],
+          "why": "Route-level dependencies (passed directly to @app.get) are spliced into the endpoint's Dependant tree here at registration time, not at request time \u2014 a key architectural fact.",
+          "understand": "APIRoute.__init__ calls get_dependant on the endpoint, then inserts parameterless sub-dependants for each route-level Depends at the front of dependant.dependencies, so the full tree is frozen before any request arrives.",
+          "concepts": [
+            "architecture",
+            "flow",
+            "component"
+          ]
+        },
+        {
+          "step": 6,
+          "title": "Understand how non-dependency special params are recognised and registered",
+          "file": "fastapi/dependencies/utils.py",
+          "line_range": [
+            362,
+            383
+          ],
+          "why": "Request, Response, BackgroundTasks, SecurityScopes etc. are not resolved through normal parameter extraction \u2014 this function intercepts them and stores their param names on the Dependant instead.",
+          "understand": "FastAPI uses isinstance checks on type annotations to short-circuit DI for framework-injected objects; missing this means accidentally wrapping Request in a Pydantic model or triggering a validation error.",
+          "concepts": [
+            "component",
+            "risk"
+          ]
+        },
+        {
+          "step": 7,
+          "title": "Trace the recursive solve_dependencies execution engine",
+          "file": "fastapi/dependencies/utils.py",
+          "line_range": [
+            598,
+            735
+          ],
+          "why": "This async function is where the entire DI tree is actually resolved at request time \u2014 it handles caching, overrides, generator lifecycle, sync/async dispatch, and all param extraction.",
+          "understand": "solve_dependencies recurses depth-first through the Dependant tree; it checks dependency_cache before calling anything (use_cache deduplication), picks the right AsyncExitStack based on computed_scope, and only calls the callable after all its own sub-dependencies are solved.",
+          "concepts": [
+            "flow",
+            "component",
+            "risk"
+          ]
+        },
+        {
+          "step": 8,
+          "title": "Understand DependencyScopeError \u2014 the scope-narrowing invariant you must not violate",
+          "file": "fastapi/exceptions.py",
+          "line_range": [
+            167,
+            171
+          ],
+          "why": "When a 'request'-scoped dependency tries to depend on a 'function'-scoped one, FastAPI raises this error \u2014 understanding it prevents subtle resource-lifetime bugs in generator dependencies.",
+          "understand": "A dependency with broader scope ('request') cannot safely consume one with narrower scope ('function') because the inner dependency will be torn down before the outer one finishes, so FastAPI enforces this as a hard error.",
+          "concepts": [
+            "risk",
+            "architecture"
+          ]
+        },
+        {
+          "step": 9,
+          "title": "See how solved values are dispatched to the endpoint via run_endpoint_function",
+          "file": "fastapi/routing.py",
+          "line_range": [
+            320,
+            330
+          ],
+          "why": "This function closes the loop \u2014 it takes the fully-resolved values dict from solve_dependencies and calls the endpoint callable with them, handling sync vs. async dispatch.",
+          "understand": "run_endpoint_function simply unpacks the values dict as keyword arguments into the endpoint, confirming that DI resolution and endpoint invocation are cleanly separated \u2014 solve_dependencies owns resolution, this function owns dispatch.",
+          "concepts": [
+            "flow",
+            "component"
+          ]
+        }
+      ]
+    }
+  }
+}

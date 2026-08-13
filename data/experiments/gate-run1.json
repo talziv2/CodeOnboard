@@ -1,0 +1,704 @@
+[
+  {
+    "attempt": 1,
+    "goal": "requests-auth",
+    "goal_type": "understand_component",
+    "repo": "requests",
+    "investigation": {
+      "stop_reason": "turn_budget",
+      "turns": 21,
+      "tool_calls": 27,
+      "submissions": 2,
+      "rejections": [
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: these item-level keys arrived at the top level of the dossier: `role_in_goal`, `symbol`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable.",
+        "2 citation(s) do not resolve against the repository: relationship_to: src/requests/models.py:PreparedRequest.register_hook (unknown_symbol); contract: src/requests/_types.py:AuthType (unknown_symbol). Verify with `symbols` or `propose_anchor`, then correct or drop them."
+      ],
+      "repair_turns": 0,
+      "duplicate_calls": 0,
+      "seconds": 156.71899999999982,
+      "input_tokens": 583,
+      "output_tokens": 14817,
+      "cache_read_tokens": 372354,
+      "cache_write_tokens": 45092,
+      "cache_hit_ratio": 0.8907372455021063,
+      "cost_usd": 0.16826839999999998,
+      "contract_met": false,
+      "grounding_first": 1.0,
+      "grounding_final": 0.9629629629629629,
+      "unresolved_final": [
+        "relationship_to: src/requests/models.py:PreparedRequest.register_hook (unknown_symbol)",
+        "contract: src/requests/_types.py:AuthType (unknown_symbol)"
+      ],
+      "unmet_final": [],
+      "structural_final": []
+    },
+    "pipeline_seconds": 189.50045084953308,
+    "errors": [],
+    "invariants": {
+      "nodes": 9,
+      "anchors_resolve": true,
+      "unresolved_anchors": [],
+      "no_fabricated_evidence": true,
+      "nodes_outside_dossier_evidence": [],
+      "single_chain": true,
+      "has_current_node": true
+    },
+    "confidence": "medium",
+    "persistence": {
+      "graph_reloaded": true,
+      "nodes_reloaded": 9,
+      "symbols_kept": 9,
+      "dossier_reloaded": true,
+      "resume_point": true
+    },
+    "session": {
+      "lesson_rendered": true,
+      "used_fallback_lesson": false,
+      "seconds": 7.552419662475586,
+      "walkthrough": "AuthBase is the **contract that every authentication handler in Requests must satisfy**. It defines a single responsibility: accept a `PreparedRequest` object and return it modified. **Why this matters for your goal:** When you call `requests.get(url, auth=...)`, the auth object you pass is guaranteed to be callable. The library doesn't care if it's an AuthBase subclass or any other callable\u2014it o\u2026"
+    },
+    "file_trace": {
+      "src/requests/auth.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "src/requests/sessions.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "src/requests/models.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "src/requests/api.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      }
+    },
+    "discovery": 1.0,
+    "graph_files": [
+      "src/requests/api.py",
+      "src/requests/auth.py",
+      "src/requests/hooks.py",
+      "src/requests/models.py",
+      "src/requests/sessions.py"
+    ],
+    "node_titles": [
+      "src/requests/auth.py:AuthBase \u2014 Understand the AuthBase callable contract",
+      "src/requests/models.py:PreparedRequest.prepare_auth \u2014 Trace how auth enters the preparation pipeline",
+      "src/requests/sessions.py:merge_setting \u2014 See how session and per-request auth are merged",
+      "src/requests/sessions.py:Session.prepare_request \u2014 Follow auth from Session.prepare_request to PreparedRequest",
+      "src/requests/auth.py:HTTPBasicAuth.__call__ \u2014 Study the simplest handler: HTTPBasicAuth",
+      "src/requests/hooks.py:dispatch_hook \u2014 Learn how hooks are dispatched after the response arrives",
+      "src/requests/sessions.py:Session.send \u2014 Understand how Session.send triggers response hooks",
+      "src/requests/auth.py:HTTPDigestAuth.__call__ \u2014 Study the complex handler: HTTPDigestAuth's challenge-response setup",
+      "src/requests/api.py:request \u2014 See the public API entry point and the full auth path end-to-end"
+    ],
+    "session_id": "746b81b9faa8436eb0f75f6b1193d561",
+    "stage": "ok",
+    "ok": true,
+    "seconds": 197.23109126091003,
+    "rag_calls": {}
+  },
+  {
+    "attempt": 2,
+    "goal": "requests-auth",
+    "goal_type": "understand_component",
+    "repo": "requests",
+    "investigation": {
+      "stop_reason": "turn_budget",
+      "turns": 21,
+      "tool_calls": 32,
+      "submissions": 14,
+      "rejections": [
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: `components` arrived as str, not a list of objects \u2014 emit it as a JSON array of objects; these item-level keys arrived at the top level of the dossier: `role_in_goal`, `symbol`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable.",
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: `components` arrived as str, not a list of objects \u2014 emit it as a JSON array of objects; these item-level keys arrived at the top level of the dossier: `role_in_goal`, `symbol`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable.",
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: `components` arrived as str, not a list of objects \u2014 emit it as a JSON array of objects; these item-level keys arrived at the top level of the dossier: `role_in_goal`, `symbol`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable.",
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: `components` arrived as str, not a list of objects \u2014 emit it as a JSON array of objects; these item-level keys arrived at the top level of the dossier: `role_in_goal`, `symbol`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable.",
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: `components` arrived as str, not a list of objects \u2014 emit it as a JSON array of objects; these item-level keys arrived at the top level of the dossier: `role_in_goal`, `symbol`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable.",
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: `components` arrived as str, not a list of objects \u2014 emit it as a JSON array of objects; these item-level keys arrived at the top level of the dossier: `role_in_goal`, `symbol`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable.",
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: `components` arrived as str, not a list of objects \u2014 emit it as a JSON array of objects; these item-level keys arrived at the top level of the dossier: `role_in_goal`, `symbol`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable.",
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: `components` arrived as str, not a list of objects \u2014 emit it as a JSON array of objects; these item-level keys arrived at the top level of the dossier: `role_in_goal`, `symbol`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable.",
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: `components` arrived as str, not a list of objects \u2014 emit it as a JSON array of objects; these item-level keys arrived at the top level of the dossier: `role_in_goal`, `symbol`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable.",
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: `components` arrived as str, not a list of objects \u2014 emit it as a JSON array of objects; these item-level keys arrived at the top level of the dossier: `role_in_goal`, `symbol`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable.",
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: `components` arrived as str, not a list of objects \u2014 emit it as a JSON array of objects; these item-level keys arrived at the top level of the dossier: `role_in_goal`, `symbol`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable.",
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: `components` arrived as str, not a list of objects \u2014 emit it as a JSON array of objects; these item-level keys arrived at the top level of the dossier: `role_in_goal`, `symbol`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable.",
+        "1 citation(s) do not resolve against the repository: contract: src/requests/_types.py:AuthType (unknown_symbol). Verify with `symbols` or `propose_anchor`, then correct or drop them."
+      ],
+      "repair_turns": 0,
+      "duplicate_calls": 0,
+      "seconds": 194.25,
+      "input_tokens": 592,
+      "output_tokens": 17006,
+      "cache_read_tokens": 377054,
+      "cache_write_tokens": 59542,
+      "cache_hit_ratio": 0.8624527663156354,
+      "cost_usd": 0.19775489999999998,
+      "contract_met": true,
+      "grounding_first": 1.0,
+      "grounding_final": 1.0,
+      "unresolved_final": [],
+      "unmet_final": [],
+      "structural_final": []
+    },
+    "pipeline_seconds": 233.18997073173523,
+    "errors": [],
+    "invariants": {
+      "nodes": 11,
+      "anchors_resolve": true,
+      "unresolved_anchors": [],
+      "no_fabricated_evidence": true,
+      "nodes_outside_dossier_evidence": [],
+      "single_chain": true,
+      "has_current_node": true
+    },
+    "confidence": "high",
+    "persistence": {
+      "graph_reloaded": true,
+      "nodes_reloaded": 11,
+      "symbols_kept": 11,
+      "dossier_reloaded": true,
+      "resume_point": true
+    },
+    "session": {
+      "lesson_rendered": true,
+      "used_fallback_lesson": false,
+      "seconds": 8.035670280456543,
+      "walkthrough": "AuthBase is the **extension point** that formalizes the authentication contract in Requests. Every auth mechanism\u2014built-in or custom\u2014must subclass AuthBase and implement `__call__(self, r: PreparedRequest) -> PreparedRequest`. **The contract:** An auth handler receives a PreparedRequest object, modifies it (typically by adding an `Authorization` header), and returns the modified request. This sim\u2026"
+    },
+    "file_trace": {
+      "src/requests/auth.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "src/requests/sessions.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "src/requests/models.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "src/requests/api.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": false
+      }
+    },
+    "discovery": 0.75,
+    "graph_files": [
+      "src/requests/auth.py",
+      "src/requests/hooks.py",
+      "src/requests/models.py",
+      "src/requests/sessions.py"
+    ],
+    "node_titles": [
+      "src/requests/auth.py:AuthBase \u2014 Understand the auth handler contract via AuthBase",
+      "src/requests/auth.py:HTTPBasicAuth.__call__ \u2014 See the simplest auth implementation: HTTPBasicAuth.__call__",
+      "src/requests/models.py:PreparedRequest.prepare \u2014 Trace auth application in the preparation pipeline: PreparedRequest.prepare",
+      "src/requests/models.py:PreparedRequest.prepare_auth \u2014 See how all auth forms are normalized and invoked: PreparedRequest.prepare_auth",
+      "src/requests/sessions.py:Session.prepare_request \u2014 Understand auth source resolution: Session.prepare_request",
+      "src/requests/sessions.py:Session.request \u2014 Follow auth from the user API entry point: Session.request",
+      "src/requests/models.py:RequestHooksMixin.register_hook \u2014 Learn how hooks are registered on a request: RequestHooksMixin.register_hook",
+      "src/requests/auth.py:HTTPDigestAuth.__call__ \u2014 See how Digest auth registers its challenge hooks: HTTPDigestAuth.__call__",
+      "src/requests/hooks.py:dispatch_hook \u2014 Understand how response hooks are dispatched: dispatch_hook",
+      "src/requests/sessions.py:Session.send \u2014 Trace where hooks fire in the send cycle: Session.send",
+      "src/requests/auth.py:HTTPDigestAuth.handle_401 \u2014 See how Digest auth reacts to a 401 challenge: HTTPDigestAuth.handle_401"
+    ],
+    "session_id": "ef1956743bb844f1a17f43f4b5b595fa",
+    "stage": "ok",
+    "ok": true,
+    "seconds": 241.25976729393005,
+    "rag_calls": {}
+  },
+  {
+    "attempt": 3,
+    "goal": "requests-auth",
+    "goal_type": "understand_component",
+    "repo": "requests",
+    "investigation": {
+      "stop_reason": "turn_budget",
+      "turns": 21,
+      "tool_calls": 35,
+      "submissions": 3,
+      "rejections": [
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: `components` arrived as str, not a list of objects \u2014 emit it as a JSON array of objects; these item-level keys arrived at the top level of the dossier: `role_in_goal`, `symbol`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable.",
+        "3 citation(s) do not resolve against the repository: flow:Session-Level Default Auth: src/requests:User code (unknown_file); relationship_to: src/requests/models.py:PreparedRequest.register_hook (unknown_symbol); contract: src/requests/_types.py:AuthType (unknown_symbol). Verify with `symbols` or `propose_anchor`, then correct or drop them.",
+        "1 citation(s) do not resolve against the repository: relationship_to: src/requests/models.py:PreparedRequest.register_hook (unknown_symbol). Verify with `symbols` or `propose_anchor`, then correct or drop them."
+      ],
+      "repair_turns": 0,
+      "duplicate_calls": 0,
+      "seconds": 275.0150000000001,
+      "input_tokens": 591,
+      "output_tokens": 26716,
+      "cache_read_tokens": 382779,
+      "cache_write_tokens": 52520,
+      "cache_hit_ratio": 0.8781550391153732,
+      "cost_usd": 0.2380989,
+      "contract_met": false,
+      "grounding_first": 1.0,
+      "grounding_final": 0.9836065573770492,
+      "unresolved_final": [
+        "relationship_to: src/requests/models.py:PreparedRequest.register_hook (unknown_symbol)"
+      ],
+      "unmet_final": [],
+      "structural_final": []
+    },
+    "pipeline_seconds": 317.852739572525,
+    "errors": [],
+    "invariants": {
+      "nodes": 12,
+      "anchors_resolve": true,
+      "unresolved_anchors": [],
+      "no_fabricated_evidence": true,
+      "nodes_outside_dossier_evidence": [],
+      "single_chain": true,
+      "has_current_node": true
+    },
+    "confidence": "medium",
+    "persistence": {
+      "graph_reloaded": true,
+      "nodes_reloaded": 12,
+      "symbols_kept": 12,
+      "dossier_reloaded": true,
+      "resume_point": true
+    },
+    "session": {
+      "lesson_rendered": true,
+      "used_fallback_lesson": false,
+      "seconds": 5.3361523151397705,
+      "walkthrough": "This module-level `request()` function is the entry point users call when they do `requests.get(url, auth=...)`. It's a thin architectural wrapper that creates a temporary `Session` object and immediately delegates all work\u2014including the auth parameter\u2014to `Session.request(method, url, **kwargs)`. The key insight: **auth never lives here**. The function accepts `**kwargs` which includes `auth`, bu\u2026"
+    },
+    "file_trace": {
+      "src/requests/auth.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "src/requests/sessions.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "src/requests/models.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "src/requests/api.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      }
+    },
+    "discovery": 1.0,
+    "graph_files": [
+      "src/requests/api.py",
+      "src/requests/auth.py",
+      "src/requests/models.py",
+      "src/requests/sessions.py"
+    ],
+    "node_titles": [
+      "src/requests/api.py:request \u2014 Trace auth from user call to Session",
+      "src/requests/sessions.py:merge_setting \u2014 See how session auth merges with request auth",
+      "src/requests/sessions.py:Session.prepare_request \u2014 Follow auth through Session.prepare_request",
+      "src/requests/models.py:PreparedRequest.prepare \u2014 Understand why auth is applied last during preparation",
+      "src/requests/models.py:PreparedRequest.prepare_auth \u2014 See how prepare_auth dispatches to any auth handler",
+      "src/requests/auth.py:AuthBase \u2014 Study the AuthBase contract and extension point",
+      "src/requests/auth.py:_basic_auth_str \u2014 Examine Basic Auth encoding and header construction",
+      "src/requests/auth.py:HTTPBasicAuth.__call__ \u2014 See Basic Auth applied as a callable",
+      "src/requests/auth.py:HTTPDigestAuth.__call__ \u2014 Understand how Digest Auth bootstraps with response hooks",
+      "src/requests/auth.py:HTTPDigestAuth.handle_401 \u2014 Follow the 401 challenge-response cycle",
+      "src/requests/auth.py:HTTPDigestAuth.build_digest_header \u2014 Inspect the Digest header cryptographic construction",
+      "src/requests/sessions.py:SessionRedirectMixin.rebuild_auth \u2014 Understand auth stripping and reapplication across redirects"
+    ],
+    "session_id": "5b4e81f68f19469bb1545766736d4e0e",
+    "stage": "ok",
+    "ok": true,
+    "seconds": 323.42778038978577,
+    "rag_calls": {}
+  },
+  {
+    "attempt": 4,
+    "goal": "requests-flow",
+    "goal_type": "understand_system",
+    "repo": "requests",
+    "investigation": {
+      "stop_reason": "reported",
+      "turns": 20,
+      "tool_calls": 27,
+      "submissions": 4,
+      "rejections": [
+        "Your submission exceeded the output limit and was cut off mid-JSON \u2014 the payload arrived mangled, so it could not be read. Resubmit the SAME findings more compactly: one sentence per description field, no repetition, and trim `context` first. Do not gather more evidence.",
+        "Your submission exceeded the output limit and was cut off mid-JSON \u2014 the payload arrived mangled, so it could not be read. Resubmit the SAME findings more compactly: one sentence per description field, no repetition, and trim `context` first. Do not gather more evidence.",
+        "Your submission did not arrive in the shape the schema describes, so it could not be read: `components` arrived as str, not a list of objects \u2014 emit it as a JSON array of objects; these item-level keys arrived at the top level of the dossier: `role_in_goal`, `symbol`, `why_it_matters` \u2014 each belongs inside an object within one of the list fields, so a nested object was flattened out of its array. This is a formatting fault, not a gap in what you found \u2014 your evidence is still valid. Do NOT gather more evidence and do NOT re-explore. Resubmit the SAME findings as a single JSON object, with every list field as a JSON array of objects (no XML-style tags, no arrays serialised into one string, no item fields at the top level). The rest of the contract is checked once the shape is readable."
+      ],
+      "repair_turns": 0,
+      "duplicate_calls": 0,
+      "seconds": 222.21900000000005,
+      "input_tokens": 501,
+      "output_tokens": 21141,
+      "cache_read_tokens": 281196,
+      "cache_write_tokens": 18286,
+      "cache_hit_ratio": 0.9373731178100092,
+      "cost_usd": 0.1571831,
+      "contract_met": true,
+      "grounding_first": 1.0,
+      "grounding_final": 1.0,
+      "unresolved_final": [],
+      "unmet_final": [],
+      "structural_final": []
+    },
+    "pipeline_seconds": 267.4220893383026,
+    "errors": [],
+    "invariants": {
+      "nodes": 12,
+      "anchors_resolve": true,
+      "unresolved_anchors": [],
+      "no_fabricated_evidence": true,
+      "nodes_outside_dossier_evidence": [],
+      "single_chain": true,
+      "has_current_node": true
+    },
+    "confidence": "high",
+    "persistence": {
+      "graph_reloaded": true,
+      "nodes_reloaded": 12,
+      "symbols_kept": 12,
+      "dossier_reloaded": true,
+      "resume_point": true
+    },
+    "session": {
+      "lesson_rendered": true,
+      "used_fallback_lesson": false,
+      "seconds": 8.832757711410522,
+      "walkthrough": "When you call `requests.get(url)`, you're calling the function at line 74 in `api.py`. It's deliberately simple: a one-liner that delegates to `request('get', url, params=params, **kwargs)`. This is the **module-level API's only job**: convert a convenience method call into a standardized `request()` call. The `get()` function owns nothing else\u2014no connection pooling, no state, no retry logic. `re\u2026"
+    },
+    "file_trace": {
+      "src/requests/api.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "src/requests/sessions.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "src/requests/models.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      },
+      "src/requests/adapters.py": {
+        "in_repository": true,
+        "in_survey": true,
+        "surfaced_by_a_tool": true,
+        "read": true,
+        "in_dossier": true,
+        "in_graph": true
+      }
+    },
+    "discovery": 1.0,
+    "graph_files": [
+      "src/requests/adapters.py",
+      "src/requests/api.py",
+      "src/requests/hooks.py",
+      "src/requests/models.py",
+      "src/requests/sessions.py"
+    ],
+    "node_titles": [
+      "src/requests/api.py:get \u2014 Trace the public entry point: get() and request()",
+      "src/requests/api.py:request \u2014 See how request() manages Session lifetime",
+      "src/requests/models.py:Request.__init__ \u2014 Meet the Request/PreparedRequest separation",
+      "src/requests/sessions.py:Session.request \u2014 Understand Session.request() as the orchestration hub",
+      "src/requests/sessions.py:Session.prepare_request \u2014 Follow prepare_request() as it merges session state",
+      "src/requests/models.py:PreparedRequest.prepare \u2014 Watch PreparedRequest.prepare() encode every request component",
+      "src/requests/adapters.py:BaseAdapter.send \u2014 Understand the BaseAdapter contract as the transport boundary",
+      "src/requests/sessions.py:Session.send \u2014 Trace Session.send(): adapter selection, hooks, cookies, redirects",
+      "src/requests/adapters.py:HTTPAdapter.send \u2014 See HTTPAdapter.send() emit the request via urllib3",
+      "src/requests/adapters.py:HTTPAdapter.build_response \u2014 See build_response() wrap the urllib3 response into a Requests Response",
+      "src/requests/sessions.py:SessionRedirectMixin.resolve_redirects \u2014 Follow resolve_redirects() as it replays the send pipeline for 3xx",
+      "src/requests/hooks.py:dispatch_hook \u2014 Understand dispatch_hook() as the user callback point"
+    ],
+    "session_id": "b3776c4e74604fefb1d06721a082af7a",
+    "stage": "ok",
+    "ok": true,
+    "seconds": 276.2966191768646,
+    "rag_calls": {}
+  },
+  {
+    "attempt": 5,
+    "goal": "requests-flow",
+    "goal_type": "understand_system",
+    "repo": "requests",
+    "investigation": {
+      "stop_reason": "api_error",
+      "turns": 5,
+      "tool_calls": 7,
+      "submissions": 0,
+      "rejections": [],
+      "repair_turns": 0,
+      "duplicate_calls": 0,
+      "seconds": 25.327999999999975,
+      "input_tokens": 414,
+      "output_tokens": 550,
+      "cache_read_tokens": 38241,
+      "cache_write_tokens": 8666,
+      "cache_hit_ratio": 0.8081190169269458,
+      "cost_usd": 0.0178206,
+      "contract_met": null,
+      "grounding_first": null,
+      "grounding_final": null,
+      "unresolved_final": [],
+      "unmet_final": [],
+      "structural_final": []
+    },
+    "pipeline_seconds": 25.380777597427368,
+    "errors": [
+      "goal_investigation: no dossier produced (api_error)"
+    ],
+    "stage": "investigation",
+    "ok": false,
+    "cause": "goal_investigation: no dossier produced (api_error)",
+    "seconds": 25.380777597427368,
+    "rag_calls": {}
+  },
+  {
+    "attempt": 6,
+    "goal": "fastapi-di",
+    "goal_type": "understand_component",
+    "repo": "fastapi",
+    "investigation": {
+      "stop_reason": "api_error",
+      "turns": 0,
+      "tool_calls": 0,
+      "submissions": 0,
+      "rejections": [],
+      "repair_turns": 0,
+      "duplicate_calls": 0,
+      "seconds": 0.2660000000000764,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "cache_hit_ratio": 0.0,
+      "cost_usd": 0.0,
+      "contract_met": null,
+      "grounding_first": null,
+      "grounding_final": null,
+      "unresolved_final": [],
+      "unmet_final": [],
+      "structural_final": []
+    },
+    "pipeline_seconds": 0.9235010147094727,
+    "errors": [
+      "goal_investigation: no dossier produced (api_error)"
+    ],
+    "stage": "investigation",
+    "ok": false,
+    "cause": "goal_investigation: no dossier produced (api_error)",
+    "seconds": 1.4691925048828125,
+    "rag_calls": {}
+  },
+  {
+    "attempt": 7,
+    "goal": "fastapi-di",
+    "goal_type": "understand_component",
+    "repo": "fastapi",
+    "investigation": {
+      "stop_reason": "api_error",
+      "turns": 0,
+      "tool_calls": 0,
+      "submissions": 0,
+      "rejections": [],
+      "repair_turns": 0,
+      "duplicate_calls": 0,
+      "seconds": 0.2660000000000764,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "cache_hit_ratio": 0.0,
+      "cost_usd": 0.0,
+      "contract_met": null,
+      "grounding_first": null,
+      "grounding_final": null,
+      "unresolved_final": [],
+      "unmet_final": [],
+      "structural_final": []
+    },
+    "pipeline_seconds": 0.3649718761444092,
+    "errors": [
+      "goal_investigation: no dossier produced (api_error)"
+    ],
+    "stage": "investigation",
+    "ok": false,
+    "cause": "goal_investigation: no dossier produced (api_error)",
+    "seconds": 0.3649718761444092,
+    "rag_calls": {}
+  },
+  {
+    "attempt": 8,
+    "goal": "fastapi-di",
+    "goal_type": "understand_component",
+    "repo": "fastapi",
+    "investigation": {
+      "stop_reason": "api_error",
+      "turns": 0,
+      "tool_calls": 0,
+      "submissions": 0,
+      "rejections": [],
+      "repair_turns": 0,
+      "duplicate_calls": 0,
+      "seconds": 0.25,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "cache_hit_ratio": 0.0,
+      "cost_usd": 0.0,
+      "contract_met": null,
+      "grounding_first": null,
+      "grounding_final": null,
+      "unresolved_final": [],
+      "unmet_final": [],
+      "structural_final": []
+    },
+    "pipeline_seconds": 0.3479466438293457,
+    "errors": [
+      "goal_investigation: no dossier produced (api_error)"
+    ],
+    "stage": "investigation",
+    "ok": false,
+    "cause": "goal_investigation: no dossier produced (api_error)",
+    "seconds": 0.3479466438293457,
+    "rag_calls": {}
+  },
+  {
+    "attempt": 9,
+    "goal": "fastapi-request",
+    "goal_type": "understand_system",
+    "repo": "fastapi",
+    "investigation": {
+      "stop_reason": "api_error",
+      "turns": 0,
+      "tool_calls": 0,
+      "submissions": 0,
+      "rejections": [],
+      "repair_turns": 0,
+      "duplicate_calls": 0,
+      "seconds": 0.2660000000000764,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "cache_hit_ratio": 0.0,
+      "cost_usd": 0.0,
+      "contract_met": null,
+      "grounding_first": null,
+      "grounding_final": null,
+      "unresolved_final": [],
+      "unmet_final": [],
+      "structural_final": []
+    },
+    "pipeline_seconds": 0.3451042175292969,
+    "errors": [
+      "goal_investigation: no dossier produced (api_error)"
+    ],
+    "stage": "investigation",
+    "ok": false,
+    "cause": "goal_investigation: no dossier produced (api_error)",
+    "seconds": 0.3451042175292969,
+    "rag_calls": {}
+  },
+  {
+    "attempt": 10,
+    "goal": "fastapi-security",
+    "goal_type": "contribute_code",
+    "repo": "fastapi",
+    "investigation": {
+      "stop_reason": "api_error",
+      "turns": 0,
+      "tool_calls": 0,
+      "submissions": 0,
+      "rejections": [],
+      "repair_turns": 0,
+      "duplicate_calls": 0,
+      "seconds": 0.2660000000000764,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "cache_hit_ratio": 0.0,
+      "cost_usd": 0.0,
+      "contract_met": null,
+      "grounding_first": null,
+      "grounding_final": null,
+      "unresolved_final": [],
+      "unmet_final": [],
+      "structural_final": []
+    },
+    "pipeline_seconds": 0.3508141040802002,
+    "errors": [
+      "goal_investigation: no dossier produced (api_error)"
+    ],
+    "stage": "investigation",
+    "ok": false,
+    "cause": "goal_investigation: no dossier produced (api_error)",
+    "seconds": 0.3508141040802002,
+    "rag_calls": {}
+  }
+]

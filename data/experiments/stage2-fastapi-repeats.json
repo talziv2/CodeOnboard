@@ -1,0 +1,1948 @@
+{
+  "model": "claude-haiku-4-5",
+  "budget": {
+    "max_turns": 12,
+    "max_tool_calls": 80,
+    "max_result_chars": 300000,
+    "max_seconds": 420.0
+  },
+  "cells": [
+    [
+      "default",
+      "two"
+    ],
+    [
+      "structural",
+      "two"
+    ],
+    [
+      "structural",
+      "one"
+    ]
+  ],
+  "rows": [
+    {
+      "repo": "fastapi",
+      "policy": "default",
+      "cache": "two",
+      "stop_reason": "turn_budget",
+      "errors": [],
+      "behavior": {
+        "turns": 13,
+        "tool_calls": 48,
+        "failed_calls": 1,
+        "calls_by_tool": {
+          "read_file": 20,
+          "list_files": 2,
+          "symbols": 26
+        },
+        "read_calls": 19,
+        "outline_reads": 0,
+        "source_lines_read": 405,
+        "source_chars_read": 15520,
+        "largest_read_lines": 110,
+        "large_reads": 0,
+        "whole_file_reads": 16,
+        "structural_calls": 26,
+        "tool_output_chars": 42673,
+        "average_read_lines": 21.31578947368421,
+        "structural_share": 0.5777777777777777
+      },
+      "quality": {
+        "produced": true,
+        "accepted": false,
+        "rejections": 1,
+        "required_subsystems": 28,
+        "covered": 28,
+        "skipped": 0,
+        "unaccounted": 0,
+        "unknown_names": 1,
+        "skip_reasons": [],
+        "first_grounding": 0.9411764705882353,
+        "first_anchors": 51,
+        "first_unresolved": 3,
+        "final_grounding": 0.9411764705882353,
+        "final_anchors": 51,
+        "entry_points": 3,
+        "core_abstractions": 4,
+        "flows": 3,
+        "flow_steps": 17,
+        "widest_flow_files": 4,
+        "boundaries": 11,
+        "docs": 2,
+        "responsibility_chars": 2584,
+        "accounted_ratio": 1.0,
+        "covered_ratio": 1.0,
+        "average_responsibility_chars": 92.28571428571429
+      },
+      "cost": {
+        "api_calls": 13,
+        "input_tokens": 3889,
+        "output_tokens": 7307,
+        "cache_write_tokens": 41941,
+        "cache_read_tokens": 140863,
+        "cost_usd": 0.10693655,
+        "uncached_cost_usd": 0.223228,
+        "seconds": 58.82799999999952,
+        "prompt_tokens": 186693,
+        "cache_hit_rate": 0.7545167735265917,
+        "caching_saved_usd": 0.11629145,
+        "write_share": 0.22465223655948535,
+        "cost_per_1k_prompt_tokens": 0.0005727935701927765
+      },
+      "important": {
+        "covered": [
+          "security",
+          "routing.py",
+          "dependencies",
+          "applications.py",
+          "params.py"
+        ],
+        "skipped": [],
+        "missing": []
+      },
+      "survey": {
+        "architecture": "FastAPI is a modern Python web framework for building APIs, built on top of Starlette. It provides HTTP and WebSocket routing, automatic validation and serialization using Pydantic, dependency injection, security schemes, OpenAPI documentation generation, and background task handling. FastAPI applications are ASGI applications that route incoming requests to handler functions, resolving their dependencies and validating request parameters before execution.",
+        "subsystems": [
+          {
+            "name": "__init__.py",
+            "responsibility": "Public API exports for FastAPI framework including application, routing, parameters, responses, exceptions, and security classes",
+            "key_file": "fastapi/__init__.py"
+          },
+          {
+            "name": "__main__.py",
+            "responsibility": "CLI entry point that delegates to fastapi_cli.cli when invoked as a module",
+            "key_file": "fastapi/__main__.py"
+          },
+          {
+            "name": "_compat",
+            "responsibility": "Compatibility layer abstracting Pydantic v2 APIs and version detection utilities",
+            "key_file": "fastapi/_compat/__init__.py"
+          },
+          {
+            "name": "applications.py",
+            "responsibility": "FastAPI main application class extending Starlette with routing decorators, middleware stack setup, and OpenAPI spec generation",
+            "key_file": "fastapi/applications.py",
+            "key_symbol": "FastAPI"
+          },
+          {
+            "name": "background.py",
+            "responsibility": "BackgroundTasks class for queueing work to run after response is sent",
+            "key_file": "fastapi/background.py",
+            "key_symbol": "BackgroundTasks"
+          },
+          {
+            "name": "cli.py",
+            "responsibility": "Command-line interface entry point that delegates to fastapi_cli package",
+            "key_file": "fastapi/cli.py"
+          },
+          {
+            "name": "concurrency.py",
+            "responsibility": "Async-to-sync bridge utilities for running context managers in threadpools",
+            "key_file": "fastapi/concurrency.py",
+            "key_symbol": "contextmanager_in_threadpool"
+          },
+          {
+            "name": "datastructures.py",
+            "responsibility": "UploadFile wrapper for file uploads and DefaultPlaceholder sentinel for parameter defaults",
+            "key_file": "fastapi/datastructures.py",
+            "key_symbol": "UploadFile"
+          },
+          {
+            "name": "dependencies",
+            "responsibility": "Dependency injection system modeling endpoints as DAGs of Dependant objects with parameter analysis and resolution",
+            "key_file": "fastapi/dependencies/utils.py",
+            "key_symbol": "Dependant"
+          },
+          {
+            "name": "encoders.py",
+            "responsibility": "JSON encoders for custom types like datetime, UUID, Decimal, and Pydantic models",
+            "key_file": "fastapi/encoders.py",
+            "key_symbol": "jsonable_encoder"
+          },
+          {
+            "name": "exception_handlers.py",
+            "responsibility": "Default exception handlers for HTTPException, validation errors, and WebSocket validation errors",
+            "key_file": "fastapi/exception_handlers.py"
+          },
+          {
+            "name": "exceptions.py",
+            "responsibility": "Custom exception classes for HTTP errors, WebSocket errors, validation errors, and framework-specific issues",
+            "key_file": "fastapi/exceptions.py",
+            "key_symbol": "HTTPException"
+          },
+          {
+            "name": "logger.py",
+            "responsibility": "Module-level logger for FastAPI framework diagnostics",
+            "key_file": "fastapi/logger.py"
+          },
+          {
+            "name": "middleware",
+            "responsibility": "ASGI middleware wrappers including CORS, GZip, HTTPS redirect, trusted hosts, and async exit stack management",
+            "key_file": "fastapi/middleware/asyncexitstack.py",
+            "key_symbol": "AsyncExitStackMiddleware"
+          },
+          {
+            "name": "openapi",
+            "responsibility": "OpenAPI 3.0 specification generation, documentation HTML rendering, and schema models",
+            "key_file": "fastapi/openapi/utils.py",
+            "key_symbol": "get_openapi"
+          },
+          {
+            "name": "param_functions.py",
+            "responsibility": "High-level parameter definition functions (Path, Query, Header, Cookie, Body, Form, File, Depends, Security) wrapping Param classes",
+            "key_file": "fastapi/param_functions.py",
+            "key_symbol": "Query"
+          },
+          {
+            "name": "params.py",
+            "responsibility": "Low-level parameter classes (Param, Path, Query, Header, Cookie, Body, Form, File, Depends, Security) for endpoint argument annotation",
+            "key_file": "fastapi/params.py",
+            "key_symbol": "Param"
+          },
+          {
+            "name": "requests.py",
+            "responsibility": "Re-exports of Starlette Request and HTTPConnection for HTTP request objects",
+            "key_file": "fastapi/requests.py"
+          },
+          {
+            "name": "responses.py",
+            "responsibility": "JSON response classes using alternative serializers (UJSONResponse, ORJSONResponse)",
+            "key_file": "fastapi/responses.py",
+            "key_symbol": "ORJSONResponse"
+          },
+          {
+            "name": "routing.py",
+            "responsibility": "APIRoute and APIRouter classes implementing HTTP/WebSocket route handling, request/response serialization, and lifespan management",
+            "key_file": "fastapi/routing.py",
+            "key_symbol": "APIRoute"
+          },
+          {
+            "name": "security",
+            "responsibility": "Security schemes including HTTP Basic/Bearer/Digest, OAuth2 flows, OpenID Connect, and API key authentication",
+            "key_file": "fastapi/security/base.py",
+            "key_symbol": "SecurityBase"
+          },
+          {
+            "name": "sse.py",
+            "responsibility": "Server-Sent Events response streaming with EventSourceResponse and ServerSentEvent formatting",
+            "key_file": "fastapi/sse.py",
+            "key_symbol": "EventSourceResponse"
+          },
+          {
+            "name": "staticfiles.py",
+            "responsibility": "Re-export of Starlette's StaticFiles middleware for serving static assets",
+            "key_file": "fastapi/staticfiles.py"
+          },
+          {
+            "name": "templating.py",
+            "responsibility": "Re-export of Starlette's Jinja2Templates for template rendering",
+            "key_file": "fastapi/templating.py"
+          },
+          {
+            "name": "testclient.py",
+            "responsibility": "Re-export of Starlette's TestClient for testing ASGI applications",
+            "key_file": "fastapi/testclient.py"
+          },
+          {
+            "name": "types.py",
+            "responsibility": "Type aliases and constants for decorators, model mapping, and dependency caching",
+            "key_file": "fastapi/types.py"
+          },
+          {
+            "name": "utils.py",
+            "responsibility": "Utility functions for status codes, path parameters, model fields, operation IDs, and default values",
+            "key_file": "fastapi/utils.py",
+            "key_symbol": "generate_unique_id"
+          },
+          {
+            "name": "websockets.py",
+            "responsibility": "Re-exports of Starlette WebSocket and WebSocketDisconnect for bidirectional communication",
+            "key_file": "fastapi/websockets.py"
+          }
+        ],
+        "skipped": [
+          {
+            "name": "openapi/constants.py",
+            "reason": "Generated constants file (not examined due to token budget)"
+          },
+          {
+            "name": "openapi/__init__.py",
+            "reason": "Empty or minimal module file"
+          },
+          {
+            "name": "dependencies/__init__.py",
+            "reason": "Empty module namespace file"
+          },
+          {
+            "name": "security/__init__.py",
+            "reason": "Pure re-export module (only examined at module level)"
+          },
+          {
+            "name": "middleware/__init__.py",
+            "reason": "Minimal namespace file"
+          },
+          {
+            "name": "security/utils.py",
+            "reason": "Small utility module (1 symbol) not examined due to token budget"
+          }
+        ],
+        "entry_points": [
+          {
+            "file": "fastapi/__init__.py",
+            "symbol": "FastAPI",
+            "what_it_starts": "HTTP/WebSocket API application that accepts requests, routes them to endpoints, validates parameters, and generates OpenAPI documentation"
+          },
+          {
+            "file": "fastapi/__main__.py",
+            "symbol": "main",
+            "what_it_starts": "CLI interface for running FastAPI applications (via fastapi_cli package)"
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "APIRouter",
+            "what_it_starts": "Route collection and registration system for organizing endpoints and dependencies"
+          }
+        ],
+        "core_abstractions": [
+          {
+            "file": "fastapi/dependencies/models.py",
+            "symbol": "Dependant",
+            "role": "Models the dependency graph as a dataclass with fields for path/query/header/cookie/body parameters, nested dependencies, and metadata about callables (coroutine, generator, security scopes). Everything in FastAPI is expressed as a Dependant DAG."
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "APIRoute",
+            "role": "Wraps an endpoint function with dependency resolution, request validation, and response serialization. Inherits from Starlette's Route and uses Dependant to model its endpoint."
+          },
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI",
+            "role": "ASGI application class extending Starlette that aggregates routes and manages OpenAPI spec generation. Provides HTTP verb decorators (get, post, etc.) as sugar over APIRouter."
+          },
+          {
+            "file": "fastapi/params.py",
+            "symbol": "Param",
+            "role": "Base class for all parameter markers (Path, Query, Header, Cookie, Body, Form, File) that annotate endpoint function arguments to control how they are extracted and validated from requests."
+          }
+        ],
+        "flows": [
+          {
+            "name": "HTTP Request Handling",
+            "steps": [
+              {
+                "file": "fastapi/applications.py",
+                "symbol": "FastAPI.__init__",
+                "what_happens": "Application is instantiated with title, description, and routes, registering default exception handlers"
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "APIRoute.__init__",
+                "what_happens": "Route is created with endpoint function, methods, path. Dependency injection analysis begins via get_dependant()"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "get_dependant",
+                "what_happens": "Endpoint function signature is analyzed, creating a Dependant graph modeling all parameters (path, query, header, cookie, body) and nested dependencies"
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "request_response",
+                "what_happens": "When HTTP request arrives, ASGI scope/receive/send are wrapped in a function that invokes the route handler"
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "get_request_handler",
+                "what_happens": "Handler function executes: solves dependencies via solve_dependencies(), validates request body/params, calls endpoint function"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "Dependency graph is traversed, each Dependant is invoked (handling generators, async, caching), request parameters are extracted and validated with Pydantic"
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "serialize_response",
+                "what_happens": "Endpoint's return value is serialized using jsonable_encoder and wrapped in a Response object (JSON, HTML, or streaming)"
+              }
+            ]
+          },
+          {
+            "name": "OpenAPI Documentation Generation",
+            "steps": [
+              {
+                "file": "fastapi/applications.py",
+                "symbol": "FastAPI.openapi",
+                "what_happens": "On first access to /openapi.json, method is called to generate the spec"
+              },
+              {
+                "file": "fastapi/openapi/utils.py",
+                "symbol": "get_openapi",
+                "what_happens": "Iterates over registered routes, extracts operation metadata (summary, tags, parameters, request body, responses)"
+              },
+              {
+                "file": "fastapi/openapi/utils.py",
+                "symbol": "get_openapi_path",
+                "what_happens": "For each route, builds OpenAPI PathItem with operations, parameters, request body, and response schemas"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "get_dependant",
+                "what_happens": "Endpoint's Dependant is queried to extract parameter information for OpenAPI spec generation"
+              },
+              {
+                "file": "fastapi/openapi/docs.py",
+                "symbol": "get_swagger_ui_html",
+                "what_happens": "HTML documentation is rendered at /docs using the generated OpenAPI spec"
+              }
+            ]
+          },
+          {
+            "name": "Dependency Resolution with Security",
+            "steps": [
+              {
+                "file": "fastapi/param_functions.py",
+                "symbol": "Security",
+                "what_happens": "Endpoint parameter is marked with Security() to require OAuth2 or other security scheme"
+              },
+              {
+                "file": "fastapi/security/oauth2.py",
+                "symbol": "OAuth2PasswordBearer",
+                "what_happens": "Security dependency class extracts bearer token from Authorization header, is invoked during dependency resolution"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "get_dependant",
+                "what_happens": "During analysis, Security dependencies are identified as _is_security_scheme and collected into _security_dependencies"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "Security dependencies are resolved first, scopes are propagated through the dependency tree, calling each security callable"
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "get_request_handler",
+                "what_happens": "If security check fails or raises HTTPException, exception handler converts it to 401/403 response"
+              }
+            ]
+          }
+        ],
+        "boundaries": [
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI",
+            "kind": "extension_point",
+            "note": "FastAPI extends Starlette with routing decorators and OpenAPI generation. Users extend FastAPI by subclassing or using include_router() to compose APIRouter instances"
+          },
+          {
+            "file": "fastapi/params.py",
+            "symbol": "Param",
+            "kind": "extension_point",
+            "note": "Param subclasses (Path, Query, etc.) define how request parameters are extracted. Users can create custom Param types by subclassing."
+          },
+          {
+            "file": "fastapi/security/base.py",
+            "symbol": "SecurityBase",
+            "kind": "extension_point",
+            "note": "SecurityBase is the marker interface for security schemes. Custom schemes inherit from SecurityBase and implement __call__() to validate credentials."
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "APIRoute",
+            "kind": "extension_point",
+            "note": "APIRoute can be subclassed to customize request handling, validation, or response serialization per-route."
+          },
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI.exception_handler",
+            "kind": "extension_point",
+            "note": "Users register custom exception handlers via @app.exception_handler() to convert exceptions into responses"
+          },
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI.middleware",
+            "kind": "extension_point",
+            "note": "Users register ASGI middleware via @app.middleware() to intercept and modify requests/responses"
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "APIRouter",
+            "kind": "external_dependency",
+            "note": "APIRouter delegates HTTP routing to Starlette's routing module (Mount, compile_path, get_name)"
+          },
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI",
+            "kind": "external_dependency",
+            "note": "FastAPI inherits from Starlette and uses Starlette's Scope/Receive/Send ASGI types and lifespan management"
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "get_dependant",
+            "kind": "external_dependency",
+            "note": "Dependency analysis uses Pydantic v2 FieldInfo, ModelField (via _compat), and create_model_field() for validation"
+          },
+          {
+            "file": "fastapi/encoders.py",
+            "symbol": "jsonable_encoder",
+            "kind": "external_dependency",
+            "note": "jsonable_encoder delegates Pydantic model serialization to Pydantic's model_dump() and handles custom encoder registration"
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "APIRoute.get_route_handler",
+            "kind": "trust_boundary",
+            "note": "Request parameter validation occurs here. If Pydantic validation fails, RequestValidationError is raised and handled by exception_handler, converting untrusted input into 422 response"
+          }
+        ],
+        "testing_posture": "The repository contains 504 test files in test/ directory covering units, integration, and edge cases. Tests use Starlette's TestClient to invoke FastAPI applications and verify request/response behavior, validation, security, and OpenAPI spec generation. No testing files were examined in detail due to token budget.",
+        "docs": [
+          {
+            "path": "README.md (not examined)",
+            "what_it_covers": "High-level framework overview, installation, and basic usage examples"
+          },
+          {
+            "path": "docs/ directory (358 doc files, not examined)",
+            "what_it_covers": "Comprehensive user-facing documentation on routing, parameters, responses, security, testing, deployment, and advanced features"
+          }
+        ]
+      },
+      "rejections": [
+        "3 citation(s) do not resolve against the repository: entry_point: fastapi/__init__.py:FastAPI (unknown_symbol); entry_point: fastapi/__main__.py:main (unknown_symbol); subsystem: fastapi/dependencies/utils.py:Dependant (unknown_symbol). Use `symbols` or `propose_anchor` to find the real location, then correct or drop them. These names are not subsystems in the inventory and were ignored: openapi/constants.py."
+      ],
+      "seconds_total": 58.82792663574219,
+      "run": 1
+    },
+    {
+      "repo": "fastapi",
+      "policy": "default",
+      "cache": "two",
+      "stop_reason": "turn_budget",
+      "errors": [],
+      "behavior": {
+        "turns": 13,
+        "tool_calls": 46,
+        "failed_calls": 0,
+        "calls_by_tool": {
+          "read_file": 25,
+          "list_files": 1,
+          "symbols": 20
+        },
+        "read_calls": 25,
+        "outline_reads": 0,
+        "source_lines_read": 1143,
+        "source_chars_read": 48096,
+        "largest_read_lines": 150,
+        "large_reads": 1,
+        "whole_file_reads": 16,
+        "structural_calls": 20,
+        "tool_output_chars": 67263,
+        "average_read_lines": 45.72,
+        "structural_share": 0.4444444444444444
+      },
+      "quality": {
+        "produced": true,
+        "accepted": false,
+        "rejections": 1,
+        "required_subsystems": 28,
+        "covered": 28,
+        "skipped": 0,
+        "unaccounted": 0,
+        "unknown_names": 2,
+        "skip_reasons": [],
+        "first_grounding": 0.975609756097561,
+        "first_anchors": 41,
+        "first_unresolved": 1,
+        "final_grounding": 0.975609756097561,
+        "final_anchors": 41,
+        "entry_points": 4,
+        "core_abstractions": 5,
+        "flows": 3,
+        "flow_steps": 20,
+        "widest_flow_files": 5,
+        "boundaries": 8,
+        "docs": 6,
+        "responsibility_chars": 2808,
+        "accounted_ratio": 1.0,
+        "covered_ratio": 1.0,
+        "average_responsibility_chars": 100.28571428571429
+      },
+      "cost": {
+        "api_calls": 13,
+        "input_tokens": 3889,
+        "output_tokens": 7846,
+        "cache_write_tokens": 53896,
+        "cache_read_tokens": 154993,
+        "cost_usd": 0.1259883,
+        "uncached_cost_usd": 0.252008,
+        "seconds": 62.39099999999962,
+        "prompt_tokens": 212778,
+        "cache_hit_rate": 0.728425871095696,
+        "caching_saved_usd": 0.1260197,
+        "write_share": 0.2532968633975317,
+        "cost_per_1k_prompt_tokens": 0.0005921114964892988
+      },
+      "important": {
+        "covered": [
+          "security",
+          "routing.py",
+          "dependencies",
+          "applications.py",
+          "params.py"
+        ],
+        "skipped": [],
+        "missing": []
+      },
+      "survey": {
+        "architecture": "FastAPI is a modern, high-performance web framework for building APIs in Python. It extends Starlette (an ASGI framework) with a sophisticated dependency injection system, automatic OpenAPI documentation generation, and request/response validation using Pydantic. FastAPI routes HTTP and WebSocket requests through a request handler that resolves dependencies, validates inputs against annotated parameters, executes the endpoint function, serializes the response, and returns it to the client. The framework bridges raw ASGI with developer-friendly decorators and type annotations.",
+        "subsystems": [
+          {
+            "name": "__init__.py",
+            "responsibility": "Exports the main public API of FastAPI including FastAPI, APIRouter, HTTPException, and parameter functions.",
+            "key_file": "fastapi/__init__.py"
+          },
+          {
+            "name": "__main__.py",
+            "responsibility": "Provides CLI entry point via the fastapi command.",
+            "key_file": "fastapi/__main__.py"
+          },
+          {
+            "name": "_compat",
+            "responsibility": "Compatibility layer abstracting differences between Pydantic v1 and v2, providing a unified interface for model fields and validation.",
+            "key_file": "fastapi/_compat/__init__.py"
+          },
+          {
+            "name": "applications.py",
+            "responsibility": "Implements FastAPI class, the main application container that extends Starlette with dependency injection, OpenAPI docs, and path operation registration methods.",
+            "key_file": "fastapi/applications.py",
+            "key_symbol": "FastAPI"
+          },
+          {
+            "name": "background.py",
+            "responsibility": "Provides BackgroundTasks for scheduling work to execute after a response is sent.",
+            "key_file": "fastapi/background.py"
+          },
+          {
+            "name": "cli.py",
+            "responsibility": "CLI interface entry point that delegates to fastapi_cli if installed.",
+            "key_file": "fastapi/cli.py"
+          },
+          {
+            "name": "concurrency.py",
+            "responsibility": "Utility for running async context managers in thread pools.",
+            "key_file": "fastapi/concurrency.py"
+          },
+          {
+            "name": "datastructures.py",
+            "responsibility": "Defines UploadFile for handling file uploads and DefaultPlaceholder for configuration defaults.",
+            "key_file": "fastapi/datastructures.py"
+          },
+          {
+            "name": "dependencies",
+            "responsibility": "Core dependency injection system: models.py defines Dependant to represent dependency graphs, utils.py resolves dependencies and extracts parameters from requests.",
+            "key_file": "fastapi/dependencies/utils.py",
+            "key_symbol": "solve_dependencies"
+          },
+          {
+            "name": "encoders.py",
+            "responsibility": "JSON serialization of Python objects including custom types, enums, and Pydantic models.",
+            "key_file": "fastapi/encoders.py"
+          },
+          {
+            "name": "exception_handlers.py",
+            "responsibility": "Exception handlers that convert HTTPException and validation errors to HTTP responses.",
+            "key_file": "fastapi/exception_handlers.py"
+          },
+          {
+            "name": "exceptions.py",
+            "responsibility": "Custom exception classes: HTTPException, WebSocketException, RequestValidationError, and others for error handling.",
+            "key_file": "fastapi/exceptions.py"
+          },
+          {
+            "name": "logger.py",
+            "responsibility": "Logger instance for FastAPI internal logging.",
+            "key_file": "fastapi/logger.py"
+          },
+          {
+            "name": "middleware",
+            "responsibility": "Middleware components for cross-cutting concerns: AsyncExitStackMiddleware for resource cleanup, and re-exports of Starlette middleware (CORS, GZIP, HTTPS redirect, trusted host, WSGI).",
+            "key_file": "fastapi/middleware/asyncexitstack.py"
+          },
+          {
+            "name": "openapi",
+            "responsibility": "OpenAPI/Swagger documentation generation: utils.py builds OpenAPI spec, docs.py renders HTML documentation pages.",
+            "key_file": "fastapi/openapi/utils.py",
+            "key_symbol": "get_openapi"
+          },
+          {
+            "name": "param_functions.py",
+            "responsibility": "Decorator functions (Path, Query, Header, Cookie, Body, Form, File, Depends, Security) that mark endpoint parameters with metadata.",
+            "key_file": "fastapi/param_functions.py"
+          },
+          {
+            "name": "params.py",
+            "responsibility": "Parameter classes and base Param class defining how parameters are extracted and validated from HTTP requests.",
+            "key_file": "fastapi/params.py"
+          },
+          {
+            "name": "requests.py",
+            "responsibility": "Re-exports Starlette Request for convenience.",
+            "key_file": "fastapi/requests.py"
+          },
+          {
+            "name": "responses.py",
+            "responsibility": "Response classes with specialized JSON encoders: UJSONResponse and ORJSONResponse for faster serialization.",
+            "key_file": "fastapi/responses.py"
+          },
+          {
+            "name": "routing.py",
+            "responsibility": "Core routing and request handling: APIRoute defines path operations, APIRouter groups routes, get_request_handler builds ASGI apps that resolve dependencies and call endpoints.",
+            "key_file": "fastapi/routing.py",
+            "key_symbol": "APIRoute"
+          },
+          {
+            "name": "security",
+            "responsibility": "Security schemes for authentication and authorization: API key, HTTP Basic/Bearer/Digest, OAuth2, and OpenID Connect implementations.",
+            "key_file": "fastapi/security/api_key.py"
+          },
+          {
+            "name": "sse.py",
+            "responsibility": "Server-Sent Events streaming response with EventSourceResponse and ServerSentEvent classes.",
+            "key_file": "fastapi/sse.py"
+          },
+          {
+            "name": "staticfiles.py",
+            "responsibility": "Re-exports Starlette StaticFiles for serving static files.",
+            "key_file": "fastapi/staticfiles.py"
+          },
+          {
+            "name": "templating.py",
+            "responsibility": "Re-exports Starlette Jinja2Templates for template rendering.",
+            "key_file": "fastapi/templating.py"
+          },
+          {
+            "name": "testclient.py",
+            "responsibility": "Re-exports Starlette TestClient for testing FastAPI applications.",
+            "key_file": "fastapi/testclient.py"
+          },
+          {
+            "name": "types.py",
+            "responsibility": "Type definitions used throughout FastAPI: DecoratedCallable, DependencyCacheKey, and Pydantic type exports.",
+            "key_file": "fastapi/types.py"
+          },
+          {
+            "name": "utils.py",
+            "responsibility": "Utility functions: model field creation, operation ID generation, and response validation checks.",
+            "key_file": "fastapi/utils.py"
+          },
+          {
+            "name": "websockets.py",
+            "responsibility": "Re-exports Starlette WebSocket and WebSocketDisconnect for WebSocket support.",
+            "key_file": "fastapi/websockets.py"
+          }
+        ],
+        "skipped": [
+          {
+            "name": "openapi/models.py",
+            "reason": "Generated Pydantic models for OpenAPI schema representation; implementation details of documentation generation."
+          },
+          {
+            "name": "openapi/constants.py",
+            "reason": "Constants used in OpenAPI generation; not a core abstraction."
+          },
+          {
+            "name": "security/utils.py",
+            "reason": "Small helper function for security schemes; covered by security subsystem description."
+          },
+          {
+            "name": "security/__init__.py",
+            "reason": "Re-exports of security classes; covered by security subsystem description."
+          },
+          {
+            "name": "dependencies/__init__.py",
+            "reason": "Empty module; subsystem fully described via models.py and utils.py."
+          },
+          {
+            "name": "middleware/__init__.py",
+            "reason": "Empty module; subsystem fully described via asyncexitstack.py and other middleware files."
+          },
+          {
+            "name": "openapi/__init__.py",
+            "reason": "Empty module; subsystem fully described via utils.py and docs.py."
+          }
+        ],
+        "entry_points": [
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI",
+            "what_it_starts": "Instantiates the FastAPI application that handles ASGI requests. Users decorate path operation methods on this instance to register routes."
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "APIRouter",
+            "what_it_starts": "Creates a router that groups path operations, which can be included in FastAPI apps or other routers to compose larger applications."
+          },
+          {
+            "file": "fastapi/__main__.py",
+            "symbol": "main",
+            "what_it_starts": "CLI entry point for the fastapi command-line tool, delegating to fastapi_cli package if installed."
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "get_request_handler",
+            "what_it_starts": "Creates the ASGI app that processes incoming HTTP requests: resolves dependencies, validates inputs, calls the endpoint, serializes the response."
+          }
+        ],
+        "core_abstractions": [
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI",
+            "role": "Main application class and entry point. Extends Starlette with dependency injection, OpenAPI generation, and path operation registration decorators."
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "APIRoute",
+            "role": "Encapsulates a single path operation with metadata (path, methods, parameters, response model). Starlette Route subclass with FastAPI enhancements."
+          },
+          {
+            "file": "fastapi/dependencies/models.py",
+            "symbol": "Dependant",
+            "role": "Represents a dependency graph: holds the callable, its parameters (path/query/body/header/cookie), sub-dependencies, and security scopes. Core to dependency resolution."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "solve_dependencies",
+            "role": "Async function that recursively resolves all dependencies for a request by extracting parameters, validating them, executing dependency callables, and caching results."
+          },
+          {
+            "file": "fastapi/params.py",
+            "symbol": "Param",
+            "role": "Base class for parameter metadata (Path, Query, Header, Cookie, Body, Form, File). Attached to endpoint signature via annotations to control how parameters are extracted."
+          }
+        ],
+        "flows": [
+          {
+            "name": "HTTP Request to Response",
+            "steps": [
+              {
+                "file": "fastapi/applications.py",
+                "symbol": "FastAPI.__call__",
+                "what_happens": "FastAPI instance is called as ASGI app; request enters the Starlette middleware stack."
+              },
+              {
+                "file": "fastapi/middleware/asyncexitstack.py",
+                "symbol": "AsyncExitStackMiddleware.__call__",
+                "what_happens": "Middleware creates AsyncExitStack instances for resource cleanup, storing them in request scope."
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "APIRoute.get_route_handler",
+                "what_happens": "Route matching finds the APIRoute and extracts path parameters; get_request_handler creates the ASGI app."
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "get_request_handler",
+                "what_happens": "Request handler parses request body (JSON or form), then calls solve_dependencies to resolve endpoint parameters."
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "Recursively resolves all dependencies: extracts path/query/header/cookie params, validates them against Pydantic models, executes callable dependencies, caches results."
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "run_endpoint_function",
+                "what_happens": "Calls the endpoint function with resolved dependencies and validated parameters."
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "serialize_response",
+                "what_happens": "Serializes the endpoint return value using the response_model (if provided) and the response class (default JSONResponse)."
+              },
+              {
+                "file": "fastapi/encoders.py",
+                "symbol": "jsonable_encoder",
+                "what_happens": "Recursively converts Python objects to JSON-serializable format, handling Pydantic models, enums, dates, etc."
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "get_request_handler",
+                "what_happens": "Response is returned to ASGI server; AsyncExitStack context managers are cleaned up (file handles, database connections, etc.)."
+              }
+            ]
+          },
+          {
+            "name": "OpenAPI Schema Generation",
+            "steps": [
+              {
+                "file": "fastapi/applications.py",
+                "symbol": "FastAPI.setup",
+                "what_happens": "Called during app initialization; sets up default routes for OpenAPI docs (/docs, /redoc, /openapi.json)."
+              },
+              {
+                "file": "fastapi/applications.py",
+                "symbol": "FastAPI.openapi",
+                "what_happens": "Lazy property that generates the OpenAPI schema by calling get_openapi with all registered routes."
+              },
+              {
+                "file": "fastapi/openapi/utils.py",
+                "symbol": "get_openapi",
+                "what_happens": "Traverses all APIRoutes and builds OpenAPI spec dict: extracts operations, parameters, request bodies, responses, security schemes."
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "get_dependant",
+                "what_happens": "Analyzes endpoint signature to extract parameter metadata for OpenAPI generation."
+              },
+              {
+                "file": "fastapi/openapi/utils.py",
+                "symbol": "get_openapi_path",
+                "what_happens": "For each endpoint, builds the OpenAPI operation object with parameters, request body, responses, and security requirements."
+              },
+              {
+                "file": "fastapi/openapi/docs.py",
+                "symbol": "get_swagger_ui_html",
+                "what_happens": "Renders Swagger UI HTML page that displays the OpenAPI schema at /docs."
+              }
+            ]
+          },
+          {
+            "name": "Dependency Injection with Security",
+            "steps": [
+              {
+                "file": "fastapi/param_functions.py",
+                "symbol": "Depends",
+                "what_happens": "Parameter annotation that marks a dependency: wraps the callable dependency in a Depends object."
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "get_dependant",
+                "what_happens": "Analyzes endpoint signature; when Depends is found, recursively calls get_dependant on the dependency callable to build the dependency graph."
+              },
+              {
+                "file": "fastapi/security/base.py",
+                "symbol": "SecurityBase",
+                "what_happens": "Base class for security schemes (APIKey, HTTP, OAuth2, OpenID); subclasses are callable and return validated credentials."
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "Recursively resolves dependencies in depth-first order; for security dependencies, calls their __call__ method which validates credentials and raises HTTPException on failure."
+              },
+              {
+                "file": "fastapi/exception_handlers.py",
+                "symbol": "http_exception_handler",
+                "what_happens": "Global exception handler catches HTTPException (e.g., from failed auth) and returns error response."
+              }
+            ]
+          }
+        ],
+        "boundaries": [
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI",
+            "kind": "external_dependency",
+            "note": "Extends Starlette.applications.Starlette; relies on Starlette for ASGI request/response handling, routing infrastructure, and exception middleware."
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "solve_dependencies",
+            "kind": "external_dependency",
+            "note": "Uses Pydantic for request body validation and response model serialization; Pydantic v2 compatibility layer in _compat abstracts version differences."
+          },
+          {
+            "file": "fastapi/param_functions.py",
+            "symbol": "Depends",
+            "kind": "extension_point",
+            "note": "Users provide callable dependencies that FastAPI injects; enables custom business logic integration, database sessions, authentication, etc."
+          },
+          {
+            "file": "fastapi/security/base.py",
+            "symbol": "SecurityBase",
+            "kind": "extension_point",
+            "note": "Base class for custom security schemes; users can subclass to implement custom authentication strategies by overriding __call__."
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "APIRoute",
+            "kind": "extension_point",
+            "note": "Endpoint functions are user-defined callables passed to @app.get, @app.post, etc.; FastAPI wraps them with dependency resolution and response serialization."
+          },
+          {
+            "file": "fastapi/exception_handlers.py",
+            "symbol": "http_exception_handler",
+            "kind": "extension_point",
+            "note": "Users can register custom exception handlers via @app.exception_handler(ExceptionClass) to override default error responses."
+          },
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI.middleware",
+            "kind": "extension_point",
+            "note": "Users can add custom middleware via @app.middleware('http') or app.add_middleware(CustomMiddleware) for cross-cutting concerns."
+          },
+          {
+            "file": "fastapi/encoders.py",
+            "symbol": "jsonable_encoder",
+            "kind": "external_dependency",
+            "note": "Delegates to Pydantic's model_dump for model serialization; uses Python's standard json for final encoding."
+          }
+        ],
+        "testing_posture": "FastAPI includes a TestClient re-exported from Starlette (fastapi/testclient.py). The repository has 504 test files in the test directory, testing all subsystems including routing, dependency injection, OpenAPI generation, security, and response serialization. Tests validate request/response cycle, exception handling, middleware behavior, and integration scenarios.",
+        "docs": [
+          {
+            "path": "README.md and official documentation (https://fastapi.tiangolo.com)",
+            "what_it_covers": "Comprehensive tutorial-based guide to FastAPI features: routing, dependency injection, request/response models, security, WebSockets, background tasks, testing, and deployment."
+          },
+          {
+            "path": "fastapi/applications.py docstrings",
+            "what_it_covers": "Documentation of FastAPI class and its methods (get, post, put, delete, etc.), path operation configuration, middleware setup."
+          },
+          {
+            "path": "fastapi/routing.py docstrings",
+            "what_it_covers": "Documentation of APIRouter and APIRoute; explains how routes are defined and matched."
+          },
+          {
+            "path": "fastapi/param_functions.py docstrings",
+            "what_it_covers": "Documentation of parameter functions (Path, Query, Header, Cookie, Body, Form, File, Depends, Security); examples of parameter extraction and validation."
+          },
+          {
+            "path": "fastapi/exceptions.py docstrings",
+            "what_it_covers": "Documentation of HTTPException and WebSocketException; explains error handling patterns."
+          },
+          {
+            "path": "fastapi/security/* docstrings",
+            "what_it_covers": "Documentation of security schemes (APIKey, HTTP Basic/Bearer, OAuth2, OpenID Connect); examples of implementing authentication."
+          }
+        ]
+      },
+      "rejections": [
+        "1 citation(s) do not resolve against the repository: entry_point: fastapi/__main__.py:main (unknown_symbol). Use `symbols` or `propose_anchor` to find the real location, then correct or drop them. These names are not subsystems in the inventory and were ignored: openapi/models.py, openapi/constants.py."
+      ],
+      "seconds_total": 62.39299416542053,
+      "run": 2
+    },
+    {
+      "repo": "fastapi",
+      "policy": "structural",
+      "cache": "two",
+      "stop_reason": "turn_budget",
+      "errors": [],
+      "behavior": {
+        "turns": 13,
+        "tool_calls": 42,
+        "failed_calls": 1,
+        "calls_by_tool": {
+          "read_file": 16,
+          "list_files": 1,
+          "symbols": 25
+        },
+        "read_calls": 15,
+        "outline_reads": 0,
+        "source_lines_read": 313,
+        "source_chars_read": 12124,
+        "largest_read_lines": 100,
+        "large_reads": 0,
+        "whole_file_reads": 13,
+        "structural_calls": 25,
+        "tool_output_chars": 40380,
+        "average_read_lines": 20.866666666666667,
+        "structural_share": 0.625
+      },
+      "quality": {
+        "produced": true,
+        "accepted": false,
+        "rejections": 1,
+        "required_subsystems": 28,
+        "covered": 28,
+        "skipped": 0,
+        "unaccounted": 0,
+        "unknown_names": 1,
+        "skip_reasons": [],
+        "first_grounding": 0.9607843137254902,
+        "first_anchors": 51,
+        "first_unresolved": 2,
+        "final_grounding": 0.9607843137254902,
+        "final_anchors": 51,
+        "entry_points": 4,
+        "core_abstractions": 6,
+        "flows": 3,
+        "flow_steps": 23,
+        "widest_flow_files": 6,
+        "boundaries": 9,
+        "docs": 1,
+        "responsibility_chars": 3051,
+        "accounted_ratio": 1.0,
+        "covered_ratio": 1.0,
+        "average_responsibility_chars": 108.96428571428571
+      },
+      "cost": {
+        "api_calls": 13,
+        "input_tokens": 8088,
+        "output_tokens": 7087,
+        "cache_write_tokens": 39685,
+        "cache_read_tokens": 112201,
+        "cost_usd": 0.10434935000000001,
+        "uncached_cost_usd": 0.195409,
+        "seconds": 56.63999999999942,
+        "prompt_tokens": 159974,
+        "cache_hit_rate": 0.7013702226611824,
+        "caching_saved_usd": 0.09105964999999999,
+        "write_share": 0.24807156162876468,
+        "cost_per_1k_prompt_tokens": 0.0006522894345331118
+      },
+      "important": {
+        "covered": [
+          "security",
+          "routing.py",
+          "dependencies",
+          "applications.py",
+          "params.py"
+        ],
+        "skipped": [],
+        "missing": []
+      },
+      "survey": {
+        "architecture": "FastAPI is a modern, high-performance Python web framework for building APIs with automatic documentation and validation. It is built on top of Starlette (ASGI web framework) and Pydantic (data validation library), and runs on ASGI servers. The framework's core responsibility is to route incoming HTTP and WebSocket requests to user-defined endpoint functions, automatically validate request data using Pydantic models, serialize responses, and generate interactive API documentation (Swagger UI, ReDoc). At its center are the `FastAPI` application class and `APIRouter` routing engine, which orchestrate dependency injection, request/response handling, security, middleware, and OpenAPI schema generation.",
+        "subsystems": [
+          {
+            "name": "__init__.py",
+            "responsibility": "Exports the public API of FastAPI including main classes and decorators for easy importing.",
+            "key_file": "fastapi/__init__.py"
+          },
+          {
+            "name": "__main__.py",
+            "responsibility": "Entry point for the fastapi CLI command that delegates to the optional fastapi-cli package.",
+            "key_file": "fastapi/__main__.py"
+          },
+          {
+            "name": "_compat",
+            "responsibility": "Provides Pydantic v2 compatibility layer abstracting differences from v1, including ModelField wrappers and schema generation utilities.",
+            "key_file": "fastapi/_compat/v2.py"
+          },
+          {
+            "name": "applications.py",
+            "responsibility": "Defines the main FastAPI application class that extends Starlette and provides HTTP method decorators, route registration, middleware setup, and OpenAPI documentation generation.",
+            "key_file": "fastapi/applications.py",
+            "key_symbol": "FastAPI"
+          },
+          {
+            "name": "background.py",
+            "responsibility": "Provides BackgroundTasks class for registering tasks to run after the response is sent.",
+            "key_file": "fastapi/background.py",
+            "key_symbol": "BackgroundTasks"
+          },
+          {
+            "name": "cli.py",
+            "responsibility": "Wrapper for the optional fastapi-cli CLI tool that displays installation instructions if not available.",
+            "key_file": "fastapi/cli.py"
+          },
+          {
+            "name": "concurrency.py",
+            "responsibility": "Provides async context manager utilities for running blocking context managers in thread pools.",
+            "key_file": "fastapi/concurrency.py"
+          },
+          {
+            "name": "datastructures.py",
+            "responsibility": "Defines UploadFile for handling file uploads and DefaultPlaceholder for distinguishing unset parameter defaults.",
+            "key_file": "fastapi/datastructures.py",
+            "key_symbol": "UploadFile"
+          },
+          {
+            "name": "dependencies",
+            "responsibility": "Core dependency injection system that analyzes function signatures, resolves dependencies, validates request data, and executes dependency chains.",
+            "key_file": "fastapi/dependencies/utils.py",
+            "key_symbol": "solve_dependencies"
+          },
+          {
+            "name": "encoders.py",
+            "responsibility": "Provides jsonable_encoder that converts Python objects (dates, decimals, Pydantic models) to JSON-serializable representations.",
+            "key_file": "fastapi/encoders.py",
+            "key_symbol": "jsonable_encoder"
+          },
+          {
+            "name": "exception_handlers.py",
+            "responsibility": "Defines default exception handlers for HTTPException, request validation errors, and WebSocket validation errors.",
+            "key_file": "fastapi/exception_handlers.py"
+          },
+          {
+            "name": "exceptions.py",
+            "responsibility": "Defines FastAPI-specific exceptions including HTTPException, WebSocketException, RequestValidationError, and ResponseValidationError.",
+            "key_file": "fastapi/exceptions.py"
+          },
+          {
+            "name": "logger.py",
+            "responsibility": "Placeholder module for logging configuration (currently minimal).",
+            "key_file": "fastapi/logger.py"
+          },
+          {
+            "name": "middleware",
+            "responsibility": "Re-exports Starlette middleware classes (CORS, GZip, HTTPS redirect, trusted host, WSGI) for convenient use with FastAPI.",
+            "key_file": "fastapi/middleware/__init__.py"
+          },
+          {
+            "name": "openapi",
+            "responsibility": "Generates OpenAPI/Swagger schemas from route definitions and provides HTML rendering for Swagger UI and ReDoc documentation.",
+            "key_file": "fastapi/openapi/utils.py",
+            "key_symbol": "get_openapi"
+          },
+          {
+            "name": "param_functions.py",
+            "responsibility": "Convenience functions (Path, Query, Header, Cookie, Body, Form, File, Depends, Security) that wrap parameter classes for cleaner API.",
+            "key_file": "fastapi/param_functions.py"
+          },
+          {
+            "name": "params.py",
+            "responsibility": "Defines parameter classes that annotate endpoint function parameters to control parsing location (path, query, header, cookie, body).",
+            "key_file": "fastapi/params.py",
+            "key_symbol": "Param"
+          },
+          {
+            "name": "requests.py",
+            "responsibility": "Re-exports Starlette's Request and HTTPConnection classes for direct use.",
+            "key_file": "fastapi/requests.py"
+          },
+          {
+            "name": "responses.py",
+            "responsibility": "Provides response classes (UJSONResponse, ORJSONResponse) that use faster JSON encoders as alternatives to Starlette's JSONResponse.",
+            "key_file": "fastapi/responses.py"
+          },
+          {
+            "name": "routing.py",
+            "responsibility": "Core routing system defining APIRoute and APIRouter that handle request processing, dependency resolution, validation, serialization, and endpoint invocation.",
+            "key_file": "fastapi/routing.py",
+            "key_symbol": "APIRoute"
+          },
+          {
+            "name": "security",
+            "responsibility": "Security schemes for API authentication including API Key (query, header, cookie), HTTP Basic/Bearer/Digest, OAuth2, and OpenID Connect.",
+            "key_file": "fastapi/security/api_key.py"
+          },
+          {
+            "name": "sse.py",
+            "responsibility": "Server-Sent Events support with EventSourceResponse and ServerSentEvent for streaming responses.",
+            "key_file": "fastapi/sse.py",
+            "key_symbol": "EventSourceResponse"
+          },
+          {
+            "name": "staticfiles.py",
+            "responsibility": "Re-exports Starlette's StaticFiles class for serving static files.",
+            "key_file": "fastapi/staticfiles.py"
+          },
+          {
+            "name": "templating.py",
+            "responsibility": "Re-exports Starlette's Jinja2Templates for template rendering.",
+            "key_file": "fastapi/templating.py"
+          },
+          {
+            "name": "testclient.py",
+            "responsibility": "Re-exports Starlette's TestClient for testing FastAPI applications.",
+            "key_file": "fastapi/testclient.py"
+          },
+          {
+            "name": "types.py",
+            "responsibility": "Defines type aliases used throughout FastAPI (DecoratedCallable, IncEx).",
+            "key_file": "fastapi/types.py"
+          },
+          {
+            "name": "utils.py",
+            "responsibility": "Utility functions for field creation, operation ID generation, schema updates, and parameter validation.",
+            "key_file": "fastapi/utils.py"
+          },
+          {
+            "name": "websockets.py",
+            "responsibility": "Re-exports Starlette's WebSocket, WebSocketDisconnect, and WebSocketState for WebSocket handling.",
+            "key_file": "fastapi/websockets.py"
+          }
+        ],
+        "skipped": [
+          {
+            "name": "openapi/constants.py",
+            "reason": "Generated or configuration file containing OpenAPI constants; minimal content not substantive to overall system behavior"
+          },
+          {
+            "name": "logger.py",
+            "reason": "Placeholder module with no substantive implementation; deferred to system logging configuration"
+          }
+        ],
+        "entry_points": [
+          {
+            "file": "fastapi/__init__.py",
+            "symbol": "FastAPI",
+            "what_it_starts": "The main FastAPI application instance that serves as the entry point for defining routes, middleware, security, and serving HTTP/WebSocket traffic"
+          },
+          {
+            "file": "fastapi/__main__.py",
+            "symbol": "main",
+            "what_it_starts": "CLI entry point that invokes the fastapi-cli command-line tool for development server management"
+          },
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI.__call__",
+            "what_it_starts": "ASGI application call handling incoming HTTP requests by delegating to Starlette's router and middleware stack"
+          },
+          {
+            "file": "fastapi/cli.py",
+            "symbol": "main",
+            "what_it_starts": "Command-line interface wrapper that loads the optional fastapi-cli dependency"
+          }
+        ],
+        "core_abstractions": [
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI",
+            "role": "Main ASGI application class extending Starlette that coordinates all FastAPI functionality"
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "APIRoute",
+            "role": "Route handler that processes incoming requests through dependency injection, validation, and endpoint invocation"
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "APIRouter",
+            "role": "Router for organizing and grouping routes with shared configuration, prefix, tags, and dependencies"
+          },
+          {
+            "file": "fastapi/dependencies/models.py",
+            "symbol": "Dependant",
+            "role": "Model representing a dependency with its parameters, sub-dependencies, and execution strategy"
+          },
+          {
+            "file": "fastapi/params.py",
+            "symbol": "Param",
+            "role": "Base parameter annotation that controls where and how request data is parsed from different sources"
+          },
+          {
+            "file": "fastapi/exceptions.py",
+            "symbol": "HTTPException",
+            "role": "Exception for returning HTTP error responses with status codes and custom headers"
+          }
+        ],
+        "flows": [
+          {
+            "name": "HTTP Request Processing",
+            "steps": [
+              {
+                "file": "fastapi/applications.py",
+                "symbol": "FastAPI.__call__",
+                "what_happens": "ASGI app receives request and delegates to Starlette's built middleware/router"
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "APIRoute.get_route_handler",
+                "what_happens": "Route handler is retrieved, which wraps the user endpoint function with dependency injection and validation logic"
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "get_request_handler",
+                "what_happens": "Main request handler created that solves dependencies, validates request data, and calls the endpoint"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "Dependency injection engine resolves all declared dependencies, calling them or retrieving from cache, handling async/sync callables"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "request_params_to_args",
+                "what_happens": "Request parameters (path, query, header, cookie) are extracted and validated using Pydantic FieldInfo"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "request_body_to_args",
+                "what_happens": "Request body is parsed (JSON, form, multipart) and validated against declared body models"
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "run_endpoint_function",
+                "what_happens": "User endpoint function is executed with resolved dependencies and validated arguments"
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "serialize_response",
+                "what_happens": "Response is serialized to JSON or another format using jsonable_encoder, validated against response model"
+              },
+              {
+                "file": "fastapi/encoders.py",
+                "symbol": "jsonable_encoder",
+                "what_happens": "Response objects are converted to JSON-serializable representations handling dates, decimals, Pydantic models, etc."
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "request_response",
+                "what_happens": "Final response is sent to the client as an ASGI response"
+              }
+            ]
+          },
+          {
+            "name": "Application Setup and Route Definition",
+            "steps": [
+              {
+                "file": "fastapi/applications.py",
+                "symbol": "FastAPI.__init__",
+                "what_happens": "FastAPI instance is created with title, version, OpenAPI config, and routes list"
+              },
+              {
+                "file": "fastapi/applications.py",
+                "symbol": "FastAPI.add_api_route",
+                "what_happens": "Route is registered with endpoint function, path, HTTP methods, response model, and dependencies"
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "APIRoute.__init__",
+                "what_happens": "APIRoute analyzes endpoint signature using get_dependant, extracts parameters, builds dependency tree"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "get_dependant",
+                "what_happens": "Function signature is inspected to extract all parameters, their types, defaults, and annotations (Query, Body, etc.)"
+              },
+              {
+                "file": "fastapi/openapi/utils.py",
+                "symbol": "get_openapi",
+                "what_happens": "OpenAPI schema is generated from all registered routes, their parameters, response models, and security schemes"
+              },
+              {
+                "file": "fastapi/applications.py",
+                "symbol": "FastAPI.openapi",
+                "what_happens": "OpenAPI schema is cached and returned, with automatic path/parameter documentation"
+              },
+              {
+                "file": "fastapi/openapi/docs.py",
+                "symbol": "get_swagger_ui_html",
+                "what_happens": "Swagger UI HTML is generated and served at /docs endpoint for interactive API exploration"
+              }
+            ]
+          },
+          {
+            "name": "Dependency Injection and Security",
+            "steps": [
+              {
+                "file": "fastapi/param_functions.py",
+                "symbol": "Depends",
+                "what_happens": "Depends() decorator marks a parameter as a dependency to be injected"
+              },
+              {
+                "file": "fastapi/security/base.py",
+                "symbol": "SecurityBase",
+                "what_happens": "Security schemes extend this base to define OpenAPI requirements"
+              },
+              {
+                "file": "fastapi/security/oauth2.py",
+                "symbol": "OAuth2PasswordBearer",
+                "what_happens": "OAuth2 security scheme extracts token from Authorization header and optionally calls a user-provided token validator"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "Dependency graph is traversed, dependencies are called or awaited, security dependencies are tracked for OpenAPI"
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "get_request_handler",
+                "what_happens": "Dependencies are resolved before endpoint execution, security dependencies raise HTTPException if validation fails"
+              },
+              {
+                "file": "fastapi/exceptions.py",
+                "symbol": "HTTPException",
+                "what_happens": "Security validation errors throw HTTPException with 401/403 status codes"
+              }
+            ]
+          }
+        ],
+        "boundaries": [
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI",
+            "kind": "external_dependency",
+            "note": "Extends Starlette application class, depending on Starlette's routing, middleware, and ASGI handling"
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "solve_dependencies",
+            "kind": "external_dependency",
+            "note": "Depends on Pydantic for validation, using FieldInfo and ValidationError from pydantic"
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "APIRoute",
+            "kind": "external_dependency",
+            "note": "Built on Starlette's Route class and uses Starlette's request/response types"
+          },
+          {
+            "file": "fastapi/openapi/utils.py",
+            "symbol": "get_openapi",
+            "kind": "external_dependency",
+            "note": "Generates OpenAPI 3.0.2 schemas that can be consumed by API documentation tools and code generators"
+          },
+          {
+            "file": "fastapi/security/oauth2.py",
+            "symbol": "OAuth2PasswordBearer",
+            "kind": "extension_point",
+            "note": "Allows user-defined token validators and scopes for customizing authentication logic"
+          },
+          {
+            "file": "fastapi/param_functions.py",
+            "symbol": "Depends",
+            "kind": "extension_point",
+            "note": "Allows registration of arbitrary callable dependencies that can be injected into routes"
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "APIRoute",
+            "kind": "extension_point",
+            "note": "Endpoint functions can be any callable returning Response, StreamingResponse, or JSONifiable objects"
+          },
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI.exception_handler",
+            "kind": "extension_point",
+            "note": "Allows custom exception handlers for any exception type to customize error responses"
+          },
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI.middleware",
+            "kind": "extension_point",
+            "note": "Allows registration of custom ASGI middleware that wraps request/response processing"
+          }
+        ],
+        "testing_posture": "The repository contains 504 test files covering comprehensive scenarios. Testing is organized in dedicated test directories. The framework provides fastapi.testclient.TestClient (re-exported from Starlette) for synchronous testing of ASGI applications, allowing developers to write tests for their FastAPI applications without running a server. Tests cover routing, dependency injection, validation, security, response serialization, and OpenAPI generation.",
+        "docs": [
+          {
+            "path": "README.md or docs/",
+            "what_it_covers": "FastAPI framework documentation including tutorials, advanced guides, security configuration, deployment, and API reference (not fully explored due to budget constraints)"
+          }
+        ]
+      },
+      "rejections": [
+        "2 citation(s) do not resolve against the repository: entry_point: fastapi/__init__.py:FastAPI (unknown_symbol); entry_point: fastapi/__main__.py:main (unknown_symbol). Use `symbols` or `propose_anchor` to find the real location, then correct or drop them. These names are not subsystems in the inventory and were ignored: openapi/constants.py."
+      ],
+      "seconds_total": 56.64160776138306,
+      "run": 1
+    },
+    {
+      "repo": "fastapi",
+      "policy": "structural",
+      "cache": "two",
+      "stop_reason": "turn_budget",
+      "errors": [],
+      "behavior": {
+        "turns": 13,
+        "tool_calls": 25,
+        "failed_calls": 0,
+        "calls_by_tool": {
+          "list_files": 1,
+          "symbols": 16,
+          "read_file": 8
+        },
+        "read_calls": 8,
+        "outline_reads": 0,
+        "source_lines_read": 246,
+        "source_chars_read": 8567,
+        "largest_read_lines": 110,
+        "large_reads": 0,
+        "whole_file_reads": 6,
+        "structural_calls": 16,
+        "tool_output_chars": 25551,
+        "average_read_lines": 30.75,
+        "structural_share": 0.6666666666666666
+      },
+      "quality": {
+        "produced": true,
+        "accepted": true,
+        "rejections": 0,
+        "required_subsystems": 28,
+        "covered": 28,
+        "skipped": 0,
+        "unaccounted": 0,
+        "unknown_names": 0,
+        "skip_reasons": [],
+        "first_grounding": 1.0,
+        "first_anchors": 31,
+        "first_unresolved": 0,
+        "final_grounding": 1.0,
+        "final_anchors": 31,
+        "entry_points": 3,
+        "core_abstractions": 5,
+        "flows": 3,
+        "flow_steps": 12,
+        "widest_flow_files": 3,
+        "boundaries": 7,
+        "docs": 1,
+        "responsibility_chars": 1909,
+        "accounted_ratio": 1.0,
+        "covered_ratio": 1.0,
+        "average_responsibility_chars": 68.17857142857143
+      },
+      "cost": {
+        "api_calls": 13,
+        "input_tokens": 4067,
+        "output_tokens": 5055,
+        "cache_write_tokens": 28695,
+        "cache_read_tokens": 97398,
+        "cost_usd": 0.07495055,
+        "uncached_cost_usd": 0.155435,
+        "seconds": 42.82800000000134,
+        "prompt_tokens": 130160,
+        "cache_hit_rate": 0.7482944068838353,
+        "caching_saved_usd": 0.08048444999999999,
+        "write_share": 0.22045943454210204,
+        "cost_per_1k_prompt_tokens": 0.0005758339735709897
+      },
+      "important": {
+        "covered": [
+          "security",
+          "routing.py",
+          "dependencies",
+          "applications.py",
+          "params.py"
+        ],
+        "skipped": [],
+        "missing": []
+      },
+      "survey": {
+        "architecture": "FastAPI is a modern Python web framework built on top of Starlette that enables rapid development of high-performance HTTP APIs with automatic validation, serialization, and OpenAPI documentation. It extends Starlette's routing and request handling with a dependency injection system, automatic request validation using Pydantic, built-in security schemes, and automatic API documentation generation. The framework follows an ASGI pattern with async-first design and provides decorators for defining path operations (routes) with automatic parameter extraction from the request.",
+        "subsystems": [
+          {
+            "name": "__init__.py",
+            "responsibility": "Public API exports of FastAPI's main classes and functions.",
+            "key_file": "fastapi/__init__.py"
+          },
+          {
+            "name": "__main__.py",
+            "responsibility": "Entry point for running FastAPI as a module.",
+            "key_file": "fastapi/__main__.py"
+          },
+          {
+            "name": "_compat",
+            "responsibility": "Compatibility layer for Pydantic v1 and v2 API differences.",
+            "key_file": "fastapi/_compat/__init__.py"
+          },
+          {
+            "name": "applications.py",
+            "responsibility": "Core FastAPI application class extending Starlette with route decoration methods and middleware management.",
+            "key_file": "fastapi/applications.py",
+            "key_symbol": "FastAPI"
+          },
+          {
+            "name": "background.py",
+            "responsibility": "Background task execution wrapper for running tasks after response is sent.",
+            "key_file": "fastapi/background.py"
+          },
+          {
+            "name": "cli.py",
+            "responsibility": "Command-line interface for FastAPI utilities.",
+            "key_file": "fastapi/cli.py"
+          },
+          {
+            "name": "concurrency.py",
+            "responsibility": "Utilities for concurrent execution handling.",
+            "key_file": "fastapi/concurrency.py"
+          },
+          {
+            "name": "datastructures.py",
+            "responsibility": "Custom data structures like UploadFile for handling file uploads.",
+            "key_file": "fastapi/datastructures.py"
+          },
+          {
+            "name": "dependencies",
+            "responsibility": "Dependency injection system with automatic parameter extraction, validation, and resolution.",
+            "key_file": "fastapi/dependencies/utils.py",
+            "key_symbol": "get_dependant"
+          },
+          {
+            "name": "encoders.py",
+            "responsibility": "JSON encoding of complex types and Pydantic models.",
+            "key_file": "fastapi/encoders.py"
+          },
+          {
+            "name": "exception_handlers.py",
+            "responsibility": "Default exception handlers for HTTP exceptions and validation errors.",
+            "key_file": "fastapi/exception_handlers.py"
+          },
+          {
+            "name": "exceptions.py",
+            "responsibility": "FastAPI-specific exception classes for HTTP errors, WebSocket errors, and validation failures.",
+            "key_file": "fastapi/exceptions.py"
+          },
+          {
+            "name": "logger.py",
+            "responsibility": "Logging configuration for FastAPI.",
+            "key_file": "fastapi/logger.py"
+          },
+          {
+            "name": "middleware",
+            "responsibility": "Middleware components for request/response processing including CORS, gzip, and custom async exit stack.",
+            "key_file": "fastapi/middleware/asyncexitstack.py"
+          },
+          {
+            "name": "openapi",
+            "responsibility": "OpenAPI schema generation and automatic API documentation UI rendering.",
+            "key_file": "fastapi/openapi/utils.py",
+            "key_symbol": "get_openapi"
+          },
+          {
+            "name": "param_functions.py",
+            "responsibility": "Factory functions for creating parameter extractors (Path, Query, Header, Cookie, Body, Form, File, Depends, Security).",
+            "key_file": "fastapi/param_functions.py"
+          },
+          {
+            "name": "params.py",
+            "responsibility": "Parameter classes that define how request data should be extracted and validated.",
+            "key_file": "fastapi/params.py"
+          },
+          {
+            "name": "requests.py",
+            "responsibility": "Request class extending Starlette's Request.",
+            "key_file": "fastapi/requests.py"
+          },
+          {
+            "name": "responses.py",
+            "responsibility": "Response classes for alternative JSON encoders (UJSONResponse, ORJSONResponse).",
+            "key_file": "fastapi/responses.py"
+          },
+          {
+            "name": "routing.py",
+            "responsibility": "APIRoute and APIRouter classes that handle path operation registration, request handling, dependency resolution, and response serialization.",
+            "key_file": "fastapi/routing.py",
+            "key_symbol": "APIRoute"
+          },
+          {
+            "name": "security",
+            "responsibility": "Security scheme implementations for API authentication (APIKey, HTTP Basic/Bearer, OAuth2).",
+            "key_file": "fastapi/security/api_key.py"
+          },
+          {
+            "name": "sse.py",
+            "responsibility": "Server-Sent Events response handling for streaming data to clients.",
+            "key_file": "fastapi/sse.py"
+          },
+          {
+            "name": "staticfiles.py",
+            "responsibility": "Static file serving.",
+            "key_file": "fastapi/staticfiles.py"
+          },
+          {
+            "name": "templating.py",
+            "responsibility": "Template rendering support.",
+            "key_file": "fastapi/templating.py"
+          },
+          {
+            "name": "testclient.py",
+            "responsibility": "Test client for testing FastAPI applications.",
+            "key_file": "fastapi/testclient.py"
+          },
+          {
+            "name": "types.py",
+            "responsibility": "Type definitions and aliases used throughout FastAPI.",
+            "key_file": "fastapi/types.py"
+          },
+          {
+            "name": "utils.py",
+            "responsibility": "Utility functions for field creation, unique ID generation, and value extraction.",
+            "key_file": "fastapi/utils.py"
+          },
+          {
+            "name": "websockets.py",
+            "responsibility": "WebSocket class for bi-directional communication.",
+            "key_file": "fastapi/websockets.py"
+          }
+        ],
+        "skipped": [],
+        "entry_points": [
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI",
+            "what_it_starts": "The main application instance that receives ASGI scope/receive/send and routes requests to path operations"
+          },
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI.add_api_route",
+            "what_it_starts": "Registration of HTTP routes with automatic dependency injection and validation"
+          },
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI.websocket",
+            "what_it_starts": "Registration of WebSocket endpoints"
+          }
+        ],
+        "core_abstractions": [
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "APIRoute",
+            "role": "Route definition that wraps endpoint functions with automatic parameter extraction, validation, dependency resolution, and response serialization"
+          },
+          {
+            "file": "fastapi/dependencies/models.py",
+            "symbol": "Dependant",
+            "role": "Model representing a function's dependencies and parameters, used for recursive dependency resolution"
+          },
+          {
+            "file": "fastapi/params.py",
+            "symbol": "Param",
+            "role": "Base class for parameter descriptors (Query, Path, Header, Cookie, Body) that control request data extraction"
+          },
+          {
+            "file": "fastapi/exceptions.py",
+            "symbol": "HTTPException",
+            "role": "FastAPI's exception class for returning HTTP error responses"
+          },
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI",
+            "role": "Main application class extending Starlette that manages routes, middleware, exception handlers, and OpenAPI generation"
+          }
+        ],
+        "flows": [
+          {
+            "name": "HTTP Request Handling",
+            "steps": [
+              {
+                "file": "fastapi/applications.py",
+                "symbol": "FastAPI.__call__",
+                "what_happens": "ASGI app entry point receives scope/receive/send from server"
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "get_request_handler",
+                "what_happens": "Creates handler function for matched route that extracts and validates all dependencies"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "solve_dependencies",
+                "what_happens": "Recursively resolves all dependencies, validates request data, executes generators/context managers"
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "run_endpoint_function",
+                "what_happens": "Executes the actual endpoint function with resolved dependencies"
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "serialize_response",
+                "what_happens": "Encodes response using jsonable_encoder and returns Response object"
+              }
+            ]
+          },
+          {
+            "name": "OpenAPI Documentation Generation",
+            "steps": [
+              {
+                "file": "fastapi/applications.py",
+                "symbol": "FastAPI.openapi",
+                "what_happens": "Collects all registered routes and generates OpenAPI schema"
+              },
+              {
+                "file": "fastapi/openapi/utils.py",
+                "symbol": "get_openapi",
+                "what_happens": "Builds OpenAPI specification dictionary from routes and dependencies"
+              },
+              {
+                "file": "fastapi/openapi/docs.py",
+                "symbol": "get_swagger_ui_html",
+                "what_happens": "Renders Swagger UI documentation page at /docs"
+              }
+            ]
+          },
+          {
+            "name": "Route Registration with Decorators",
+            "steps": [
+              {
+                "file": "fastapi/applications.py",
+                "symbol": "FastAPI.get",
+                "what_happens": "Decorator method that accepts route path and response configuration"
+              },
+              {
+                "file": "fastapi/applications.py",
+                "symbol": "FastAPI.add_api_route",
+                "what_happens": "Creates APIRoute instance and adds to application routes"
+              },
+              {
+                "file": "fastapi/routing.py",
+                "symbol": "APIRoute.__init__",
+                "what_happens": "Analyzes endpoint function signature to extract parameters and dependencies"
+              },
+              {
+                "file": "fastapi/dependencies/utils.py",
+                "symbol": "get_dependant",
+                "what_happens": "Recursively analyzes function to build dependency tree"
+              }
+            ]
+          }
+        ],
+        "boundaries": [
+          {
+            "file": "fastapi/applications.py",
+            "symbol": "FastAPI",
+            "kind": "extension_point",
+            "note": "Extends Starlette to add FastAPI-specific features; users subclass or instance-configure it"
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "APIRoute",
+            "kind": "extension_point",
+            "note": "Can be subclassed to customize request handling and response serialization"
+          },
+          {
+            "file": "fastapi/_compat/v2.py",
+            "symbol": "ModelField",
+            "kind": "external_dependency",
+            "note": "Pydantic v2 compatibility layer providing Pydantic model introspection"
+          },
+          {
+            "file": "fastapi/routing.py",
+            "symbol": "request_response",
+            "kind": "external_dependency",
+            "note": "Wraps Starlette's ASGI app handler for request/response pattern"
+          },
+          {
+            "file": "fastapi/security/base.py",
+            "symbol": "SecurityBase",
+            "kind": "extension_point",
+            "note": "Base class for security schemes; users can create custom security implementations"
+          },
+          {
+            "file": "fastapi/dependencies/utils.py",
+            "symbol": "solve_dependencies",
+            "kind": "trust_boundary",
+            "note": "Validates all incoming request data against Pydantic models before endpoint execution"
+          },
+          {
+            "file": "fastapi/exception_handlers.py",
+            "symbol": "request_validation_exception_handler",
+            "kind": "trust_boundary",
+            "note": "Catches validation errors and returns safe HTTP 422 responses without internal details"
+          }
+        ],
+        "testing_posture": "FastAPI has a comprehensive test suite with 504 test files covering routing, dependencies, security, exception handling, OpenAPI generation, and request/response validation. Tests are located in test directories throughout the repository and use the TestClient from fastapi/testclient.py for integration testing.",
+        "docs": [
+          {
+            "path": "README documentation files",
+            "what_it_covers": "Documentation appears to be maintained in a separate directory (not enumerated in source files); 358 doc files suggest comprehensive guides covering first steps, request bodies, responses, dependencies, security, middleware, background tasks, and deployment"
+          }
+        ]
+      },
+      "rejections": [],
+      "seconds_total": 42.83460736274719,
+      "run": 2
+    }
+  ],
+  "consistency": {
+    "fastapi/default/two": {
+      "runs": 2,
+      "covered_overlap": 1.0,
+      "anchor_overlap": 0.43902439024390244,
+      "cost_spread_usd": 0.019051749999999992,
+      "turn_spread": 0
+    },
+    "fastapi/structural/two": {
+      "runs": 2,
+      "covered_overlap": 1.0,
+      "anchor_overlap": 0.47368421052631576,
+      "cost_spread_usd": 0.029398800000000003,
+      "turn_spread": 0
+    }
+  },
+  "total_cost_usd": 0.41222475000000003
+}

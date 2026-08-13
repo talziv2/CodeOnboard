@@ -1,0 +1,159 @@
+[
+  {
+    "goal": "fastapi-di",
+    "node_index": "4/10",
+    "confused_at": "fastapi/dependencies/utils.py:analyze_param",
+    "grade": "off-topic",
+    "dossier_candidates": [],
+    "dossier_sources": {},
+    "skeleton_candidates": [
+      "fastapi/dependencies/utils.py:ensure_multipart_is_installed",
+      "fastapi/dependencies/utils.py:ParamDetails",
+      "fastapi/_compat/shared.py:lenient_issubclass",
+      "fastapi/_compat/shared.py:field_annotation_is_scalar",
+      "fastapi/background.py:BackgroundTasks",
+      "fastapi/concurrency.py:contextmanager_in_threadpool",
+      "fastapi/exceptions.py:DependencyScopeError",
+      "fastapi/security/oauth2.py:SecurityScopes"
+    ],
+    "skeleton_sources": {
+      "calls": 4,
+      "module_dependency": 4
+    },
+    "removed_by_exclusion": [
+      "fastapi/dependencies/utils.py:get_dependant",
+      "fastapi/dependencies/utils.py:add_non_field_param_to_dependency"
+    ],
+    "pool_used": [
+      "fastapi/dependencies/utils.py:ensure_multipart_is_installed [calls]",
+      "fastapi/dependencies/utils.py:ParamDetails [calls]",
+      "fastapi/_compat/shared.py:lenient_issubclass [calls]",
+      "fastapi/_compat/shared.py:field_annotation_is_scalar [calls]",
+      "fastapi/background.py:BackgroundTasks [module_dependency]"
+    ],
+    "selected": null,
+    "selected_source": null,
+    "selected_why": null,
+    "outcome": "no_useful_prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  },
+  {
+    "goal": "fastapi-di",
+    "node_index": "8/10",
+    "confused_at": "fastapi/dependencies/utils.py:solve_dependencies",
+    "grade": "off-topic",
+    "dossier_candidates": [],
+    "dossier_sources": {},
+    "skeleton_candidates": [
+      "fastapi/dependencies/utils.py:_solve_generator",
+      "fastapi/dependencies/utils.py:SolvedDependency",
+      "fastapi/dependencies/utils.py:request_params_to_args",
+      "fastapi/dependencies/utils.py:request_body_to_args",
+      "fastapi/background.py:BackgroundTasks",
+      "fastapi/concurrency.py:contextmanager_in_threadpool",
+      "fastapi/exceptions.py:DependencyScopeError",
+      "fastapi/security/oauth2.py:SecurityScopes"
+    ],
+    "skeleton_sources": {
+      "calls": 4,
+      "module_dependency": 4
+    },
+    "removed_by_exclusion": [
+      "fastapi/routing.py:get_request_handler",
+      "fastapi/dependencies/utils.py:solve_dependencies"
+    ],
+    "pool_used": [
+      "fastapi/dependencies/utils.py:_solve_generator [calls]",
+      "fastapi/dependencies/utils.py:SolvedDependency [calls]",
+      "fastapi/dependencies/utils.py:request_params_to_args [calls]",
+      "fastapi/dependencies/utils.py:request_body_to_args [calls]",
+      "fastapi/background.py:BackgroundTasks [module_dependency]"
+    ],
+    "selected": null,
+    "selected_source": null,
+    "selected_why": null,
+    "outcome": "no_useful_prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  },
+  {
+    "goal": "fastapi-di",
+    "node_index": "4/10",
+    "confused_at": "fastapi/routing.py:APIRoute.__init__",
+    "grade": "off-topic",
+    "dossier_candidates": [],
+    "dossier_sources": {},
+    "skeleton_candidates": [
+      "fastapi/routing.py:APIRoute",
+      "fastapi/routing.py:request_response",
+      "fastapi/_compat/shared.py:lenient_issubclass",
+      "fastapi/_compat/v2.py:ModelField",
+      "fastapi/datastructures.py:DefaultPlaceholder",
+      "fastapi/datastructures.py:Default",
+      "fastapi/dependencies/utils.py:_should_embed_body_fields",
+      "fastapi/dependencies/utils.py:get_body_field"
+    ],
+    "skeleton_sources": {
+      "enclosing_class": 1,
+      "calls": 4,
+      "module_dependency": 3
+    },
+    "removed_by_exclusion": [
+      "fastapi/dependencies/utils.py:get_dependant",
+      "fastapi/dependencies/utils.py:get_flat_dependant"
+    ],
+    "pool_used": [
+      "fastapi/routing.py:APIRoute [enclosing_class]",
+      "fastapi/routing.py:request_response [calls]",
+      "fastapi/_compat/shared.py:lenient_issubclass [calls]",
+      "fastapi/_compat/v2.py:ModelField [calls]",
+      "fastapi/datastructures.py:DefaultPlaceholder [calls]"
+    ],
+    "selected": null,
+    "selected_source": null,
+    "selected_why": null,
+    "outcome": "no_useful_prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  },
+  {
+    "goal": "fastapi-di",
+    "node_index": "8/10",
+    "confused_at": "fastapi/dependencies/utils.py:solve_dependencies",
+    "grade": "off-topic",
+    "dossier_candidates": [],
+    "dossier_sources": {},
+    "skeleton_candidates": [
+      "fastapi/dependencies/utils.py:_solve_generator",
+      "fastapi/dependencies/utils.py:SolvedDependency",
+      "fastapi/dependencies/utils.py:request_params_to_args",
+      "fastapi/dependencies/utils.py:request_body_to_args",
+      "fastapi/background.py:BackgroundTasks",
+      "fastapi/concurrency.py:contextmanager_in_threadpool",
+      "fastapi/exceptions.py:DependencyScopeError",
+      "fastapi/security/oauth2.py:SecurityScopes"
+    ],
+    "skeleton_sources": {
+      "calls": 4,
+      "module_dependency": 4
+    },
+    "removed_by_exclusion": [
+      "fastapi/routing.py:get_request_handler",
+      "fastapi/dependencies/utils.py:solve_dependencies"
+    ],
+    "pool_used": [
+      "fastapi/dependencies/utils.py:_solve_generator [calls]",
+      "fastapi/dependencies/utils.py:SolvedDependency [calls]",
+      "fastapi/dependencies/utils.py:request_params_to_args [calls]",
+      "fastapi/dependencies/utils.py:request_body_to_args [calls]",
+      "fastapi/background.py:BackgroundTasks [module_dependency]"
+    ],
+    "selected": null,
+    "selected_source": null,
+    "selected_why": null,
+    "outcome": "no_useful_prerequisite",
+    "reached_retrieval": false,
+    "errors": []
+  }
+]
