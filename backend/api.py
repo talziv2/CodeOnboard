@@ -447,18 +447,20 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
         current, body.response, classification, grade.get("rationale") or ""
     )
 
-    # A wrong answer gets a warm-up automatically — being stuck is exactly when
-    # a user is least able to judge that they need one. "partial" does not: the
-    # user is mostly there, so the warm-up stays an offer they can decline
-    # (the /retry endpoint). The Mutator's one-prerequisite-per-node cap still
-    # applies, so repeated failures can't stack warm-ups.
+    # A WRONG answer gets a warm-up automatically — being stuck is exactly when
+    # a user is least able to judge that they need one. Three classifications do
+    # not qualify:
+    #   partial    the user is mostly there, so the warm-up stays an offer they
+    #              can decline (the /retry endpoint);
+    #   off-topic  the answer says nothing about their understanding, so it is
+    #              not grounds to reshape their path — they typed something
+    #              unrelated, which is not the same as being stuck;
+    #   understood nothing to remediate.
+    # The Mutator's one-prerequisite-per-node cap still applies, so repeated
+    # failures cannot stack warm-ups.
     mutation = {"kind": "none"}
-    if classification in ("confused", "off-topic"):
+    if classification == "confused":
         try:
-            # A warm-up adds a real node to the graph, so its title is written
-            # in the session's own language and translated for display like
-            # every other node — unlike the grading feedback above, which is
-            # transient and follows the reader.
             mutation_state = OnboardState(
                 repo_url=graph.repo_url, goal=graph.goal, client=client
             )

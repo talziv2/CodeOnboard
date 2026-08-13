@@ -87,11 +87,11 @@ def test_mark_visited_flips_flag():
     assert g.nodes[a.id].visited is True
 
 
-def test_mark_understanding_not_yet_sets_weak_spot():
+def test_mark_understanding_failed_sets_weak_spot():
     g = _make_graph()
     a = g.add_node(_make_node())
-    g.mark_understanding(a.id, "not-yet")
-    assert g.nodes[a.id].understanding_state == "not-yet"
+    g.mark_understanding(a.id, "failed")
+    assert g.nodes[a.id].understanding_state == "failed"
     assert g.nodes[a.id].weak_spot is True
 
 
@@ -100,7 +100,7 @@ def test_weak_spot_is_sticky_across_recovery():
     # The Planner uses this as a long-memory signal.
     g = _make_graph()
     a = g.add_node(_make_node())
-    g.mark_understanding(a.id, "not-yet")
+    g.mark_understanding(a.id, "failed")
     g.mark_understanding(a.id, "understood")
     assert g.nodes[a.id].understanding_state == "understood"
     assert g.nodes[a.id].weak_spot is True
@@ -168,14 +168,15 @@ def test_readiness_empty_graph_is_zero():
     assert g.readiness() == 0.0
 
 
-def test_readiness_counts_only_understood():
+def test_readiness_counts_partial_as_half_understood():
+    """`partial` is real progress, so readiness scores it at 0.5."""
     g = _make_graph()
     a = g.add_node(_make_node("A"))
     b = g.add_node(_make_node("B"))
     g.add_node(_make_node("C"))
     g.mark_understanding(a.id, "understood")
     g.mark_understanding(b.id, "partial")
-    assert g.readiness() == pytest.approx(1 / 3)
+    assert g.readiness() == pytest.approx((1 + 0.5) / 3)
 
 
 # --- traversal ---

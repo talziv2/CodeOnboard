@@ -70,22 +70,47 @@ def test_partial_marks_node_partial():
     assert state.graph.nodes[node_id].understanding_state == "partial"
 
 
-def test_confused_marks_not_yet_and_sets_weak_spot():
+def test_confused_marks_failed_and_sets_weak_spot():
     state, node_id = _make_state_with_lesson()
     run(state, "It opens a socket?", client=_mock_client("confused"))
     node = state.graph.nodes[node_id]
-    assert node.understanding_state == "not-yet"
+    assert node.understanding_state == "failed"
     assert node.weak_spot is True
 
 
 def test_off_topic_leaves_understanding_state_unchanged():
+    """An irrelevant answer is evidence of nothing, in either direction."""
     state, node_id = _make_state_with_lesson()
-    before = state.graph.nodes[node_id].understanding_state  # "not-yet" default
+    before = state.graph.nodes[node_id].understanding_state
     run(state, "what's for lunch", client=_mock_client("off-topic"))
     node = state.graph.nodes[node_id]
     assert node.understanding_state == before
     assert node.weak_spot is False
     assert state.last_grade["classification"] == "off-topic"
+
+
+def test_off_topic_does_not_overwrite_an_earned_state():
+    """The bug was worse than a wrong default: it erased real progress.
+
+    A node the developer had already shown they understood was marked failed
+    the moment they typed something unrelated.
+    """
+    state, node_id = _make_state_with_lesson()
+    run(state, "It returns the mutated PreparedRequest", client=_mock_client("understood"))
+    assert state.graph.nodes[node_id].understanding_state == "understood"
+
+    run(state, "what's for lunch", client=_mock_client("off-topic"))
+    node = state.graph.nodes[node_id]
+    assert node.understanding_state == "understood"
+    assert node.weak_spot is False
+
+
+def test_off_topic_does_not_make_a_node_eligible_for_a_prerequisite():
+    """`weak_spot` is what the Mutator's confusion path keys on."""
+    state, node_id = _make_state_with_lesson()
+    run(state, "unrelated rambling", client=_mock_client("off-topic"))
+    assert state.graph.nodes[node_id].weak_spot is False
+    assert state.graph.nodes[node_id].understanding_state != "failed"
 
 
 def test_uses_haiku_model():

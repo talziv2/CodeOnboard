@@ -30,12 +30,16 @@ MAX_TOKENS = 512
 Classification = Literal["understood", "partial", "confused", "off-topic"]
 
 # How each classification updates the node.
-# "confused" and "off-topic" both map to "failed" — the user didn't demonstrate understanding.
+# An off-topic answer is deliberately ABSENT from this map, not mapped to
+# anything: it is evidence of neither understanding nor misunderstanding, so the
+# node keeps whatever state it already had. Mapping it to "failed" (as this table
+# did) marked the node failed, tripped `weak_spot`, and made it eligible for a
+# prerequisite insertion — all on the strength of the user typing something
+# unrelated. `_apply_grade` skips any classification missing from here.
 _CLASSIFICATION_TO_STATE: dict[str, str] = {
     "understood": "understood",
     "partial": "partial",
     "confused": "failed",
-    "off-topic": "failed",
 }
 
 

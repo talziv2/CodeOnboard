@@ -226,8 +226,11 @@ def test_advance_unknown_session_404(client):
 def _grader_side_effect(classification: str):
     def _apply(state, user_response, client=None):
         node = state.graph.nodes[state.graph.current_node_id]
-        # Mimic the real agent's node update for the non-off-topic cases.
-        mapping = {"understood": "understood", "partial": "partial", "confused": "not-yet"}
+        # Mimic the real agent's node update. `off-topic` is absent on purpose:
+        # it is evidence of neither understanding nor misunderstanding, so the
+        # node keeps the state it already had (see grader/agent.py).
+        mapping = {"understood": "understood", "partial": "partial",
+                   "confused": "failed"}
         if classification in mapping:
             state.graph.mark_understanding(node.id, mapping[classification])
         state.last_grade = {"classification": classification, "rationale": "mock"}
@@ -259,6 +262,55 @@ def test_respond_classifies_and_persists(mock_pipeline, mock_teaching, mock_clon
     assert node["understanding_state"] == "understood"
 
 
+@patch("backend.api.mutate_graph")
+@patch("backend.api.clone_repo", return_value="data/repos/requests")
+@patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_off_topic_does_not_trigger_an_automatic_prerequisite(
+    mock_pipeline, mock_teaching, mock_clone, mock_mutate, client
+):
+    """The other half of the off-topic bug, one layer up.
+
+    Fixing the Grader's state mapping was not enough: /respond also branched on
+    `off-topic` to insert a warm-up. Typing something unrelated would still have
+    reshaped the learning path.
+    """
+    session_id = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()["session_id"]
+    client.get(f"/session/{session_id}/lesson")
+
+    with patch("backend.api.run_grader", side_effect=_grader_side_effect("off-topic")):
+        resp = client.post(f"/session/{session_id}/respond", json={"response": "hello?"})
+
+    assert resp.status_code == 200
+    mock_mutate.assert_not_called()
+    graph = client.get(f"/session/{session_id}").json()
+    node = next(n for n in graph["nodes"] if n["id"] == graph["current_node_id"])
+    assert node["weak_spot"] is False
+    assert node["understanding_state"] == "not_started"
+    # The answer is still recorded — it happened, it just carries no verdict.
+    assert node["attempts"][-1]["classification"] == "off-topic"
+
+
+@patch("backend.api.mutate_graph")
+@patch("backend.api.clone_repo", return_value="data/repos/requests")
+@patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_confused_still_triggers_an_automatic_prerequisite(
+    mock_pipeline, mock_teaching, mock_clone, mock_mutate, client
+):
+    session_id = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()["session_id"]
+    client.get(f"/session/{session_id}/lesson")
+
+    with patch("backend.api.run_grader", side_effect=_grader_side_effect("confused")):
+        client.post(f"/session/{session_id}/respond", json={"response": "no idea"})
+
+    mock_mutate.assert_called_once()
+
+
 @patch("backend.api.clone_repo", return_value="data/repos/requests")
 @patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
@@ -274,7 +326,7 @@ def test_respond_confused_sets_weak_spot(mock_pipeline, mock_teaching, mock_clon
     graph = client.get(f"/session/{session_id}").json()
     current = graph["current_node_id"]
     node = next(n for n in graph["nodes"] if n["id"] == current)
-    assert node["understanding_state"] == "not-yet"
+    assert node["understanding_state"] == "failed"
     assert node["weak_spot"] is True
 
 
