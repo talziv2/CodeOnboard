@@ -3,7 +3,7 @@
 import type { GraphNode } from "@/lib/api";
 import type { RouteStop } from "@/lib/graph-layout";
 import { tagStyle, tagLabel, stateStyle, stateLabel, STATE_ORDER } from "@/lib/tags";
-import { useI18n } from "@/lib/i18n/context";
+import { t } from "@/lib/strings";
 
 interface Props {
   stops: RouteStop[];
@@ -33,8 +33,6 @@ function Pin({ node, isCurrent }: { node: GraphNode; isCurrent: boolean }) {
 }
 
 export default function RouteRail({ stops, currentNodeId, onJump, onExpand }: Props) {
-  const { t } = useI18n();
-
   return (
     <aside className="flex h-full min-h-0 flex-col gap-3 border-e border-rule bg-trench py-4">
       <div className="flex items-baseline justify-between px-4">
@@ -92,7 +90,7 @@ export default function RouteRail({ stops, currentNodeId, onJump, onExpand }: Pr
                   {node.title}
                 </span>
 
-                <span dir="ltr" className="truncate text-start font-mono text-[10.5px] text-graphite">
+                <span className="truncate text-start font-mono text-[10.5px] text-graphite">
                   {node.file}
                 </span>
 
@@ -106,7 +104,7 @@ export default function RouteRail({ stops, currentNodeId, onJump, onExpand }: Pr
                           className="rounded-[2px] border px-[5px] py-px font-mono text-[9.5px] tracking-[0.05em]"
                           style={{ color: s.text, borderColor: s.border, background: s.background }}
                         >
-                          {tagLabel(t, tag)}
+                          {tagLabel(tag)}
                         </span>
                       );
                     })}
@@ -137,7 +135,7 @@ export default function RouteRail({ stops, currentNodeId, onJump, onExpand }: Pr
                 className="h-[9px] w-[9px] shrink-0 rounded-full border-[1.5px]"
                 style={{ borderColor: s.stroke, background: s.fill }}
               />
-              {stateLabel(t, state)}
+              {stateLabel(state)}
             </span>
           );
         })}

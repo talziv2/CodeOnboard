@@ -7,9 +7,8 @@ import { getLesson, respond, advance, retry } from "@/lib/api";
 import type {
   Attempt, Classification, GraphNode, Lesson, RespondResult, SessionGraph,
 } from "@/lib/api";
-import type { Dictionary } from "@/lib/i18n";
 import { tagStyle, tagLabel } from "@/lib/tags";
-import { useI18n } from "@/lib/i18n/context";
+import { errorText, t } from "@/lib/strings";
 
 interface Props {
   sessionId: string;
@@ -25,7 +24,7 @@ interface Props {
   onFinish: () => void;
 }
 
-/** Classification keys stay English on the wire; only the label is localized. */
+/** Keyed by the classification value the Grader returns. */
 const VERDICT_COLOR: Record<string, string> = {
   understood: "#4fb286",
   partial: "#d9a441",
@@ -48,20 +47,20 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Chevron that points along the reading direction when closed, down when open. */
+/** Chevron that points right when closed, down when open. */
 function Chevron() {
   return (
     <svg
       aria-hidden
       viewBox="0 0 10 10"
-      className="h-2.5 w-2.5 shrink-0 fill-none stroke-graphite stroke-[1.5] transition-transform group-open:rotate-90 rtl:rotate-180 rtl:group-open:rotate-90"
+      className="h-2.5 w-2.5 shrink-0 fill-none stroke-graphite stroke-[1.5] transition-transform group-open:rotate-90"
     >
       <path d="M3.5 1.5 L7 5 L3.5 8.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-function whenLabel(t: Dictionary, iso: string): string {
+function whenLabel(iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
   const mins = Math.round((Date.now() - then) / 60000);
@@ -74,14 +73,13 @@ function whenLabel(t: Dictionary, iso: string): string {
 
 /** One graded answer, collapsed to its verdict until opened. */
 function AttemptCard({ attempt, index }: { attempt: Attempt; index: number }) {
-  const { t } = useI18n();
   const label = t.lesson.verdict[attempt.classification] ?? attempt.classification;
   const color = VERDICT_COLOR[attempt.classification] ?? NEUTRAL;
 
   return (
     <details className="group rounded border border-rule bg-slab open:bg-trench">
       <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2">
-        <span aria-hidden dir="ltr" className="font-mono text-[10px] text-graphite">
+        <span aria-hidden className="font-mono text-[10px] text-graphite">
           {String(index + 1).padStart(2, "0")}
         </span>
         <span
@@ -91,7 +89,7 @@ function AttemptCard({ attempt, index }: { attempt: Attempt; index: number }) {
           {label}
         </span>
         <span className="ms-auto font-mono text-[10px] text-graphite">
-          {whenLabel(t, attempt.at)}
+          {whenLabel(attempt.at)}
         </span>
         <Chevron />
       </summary>
@@ -100,7 +98,7 @@ function AttemptCard({ attempt, index }: { attempt: Attempt; index: number }) {
           <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-graphite">
             {t.lesson.youWrote}
           </span>
-          <p className="measure bidi-auto whitespace-pre-wrap text-[12.5px] leading-relaxed text-paper">
+          <p className="measure whitespace-pre-wrap text-[12.5px] leading-relaxed text-paper">
             {attempt.answer}
           </p>
         </div>
@@ -109,7 +107,7 @@ function AttemptCard({ attempt, index }: { attempt: Attempt; index: number }) {
             <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-graphite">
               {t.lesson.feedback}
             </span>
-            <p className="measure bidi-auto text-[12.5px] leading-relaxed text-graphite">
+            <p className="measure text-[12.5px] leading-relaxed text-graphite">
               {attempt.rationale}
             </p>
           </div>
@@ -124,7 +122,6 @@ export default function LessonPanel({
   graph, onFileClick, onAdvance, onRespond, onFinish,
 }: Props) {
   const router = useRouter();
-  const { t, te, locale } = useI18n();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [answer, setAnswer] = useState("");
   const [result, setResult] = useState<RespondResult | null>(null);
@@ -132,21 +129,15 @@ export default function LessonPanel({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
-  // Refetching on a locale change is the point: the server returns this
-  // lesson translated into the new language. The verdict is deliberately not
-  // cleared — a switch mid-answer shouldn't discard feedback already earned.
   useEffect(() => {
     setLesson(null);
     setError(null);
     setLoading(true);
-    getLesson(sessionId, locale)
+    getLesson(sessionId)
       .then(setLesson)
-      .catch((e) => setError(te(e.message)))
+      .catch((e) => setError(errorText(e.message)))
       .finally(() => setLoading(false));
-    // `te` is a fresh closure on every provider render; `locale` is the part
-    // of it that actually matters here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, nodeId, locale]);
+  }, [sessionId, nodeId]);
 
   // Moving to a different node is what clears the answer in progress.
   useEffect(() => {
@@ -159,13 +150,13 @@ export default function LessonPanel({
     setLoading(true);
     setError(null);
     try {
-      const res = await respond(sessionId, answer, nodeId, locale);
+      const res = await respond(sessionId, answer, nodeId);
       setResult(res);
       // A warm-up moves the session pointer, and refreshing now would swap this
       // panel out before the verdict could be read. Follow on the user's click.
       if (res.mutation?.kind !== "prerequisite") onRespond();
     } catch (e: unknown) {
-      setError(e instanceof Error ? te(e.message) : t.lesson.gradeFailed);
+      setError(e instanceof Error ? errorText(e.message) : t.lesson.gradeFailed);
     } finally {
       setLoading(false);
     }
@@ -178,7 +169,7 @@ export default function LessonPanel({
       await onAdvance();
       if (res?.done) setDone(true);
     } catch (e: unknown) {
-      setError(e instanceof Error ? te(e.message) : t.lesson.advanceFailed);
+      setError(e instanceof Error ? errorText(e.message) : t.lesson.advanceFailed);
     } finally {
       setLoading(false);
     }
@@ -192,7 +183,7 @@ export default function LessonPanel({
       setAnswer("");
       await onAdvance();
     } catch (e: unknown) {
-      setError(e instanceof Error ? te(e.message) : t.lesson.warmUpFailed);
+      setError(e instanceof Error ? errorText(e.message) : t.lesson.warmUpFailed);
     } finally {
       setLoading(false);
     }
@@ -209,7 +200,7 @@ export default function LessonPanel({
   }
 
   if (error && !lesson) {
-    return <p className="bidi-auto text-sm text-rust">{error}</p>;
+    return <p className="text-sm text-rust">{error}</p>;
   }
 
   if (!lesson) return null;
@@ -259,7 +250,7 @@ export default function LessonPanel({
           onClick={() => onFileClick(node.file)}
           className="w-fit border-b border-dashed border-signal-dim pb-px font-mono text-[11px] text-signal transition hover:border-signal"
         >
-          <span dir="ltr">{node.file}</span>
+          {node.file}
           {" · "}
           {t.lesson.lines(node.line_start, node.line_end)}
         </button>
@@ -274,7 +265,7 @@ export default function LessonPanel({
                   className="rounded-[2px] border px-1.5 py-px font-mono text-[9.5px] tracking-[0.05em]"
                   style={{ color: s.text, borderColor: s.border, background: s.background }}
                 >
-                  {tagLabel(t, tag)}
+                  {tagLabel(tag)}
                 </span>
               );
             })}
@@ -297,9 +288,7 @@ export default function LessonPanel({
 
       <div className="flex flex-col gap-3">
         <SectionLabel>{t.lesson.walkthrough}</SectionLabel>
-        {/* Agent prose interleaves the user's language with code identifiers,
-            so direction is resolved line by line rather than for the block. */}
-        <p className="measure bidi-auto whitespace-pre-wrap text-[13.5px] leading-[1.72] text-paper">
+        <p className="measure whitespace-pre-wrap text-[13.5px] leading-[1.72] text-paper">
           {lesson.lesson.walkthrough}
         </p>
       </div>
@@ -318,7 +307,7 @@ export default function LessonPanel({
       {!result && (
         <div className="flex flex-col gap-3">
           <SectionLabel>{t.lesson.checkUnderstanding}</SectionLabel>
-          <p className="measure bidi-auto text-[13.5px] leading-[1.6] text-chalk">
+          <p className="measure text-[13.5px] leading-[1.6] text-chalk">
             {lesson.lesson.prompt}
           </p>
           <textarea
@@ -335,7 +324,7 @@ export default function LessonPanel({
             }}
             disabled={loading}
           />
-          {error && <p className="bidi-auto text-sm text-rust">{error}</p>}
+          {error && <p className="text-sm text-rust">{error}</p>}
           <div className="flex items-center gap-3">
             <button
               onClick={submitAnswer}
@@ -366,10 +355,10 @@ export default function LessonPanel({
           >
             {t.lesson.verdict[result.classification] ?? result.classification}
           </p>
-          <p className="measure bidi-auto text-[13px] leading-[1.65] text-paper">
+          <p className="measure text-[13px] leading-[1.65] text-paper">
             {result.rationale}
           </p>
-          {error && <p className="bidi-auto text-sm text-rust">{error}</p>}
+          {error && <p className="text-sm text-rust">{error}</p>}
 
           {FAILED.includes(result.classification) && (
             <p className="text-[12.5px] leading-relaxed text-paper">
@@ -462,7 +451,6 @@ export default function LessonPanel({
 function CompletionScreen({
   graph, onNewSession, onFinish,
 }: { graph: SessionGraph; onNewSession: () => void; onFinish: () => void }) {
-  const { t } = useI18n();
   const [tab, setTab] = useState<"summary" | "map">("summary");
   const weak = graph.nodes.filter((n) => n.weak_spot);
   const understood = graph.nodes.filter((n) => n.understanding_state === "understood").length;
@@ -509,7 +497,7 @@ function CompletionScreen({
                   <li key={n.id} className="flex flex-col gap-0.5">
                     <span className="text-[13px] font-medium text-chalk">{n.title}</span>
                     <span className="font-mono text-[10.5px] text-graphite">
-                      <span dir="ltr">{n.file}</span>
+                      {n.file}
                       {" · "}
                       {t.lesson.lines(n.line_start, n.line_end)}
                     </span>

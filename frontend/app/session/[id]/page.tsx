@@ -6,16 +6,14 @@ import MapView from "@/components/MapView";
 import RouteRail from "@/components/RouteRail";
 import LessonPanel from "@/components/LessonPanel";
 import CodeViewer from "@/components/CodeViewer";
-import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { getSession, jump, sessionStart } from "@/lib/api";
 import type { GraphNode, SessionGraph } from "@/lib/api";
 import { buildRoute, spineLength } from "@/lib/graph-layout";
-import { useI18n } from "@/lib/i18n/context";
+import { errorText, t } from "@/lib/strings";
 
 export default function SessionPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { t, te, locale } = useI18n();
   const [graph, setGraph] = useState<SessionGraph | null>(null);
   const [viewingFile, setViewingFile] = useState<string | null>(null);
   const [showCode, setShowCode] = useState(true);
@@ -23,16 +21,13 @@ export default function SessionPage() {
   const [error, setError] = useState<string | null>(null);
   const [restarting, setRestarting] = useState(false);
 
-  // The graph is refetched when the locale changes: the server translates the
-  // persisted titles and lessons into it and caches the result, so switching
-  // back later is free.
   const loadGraph = useCallback(async () => {
     try {
-      setGraph(await getSession(id, locale));
+      setGraph(await getSession(id));
     } catch (e: unknown) {
-      setError(e instanceof Error ? te(e.message) : t.session.loadFailed);
+      setError(e instanceof Error ? errorText(e.message) : t.session.loadFailed);
     }
-  }, [id, locale, t, te]);
+  }, [id]);
 
   useEffect(() => {
     loadGraph();
@@ -66,7 +61,7 @@ export default function SessionPage() {
       await jump(id, node.id);
       await loadGraph();
     } catch (e: unknown) {
-      setError(e instanceof Error ? te(e.message) : t.session.jumpFailed);
+      setError(e instanceof Error ? errorText(e.message) : t.session.jumpFailed);
     }
   };
 
@@ -74,7 +69,7 @@ export default function SessionPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-ink px-6">
         <div className="flex max-w-sm flex-col gap-3 text-center">
-          <p className="bidi-auto text-rust">{error}</p>
+          <p className="text-rust">{error}</p>
           <button
             onClick={() => { setError(null); loadGraph(); }}
             className="mx-auto rounded border border-rule px-4 py-2 text-sm text-graphite transition hover:border-signal-dim hover:text-signal"
@@ -111,9 +106,7 @@ export default function SessionPage() {
         </span>
 
         <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-graphite">
-          <span dir="ltr">
-            {graph.repo_url.replace(/^https?:\/\/github\.com\//, "")}
-          </span>
+          {graph.repo_url.replace(/^https?:\/\/github\.com\//, "")}
           {graph.goal?.primary_goal && (
             <> &nbsp;·&nbsp; <span className="text-signal">{graph.goal.primary_goal}</span></>
           )}
@@ -126,14 +119,12 @@ export default function SessionPage() {
           </span>
           <span className="h-1 w-24 overflow-hidden rounded-full bg-raise">
             <span
-              className="block h-full rounded-full bg-gradient-to-r from-signal-dim to-signal transition-[width] duration-500 rtl:bg-gradient-to-l"
+              className="block h-full rounded-full bg-gradient-to-r from-signal-dim to-signal transition-[width] duration-500"
               style={{ width: `${pct}%` }}
             />
           </span>
-          <span dir="ltr" className="font-mono text-xs tabular-nums text-chalk">{pct}%</span>
+          <span className="font-mono text-xs tabular-nums text-chalk">{pct}%</span>
         </span>
-
-        <LanguageSwitcher />
 
         {tab === "lesson" && (
           <button
@@ -164,8 +155,6 @@ export default function SessionPage() {
         className="grid min-h-0 flex-1"
         style={{
           // The map wants the room, so the source column steps aside on that tab.
-          // Grid columns follow the writing direction, so the rail stays on the
-          // inline-start side and the source column on the inline-end side.
           gridTemplateColumns:
             tab === "lesson" && showCode && openFile
               ? "268px minmax(0,1fr) 340px"

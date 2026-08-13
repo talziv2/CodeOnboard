@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getFile } from "@/lib/api";
-import { useI18n } from "@/lib/i18n/context";
+import { errorText, t } from "@/lib/strings";
 
 interface Props {
   sessionId: string;
@@ -15,7 +15,6 @@ interface Props {
 export default function CodeViewer({
   sessionId, filePath, highlightStart, highlightEnd, onClose,
 }: Props) {
-  const { t, te } = useI18n();
   const [content, setContent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const firstHotLine = useRef<HTMLTableRowElement | null>(null);
@@ -25,8 +24,8 @@ export default function CodeViewer({
     setError(null);
     getFile(sessionId, filePath)
       .then((f) => setContent(f.content))
-      .catch((e) => setError(te(e.message)));
-  }, [sessionId, filePath, te]);
+      .catch((e) => setError(errorText(e.message)));
+  }, [sessionId, filePath]);
 
   useEffect(() => {
     if (content && firstHotLine.current) {
@@ -37,9 +36,7 @@ export default function CodeViewer({
   const lines = content?.split("\n") ?? [];
 
   return (
-    // Source is always left-to-right: indentation, operators and line numbers
-    // only make sense in the direction the code was written.
-    <aside dir="ltr" className="flex min-h-0 flex-col bg-trench">
+    <aside className="flex min-h-0 flex-col bg-trench">
       <div className="flex shrink-0 items-center gap-2.5 border-b border-rule px-3.5 py-2.5">
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-graphite">
           {filePath}

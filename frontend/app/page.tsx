@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import GoalDialogue from "@/components/GoalDialogue";
-import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { checkRepo, sessionStart } from "@/lib/api";
-import { useI18n } from "@/lib/i18n/context";
+import { errorText, t } from "@/lib/strings";
 
 type Step = "repo" | "goal" | "starting" | "failed";
 
@@ -32,7 +31,6 @@ function rememberRepo(url: string) {
 
 export default function Home() {
   const router = useRouter();
-  const { t, te } = useI18n();
   const [step, setStep] = useState<Step>("repo");
   const [repoUrl, setRepoUrl] = useState("");
   const [recent, setRecent] = useState<string[]>([]);
@@ -47,8 +45,8 @@ export default function Home() {
   useEffect(() => {
     if (step !== "starting") return;
     setElapsed(0);
-    const t = setInterval(() => setElapsed((s) => s + 1), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(timer);
   }, [step]);
 
   // Verify the repo can actually be cloned before spending five questions on it.
@@ -60,12 +58,12 @@ export default function Home() {
     try {
       const { ok, reason } = await checkRepo(repoUrl.trim());
       if (!ok) {
-        setError(reason ? te(reason) : t.home.repoUnreachable);
+        setError(reason ? errorText(reason) : t.home.repoUnreachable);
         return;
       }
       setStep("goal");
     } catch (err: unknown) {
-      setError(err instanceof Error ? te(err.message) : t.home.serverUnreachable);
+      setError(err instanceof Error ? errorText(err.message) : t.home.serverUnreachable);
     } finally {
       setChecking(false);
     }
@@ -79,7 +77,7 @@ export default function Home() {
       rememberRepo(repoUrl);
       router.push(`/session/${session_id}`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? te(err.message) : t.home.pipelineFailed);
+      setError(err instanceof Error ? errorText(err.message) : t.home.pipelineFailed);
       setStep("failed");
     }
   };
@@ -91,8 +89,6 @@ export default function Home() {
 
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center bg-ink px-6 py-16">
-      <LanguageSwitcher className="absolute top-5 end-6" />
-
       <div className="mb-12 flex flex-col items-center gap-2 text-center">
         <h1 className="font-display text-[38px] font-medium leading-none tracking-tight text-chalk">
           {t.appName}
@@ -113,7 +109,6 @@ export default function Home() {
           <input
             id="repo"
             type="url"
-            dir="ltr"
             className="rounded border border-rule bg-trench px-3.5 py-3 text-start font-mono text-[13px] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
             placeholder={t.home.repoPlaceholder}
             value={repoUrl}
@@ -130,7 +125,6 @@ export default function Home() {
                 <button
                   key={url}
                   type="button"
-                  dir="ltr"
                   onClick={() => { setRepoUrl(url); setError(null); }}
                   className="rounded border border-rule px-2.5 py-1 font-mono text-[11px] text-graphite transition hover:border-signal-dim hover:text-signal"
                 >
@@ -160,7 +154,7 @@ export default function Home() {
             <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-graphite">
               {t.starting.label}
             </span>
-            <h2 dir="ltr" className="font-display text-[21px] font-medium tracking-tight text-chalk">
+            <h2 className="font-display text-[21px] font-medium tracking-tight text-chalk">
               {repoUrl.replace(/^https?:\/\/github\.com\//, "")}
             </h2>
           </div>
@@ -191,7 +185,7 @@ export default function Home() {
             <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-rust">
               {t.failed.label}
             </span>
-            <h2 dir="ltr" className="font-display text-[21px] font-medium tracking-tight text-chalk">
+            <h2 className="font-display text-[21px] font-medium tracking-tight text-chalk">
               {repoUrl.replace(/^https?:\/\/github\.com\//, "")}
             </h2>
             <p className="text-[13px] leading-relaxed text-graphite">
@@ -200,7 +194,7 @@ export default function Home() {
           </div>
 
           {error && (
-            <pre className="bidi-auto max-h-44 overflow-auto whitespace-pre-wrap break-words rounded border border-rule bg-trench p-3 font-mono text-[11px] leading-relaxed text-rust">
+            <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded border border-rule bg-trench p-3 font-mono text-[11px] leading-relaxed text-rust">
               {error}
             </pre>
           )}

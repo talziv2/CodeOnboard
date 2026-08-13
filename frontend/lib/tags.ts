@@ -1,15 +1,14 @@
 import type { UnderstandingState } from "@/lib/api";
-import type { Dictionary } from "@/lib/i18n";
+import { t } from "@/lib/strings";
 
 /**
  * The concept-tag vocabulary is shared by the Mentor, Teaching, Grader and
  * Reviewer agents. Each tag keeps one fixed hue everywhere it appears so the
  * colour becomes readable on its own after a couple of encounters.
  *
- * Tags and understanding states travel the wire as fixed English keys — the
- * agents are instructed never to translate them, because these values are what
- * the UI switches on. Only the displayed label is localized, via `tagLabel` and
- * `stateLabel`.
+ * Tags and understanding states travel the wire as fixed keys — those values
+ * are what the UI switches on, and `tagLabel` / `stateLabel` map them to the
+ * wording shown.
  */
 export interface TagStyle {
   text: string;
@@ -38,12 +37,12 @@ export function tagStyle(tag: string): TagStyle {
 }
 
 /**
- * Canonical tags have a translated label. Free-form domain tags are whatever
- * the Mentor invented — already in the session's language — so they are shown
- * as written, with underscores relaxed into spaces.
+ * Canonical tags have a curated label. Free-form domain tags are whatever the
+ * Mentor invented, so they are shown as written, with underscores relaxed into
+ * spaces.
  */
-export function tagLabel(dict: Dictionary, tag: string): string {
-  return dict.tags[tag] ?? tag.replace(/_/g, " ");
+export function tagLabel(tag: string): string {
+  return t.tags[tag] ?? tag.replace(/_/g, " ");
 }
 
 /**
@@ -75,8 +74,8 @@ export function stateStyle(state: UnderstandingState): StateStyle {
   return STATE_STYLES[state] ?? STATE_STYLES.not_started;
 }
 
-export function stateLabel(dict: Dictionary, state: UnderstandingState): string {
-  return dict.states[state] ?? state;
+export function stateLabel(state: UnderstandingState): string {
+  return t.states[state] ?? state;
 }
 
 export const STATE_ORDER: UnderstandingState[] = [

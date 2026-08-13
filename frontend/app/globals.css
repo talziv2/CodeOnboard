@@ -27,23 +27,9 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
-/* Geist is subset to Latin and the display serif has no Hebrew coverage, so in
-   an RTL locale the headings would fall back to an arbitrary system serif.
-   Point the display face at the UI sans stack there instead. */
-[dir="rtl"] {
-  --font-display: var(--font-geist-sans), "Segoe UI", system-ui, sans-serif;
-}
-
 /* The lesson column holds long-form prose; cap the measure for readability. */
 .measure {
   max-width: 62ch;
-}
-
-/* Agent-written prose mixes the user's language with English identifiers and
-   file paths. `plaintext` resolves direction per line from its own content, so
-   a Hebrew sentence reads right-to-left while a line of code stays intact. */
-.bidi-auto {
-  unicode-bidi: plaintext;
 }
 
 @media (prefers-reduced-motion: reduce) {

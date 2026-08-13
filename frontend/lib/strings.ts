@@ -1,22 +1,14 @@
 /**
- * English is the source dictionary. `he.ts` is typed against `Dictionary`, so
- * adding a key here is a type error there until it is translated — the two
- * cannot drift apart silently.
+ * Every piece of UI copy, in one place. The app is English-only; this exists so
+ * wording lives apart from layout, not to support switching languages.
  *
  * Values that take a runtime value are functions rather than templates with
  * placeholder tokens, so the argument list is type-checked at the call site.
  */
-export const en = {
+export const t = {
   appName: "CodeOnboard",
   tagline:
     "Build a real understanding of an unfamiliar codebase, one anchored concept at a time.",
-
-  // --- language switcher ---
-  language: {
-    label: "Language",
-    en: "English",
-    he: "עברית",
-  },
 
   // --- home: repo step ---
   home: {
@@ -33,14 +25,18 @@ export const en = {
   // --- home: pipeline progress ---
   starting: {
     label: "Reading the repository",
+    // These track the real pipeline: clone + parse (Layer A), survey the
+    // repository (Layer B), investigate the goal (Layer C), then plan. There is
+    // no indexing step any more — nothing is embedded or stored for retrieval.
     phases: [
       "Cloning the repository",
-      "Parsing files into concepts",
-      "Indexing for retrieval",
+      "Mapping the code structure",
+      "Surveying the architecture",
+      "Investigating your goal",
       "Planning your route",
     ],
     elapsed: (seconds: number) =>
-      `${seconds}s elapsed · usually about a minute on a small repo`,
+      `${seconds}s elapsed · usually two to four minutes`,
   },
 
   // --- home: failure ---
@@ -79,8 +75,8 @@ export const en = {
     retryLoad: "Try loading again",
     jumpFailed: "Couldn't move to that stop.",
     firstLesson: "Loading your first lesson…",
-    // `depth` comes back from the Goal Agent as a fixed English enum so the
-    // agents can reason over it; the label is chosen here.
+    // `depth` comes back from the Goal Agent as a fixed enum so the agents can
+    // reason over it; the label is chosen here.
     depth: {
       overview: "overview",
       moderate: "moderate",
@@ -180,7 +176,7 @@ export const en = {
 
   // --- shared vocabularies ---
   // Keys match the concept-tag and understanding-state values the backend
-  // emits. Those stay English on the wire; only the label is translated.
+  // emits; only the label is chosen here.
   tags: {
     architecture: "architecture",
     flow: "flow",
@@ -211,6 +207,12 @@ export const en = {
   } as Record<string, string>,
 };
 
-// Deliberately not `as const`: the shape is the contract, the exact English
-// wording is not. With literal types every Hebrew string would be a type error.
-export type Dictionary = typeof en;
+/**
+ * Backend failures arrive as `detail` slugs (`session_not_found`) mixed with
+ * real prose (a pipeline error list). Replace the ones we recognise and pass
+ * anything else through — a raw stack trace is more useful than a generic
+ * "something went wrong".
+ */
+export function errorText(message: string): string {
+  return t.errors[message.trim()] ?? message;
+}

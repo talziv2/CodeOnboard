@@ -20,7 +20,6 @@ from typing import Literal
 import anthropic
 from pydantic import BaseModel
 
-from backend.agents.language import language_instruction, language_of
 from backend.learning.graph import LearningNode
 from backend.pipeline.state import OnboardState
 
@@ -45,12 +44,9 @@ class GraderOutput(BaseModel):
     rationale: str  # one sentence — for debugging, not shown to the user in v1
 
 
-# The rationale is surfaced in the UI, so even the never-reached-the-model
-# fallback has to be readable in the session's language.
-_GRADING_FAILED: dict[str, str] = {
-    "en": "grading failed; defaulted to partial",
-    "he": "הבדיקה נכשלה; סווג כברירת מחדל כהבנה חלקית",
-}
+# The rationale is surfaced in the UI, so even this fallback — used when the
+# call never reached the model — has to read as a sentence.
+_GRADING_FAILED = "grading failed; defaulted to partial"
 
 
 _SYSTEM_PROMPT = """\
@@ -124,13 +120,12 @@ def _build_user_content(node: LearningNode, user_response: str) -> str:
 
 
 def _parse_output(raw: str) -> GraderOutput:
+    # Leading fence only. Cutting at the closing fence truncates a payload whose
+    # own strings contain one — a rationale quoting the user's fenced answer is
+    # exactly that case. `raw_decode` ends the object without help.
     raw = raw.strip()
-    if "```json" in raw:
-        raw = raw.split("```json", 1)[1].split("```", 1)[0]
-    elif "```" in raw:
-        parts = raw.split("```")
-        if len(parts) >= 2:
-            raw = parts[1]
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1] if "\n" in raw else ""
     start = raw.find("{")
     if start < 0:
         raise ValueError("no JSON object found in response")
@@ -166,7 +161,7 @@ def run(
         response = client.messages.create(
             model=MODEL,
             max_tokens=MAX_TOKENS,
-            system=_SYSTEM_PROMPT + language_instruction(state.goal),
+            system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_content}],
         )
         raw = response.content[0].text
@@ -174,12 +169,7 @@ def run(
     except Exception as e:
         # Never block the session on a grading hiccup — assume partial.
         state.errors.append(f"grader_agent: classification failed, defaulting to partial: {e}")
-        output = GraderOutput(
-            classification="partial",
-            rationale=_GRADING_FAILED.get(
-                language_of(state.goal), _GRADING_FAILED["en"]
-            ),
-        )
+        output = GraderOutput(classification="partial", rationale=_GRADING_FAILED)
 
     _apply_grade(state, current_id, output.classification)
     state.last_grade = {"classification": output.classification, "rationale": output.rationale}

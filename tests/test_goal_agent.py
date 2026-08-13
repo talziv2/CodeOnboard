@@ -10,7 +10,6 @@ from backend.agents.goal import (
     GoalOutput,
     GoalSession,
     Question,
-    localize,
     process_answer,
     start_session,
 )
@@ -63,10 +62,8 @@ def test_start_session():
 # ── Q1 — familiarity ──────────────────────────────────────────────────────────
 
 def test_first_question_has_options():
-    # Options are keyed by locale now; every locale offers the same four.
     assert CORE_QUESTIONS[0].options is not None
-    assert len(localize(CORE_QUESTIONS[0], "en").options) == 4
-    assert len(localize(CORE_QUESTIONS[0], "he").options) == 4
+    assert len(CORE_QUESTIONS[0].options) == 4
 
 
 def test_q1_answer_returns_q2_with_options():

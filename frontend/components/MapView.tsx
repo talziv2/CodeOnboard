@@ -6,7 +6,7 @@ import { buildRoute } from "@/lib/graph-layout";
 import {
   tagStyle, tagLabel, stateStyle, stateLabel, isCanonicalTag, STATE_ORDER,
 } from "@/lib/tags";
-import { useI18n } from "@/lib/i18n/context";
+import { t } from "@/lib/strings";
 
 interface Props {
   nodes: GraphNode[];
@@ -29,7 +29,6 @@ const emptyTally = (): Tally => ({
 /** Proportional bar of the state mix. Carries the aggregate at a glance
  *  without asking anyone to read four numbers. */
 function StateStrip({ tally, total }: { tally: Tally; total: number }) {
-  const { t } = useI18n();
   return (
     <span className="flex h-1.5 w-full overflow-hidden rounded-full bg-raise">
       {STATE_ORDER.map((state) => {
@@ -38,7 +37,7 @@ function StateStrip({ tally, total }: { tally: Tally; total: number }) {
         return (
           <span
             key={state}
-            title={`${n} ${stateLabel(t, state)}`}
+            title={`${n} ${stateLabel(state)}`}
             style={{
               width: `${(n / total) * 100}%`,
               background: state === "not_started" ? "var(--color-rule)" : stateStyle(state).stroke,
@@ -66,7 +65,7 @@ function BreakdownRow({
         <span className="min-w-0 truncate" style={accent ? { color: accent } : undefined}>
           {label}
         </span>
-        <span dir="ltr" className="shrink-0 font-mono text-[10.5px] tabular-nums text-graphite">
+        <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-graphite">
           {sublabel ?? `${tally.understood}/${total}`}
         </span>
       </span>
@@ -87,7 +86,6 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 export default function MapView({
   nodes, edges, currentNodeId, readiness, repoUrl, onNodeClick,
 }: Props) {
-  const { t } = useI18n();
   const stops = useMemo(() => buildRoute(nodes, edges), [nodes, edges]);
 
   const summary = useMemo(() => {
@@ -145,10 +143,7 @@ export default function MapView({
             <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-graphite">
               {t.map.label}
             </span>
-            <h2
-              dir={repo ? "ltr" : undefined}
-              className="font-display text-[25px] font-medium leading-tight tracking-tight text-chalk"
-            >
+            <h2 className="font-display text-[25px] font-medium leading-tight tracking-tight text-chalk">
               {repo ?? t.map.thisCodebase}
             </h2>
             <p className="text-[12.5px] text-graphite">
@@ -161,7 +156,7 @@ export default function MapView({
             </p>
           </div>
           <div className="flex items-baseline gap-2">
-            <span dir="ltr" className="font-display text-[34px] leading-none tabular-nums text-signal">
+            <span className="font-display text-[34px] leading-none tabular-nums text-signal">
               {pct}%
             </span>
             <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-graphite">
@@ -185,7 +180,7 @@ export default function MapView({
                   style={{ borderColor: stateStyle(state).stroke, background: stateStyle(state).fill }}
                 />
                 <span className="tabular-nums text-chalk">{summary.overall[state]}</span>
-                {stateLabel(t, state)}
+                {stateLabel(state)}
               </span>
             ))}
           </div>
@@ -198,7 +193,7 @@ export default function MapView({
               {summary.kinds.map(([tag, tally, total]) => (
                 <BreakdownRow
                   key={tag}
-                  label={<span className="font-mono text-[11px]">{tagLabel(t, tag)}</span>}
+                  label={<span className="font-mono text-[11px]">{tagLabel(tag)}</span>}
                   accent={tagStyle(tag).text}
                   tally={tally}
                   total={total}
@@ -218,7 +213,7 @@ export default function MapView({
                       title={t.map.understoodOfTotal(tally.understood, total)}
                       className="rounded-[2px] border border-rule px-1.5 py-px font-mono text-[9.5px] tracking-[0.05em] text-graphite"
                     >
-                      {tagLabel(t, tag)}
+                      {tagLabel(tag)}
                       {total > 1 && <span className="text-paper"> ×{total}</span>}
                     </span>
                   ))}
@@ -233,7 +228,7 @@ export default function MapView({
                 <BreakdownRow
                   key={file}
                   label={
-                    <span dir="ltr" className="block truncate text-start font-mono text-[11px] text-paper">
+                    <span className="block truncate text-start font-mono text-[11px] text-paper">
                       {file}
                     </span>
                   }
@@ -325,7 +320,7 @@ export default function MapView({
                     </span>
 
                     <span className="font-mono text-[11px] text-graphite">
-                      <span dir="ltr">{node.file}</span>
+                      {node.file}
                       {" · "}
                       {t.lesson.lines(node.line_start, node.line_end)}
                     </span>
@@ -343,7 +338,7 @@ export default function MapView({
                               background: style.background,
                             }}
                           >
-                            {tagLabel(t, tag)}
+                            {tagLabel(tag)}
                           </span>
                         );
                       })}

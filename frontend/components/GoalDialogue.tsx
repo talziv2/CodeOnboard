@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { goalStart, goalAnswer } from "@/lib/api";
 import type { Question } from "@/lib/api";
-import { useI18n } from "@/lib/i18n/context";
+import { errorText, t } from "@/lib/strings";
 
 interface Props {
   repoUrl: string;
@@ -11,35 +11,28 @@ interface Props {
 }
 
 export default function GoalDialogue({ repoUrl, onDone }: Props) {
-  const { t, te, locale } = useI18n();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [question, setQuestion] = useState<Question | null>(null);
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Restarting on a locale change is deliberate: the interview language is
-  // fixed when the session is created, and it decides what language every
-  // downstream agent writes in. Switching mid-interview has to start over.
   useEffect(() => {
     (async () => {
       setLoading(true);
       setQuestion(null);
       setAnswer("");
       try {
-        const res = await goalStart(repoUrl, locale);
+        const res = await goalStart(repoUrl);
         setSessionId(res.session_id);
         setQuestion(res.question);
       } catch (e: unknown) {
-        setError(e instanceof Error ? te(e.message) : t.home.serverUnreachable);
+        setError(e instanceof Error ? errorText(e.message) : t.home.serverUnreachable);
       } finally {
         setLoading(false);
       }
     })();
-    // `t`/`te` are derived from `locale`; listing them would re-run on identity
-    // changes without changing behaviour.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repoUrl, locale]);
+  }, [repoUrl]);
 
   const submit = async () => {
     if (!sessionId || !answer.trim() || loading) return;
@@ -51,7 +44,7 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
       if (res.done && res.goal) onDone(sessionId, res.goal);
       else if (res.question) setQuestion(res.question);
     } catch (e: unknown) {
-      setError(e instanceof Error ? te(e.message) : t.goal.answerFailed);
+      setError(e instanceof Error ? errorText(e.message) : t.goal.answerFailed);
     } finally {
       setLoading(false);
     }

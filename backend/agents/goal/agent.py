@@ -18,14 +18,11 @@ from typing import Literal
 import anthropic
 from pydantic import BaseModel
 
-from backend.agents.language import DEFAULT_LANGUAGE, language_instruction
 from backend.agents.goal.questions import (
     CORE_QUESTIONS,
     FOLLOWUP_QUESTIONS,
     GOAL_TYPE_MAP,
     Question,
-    localize,
-    option_key,
 )
 
 
@@ -53,9 +50,6 @@ class GoalOutput(BaseModel):
     risk_tolerance: str | None = None
     error_description: str | None = None
     tried_so_far: str | None = None
-    # The interview language, carried forward so every downstream agent writes
-    # prose the user can read. Set from the request, never by the model.
-    language: str = DEFAULT_LANGUAGE
 
 
 # Holds the state of one user's dialogue: which repo, what goal_type was chosen,
@@ -66,7 +60,6 @@ class GoalSession:
     repo_url: str
     goal_type: str | None = None  # set after Q2 is answered
     answers: dict[str, str] = field(default_factory=dict)
-    language: str = DEFAULT_LANGUAGE
 
 
 def _get_question_sequence(session: GoalSession) -> list[Question]:
@@ -77,10 +70,8 @@ def _get_question_sequence(session: GoalSession) -> list[Question]:
     return CORE_QUESTIONS + FOLLOWUP_QUESTIONS[session.goal_type]
 
 
-def start_session(repo_url: str, language: str = DEFAULT_LANGUAGE) -> GoalSession:
-    return GoalSession(
-        session_id=str(uuid.uuid4()), repo_url=repo_url, language=language
-    )
+def start_session(repo_url: str) -> GoalSession:
+    return GoalSession(session_id=str(uuid.uuid4()), repo_url=repo_url)
 
 
 def question_progress(session: GoalSession) -> tuple[int, int]:
@@ -103,13 +94,7 @@ def process_answer(
     sequence = _get_question_sequence(session)
     current_q = sequence[len(session.answers)]
 
-    # Option answers arrive as the display string the user clicked, which is
-    # localized. Store the stable English key instead: downstream calibration
-    # (the Teaching Agent keys off the familiarity phrase) reads these, and it
-    # must not depend on the interview language.
-    session.answers[current_q.key] = (
-        option_key(answer) if current_q.options is not None else answer
-    )
+    session.answers[current_q.key] = answer
 
     if current_q.key == "goal_type_raw":
         chosen = session.answers[current_q.key]
@@ -127,16 +112,8 @@ def process_answer(
     if client is None:
         client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
-    # The prompt sees English question text regardless of interview language, so
-    # the model always identifies which field each answer belongs to the same
-    # way. Only the answers carry the user's own words.
-    qa_pairs = [
-        (localize(q, DEFAULT_LANGUAGE).text, session.answers[q.key])
-        for q in updated_sequence
-    ]
-    goal = _synthesize_goal(
-        session.repo_url, qa_pairs, client=client, language=session.language
-    )
+    qa_pairs = [(q.text, session.answers[q.key]) for q in updated_sequence]
+    goal = _synthesize_goal(session.repo_url, qa_pairs, client=client)
     return None, goal
 
 
@@ -163,10 +140,10 @@ Rules:
                                    what tests guard the area they will touch
     debug_issue                  — trace a specific error
 - depth must be one of: overview, moderate, deep
-- experience_level: short English phrase, e.g. "beginner", "intermediate",
+- experience_level: short phrase, e.g. "beginner", "intermediate",
   "senior engineer"
-- familiarity: copy the user's familiarity answer VERBATIM in English. It is
-  matched against a fixed set downstream, so it must be exactly one of:
+- familiarity: copy the user's familiarity answer VERBATIM. It is matched
+  against a fixed set downstream, so it must be exactly one of:
     "Starting fresh — never looked at it"
     "Skimmed the README or docs"
     "Looked at some code but still confused"
@@ -183,21 +160,16 @@ def _synthesize_goal(
     repo_url: str,
     qa_pairs: list[tuple[str, str]],
     client: anthropic.Anthropic,
-    language: str = DEFAULT_LANGUAGE,
 ) -> GoalOutput:
     # Build the user message from all Q&A pairs and call Haiku once.
     user_content = f"Target repository: {repo_url}\n\n"
     for question, answer in qa_pairs:
         user_content += f"Q: {question}\nA: {answer}\n\n"
 
-    # primary_goal and focus_area are shown in the UI, so they follow the user's
-    # language. goal_type, depth, experience_level and familiarity are read by
-    # other agents and by the frontend, so the rules above pin them to English —
-    # which the shared directive also restates for enumerated values.
     message = client.messages.create(
         model="claude-haiku-4-5",
         max_tokens=512,
-        system=_SYSTEM_PROMPT + language_instruction({"language": language}),
+        system=_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content.strip()}],
     )
 
@@ -214,6 +186,4 @@ def _synthesize_goal(
         print(f"[goal/synthesize] raw response was:\n{raw}")
         raise ValueError("synthesis_failed") from exc
 
-    # Set by us, not the model — the language is a fact about the request.
-    data["language"] = language
     return GoalOutput(**data)

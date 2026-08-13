@@ -67,10 +67,8 @@ export interface AnswerResponse {
   goal?: Record<string, string>;
 }
 
-/** `language` picks the interview language AND the language every downstream
- *  agent writes in — it is stored on the synthesized goal. */
-export const goalStart = (repo_url: string, language: string) =>
-  post<StartResponse>("/goal/start", { repo_url, language });
+export const goalStart = (repo_url: string) =>
+  post<StartResponse>("/goal/start", { repo_url });
 
 export const goalAnswer = (session_id: string, answer: string) =>
   post<AnswerResponse>("/goal/answer", { session_id, answer });
@@ -129,12 +127,8 @@ export interface SessionGraph {
   readiness: number; // 0.0 – 1.0
 }
 
-/** `language` renders the session's prose in that language, translating and
- *  caching server-side on first use. Omit it to read it as written. */
-export const getSession = (session_id: string, language?: string) =>
-  get<SessionGraph>(
-    `/session/${session_id}${language ? `?language=${encodeURIComponent(language)}` : ""}`
-  );
+export const getSession = (session_id: string) =>
+  get<SessionGraph>(`/session/${session_id}`);
 
 // --- Lesson ---
 
@@ -149,10 +143,8 @@ export interface Lesson {
   lesson: LessonBody;
 }
 
-export const getLesson = (session_id: string, language?: string) =>
-  get<Lesson>(
-    `/session/${session_id}/lesson${language ? `?language=${encodeURIComponent(language)}` : ""}`
-  );
+export const getLesson = (session_id: string) =>
+  get<Lesson>(`/session/${session_id}/lesson`);
 
 // --- Respond ---
 
@@ -170,16 +162,10 @@ export interface RespondResult {
   current_node_id: string | null;
 }
 
-export const respond = (
-  session_id: string,
-  answer: string,
-  node_id?: string,
-  language?: string
-) =>
+export const respond = (session_id: string, answer: string, node_id?: string) =>
   post<RespondResult>(`/session/${session_id}/respond`, {
     response: answer,
     node_id,
-    language,
   });
 
 // --- Advance ---
