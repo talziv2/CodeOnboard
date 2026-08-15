@@ -640,6 +640,17 @@ where it improves predictability (closure, band, coverage), not everywhere.
 > Traversal does not change. `next_in_path` already walks sequence-then-prerequisite, and
 > `path_order` / `resume_point` already handle both. This is why the graph model survives.
 
+> **`prerequisite` now has two producers, and they mean different things.** A **planned**
+> edge describes the curriculum's dependency structure and says nothing about the learner;
+> a **remedial** one is an event in one learner's session — something went wrong here.
+> Any consumer that asks "was this inserted after a mistake?" must distinguish them, and
+> the edge kind alone cannot: the tell is that `insert_before` reroutes the incoming
+> sequence edge onto the spliced node, so a **remedial node has no outgoing `sequence`
+> edge** while a planned one does. B6 found this the hard way — the route rail rendered a
+> planned graph as a sequence of failures, captioning nearly every stop "added after
+> confusion". Recorded here and in `learning/graph.py`'s header because the next consumer
+> to ask that question will otherwise repeat it.
+
 ### 6.5 "Complete enough for this user's goal"
 
 A curriculum is complete when **all three hold**:
@@ -951,7 +962,7 @@ flowchart TB
 | **B2** — `code_depth` question | nothing | ✅ **done** 2026-08-15 | One question. Independent of everything; can run in parallel with B1 |
 | **B3** — objective-first planner | B1, B2, **Phase A Stage 3** | ✅ **done** 2026-08-15, behind `CODEONBOARD_CURRICULUM=1`; sanity-validated 4/4 (§6.3). Band calibration remains open ([LQ6](#152-open-lq)) and does **not** gate B4 — see the note below | Ends L1, L3, L4, L5. The core of the phase |
 | **B4** — lesson forms + reveal split | B1, B3 | ✅ **done** 2026-08-15 | Ends L7, L8. Lesson quality is half the product value of this phase |
-| **B5** — bidirectional adaptation | B3 | **next** — B3 met | Ends L9, L10. Prune-ahead is nearly free |
+| **B5** — bidirectional adaptation | B3 | ✅ **done** 2026-08-15 | Ends L9, L10. Prune-ahead is nearly free |
 | **B6** — frontend U1–U3 (+U5) | B3, B4 | ✅ **done** 2026-08-15 — U1, U2, U3 and U5 shipped and driven end-to-end in a browser. **L8 is now fully closed.** U4 (scope control) remains in the high-value tier | Without U1 the reveal split does nothing; without U2 a large curriculum is illegible |
 
 > **Calibration does not gate B4 or B5.** Nothing in this dependency graph depends on the
@@ -1205,6 +1216,14 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 | 2026-08-15 | **The reveal also opens on a REVISIT, not only on a fresh answer** | Withholding is pedagogy the first time and pointless friction afterwards. Someone returning to a node they already answered is reading, not being tested — and their answer and its feedback are already on screen in the attempt history, so hiding the explanation would protect nothing | — |
 | 2026-08-15 | **A frontend regression that B3 introduced, found in B6**: `buildRoute` treated any outgoing `prerequisite` edge as a Mutator warm-up, so a planned graph rendered with nearly every stop indented and captioned "added after confusion" | B3 writes one prerequisite edge per `depends_on` — 16–37 of them per real journey — and they describe dependency structure rather than events. A spliced warm-up is distinguishable because `insert_before` gives its sequence slot away, so it has **no outgoing sequence edge**; a planned unit sits on the chain and keeps one. This is the kind of defect that only appears where two changes meet, which is why B6 had to come before B5 | — |
 | 2026-08-15 | **`optional` units do not consume a number in "stop N of M"** | Found by reading the real UI: the rail collapsed one optional unit while the header still counted it, promising "stop 1 of 4" above three visible stops. Prerequisites were already excluded for the same reason — a counter should describe the journey the learner can see | — |
+
+| 2026-08-15 | **B6's UX decisions, recorded because none of them follow from the plan** | (a) The reveal opens on a **revisit**, not only on a fresh answer — withholding is pedagogy the first time and friction afterwards, and the learner's own answer is already on screen by then. (b) The reveal sits **above** the verdict block, so the order is explanation → verdict → actions; verdict-first would have put "Next stop" above the explanation and invited a skip. (c) The ownership note gets its **own labelled block** rather than being folded into the takeaway — LD4 keeps it off the node, but as lesson content it reads better distinct, and it is the phase's clearest expression of the AI-supervision framing. (d) Optional units **force-open** in the rail when one is the current stop, so a collapse can never hide where the learner is | Any of these reading badly with real learners |
+| 2026-08-15 | **Both B6 defects were found by driving the UI, not by review or tests** | The prerequisite conflation and the miscounted "stop N of M" were each invisible in code that read correctly in isolation, and neither is reachable by the backend suite. Where two layers meet and the contract between them changed, a browser pass is not optional polish — it is the only instrument that sees the seam | — |
+
+| 2026-08-15 | **B5 shipped: adaptation branches on `gap_kind`, and only a missing foundation changes the graph** | L9. `backend/learning/adaptation.py` owns the decision as a **table, not a model call** — which response a gap deserves is a rule we are willing to state and test, and a model asked to choose would make it unpredictable for no gain. What each response then *says* is generated, in `teaching/respond.py`. Every session graded before `gap_kind` existed keeps its old behaviour through an explicit fallback | Evidence that a gap classification is unreliable enough that acting on it is worse than the old uniform response |
+| 2026-08-15 | **An `off-topic` answer may earn a hint, but still nothing structural** | Found by testing against the real Grader rather than a stub: "I don't know" classifies as **off-topic with a `no_attempt` gap**, so short-circuiting on the classification — as the first implementation did — left the single case the hint exists for with nothing at all. The 2026-08-14 rule is about the *graph*: an unrelated answer is evidence of neither understanding nor misunderstanding, so it cannot earn a prerequisite or change `understanding_state`. A hint changes neither. Verified live: a real "I don't know" produced a hint, left all four nodes `not_started`, tripped no `weak_spot`, and inserted nothing | Evidence that learners read a hint after an off-topic answer as the system misunderstanding them |
+| 2026-08-15 | **Prune-ahead demotes only `recommended`, only in a proven area, and never over a user override** | The one mechanism that adapts upward, and the only one that shortens a journey. Kept conservative on purpose: `required` is the curriculum's floor and past performance says nothing about a unit not yet seen; a unit already visited or answered is history and rewriting it would be dishonest; and an override is the user's opinion where this is the system's, so §9.2's rule that overrides always win applies here first. Two consecutive understood units is the threshold — one is a coincidence, three arrives after a typical area is over | Real journeys where two-in-a-row proves too eager |
+| 2026-08-15 | **`readiness()` excludes `optional` units from the denominator but keeps them in the numerator** | L10. Excluding them is what stops the gauge falling when the system *shortens* the journey — prune-ahead would otherwise be punished for working. Counting a completed optional unit in the numerator means opening one can never lower a progress bar, which would be a perverse thing to teach. The `partial`-from-grading-failure half of L10 is deliberately **not** fixed here: the distinction between a genuinely partial answer and a failed grade exists in the Grader, and inventing it in a method that cannot see it would be worse than leaving it | — |
 
 **Note on scope:** this cleanup is independent of the repository-understanding
 migration in [`repo-understanding.md`](repo-understanding.md). It touches the

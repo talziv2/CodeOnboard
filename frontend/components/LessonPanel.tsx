@@ -153,6 +153,12 @@ export default function LessonPanel({
     try {
       const res = await respond(sessionId, answer, nodeId);
       setResult(res);
+      // A re-teach replaced the cached lesson with one that names the
+      // misconception. Pull it, so what is on screen is the corrected lesson
+      // rather than the one that misled them.
+      if (res.adaptation?.retaught) {
+        getLesson(sessionId).then(setLesson).catch(() => {});
+      }
       // A warm-up moves the session pointer, and refreshing now would swap this
       // panel out before the verdict could be read. Follow on the user's click.
       if (res.mutation?.kind !== "prerequisite") onRespond();
@@ -245,6 +251,12 @@ export default function LessonPanel({
   const revealed = Boolean(result) || attempts.length > 0;
 
   const anchors: Anchor[] = node.anchors ?? [];
+  const adaptation = result?.adaptation;
+  // A hint, a follow-up or a corrected lesson is an invitation to answer again
+  // — the node is still ahead of them, not behind them.
+  const canAnswerAgain =
+    adaptation !== undefined &&
+    ["hint", "followup", "reteach"].includes(adaptation.kind);
   const recovered =
     warmUpTitle !== null &&
     attempts.some((a) => FAILED.includes(a.classification)) &&
@@ -443,15 +455,41 @@ export default function LessonPanel({
           </p>
           {error && <p className="text-sm text-rust">{error}</p>}
 
-          {FAILED.includes(result.classification) && (
-            <p className="text-[12.5px] leading-relaxed text-paper">
-              {result.mutation?.kind === "prerequisite"
-                ? t.lesson.warmUpAdded
-                : result.mutation?.reason === "prerequisite_exists"
-                ? t.lesson.warmUpExists
-                : t.lesson.warmUpUnavailable}
+          {/* What the system did about the gap. Only a missing foundation
+              grows the journey; the rest answer the learner where they are. */}
+          {adaptation?.text && (
+            <div className="flex flex-col gap-1.5 rounded border border-signal-dim/40 bg-signal/[0.06] px-4 py-3">
+              <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-signal">
+                {adaptation.kind === "hint" ? t.lesson.hint : t.lesson.followup}
+              </span>
+              <p className="measure text-[13px] leading-[1.65] text-chalk">
+                {adaptation.text}
+              </p>
+            </div>
+          )}
+
+          {adaptation?.retaught && (
+            <p className="font-mono text-[10.5px] uppercase tracking-[0.13em] text-signal">
+              {t.lesson.retaught}
             </p>
           )}
+
+          {typeof adaptation?.pruned === "number" && adaptation.pruned > 0 && (
+            <p className="font-mono text-[10.5px] uppercase tracking-[0.13em] text-jade">
+              {t.lesson.pruned(adaptation.pruned)}
+            </p>
+          )}
+
+          {FAILED.includes(result.classification) &&
+            adaptation?.kind === "prerequisite" && (
+              <p className="text-[12.5px] leading-relaxed text-paper">
+                {result.mutation?.kind === "prerequisite"
+                  ? t.lesson.warmUpAdded
+                  : result.mutation?.reason === "prerequisite_exists"
+                  ? t.lesson.warmUpExists
+                  : t.lesson.warmUpUnavailable}
+              </p>
+            )}
 
           <div className="flex flex-wrap items-center gap-3">
             {result.classification === "understood" && (
@@ -482,6 +520,16 @@ export default function LessonPanel({
                   {t.lesson.buildWarmUp}
                 </button>
               </>
+            )}
+
+            {canAnswerAgain && (
+              <button
+                onClick={() => { setResult(null); setAnswer(""); }}
+                disabled={loading}
+                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+              >
+                {t.lesson.tryAgain}
+              </button>
             )}
 
             {FAILED.includes(result.classification) && (

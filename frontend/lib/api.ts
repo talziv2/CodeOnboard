@@ -199,12 +199,26 @@ export interface Mutation {
   reason?: string;
 }
 
+/** How the system responded to the gap, decided from `gap_kind`. */
+export interface Adaptation {
+  kind: "none" | "hint" | "reteach" | "prerequisite" | "followup";
+  /** The hint or follow-up itself. Null when generating it failed. */
+  text?: string | null;
+  /** Whether the corrected lesson was written; the panel reloads if so. */
+  retaught?: boolean;
+  /** How many units ahead were demoted after sustained understanding. */
+  pruned?: number;
+}
+
 export interface RespondResult {
   classification: Classification;
+  /** Why the answer fell short — what the adaptation was chosen from. */
+  gap_kind?: string;
   rationale: string;
   understanding_state: string;
-  /** A wrong answer auto-creates a warm-up; "partial" leaves it to the user. */
+  /** Only a missing foundation grows the graph; everything else is `none`. */
   mutation: Mutation;
+  adaptation?: Adaptation;
   current_node_id: string | null;
 }
 

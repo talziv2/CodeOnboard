@@ -107,6 +107,14 @@ export const t = {
       "first. It stays marked as a rough patch, but you came back from it.",
     walkthrough: "Walkthrough",
     setup: "Before you answer",
+    hint: "A way in",
+    followup: "One more, from another angle",
+    retaught: "Rewritten around what you said",
+    tryAgain: "Try again",
+    pruned: (count: number) =>
+      count === 1
+        ? "You're ahead — 1 stop moved to optional"
+        : `You're ahead — ${count} stops moved to optional`,
     reveal: "What's actually happening",
     takeaway: "Take away",
     ownership: "Yours to hold",

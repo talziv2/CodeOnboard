@@ -39,6 +39,8 @@ from backend.agents.goal import (
 from backend.agents.grader import run as run_grader
 from backend.agents.mentor.mutator import mutate as mutate_graph
 from backend.agents.teaching import run as run_teaching
+from backend.agents.teaching import respond as teaching_respond
+from backend.learning import adaptation
 from backend.learning import store as learning_store
 from backend.pipeline.runner import run_pipeline
 from backend.repo import dossier_store
@@ -229,6 +231,18 @@ _FALLBACK_READ_SOURCE = (
 )
 _FALLBACK_SKIP_NODE = "Lesson generation failed. Please skip this node."
 _FALLBACK_PROMPT = "What is the main purpose of this code?"
+
+
+def _node_source(graph, node) -> str:
+    """The unit's anchored source, for a re-teach that must stay grounded.
+
+    A corrected lesson is still a lesson: it may not be written from the
+    objective alone (learning-engine.md §4.1.2), so this raises exactly as
+    rendering does when nothing can be read.
+    """
+    from backend.agents.teaching.agent import _read_node_source
+
+    return _read_node_source(clone_repo(graph.repo_url), node)
 
 
 def _load_session_or_404(session_id: str):
@@ -449,41 +463,67 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
         gap_kind=gap_kind,
     )
 
-    # A WRONG answer gets a warm-up automatically — being stuck is exactly when
-    # a user is least able to judge that they need one. Three classifications do
-    # not qualify:
-    #   partial    the user is mostly there, so the warm-up stays an offer they
-    #              can decline (the /retry endpoint);
-    #   off-topic  the answer says nothing about their understanding, so it is
-    #              not grounds to reshape their path — they typed something
-    #              unrelated, which is not the same as being stuck;
-    #   understood nothing to remediate.
-    # The Mutator's one-prerequisite-per-node cap still applies, so repeated
-    # failures cannot stack warm-ups.
+    # WHAT the answer earns is decided deterministically from why it fell short
+    # (learning-engine.md §9.1). Only `missing_prerequisite` changes the graph;
+    # the others answer the learner where they are. `off-topic` and `understood`
+    # earn nothing — an unrelated answer is evidence of neither understanding nor
+    # misunderstanding, and must not reshape a path.
+    node = graph.nodes[current]
+    action = adaptation.decide(classification, gap_kind)
+    rationale = grade.get("rationale") or ""
     mutation = {"kind": "none"}
-    if classification == "confused":
+    adapted: dict = {"kind": action}
+
+    if action == "prerequisite":
         try:
             mutation_state = OnboardState(
                 repo_url=graph.repo_url, goal=graph.goal, client=client
             )
             mutation_state.graph = graph
             mutation_state.repo_path = clone_repo(graph.repo_url)
+            # The Mutator's one-prerequisite-per-node cap still applies, so
+            # repeated failures cannot stack warm-ups.
             mutate_graph(mutation_state, "prerequisite", client=client)
             mutation = mutation_state.last_mutation or {"kind": "none"}
             state.errors.extend(mutation_state.errors)
         except Exception as exc:  # a failed warm-up must not lose the grade
             state.errors.append(f"auto prerequisite failed: {exc}")
+    elif action == "hint":
+        adapted["text"] = teaching_respond.hint(
+            state, node, body.response, rationale, client=client
+        )
+    elif action == "followup":
+        adapted["text"] = teaching_respond.followup(
+            state, node, body.response, rationale, client=client
+        )
+    elif action == "reteach":
+        try:
+            source = _node_source(graph, node)
+            lesson = teaching_respond.reteach(
+                state, node, body.response, rationale, source, client=client
+            )
+            adapted["retaught"] = lesson is not None
+        except Exception as exc:
+            state.errors.append(f"re-teach failed: {exc}")
+            adapted["retaught"] = False
+
+    # Adapting UPWARD, and the only response that shortens the journey: an area
+    # the learner has demonstrably got does not need its remaining recommended
+    # units at full length. Pure Python, no call, and it runs on every graded
+    # answer because the evidence it reads only ever changes here.
+    pruned = adaptation.prune_ahead(graph)
+    if pruned:
+        adapted["pruned"] = len(pruned)
 
     learning_store.save_graph(graph, SESSIONS_DB_PATH)
 
     return {
         "classification": classification,
-        # Recorded and returned, not yet acted on: the adaptation behaviours
-        # that branch on it are B5 (learning-engine.md §9.1).
         "gap_kind": gap_kind,
         "rationale": grade.get("rationale"),
         "understanding_state": graph.nodes[current].understanding_state,
         "mutation": mutation,
+        "adaptation": adapted,
         "current_node_id": graph.current_node_id,  # may now point at a new prerequisite
     }
 

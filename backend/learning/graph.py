@@ -12,11 +12,30 @@
 # "this node" even after a prerequisite is inserted before it.
 #
 # Edge kinds:
-#   - "sequence":     the default linear ordering produced by the Planner
-#   - "prerequisite": inserted by the mutator when the Grader detects confusion
-#                     and the user needs to learn something else first
+#   - "sequence":     the ordering the learner walks, produced by the Planner
+#   - "prerequisite": "B cannot be understood before A". Written by TWO different
+#                     producers, which mean different things — see below
 #   - "deeper":       inserted when the user asks to dive into a sub-topic
 #                     hanging off a node already in the graph
+#
+# TWO PRODUCERS OF `prerequisite`, AND WHY CONSUMERS MUST TELL THEM APART
+#
+#   PLANNED   the objective-first planner emits one per `depends_on`, so a normal
+#             graph carries dozens. They describe the DEPENDENCY STRUCTURE of the
+#             curriculum. Every unit they touch is an ordinary stop, planned
+#             before the learner answered anything.
+#   REMEDIAL  the Mutator splices a warm-up in after a wrong answer. This is an
+#             EVENT in one learner's session: something went wrong here.
+#
+# A consumer that treats every prerequisite edge as remedial reports a planned
+# curriculum as a sequence of failures — which is exactly what happened to the
+# route rail, where a planned graph rendered with nearly every stop captioned
+# "added after confusion".
+#
+# The structural tell is `insert_before`: it REROUTES the incoming sequence edge
+# onto the new node, so a spliced warm-up has NO OUTGOING SEQUENCE EDGE. A
+# planned unit sits on the chain and keeps one. Anything asking "was this
+# inserted after a mistake?" must check that, not merely the edge kind.
 
 import uuid
 from dataclasses import dataclass, field
@@ -310,20 +329,34 @@ class LearningGraph:
     # --- derived metrics ---
 
     def readiness(self) -> float:
-        # Heuristic progress signal — understood_count / total. Communicates
-        # progress without overclaiming. The roadmap calls for
-        # "goal_relevant_count" in the denominator; for v1 every node in the
-        # graph is goal-relevant by construction (the Mentor only emits
-        # relevant nodes), so total works.
-        if not self.nodes:
+        """Progress toward the journey the learner was actually given.
+
+        CORE-WEIGHTED: `optional` units are excluded from the denominator
+        entirely (learning-engine.md L10). They are depth nobody promised — the
+        overflow the guard band demoted, or material prune-ahead set aside —
+        and counting them means the gauge falls when the system *shortens* the
+        journey, which is precisely backwards.
+
+        Optional units the learner chose to do still count in the numerator:
+        opening one is work, and work should never lower a progress bar.
+
+        `partial` scores half. That is honest for a genuinely partial answer and
+        wrong for a grading failure, which also defaults to `partial` — but the
+        fix belongs in the Grader, which is where the distinction exists. Paying
+        for it here would mean inventing a signal this method cannot see.
+        """
+        weight = {"understood": 1.0, "partial": 0.5}
+        core = [n for n in self.nodes.values() if not self._is_optional(n)]
+        if not core:
             return 0.0
-        score = sum(
-            1.0 if n.understanding_state == "understood" else
-            0.5 if n.understanding_state == "partial" else
-            0.0  # not_started or failed
-            for n in self.nodes.values()
-        )
-        return score / len(self.nodes)
+
+        earned = sum(weight.get(n.understanding_state, 0.0) for n in self.nodes.values())
+        # Extra credit from optional units cannot push the gauge past complete.
+        return min(earned / len(core), 1.0)
+
+    @staticmethod
+    def _is_optional(node: LearningNode) -> bool:
+        return (node.lesson_brief or {}).get("priority") == "optional"
 
     # --- serialization (for API responses / UI) ---
 
