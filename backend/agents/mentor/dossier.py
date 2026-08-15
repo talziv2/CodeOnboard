@@ -193,7 +193,7 @@ Calibration by goal fields (they shape the SHAPE of the graph):
     deep      → 7–10 nodes. Include `component` nodes for specific
                 implementations; anchor methods over classes; include
                 `risk`/`test_coverage` nodes when the dossier surfaces them.
-  By `experience_level` / `familiarity`:
+  By `familiarity`:
     newer to the codebase → 1–2 orientation nodes first (entry points, the
     `understanding` paragraph is your source); experienced → start where the
     goal actually bites, zero orientation.

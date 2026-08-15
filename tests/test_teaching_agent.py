@@ -29,7 +29,7 @@ FAKE_GOAL = {
     "primary_goal": "understand how authentication works",
     "goal_type": "understand_component",
     "focus_area": "authentication",
-    "experience_level": "intermediate",
+    "code_depth": "working",
     "depth": "deep",
 }
 
@@ -359,7 +359,7 @@ def test_user_content_includes_familiarity_and_background():
     )
     goal = {
         "primary_goal": "extend safely",
-        "experience_level": "intermediate",
+        "code_depth": "working",
         "depth": "moderate",
         "familiarity": "Skimmed the README or docs",
         "background": "Python, Flask",

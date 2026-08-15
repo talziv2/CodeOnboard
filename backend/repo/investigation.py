@@ -856,8 +856,8 @@ def _task(goal: dict) -> str:
         parts.append(f"Focus area: {goal['focus_area']}")
     if goal.get("goal_type"):
         parts.append(f"Goal type: {goal['goal_type']}")
-    if goal.get("experience_level"):
-        parts.append(f"The user's experience level: {goal['experience_level']}")
+    if goal.get("code_depth"):
+        parts.append(f"How deep the user asked to go: {goal['code_depth']}")
     parts.append(
         "Investigate the repository until you can explain the goal-relevant "
         "behaviour from verified code, then submit the dossier."

@@ -274,7 +274,6 @@ def _build_user_content(
     context_section = f"{system_context}\n\n" if system_context else ""
     return (
         f"Developer profile:\n"
-        f"  experience level: {goal.get('experience_level', 'unknown')}\n"
         f"  familiarity with THIS codebase: {goal.get('familiarity', 'unknown')}\n"
         f"  background: {goal.get('background', 'unknown')}\n"
         f"Overall goal: {goal.get('primary_goal', '')}\n"

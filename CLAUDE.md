@@ -108,14 +108,27 @@ class OnboardState:
   "primary_goal": "understand the request lifecycle",
   "goal_type": "understand_component",
   "focus_area": "routing and middleware",
-  "experience_level": "intermediate",
-  "depth": "deep",
+  "code_depth": "working",
+  "depth": "moderate",
   "time_available": "2 hours",
   "target_repo": "https://github.com/psf/requests"
 }
 ```
 
 `goal_type` values: `understand_system` | `understand_component` | `contribute_code` | `debug_issue`
+
+`code_depth` values: `map` | `working` | `implementation` — how far into the
+implementation the user asked to go. It is **elicited**, not inferred: it is the
+one personalization dial worth an interview question, because scope and code
+depth are independent (a broad shallow tour and a narrow deep dive are both
+legitimate).
+
+`depth` is **derived from `code_depth` in Python** (`map→overview`,
+`working→moderate`, `implementation→deep`) and is never written by a model. It
+was previously invented by Haiku from answers that never mentioned it, and it
+decided how much got taught. `experience_level` was the same kind of invention
+and has been removed — `familiarity` (fixed options) and `background` (free
+text) are both genuinely elicited and carry the real signal.
 
 ---
 

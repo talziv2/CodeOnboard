@@ -10,6 +10,7 @@
 # That GoalOutput becomes OnboardState.goal — the input to all downstream agents.
 
 import json
+import logging
 import os
 import uuid
 from dataclasses import dataclass, field
@@ -19,11 +20,29 @@ import anthropic
 from pydantic import BaseModel
 
 from backend.agents.goal.questions import (
+    CODE_DEPTH_MAP,
     CORE_QUESTIONS,
     FOLLOWUP_QUESTIONS,
     GOAL_TYPE_MAP,
     Question,
 )
+
+logger = logging.getLogger(__name__)
+
+
+# code_depth → the `depth` word Teaching and the Mentor already calibrate on.
+#
+# `depth` used to be invented by Haiku from answers that never mentioned it, and
+# it decided how large the curriculum was. Deriving it from an answer the user
+# actually gave removes the hallucination without changing anything downstream
+# (learning-engine.md LD2). The two stay separate fields because they will
+# diverge: B3 makes scope a function of the goal and the repository, while
+# code_depth remains the user's own dial.
+_DEPTH_BY_CODE_DEPTH: dict[str, str] = {
+    "map": "overview",
+    "working": "moderate",
+    "implementation": "deep",
+}
 
 
 # Validated output of the goal dialogue. Will feed into OnboardState.goal
@@ -39,7 +58,10 @@ class GoalOutput(BaseModel):
         "debug_issue",
     ]
     focus_area: str
-    experience_level: str
+    # How far into the implementation the user asked to go. Elicited, not
+    # inferred — the one personalization dial worth an interview question.
+    code_depth: Literal["map", "working", "implementation"]
+    # Derived from code_depth in Python, never written by the model.
     depth: str
     target_repo: str
     familiarity: str
@@ -102,6 +124,9 @@ def process_answer(
             raise ValueError(f"invalid_goal_type_option: {answer!r}")
         session.goal_type = GOAL_TYPE_MAP[chosen]
 
+    if current_q.key == "code_depth" and answer not in CODE_DEPTH_MAP:
+        raise ValueError(f"invalid_code_depth_option: {answer!r}")
+
     updated_sequence = _get_question_sequence(session)
     next_index = len(session.answers)
 
@@ -113,7 +138,12 @@ def process_answer(
         client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
     qa_pairs = [(q.text, session.answers[q.key]) for q in updated_sequence]
-    goal = _synthesize_goal(session.repo_url, qa_pairs, client=client)
+    goal = _synthesize_goal(
+        session.repo_url,
+        qa_pairs,
+        client=client,
+        code_depth=CODE_DEPTH_MAP[session.answers["code_depth"]],
+    )
     return None, goal
 
 
@@ -122,8 +152,7 @@ You are a developer assistant helping onboard engineers to unfamiliar codebases.
 
 Given a user's answers about their learning goal and the target repository URL,
 produce a JSON object with exactly these keys:
-  primary_goal, goal_type, focus_area, experience_level, depth,
-  target_repo, familiarity, background
+  primary_goal, goal_type, focus_area, target_repo, familiarity, background
 
 And these optional keys (include only when the user provided relevant data):
   contribution_context, change_target, risk_tolerance,
@@ -139,9 +168,6 @@ Rules:
                                    user cares about risks, extension points, and
                                    what tests guard the area they will touch
     debug_issue                  — trace a specific error
-- depth must be one of: overview, moderate, deep
-- experience_level: short phrase, e.g. "beginner", "intermediate",
-  "senior engineer"
 - familiarity: copy the user's familiarity answer VERBATIM. It is matched
   against a fixed set downstream, so it must be exactly one of:
     "Starting fresh — never looked at it"
@@ -160,6 +186,7 @@ def _synthesize_goal(
     repo_url: str,
     qa_pairs: list[tuple[str, str]],
     client: anthropic.Anthropic,
+    code_depth: str,
 ) -> GoalOutput:
     # Build the user message from all Q&A pairs and call Haiku once.
     user_content = f"Target repository: {repo_url}\n\n"
@@ -183,7 +210,12 @@ def _synthesize_goal(
                 text = text[4:]
         data = json.loads(text.strip())
     except json.JSONDecodeError as exc:
-        print(f"[goal/synthesize] raw response was:\n{raw}")
+        logger.error("goal synthesis returned unparseable JSON: %s", raw)
         raise ValueError("synthesis_failed") from exc
 
+    # Overwritten, not defaulted: these two are ours. The model is not asked for
+    # them, and a model that volunteers them anyway does not get to decide how
+    # deep this developer's lessons go.
+    data["code_depth"] = code_depth
+    data["depth"] = _DEPTH_BY_CODE_DEPTH[code_depth]
     return GoalOutput(**data)

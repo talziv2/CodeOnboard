@@ -387,8 +387,7 @@ def _build_prereq_prompt(
     return (
         f"Developer profile:\n"
         f"  familiarity with THIS codebase: {goal.get('familiarity', 'unknown')}\n"
-        f"  background: {goal.get('background', 'unknown')}\n"
-        f"  experience level: {goal.get('experience_level', 'unknown')}\n\n"
+        f"  background: {goal.get('background', 'unknown')}\n\n"
         f"The developer was confused while learning this node:\n"
         f"  title: {anchor.title}\n"
         f"  the claim they could not make: {anchor.objective() or '(none stated)'}\n"

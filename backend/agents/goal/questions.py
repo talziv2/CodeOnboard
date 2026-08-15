@@ -1,10 +1,11 @@
 # Question flow for the Goal Agent dialogue.
 #
-# Everyone gets the 4 CORE_QUESTIONS in order:
+# Everyone gets the 5 CORE_QUESTIONS in order:
 #   1. familiarity  (options)   — where the user is starting from
 #   2. goal_type_raw (options)  — why they're here; drives follow-up routing
 #   3. primary_goal (free text) — what they want to walk away able to do
-#   4. background   (free text) — languages/frameworks they already know
+#   4. code_depth   (options)   — how far into the implementation to go
+#   5. background   (free text) — languages/frameworks they already know
 #
 # After Q4, FOLLOWUP_QUESTIONS adds 1–2 goal-specific questions:
 #   understand_system / understand_component  →  focus_area
@@ -53,6 +54,27 @@ GOAL_TYPE_MAP: dict[str, str] = {
 
 GOAL_TYPE_OPTIONS: list[str] = list(GOAL_TYPE_MAP)
 
+# Display string → the code_depth key the rest of the system reasons about.
+#
+# Scope (how much of the system a journey covers) and code depth (how far into
+# the implementation it goes) are two dimensions, not one — a broad shallow tour
+# and a narrow deep dive are both legitimate (learning-engine.md LP4). Only this
+# one genuinely needs the user: scope is derived from the goal and the repository,
+# and then adjusted against a plan the user can actually see.
+#
+# Phrased as outcomes rather than levels, because "how deep do you want to go?"
+# invites everyone to answer "deep".
+CODE_DEPTH_MAP: dict[str, str] = {
+    "Give me the map — architecture, responsibilities, flows, key decisions":
+        "map",
+    "I'll be working in here — the map, plus what I'd need to change things safely":
+        "working",
+    "I need to master the internals — algorithms, data structures, critical paths":
+        "implementation",
+}
+
+CODE_DEPTH_OPTIONS: list[str] = list(CODE_DEPTH_MAP)
+
 
 # --- questions ---------------------------------------------------------------
 
@@ -70,6 +92,11 @@ CORE_QUESTIONS: list[Question] = [
     Question(
         key="primary_goal",
         text="What specifically do you want to be able to do after this session?",
+    ),
+    Question(
+        key="code_depth",
+        text="How deep into the actual implementation do you want to go?",
+        options=CODE_DEPTH_OPTIONS,
     ),
     Question(
         key="background",

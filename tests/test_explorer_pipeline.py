@@ -29,7 +29,7 @@ FAKE_GOAL = {
     "primary_goal": "understand authentication",
     "goal_type": "understand_component",
     "focus_area": "authentication",
-    "experience_level": "intermediate",
+    "code_depth": "working",
     "depth": "deep",
     "language": "en",
 }

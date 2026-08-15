@@ -284,14 +284,14 @@ def test_prereq_prompt_includes_developer_profile_fields():
     goal = {
         "familiarity": "Skimmed the README or docs",
         "background": "Embedded C++, learning Python",
-        "experience_level": "intermediate",
     }
     prompt = _build_prereq_prompt(anchor, FAKE_CANDIDATES, goal)
-    # All three profile lines must reach the Mutator so background can act
-    # as a tiebreaker.
+    # Both profile lines must reach the Mutator so background can act as a
+    # tiebreaker. `experience_level` used to be a third: it was invented by
+    # Haiku from answers that never mentioned it, and is gone.
     assert "Skimmed the README or docs" in prompt
     assert "Embedded C++, learning Python" in prompt
-    assert "intermediate" in prompt
+    assert "experience" not in prompt
 
 
 def test_prereq_system_prompt_has_background_tiebreaker_rule():

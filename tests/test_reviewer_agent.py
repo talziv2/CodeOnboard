@@ -29,7 +29,7 @@ FAKE_GOAL_IMPROVE = {
     "primary_goal": "safely add custom auth scheme",
     "goal_type": "improve_existing_system",
     "focus_area": "session auth",
-    "experience_level": "intermediate",
+    "code_depth": "working",
     "depth": "moderate",
     "target_repo": FAKE_REPO_URL,
     "familiarity": "new",

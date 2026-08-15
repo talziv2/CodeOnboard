@@ -14,6 +14,7 @@ from backend.agents.goal import (
     start_session,
 )
 from backend.agents.goal.agent import _synthesize_goal
+from backend.agents.goal.questions import CODE_DEPTH_OPTIONS
 
 REPO_URL = "https://github.com/psf/requests"
 
@@ -26,14 +27,15 @@ ANS_GOAL_USE = "Use it in my own project"
 ANS_GOAL_ARCHITECTURE = "Understand the architecture (layers, boundaries, design)"
 ANS_GOAL_IMPROVE = "Improve or extend the codebase safely"
 ANS_PRIMARY_GOAL = "understand the request lifecycle"
+ANS_CODE_DEPTH = (
+    "I'll be working in here — the map, plus what I'd need to change things safely"
+)
 ANS_BACKGROUND = "Python, Flask, some Java"
 
 VALID_GOAL_JSON = {
     "primary_goal": "understand the request lifecycle",
     "goal_type": "understand_system",
     "focus_area": "HTTP session and adapters",
-    "experience_level": "intermediate",
-    "depth": "deep",
     "target_repo": REPO_URL,
     "familiarity": "starting fresh",
     "background": "Python, Flask",
@@ -132,6 +134,7 @@ def test_understand_path_gets_focus_area_followup():
     process_answer(session, ANS_FAMILIARITY, client=None)
     process_answer(session, ANS_GOAL_UNDERSTAND, client=None)
     process_answer(session, ANS_PRIMARY_GOAL, client=None)
+    process_answer(session, ANS_CODE_DEPTH, client=None)
     next_q, _ = process_answer(session, ANS_BACKGROUND, client=None)
     assert next_q is not None
     assert next_q.key == "focus_area"
@@ -143,6 +146,7 @@ def test_debug_path_gets_error_description_followup():
     process_answer(session, ANS_FAMILIARITY, client=None)
     process_answer(session, ANS_GOAL_DEBUG, client=None)
     process_answer(session, ANS_PRIMARY_GOAL, client=None)
+    process_answer(session, ANS_CODE_DEPTH, client=None)
     next_q, _ = process_answer(session, ANS_BACKGROUND, client=None)
     assert next_q is not None
     assert next_q.key == "error_description"
@@ -153,6 +157,7 @@ def test_debug_path_gets_tried_so_far_after_error():
     process_answer(session, ANS_FAMILIARITY, client=None)
     process_answer(session, ANS_GOAL_DEBUG, client=None)
     process_answer(session, ANS_PRIMARY_GOAL, client=None)
+    process_answer(session, ANS_CODE_DEPTH, client=None)
     process_answer(session, ANS_BACKGROUND, client=None)
     next_q, _ = process_answer(session, "ConnectionError on retry", client=None)
     assert next_q is not None
@@ -164,6 +169,7 @@ def test_contribute_path_gets_contribution_context_followup():
     process_answer(session, ANS_FAMILIARITY, client=None)
     process_answer(session, ANS_GOAL_CONTRIBUTE, client=None)
     process_answer(session, ANS_PRIMARY_GOAL, client=None)
+    process_answer(session, ANS_CODE_DEPTH, client=None)
     next_q, _ = process_answer(session, ANS_BACKGROUND, client=None)
     assert next_q is not None
     assert next_q.key == "contribution_context"
@@ -178,6 +184,7 @@ def test_understand_flow_5_questions_triggers_synthesis():
     process_answer(session, ANS_FAMILIARITY, client=None)
     process_answer(session, ANS_GOAL_UNDERSTAND, client=None)
     process_answer(session, ANS_PRIMARY_GOAL, client=None)
+    process_answer(session, ANS_CODE_DEPTH, client=None)
     process_answer(session, ANS_BACKGROUND, client=None)
     next_q, goal = process_answer(session, "the session handling part", client=mock_client)
 
@@ -200,6 +207,7 @@ def test_debug_flow_6_questions_triggers_synthesis():
     process_answer(session, ANS_FAMILIARITY, client=None)
     process_answer(session, ANS_GOAL_DEBUG, client=None)
     process_answer(session, ANS_PRIMARY_GOAL, client=None)
+    process_answer(session, ANS_CODE_DEPTH, client=None)
     process_answer(session, ANS_BACKGROUND, client=None)
     process_answer(session, "ConnectionError on retry", client=None)
     next_q, goal = process_answer(session, "checked adapters", client=mock_client)
@@ -221,6 +229,7 @@ def test_contribute_flow_5_questions_triggers_synthesis():
     process_answer(session, ANS_FAMILIARITY, client=None)
     process_answer(session, ANS_GOAL_CONTRIBUTE, client=None)
     process_answer(session, ANS_PRIMARY_GOAL, client=None)
+    process_answer(session, ANS_CODE_DEPTH, client=None)
     process_answer(session, ANS_BACKGROUND, client=None)
     next_q, goal = process_answer(session, "issue #123", client=mock_client)
 
@@ -237,10 +246,11 @@ def test_synthesize_goal_valid_json():
         (CORE_QUESTIONS[0].text, ANS_FAMILIARITY),
         (CORE_QUESTIONS[1].text, ANS_GOAL_UNDERSTAND),
         (CORE_QUESTIONS[2].text, ANS_PRIMARY_GOAL),
-        (CORE_QUESTIONS[3].text, ANS_BACKGROUND),
+        (CORE_QUESTIONS[3].text, ANS_CODE_DEPTH),
+        (CORE_QUESTIONS[4].text, ANS_BACKGROUND),
         (FOLLOWUP_QUESTIONS["understand_system"][0].text, "session handling"),
     ]
-    result = _synthesize_goal(REPO_URL, qa_pairs, client=mock_client)
+    result = _synthesize_goal(REPO_URL, qa_pairs, client=mock_client, code_depth="working")
     assert result.primary_goal == "understand the request lifecycle"
     assert result.goal_type == "understand_system"
     assert result.target_repo == REPO_URL
@@ -253,14 +263,20 @@ def test_synthesize_goal_invalid_json():
     mock_client.messages.create.return_value = mock_message
 
     with pytest.raises(ValueError, match="synthesis_failed"):
-        _synthesize_goal(REPO_URL, [("Q", "A")], client=mock_client)
+        _synthesize_goal(REPO_URL, [("Q", "A")], client=mock_client, code_depth="map")
 
 
 # ── GoalOutput validation ─────────────────────────────────────────────────────
 
+# VALID_GOAL_JSON is what the MODEL returns, and the model is no longer asked
+# for depth or code_depth — our code supplies both. Constructing a GoalOutput
+# directly therefore has to add them.
+COMPLETE_GOAL = {**VALID_GOAL_JSON, "code_depth": "working", "depth": "moderate"}
+
+
 def test_goal_type_validation_rejects_invalid_value():
     with pytest.raises(ValidationError):
-        GoalOutput(**{**VALID_GOAL_JSON, "goal_type": "read_documentation"})
+        GoalOutput(**{**COMPLETE_GOAL, "goal_type": "read_documentation"})
 
 
 def test_goal_type_accepts_all_valid_values():
@@ -272,5 +288,73 @@ def test_goal_type_accepts_all_valid_values():
         "improve_existing_system",
         "debug_issue",
     ):
-        obj = GoalOutput(**{**VALID_GOAL_JSON, "goal_type": valid_type})
+        obj = GoalOutput(**{**COMPLETE_GOAL, "goal_type": valid_type})
         assert obj.goal_type == valid_type
+
+
+# ── code_depth (B2) ───────────────────────────────────────────────────────────
+
+def test_code_depth_is_asked_with_outcome_shaped_options():
+    q = next(q for q in CORE_QUESTIONS if q.key == "code_depth")
+    assert q.options is not None and len(q.options) == 3
+    # Phrased as outcomes, not as levels — "how deep?" invites everyone to
+    # answer "deep".
+    assert all(len(o.split()) > 4 for o in q.options)
+
+
+def test_an_invalid_code_depth_option_is_rejected():
+    session = start_session(REPO_URL)
+    process_answer(session, ANS_FAMILIARITY, client=None)
+    process_answer(session, ANS_GOAL_UNDERSTAND, client=None)
+    process_answer(session, ANS_PRIMARY_GOAL, client=None)
+    with pytest.raises(ValueError, match="invalid_code_depth_option"):
+        process_answer(session, "very deep please", client=None)
+
+
+@pytest.mark.parametrize(
+    "answer,expected_code_depth,expected_depth",
+    [
+        (CODE_DEPTH_OPTIONS[0], "map", "overview"),
+        (CODE_DEPTH_OPTIONS[1], "working", "moderate"),
+        (CODE_DEPTH_OPTIONS[2], "implementation", "deep"),
+    ],
+)
+def test_depth_is_derived_from_the_answer_not_invented(
+    answer, expected_code_depth, expected_depth
+):
+    session = start_session(REPO_URL)
+    mock_client = make_mock_client(VALID_GOAL_JSON)
+    process_answer(session, ANS_FAMILIARITY, client=None)
+    process_answer(session, ANS_GOAL_UNDERSTAND, client=None)
+    process_answer(session, ANS_PRIMARY_GOAL, client=None)
+    process_answer(session, answer, client=None)
+    process_answer(session, ANS_BACKGROUND, client=None)
+    _, goal = process_answer(session, "session handling", client=mock_client)
+
+    assert goal.code_depth == expected_code_depth
+    assert goal.depth == expected_depth
+
+
+def test_a_model_that_volunteers_a_depth_does_not_get_to_keep_it():
+    # The whole point of LD2: depth decided how much got taught, and was
+    # invented by a model from answers that never mentioned it.
+    session = start_session(REPO_URL)
+    mock_client = make_mock_client(
+        {**VALID_GOAL_JSON, "depth": "deep", "code_depth": "implementation"}
+    )
+    process_answer(session, ANS_FAMILIARITY, client=None)
+    process_answer(session, ANS_GOAL_UNDERSTAND, client=None)
+    process_answer(session, ANS_PRIMARY_GOAL, client=None)
+    process_answer(session, CODE_DEPTH_OPTIONS[0], client=None)  # "give me the map"
+    process_answer(session, ANS_BACKGROUND, client=None)
+    _, goal = process_answer(session, "session handling", client=mock_client)
+
+    assert goal.code_depth == "map"
+    assert goal.depth == "overview"
+
+
+def test_the_model_is_no_longer_asked_for_depth_or_experience_level():
+    from backend.agents.goal.agent import _SYSTEM_PROMPT
+
+    assert "experience_level" not in _SYSTEM_PROMPT
+    assert "depth must be one of" not in _SYSTEM_PROMPT
