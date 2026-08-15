@@ -184,6 +184,7 @@ export const t = {
     risk: "risk",
     test_coverage: "test coverage",
     component: "component",
+    synthesis: "synthesis",
   } as Record<string, string>,
 
   states: {

@@ -1,0 +1,40 @@
+[
+  {
+    "cell": "requests-map",
+    "ok": true,
+    "seconds": 326.9,
+    "code_depth": "map",
+    "units_total": 18,
+    "journey_size": 14,
+    "optional": 4,
+    "band": [
+      5,
+      14
+    ],
+    "in_band": true,
+    "areas": 6,
+    "area_titles": [
+      "Public API and Session as orchestrator",
+      "Request vs PreparedRequest: the two-stage model",
+      "Session defaults and the merge pipeline",
+      "Adapter layer and the transport boundary",
+      "Network transmission and response wrapping",
+      "Cross-cutting runtime concerns"
+    ],
+    "kinds": {
+      "architecture": 3,
+      "flow": 6,
+      "component": 4,
+      "extension_point": 2,
+      "risk": 2,
+      "synthesis": 1
+    },
+    "multi_anchor_units": 5,
+    "max_anchors": 6,
+    "prerequisite_edges": 31,
+    "confidence": "high",
+    "objectives_present": 18,
+    "failures": {},
+    "planner_notes": []
+  }
+]

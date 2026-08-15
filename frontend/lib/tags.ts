@@ -23,6 +23,10 @@ const TAG_STYLES: Record<string, TagStyle> = {
   risk: { text: "#d4634f", border: "#6b2f26", background: "rgba(212,99,79,0.10)" },
   test_coverage: { text: "#d9a441", border: "#6b5220", background: "rgba(217,164,65,0.09)" },
   component: { text: "#7b8d99", border: "#24333d", background: "rgba(123,141,153,0.08)" },
+  // A unit that connects several earlier ones and introduces no new code —
+  // where the mental model consolidates rather than grows. Warm and distinct
+  // from the six "here is a new thing" kinds, because it is the opposite.
+  synthesis: { text: "#e0b088", border: "#6b4a2e", background: "rgba(224,176,136,0.09)" },
 };
 
 const FREEFORM: TagStyle = {

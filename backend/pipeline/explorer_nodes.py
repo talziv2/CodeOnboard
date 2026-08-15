@@ -139,8 +139,14 @@ def run_goal_investigation(
         # Hard stop for the explorer path: the Mentor must not fabricate a
         # graph from nothing (D15). state.investigation stays None and the
         # pipeline routes to END with the error visible.
+        # The stop reason alone says a run died, not why. `api_error` in
+        # particular is a category, and the exploration's own error list is the
+        # only place the cause exists — without it, diagnosing a dead pipeline
+        # means re-running the investigation by hand to read a discarded string.
+        cause = f" — {run.exploration.errors[0]}" if run.exploration.errors else ""
         state.errors.append(
-            f"goal_investigation: no dossier produced ({run.exploration.stop_reason})"
+            f"goal_investigation: no dossier produced "
+            f"({run.exploration.stop_reason}){cause}"
         )
         return state
 
