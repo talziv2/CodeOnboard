@@ -42,6 +42,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Literal
 
+from backend.learning.gaps import Gap, GapState
+
 
 UnderstandingState = Literal["not_started", "failed", "partial", "understood"]
 EdgeKind = Literal["sequence", "prerequisite", "deeper"]
@@ -105,6 +107,26 @@ class LearningNode:
     # they got there, so revisiting a node adds to the record instead of
     # silently overwriting it.
     attempts: list[dict] = field(default_factory=list)
+    # Outstanding gaps — the misconceptions this node's answers revealed, and
+    # the per-node remediation counter (gap-model.md M1).
+    #
+    # EXPLICIT STATE, not derived from `attempts`. "Gap A was later closed" is
+    # not a fact about the attempt that opened it, and a fold recomputed on
+    # every read loses a gap silently the first time it is wrong — which is
+    # exactly what the requirement that a refresh must not forget a remediation
+    # forbids (§18.4). `attempts` stays the append-only evidence; this is the
+    # current truth, on the same side of the line as `understanding_state`.
+    #
+    # M1 is INERT: nothing reads this yet. It does not block, does not appear in
+    # `to_dict`, and does not reach the API. Persistence is unconditional and
+    # never consults `CODEONBOARD_GAPS` — the flag gates behaviour, never
+    # storage, which is what makes the round-trip contract true by construction.
+    gap_state: GapState = field(default_factory=GapState)
+
+    @property
+    def gaps(self) -> list[Gap]:
+        """Read-only view. Mutate through `gap_state.gaps`."""
+        return self.gap_state.gaps
 
     def objective(self) -> str:
         """The claim this node must teach, and that the user's answer is marked against.

@@ -1,6 +1,11 @@
 # Gap model — multi-gap remediation and verification
 
-**Phase status: planned, not started.** M1 is the first step.
+**Phase status: M1 done 2026-08-16; M2 not started.**
+
+| step | state |
+|---|---|
+| **M1** gap model + persistence, write-only | ✅ **done** — `backend/learning/gaps.py`, `flags.py`, additive `gaps_json` column, 20 tests. All 61 stored sessions load and round-trip byte-identical; 833 tests pass; no observable product behaviour change |
+| M2 – M10 | not started |
 
 The *design* this builds lives in
 [`learning-engine.md` §18](learning-engine.md#18-outstanding-gaps--multi-gap-remediation-and-verification),
@@ -31,7 +36,7 @@ replacing the other mid-phase.
 
 | # | Step | Invariant after this step | What could regress |
 |---|---|---|---|
-| **M1** | **Gap model + persistence, write-only.** `Gap` dataclass, `LearningNode.gaps`, additive nullable `gaps_json` column via the existing swallow-the-error `ALTER TABLE` idiom. `SCHEMA_VERSION` does not move. Nothing reads it | All 813 tests pass **unchanged**. No observable behaviour change. A graph saved and reloaded is identical | Store round-trip; the 61 existing sessions must still load |
+| **M1** ✅ | **Gap model + persistence, write-only.** `Gap` dataclass, `LearningNode.gaps`, additive nullable `gaps_json` column via the existing swallow-the-error `ALTER TABLE` idiom. `SCHEMA_VERSION` does not move. Nothing reads it | All 813 tests pass **unchanged**. No observable behaviour change. A graph saved and reloaded is identical | Store round-trip; the 61 existing sessions must still load |
 | **M2** | **Grader emits a gap list.** `GraderOutput.gaps: list[GapOut]` (`kind`, `claim`, `objective_part`, `foundational`). Scalar `classification` kept; scalar `gap_kind` **derived** from the highest-precedence gap. Ids minted by our code on persist, never by the model | `/respond`'s `gap_kind` equals what the single-gap Grader produced. Gaps are recorded but **inert** — nothing blocks, nothing is remediated per-gap | **Classification calibration.** A prompt change can shift the verdict distribution. Gate: re-run the 48-case evaluation and require classification agreement ≥ the recorded 48/48 |
 | **M3** | **Gap identity across re-grades** (§19.3.2). Re-grade mode shows open gaps *with their ids*; the model references an id or declares `new`. Code validates membership | A gap id never changes. A `verified` gap never reopens under a new id. An id the model invents is rejected and the gap stays as it was | Duplicate gaps if the model over-reports `new`. Bounded by the queue cap; measured, not assumed |
 | **M4** | **Adaptation policy → plan.** `decide_all(classification, gaps) → Plan{actions, active_set}`. §18.5 precedence, active set ≤ 3, collapse to one re-teach above 3 | With exactly one gap, `decide_all` produces exactly what `decide` produces today — asserted directly against the existing table | The B5 adaptation tests; the `off-topic` + named-gap rule must survive intact |

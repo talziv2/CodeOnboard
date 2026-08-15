@@ -17,6 +17,7 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
+from backend.learning.gaps import GapState
 from backend.learning.graph import (
     CodeAnchor,
     LearningEdge,
@@ -134,6 +135,21 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
             conn.execute("ALTER TABLE sessions ADD COLUMN areas_json TEXT")
         except Exception:
             pass
+        # Outstanding gaps and the per-node remediation counter (gap-model.md
+        # M1). Additive and nullable like every column above, so SCHEMA_VERSION
+        # does not move and a graph written before the gap model loads with an
+        # empty GapState — which reads correctly as "no outstanding gaps".
+        #
+        # Written and read UNCONDITIONALLY. `CODEONBOARD_GAPS` gates behaviour,
+        # never storage (gap-model.md §3.8): a flag-off save that loads a
+        # gap-bearing graph, changes something unrelated and writes it back must
+        # not destroy the gaps. Making persistence conditional is the one way to
+        # break that, so this path does not read the flag at all — and a test
+        # asserts that structurally, so the contract cannot rot.
+        try:
+            conn.execute("ALTER TABLE nodes ADD COLUMN gaps_json TEXT")
+        except Exception:
+            pass
 
 
 def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
@@ -175,8 +191,8 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
                 node_id, session_id, title, file, line_start, line_end,
                 concept_tags_json, lesson_brief_json, understanding_state,
                 visited, weak_spot, user_override, cached_lesson_json,
-                attempts_json, symbol
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                attempts_json, symbol, gaps_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [_node_row(graph.session_id, n) for n in graph.nodes.values()],
         )
@@ -280,6 +296,7 @@ def _node_row(session_id: str, node: LearningNode) -> tuple:
         json.dumps(node.cached_lesson) if node.cached_lesson is not None else None,
         json.dumps(node.attempts),
         node.code_anchor.symbol,
+        json.dumps(node.gap_state.to_dict()),
     )
 
 
@@ -305,6 +322,7 @@ def _row_to_node(row: sqlite3.Row) -> LearningNode:
             else None
         ),
         attempts=_json_or_default(row, "attempts_json", []),
+        gap_state=GapState.from_dict(_json_or_default(row, "gaps_json", None)),
     )
 
 
