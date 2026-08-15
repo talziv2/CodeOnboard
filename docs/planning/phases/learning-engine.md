@@ -922,9 +922,9 @@ flowchart TB
 | **B1** — objective contract | F | ✅ **done** 2026-08-15 | The single highest-leverage change, and it **works on today's graphs**: `objective` is a key in an existing JSON payload, so this ships and delivers value before the planner is rewritten |
 | **B2** — `code_depth` question | nothing | ✅ **done** 2026-08-15 | One question. Independent of everything; can run in parallel with B1 |
 | **B3** — objective-first planner | B1, B2, **Phase A Stage 3** | ✅ **done** 2026-08-15, behind `CODEONBOARD_CURRICULUM=1`; sanity-validated 4/4 (§6.3). Band calibration remains open ([LQ6](#152-open-lq)) and does **not** gate B4 — see the note below | Ends L1, L3, L4, L5. The core of the phase |
-| **B4** — lesson forms + reveal split | B1, B3 | next | Ends L7, L8. Lesson quality is half the product value of this phase |
+| **B4** — lesson forms + reveal split | B1, B3 | ✅ **done** 2026-08-15 (backend). **L8 is only half-closed until U1** — the split exists in the payload, and the panel still renders it as one block | Ends L7, L8. Lesson quality is half the product value of this phase |
 | **B5** — bidirectional adaptation | B3 | ready (B3 met) | Ends L9, L10. Prune-ahead is nearly free |
-| **B6** — frontend U1–U3 | B3, B4 | blocked on B4 | Without U1 the reveal split does nothing; without U2 a large curriculum is illegible |
+| **B6** — frontend U1–U3 | B3, B4 | **next** — both dependencies met | Without U1 the reveal split does nothing; without U2 a large curriculum is illegible |
 
 > **Calibration does not gate B4 or B5.** Nothing in this dependency graph depends on the
 > band *numbers*: B4 chooses a lesson form from a unit's `kind`, and B5 branches on
@@ -1062,10 +1062,13 @@ just deeper lesson framing. That would make `code_depth` a cross-phase input (§
 default is **no** — it shapes selection and teaching only. *Decide only if B3 shows the
 dossier lacks implementation-level evidence.*
 
-**LQ4 — Who owns "why now" — planner or teacher?**
-The planner knows the dependency structure; the teacher knows what the previous lesson
-actually said. Cheapest is the teacher, from the prior unit's objective. If continuity
-reads poorly, move it to the planner. *Decide during B4.*
+**LQ4 — Who owns "why now"? — RESOLVED 2026-08-15: the teacher.**
+Written from the previous unit's objective, which B1 made available and B3 made reliable.
+The teacher has both the claim the last unit built and its position on the walk, and it
+costs no extra call — the planner would have needed one. `_previous_unit()` reads the
+position off `path_order()`, so it follows the walk rather than a stored pointer and stays
+correct after a mid-session mutation. Moving it to the planner remains available if
+continuity reads poorly across a whole journey, which one unit at a time cannot show.
 
 **LQ5 — Does `use_library` become a real goal type?**
 Requires exit criteria in Phase A's structure (§5.4). The interim fix is re-pointing the
@@ -1164,6 +1167,11 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 | 2026-08-15 | **The proposal truncation was fixed by cutting verbosity, NOT by raising `MAX_TOKENS`** | `understand` meant "what the developer should take away", which is what `objective` already is — the same claim twice, costing a sentence per objective in a response that was overflowing. Removing it and capping `why` at 15 words was sufficient on its own: the cell that died now proposes **22** objectives where the truncating attempt produced fewer, in less space. `MAX_TOKENS` stays at 8192, so headroom remains a real reserve rather than something already spent on redundant prose | A truncation that recurs after the retry, which would mean the budget genuinely is the constraint |
 | 2026-08-15 | **A bounded retry stays in place for `stop_reason == "max_tokens"` specifically** | It did not fire on the rerun, and is kept as protection rather than removed as unused: the failure it covers is real, was observed once, and costs one call only when it happens. Keyed on the API's own truncation signal — matching the JSON decoder's message would work today, break the day a payload ends on a different token, and cannot tell a truncated response from a malformed one. A malformed-but-complete payload is deliberately **not** retried, and the retry asks for the same curriculum written tighter, never for fewer objectives — "propose less" is a size instruction and would reintroduce L1 | — |
 | 2026-08-15 | **`optional = 0` on every real run is recorded as an open observation ([LQ8](#152-open-lq)), not a defect** | The cut layer is structurally correct and tested; what is unobserved is real-run *overflow*, because the planner proposes roughly the journey it wants. Priority assignment is nonetheless discriminating — `core` is below `journey` in all four cells — so the selection layer is doing real work even when the band never has to act. **The proposal prompt must not be inflated to make the mechanism fire**: that optimises for a mechanism rather than a learner, and corrupts `core_before_band`, which is the calibration's own input | The repeat matrix showing proposal volume genuinely exceeding what journeys keep |
+
+| 2026-08-15 | **B4 shipped (backend): the question's form is derived from the unit's `kind`, and the lesson body is split into `setup` / `reveal`** | L7 and L8. Six forms — compare, predict-next, blast-radius, locate, explain-back, and the original predict-then-reveal — chosen by `lesson_form()` and **written onto the output by our code after parsing**, so the form follows from the kind as a property of the system rather than as an instruction the model may drift from. Verified live on `psf/requests`: an `architecture` unit asks the developer to delineate what Session does *not* own, a `flow` unit asks where control goes next and why, a `risk` unit asks what breaks when a Session is shared across threads | A measured drop in lesson quality attributable to a specific form, which LR5 anticipates — the response is to drop that form back to the default, not to abandon the mapping |
+| 2026-08-15 | **All eight kinds are mapped now, rather than shipping LR5's three-form subset** | LR5's concern is quality dilution across many half-specified forms, and it is real. But the B3 sanity matrix showed every kind appearing in real journeys, so a three-form subset would have left `risk`, `extension_point` and `synthesis` — 4–5 units of a typical journey — on a form written for "explain this piece". The mitigation is kept in a different place: each form is one tight paragraph, **only the chosen one is shown to the model** (a menu of six invites blending), and any unmapped kind still falls back to the original | Live evidence that a specific form reads worse than the default |
+| 2026-08-15 | **`walkthrough` is assembled from `setup` + `reveal` rather than removed** | The reveal split is worthless until the panel withholds `reveal` (U1), and B6 has not shipped. Emitting only the halves would have broken every current client. Assembling the old field keeps today's UI rendering exactly what it rendered before, makes the change invisible until B6 opts in, and needs no migration or cache invalidation — the same additive discipline as the rest of the phase | B6 landing, after which `walkthrough` becomes a pure compatibility artefact for pre-B4 cached lessons |
+| 2026-08-15 | **A multi-anchor unit whose anchors ALL fail to read now fails the lesson instead of degrading to a source-less one** | Found live while probing B4's forms: a `flow` unit whose two anchors both pointed at a moved path produced a complete, confident, fluent lesson written from the objective alone. B3's per-anchor tolerance is right — one stale anchor should not sink a four-step flow — but tolerating *total* failure hands the model an empty source and lets it confabulate, which is the exact failure the anchor machinery exists to make impossible (LP7). A multi-anchor unit with no readable anchor is in the same position as a single-anchor unit whose file is gone, and now fails the same way | — |
 
 **Note on scope:** this cleanup is independent of the repository-understanding
 migration in [`repo-understanding.md`](repo-understanding.md). It touches the

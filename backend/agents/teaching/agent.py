@@ -36,13 +36,112 @@ MAX_TOKENS = 8192
 
 
 
+# The question forms a lesson can take. Chosen by OUR code from the unit's
+# `kind`, never by the model — deriving the form from the kind is the mechanism
+# that ends "one locked pedagogical form" (learning-engine.md L7, §7.2).
+PromptKind = Literal[
+    "predict-then-reveal",  # what does this do? — the original, and the fallback
+    "compare",              # what belongs here, and what deliberately does not?
+    "predict-next",         # given this call, where does control go, and why?
+    "blast-radius",         # what breaks if this changes?
+    "locate",               # where would you add X, and what must it provide?
+    "explain-back",         # tie these together at system level
+]
+
+# kind → form. An unmapped kind falls back to the original form, which is
+# well-tuned and correct for "explain this piece" (LR5).
+_FORM_BY_KIND: dict[str, PromptKind] = {
+    "architecture": "compare",
+    "flow": "predict-next",
+    "component": "predict-then-reveal",
+    "risk": "blast-radius",
+    "extension_point": "locate",
+    "synthesis": "explain-back",
+    # A test guards against a class of regression; asking which class is a
+    # prediction about the code shown, so the original form fits. What makes
+    # the lesson different is the FRAMING block, not the shape of the question.
+    "test_coverage": "predict-then-reveal",
+}
+_DEFAULT_FORM: PromptKind = "predict-then-reveal"
+
+# What each form asks for, injected into the user turn for the chosen one only.
+# The model is never shown the other five: a menu invites blending.
+_FORM_BRIEF: dict[str, str] = {
+    "predict-then-reveal": (
+        "Ask the developer to PREDICT what this code does or returns, before "
+        "your explanation gives it away. Answerable from the code shown."
+    ),
+    "compare": (
+        "Ask the developer to DELINEATE: what belongs to this part, and what "
+        "deliberately does NOT — the responsibility it holds versus the ones it "
+        "refuses. A correct answer names both sides of the line."
+    ),
+    "predict-next": (
+        "Ask the developer to PREDICT WHERE CONTROL GOES next from a specific "
+        "point in the path, and why. A correct answer names the destination and "
+        "the reason it is that one, not merely the next function alphabetically."
+    ),
+    "blast-radius": (
+        "Ask the developer what BREAKS if the invariant is violated or the code "
+        "changes. A correct answer names a consequence somewhere else in the "
+        "system, not a restatement of what the code does."
+    ),
+    "locate": (
+        "Ask the developer WHERE they would add a specific new capability, and "
+        "what their addition must provide to satisfy the contract. A correct "
+        "answer names the seam and its obligations."
+    ),
+    "explain-back": (
+        "Ask the developer to CONNECT the units they have already learned into "
+        "one claim at system level. Introduce no new code. A correct answer is "
+        "about relationships between parts, not about any single part."
+    ),
+}
+
+
 class LessonOutput(BaseModel):
-    walkthrough: str   # markdown lesson body
+    # The active-learning halves. `setup` frames the code WITHOUT answering the
+    # prompt; `reveal` is the explanation, shown only after the developer has
+    # answered. Splitting them is what makes the active-learning claim true —
+    # before this the prompt asked for a prediction while the full explanation
+    # sat above it on screen (L8, §7.3).
+    setup: str = ""
     prompt: str        # the active-learning question
-    expected_answer: str  # what a correct answer looks like — used by the Grader (Part 5)
-    # v1 locks to a single prompt form (phase3.md Open decision #1). The field
-    # stays so the wire format is stable when other forms arrive.
-    prompt_kind: Literal["predict-then-reveal"] = "predict-then-reveal"
+    reveal: str = ""
+    # One line connecting to the unit just finished, so the path reads as a path.
+    why_now: str = ""
+    # The objective restated as something to remember.
+    takeaway: str = ""
+    # What to hold yourself here versus what you can safely delegate to an
+    # assistant (LP5). Lesson content, not node metadata — LD4 keeps it off the
+    # node; nothing aggregates it yet.
+    ownership: str = ""
+    expected_answer: str  # a calibration reference for the Grader, not the standard
+    # Set by our code from the unit's kind after parsing; a value the model
+    # supplies is overwritten.
+    prompt_kind: PromptKind = _DEFAULT_FORM
+    # Kept, and synthesized from setup + reveal when the model did not write one.
+    # Every pre-B4 cached lesson has this and nothing else, and the current UI
+    # renders only this — so it stays the compatibility surface until B6 teaches
+    # the panel to use the two halves (§12).
+    walkthrough: str = ""
+
+
+def lesson_form(node: LearningNode) -> PromptKind:
+    """The question form for this unit, from its kind.
+
+    `kind` leads `concept_tags` on objective-first graphs, and older graphs have
+    only tags — so the first canonical tag is read either way, and anything
+    unrecognised falls back to the original form.
+    """
+    brief = node.lesson_brief or {}
+    kind = brief.get("kind")
+    if kind in _FORM_BY_KIND:
+        return _FORM_BY_KIND[kind]
+    for tag in node.concept_tags:
+        if tag in _FORM_BY_KIND:
+            return _FORM_BY_KIND[tag]
+    return _DEFAULT_FORM
 
 
 _SYSTEM_PROMPT = """\
@@ -68,51 +167,66 @@ whatever the objective requires and no more.
 
 CRITICAL: Your ENTIRE response must be under 600 words. Be very concise.
 
+THE DEVELOPER ANSWERS BEFORE THEY SEE THE EXPLANATION. `setup` and `prompt` are
+shown first; `reveal` appears only after they have committed to an answer. So:
+
+  NOTHING IN `setup` MAY ANSWER THE PROMPT. If a developer could read `setup`
+  and produce the expected answer without thinking, the lesson has taught them
+  nothing and you have wasted the one moment where they were engaged.
+
 Produce a JSON object with exactly these keys:
-  walkthrough:     markdown. MAX 250 words. Explain this code so the developer
-                   can make the objective's claim. Be brief and direct.
-                   Reference key identifiers only — no exhaustive walkthroughs.
-  prompt:          ONE active-learning question of the "predict-then-reveal"
-                   form — ask the developer to predict something about this code
-                   BEFORE they read your explanation in full (e.g. "Before
-                   reading on: what do you think `Session.send` does with the
-                   adapter it looks up?"). It must be answerable from the code
-                   shown, and answering it well must require the objective's
-                   claim — not a detail beside it.
+  why_now:         ONE short sentence connecting this unit to the one they just
+                   finished. If this is their first unit, say what the path is
+                   about to build instead. No preamble, no "in this lesson".
+  setup:           markdown. Frame the code and orient the developer — what they
+                   are looking at, what to attend to, what question it is about
+                   to answer. WITHOUT answering the prompt below.
+  prompt:          ONE active-learning question, in the FORM named in the user
+                   content under "PROMPT FORM". Answering it well must require
+                   the objective's claim, not a detail beside it.
+  reveal:          markdown. The explanation — now you may answer it. Reference
+                   key identifiers only; no exhaustive walkthrough.
+  takeaway:        ONE or TWO sentences: the objective restated as something to
+                   remember. Not a summary of the code — the claim itself, in a
+                   form that survives forgetting the details.
+  ownership:       ONE sentence naming what the developer must hold THEMSELVES
+                   here, and what they could safely delegate to an AI assistant
+                   while still being able to supervise the result. Be specific
+                   to this unit. Judgement, boundaries and invariants are
+                   usually theirs to hold; mechanical detail usually is not.
   expected_answer: a concise model answer to your prompt — one way a developer
                    who reached the objective might phrase it. This is a
                    calibration reference for the grader, not the marking
                    standard: the objective is what gets marked.
-  prompt_kind:     always the string "predict-then-reveal".
 
-Framing by dominant concept tag:
+Do NOT emit a "walkthrough" key and do NOT emit "prompt_kind" — the first is
+assembled from your setup and reveal, and the second is decided for you.
+
+LESSON SHAPE by the unit's kind. This governs what the lesson is ABOUT; the
+question's shape is governed separately by PROMPT FORM in the user content.
+  - `architecture`    — what this layer OWNS and what it does NOT own. Frame
+                        around responsibility, not line-by-line behaviour.
+  - `flow`            — trace the path, entry to exit, IN THE ORDER THE ANCHORS
+                        ARE GIVEN. Each anchor is a step; say what happens at
+                        it and what carries to the next. A flow lesson that
+                        describes only the first anchor has failed.
+  - `component`       — the abstraction and its contract. This is the one kind
+                        where implementation detail IS the objective.
   - `risk`            — lead with WHAT CAN GO WRONG. Name the invariant or
-                        hidden coupling, then show the code that depends on
-                        it. The prompt should ask the developer to predict a
-                        consequence of violating it.
-  - `extension_point` — lead with HOW THIS IS MEANT TO BE EXTENDED. Identify
-                        the contract (ABC, protocol, callback shape), and
-                        show one concrete extension if visible. The prompt
-                        should ask the developer to predict the minimum
-                        surface a new extension would need.
-  - `architecture`    — lead with WHAT THIS LAYER OWNS and what it does NOT
-                        own. Frame the explanation around the responsibility,
-                        not line-by-line behavior. The prompt should ask the
-                        developer to predict what would change if this layer
-                        were removed.
-  - `flow`            — lead with WHAT TRIGGERS THIS PATH and where it ends
-                        up. Treat the anchored code as the entry point of a
-                        path that continues through the connected code.
-  - `test_coverage`   — lead with WHAT THIS TEST GUARDS (or what is left
-                        unguarded). The prompt should ask the developer to
-                        predict which kinds of regression this coverage would
-                        and would not catch.
-  - other tags        — default behavior: explain the piece in service of
-                        the goal.
+                        hidden coupling, then the code that depends on it.
+  - `extension_point` — how this is meant to be EXTENDED. Identify the contract
+                        (ABC, protocol, callback shape) and show one concrete
+                        extension if visible.
+  - `test_coverage`   — what this test GUARDS, or what is left unguarded.
+  - `synthesis`       — connect units the developer has ALREADY learned. Teach
+                        no new code: the anchors are there to remind them what
+                        they saw, not to introduce anything. The lesson is the
+                        relationships between the parts.
+  - anything else     — explain the piece in service of the goal.
 
 Calibration by goal fields (read these from the user content):
 
-  By `Depth requested`:
+  By `Depth requested` — a budget for `setup` and `reveal` TOGETHER:
     overview  → ~100 words. Focus on the WHY only.
     moderate  → ~150 words (current default). Balanced explanation.
     deep      → ~250 words. Walk through the code. Stay under 250 words regardless.
@@ -176,6 +290,7 @@ def _read_node_source(repo_path: str, node: LearningNode) -> str:
         )
 
     parts: list[str] = []
+    failures: list[str] = []
     for i, anchor in enumerate(stored, start=1):
         try:
             body = _read_source_lines(
@@ -184,18 +299,37 @@ def _read_node_source(repo_path: str, node: LearningNode) -> str:
                 int(anchor["line_start"]),
                 int(anchor["line_end"]),
             )
-        except Exception:
+        except Exception as e:
             # One stale anchor must not cost the whole lesson; the others are
-            # still verified, and the unit is still grounded.
+            # still verified, and the unit is still grounded by them.
+            failures.append(f"{anchor.get('file')}: {e}")
             continue
         label = anchor.get("symbol") or f"lines {anchor['line_start']}-{anchor['line_end']}"
         parts.append(
             f"--- anchor {i} of {len(stored)}: {anchor['file']} — {label} ---\n{body}"
         )
+
+    if not parts:
+        # EVERY anchor failed. Tolerating this would hand the model an empty
+        # source and an objective, and it would write a confident lesson out of
+        # nothing — the precise failure this system's grounding exists to make
+        # impossible (LP7). A multi-anchor unit with no readable anchor is in
+        # exactly the same position as a single-anchor unit whose file is gone,
+        # and must fail the same way.
+        raise FileNotFoundError(
+            f"no anchor could be read for this unit: {'; '.join(failures)}"
+        )
     return "\n\n".join(parts)
 
 
 def _build_prior_context(graph: LearningGraph, current_id: str) -> str:
+    """What the developer already understands — as CLAIMS, not as titles.
+
+    Passing each earlier unit's objective rather than its title costs the same
+    tokens and buys real continuity: "they can already explain what Session owns"
+    is something to build on, where "they saw a node called Session" is not
+    (learning-engine.md §7.1).
+    """
     understood = [
         n
         for nid, n in graph.nodes.items()
@@ -205,9 +339,30 @@ def _build_prior_context(graph: LearningGraph, current_id: str) -> str:
         return "This is the developer's first lesson in this session — assume no prior nodes covered."
     lines = []
     for n in understood:
+        claim = n.objective()
         tags = ", ".join(n.concept_tags) if n.concept_tags else "—"
-        lines.append(f"- {n.title} (concepts: {tags})")
+        lines.append(
+            f"- {n.title} (concepts: {tags})"
+            + (f"\n    they can now: {claim}" if claim else "")
+        )
     return "The developer already understands these earlier nodes:\n" + "\n".join(lines)
+
+
+def _previous_unit(graph: LearningGraph, current_id: str) -> LearningNode | None:
+    """The unit immediately before this one on the walk, if any.
+
+    `why_now` is written by the TEACHER, from this unit's objective — resolving
+    LQ4. The planner knows the dependency structure but not what the previous
+    lesson actually said; the teacher has both the objective and the position,
+    and it costs no extra call. If continuity ever reads poorly, moving it to
+    the planner is still open.
+    """
+    order = graph.path_order()
+    try:
+        index = order.index(current_id)
+    except ValueError:
+        return None
+    return graph.nodes[order[index - 1]] if index > 0 else None
 
 
 # Module names too generic to identify a docs page — matching on them produces
@@ -318,6 +473,21 @@ def _brief_line(label: str, value: str | None) -> str:
     return f"  {label}: {value}\n" if value else ""
 
 
+def _previous_unit_section(previous: LearningNode | None) -> str:
+    if previous is None:
+        return (
+            "This is the first unit of the path — `why_now` should say what the "
+            "path is about to build, not what came before.\n\n"
+        )
+    claim = previous.objective()
+    return (
+        f"The unit they just finished — write `why_now` off this:\n"
+        f"  title: {previous.title}\n"
+        + (f"  its claim: {claim}\n" if claim else "")
+        + "\n"
+    )
+
+
 def _build_user_content(
     goal: dict,
     node: LearningNode,
@@ -325,6 +495,7 @@ def _build_user_content(
     prior_context: str,
     doc_context: dict | None = None,
     system_context: str = "",
+    previous: LearningNode | None = None,
 ) -> str:
     brief = node.lesson_brief or {}
     doc_section = _format_doc_context(node, doc_context)
@@ -340,9 +511,12 @@ def _build_user_content(
         f"Overall goal: {goal.get('primary_goal', '')}\n"
         f"Depth requested: {goal.get('depth', 'normal')}\n\n"
         f"{prior_context}\n\n"
+        f"{_previous_unit_section(previous)}"
         f"{doc_section}"
         f"LEARNING OBJECTIVE — build exactly this claim:\n"
         f"  {node.objective() or '(none stated — build the brief below)'}\n\n"
+        f"PROMPT FORM — your `prompt` must take this shape:\n"
+        f"  {_FORM_BRIEF[lesson_form(node)]}\n\n"
         f"Lesson brief for this node:\n"
         f"  title: {node.title}\n"
         # `understand` is absent on objective-first graphs, where it would only
@@ -376,7 +550,21 @@ def _parse_output(raw: str) -> LessonOutput:
     if start < 0:
         raise ValueError("no JSON object found in response")
     decoded, _ = json.JSONDecoder().raw_decode(raw[start:])
-    return LessonOutput(**decoded)
+    output = LessonOutput(**decoded)
+    if not output.setup and not output.walkthrough:
+        # Neither half of the lesson body arrived. Caught here rather than by
+        # Pydantic, because either field alone is legitimate: a pre-B4 cached
+        # lesson has only `walkthrough`, and a new one has only `setup`.
+        raise ValueError("lesson has neither a setup nor a walkthrough")
+    if not output.walkthrough:
+        # Assemble the compatibility surface. Any client that knows only
+        # `walkthrough` — which today is all of them — renders the same lesson
+        # it always did, in the same order, with the prompt below it. B6 is
+        # what teaches the panel to withhold `reveal` until the answer (§12).
+        output.walkthrough = "\n\n".join(
+            part for part in (output.setup, output.reveal) if part
+        )
+    return output
 
 
 def _session_dossier(state: OnboardState) -> dict | None:
@@ -495,10 +683,16 @@ def run(
     user_content = _build_user_content(
         state.goal, node, source, prior_context,
         doc_context=doc_context, system_context=system_context,
+        previous=_previous_unit(state.graph, current_id),
     )
 
     try:
         output = _generate_lesson(client, user_content, _SYSTEM_PROMPT)
+        # The form is ours to decide, not the model's to report. Setting it here
+        # rather than trusting the response is what makes "the form follows from
+        # the kind" a property of the system instead of an instruction the model
+        # may drift from.
+        output.prompt_kind = lesson_form(node)
         lesson = output.model_dump()
         node.cached_lesson = lesson
         state.current_lesson = lesson

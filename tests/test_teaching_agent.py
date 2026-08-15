@@ -133,7 +133,9 @@ def test_run_cache_hit_skips_llm(mock_read):
     client = MagicMock()
     result = run(state, client=client)
     client.messages.create.assert_not_called()
-    assert result.current_lesson == FAKE_LESSON_OUTPUT
+    # A subset, not the whole dict: B4 added keys, and every one of them is
+    # additive by design — an old fixture must not have to know about them.
+    assert result.current_lesson.items() >= FAKE_LESSON_OUTPUT.items()
 
 
 # ── prior-context ─────────────────────────────────────────────────────────────
@@ -223,7 +225,9 @@ def test_a_truncated_lesson_is_asked_to_be_shorter_not_told_it_is_malformed(mock
 
     result = run(state, client=client)
 
-    assert result.current_lesson == FAKE_LESSON_OUTPUT
+    # A subset, not the whole dict: B4 added keys, and every one of them is
+    # additive by design — an old fixture must not have to know about them.
+    assert result.current_lesson.items() >= FAKE_LESSON_OUTPUT.items()
     correction = client.messages.create.call_args.kwargs["messages"][-1]["content"]
     assert "hit the output limit" in correction
     assert "SHORTER lesson" in correction
@@ -272,7 +276,9 @@ def test_a_lesson_split_across_text_blocks_is_read_whole(mock_read):
 
     result = run(state, client=client)
 
-    assert result.current_lesson == FAKE_LESSON_OUTPUT
+    # A subset, not the whole dict: B4 added keys, and every one of them is
+    # additive by design — an old fixture must not have to know about them.
+    assert result.current_lesson.items() >= FAKE_LESSON_OUTPUT.items()
     assert client.messages.create.call_count == 1     # no retry was needed
 
 
@@ -540,3 +546,17 @@ def test_the_prompt_says_the_anchor_order_is_the_lesson_order():
     header = _source_header(_flow_node())
     assert "3 anchors, in order" in header
     assert "Teach across all of them" in header
+
+
+def test_a_unit_with_no_readable_anchor_fails_instead_of_inventing(tmp_path):
+    """Grounding's whole point: no source means no lesson, not a confident one.
+
+    Found live — a flow unit whose anchors both pointed at a moved path still
+    produced a full lesson, written from the objective alone. Tolerating a
+    total read failure hands the model an empty source and lets it confabulate,
+    which is the one thing the anchor machinery exists to prevent.
+    """
+    import pytest
+
+    with pytest.raises(Exception):
+        _read_node_source(str(tmp_path), _flow_node())  # nothing written at all
