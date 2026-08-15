@@ -2123,7 +2123,7 @@ Phase 3's centrepiece in the wrong phase.
 
 | # | Question | Why it needs you |
 |---|---|---|
-| **LQ6** *(proposal in [§18.16](#1816-proposed-policy--lq6lq10-revision-2-awaiting-decision-2026-08-15))* | May a learner **dismiss** an outstanding gap ("I know this, move on")? §9.2 says user overrides always win, which argues yes — but a dismissable gap weakens the honesty of the understanding graph, which is the whole point of the artifact | Product-values call, not technical |
+| **LQ6** *(proposal in [§18.16](#1816-proposed-policy--lq6lq10-revision-3-awaiting-decision-2026-08-16))* | May a learner **dismiss** an outstanding gap ("I know this, move on")? §9.2 says user overrides always win, which argues yes — but a dismissable gap weakens the honesty of the understanding graph, which is the whole point of the artifact | Product-values call, not technical |
 | **LQ7** | Do gaps persist **across sessions** on the same repo? Phase 3 says the understanding graph is persistent. If yes, a returning learner meets their old misconceptions — powerful, and possibly discouraging | Determines whether gaps key on session or on (learner, repo, symbol) |
 | **LQ8** | Is there a **cap** on open gaps per node? An answer that is wrong throughout could open six, turning one unit into a remediation queue. A cap risks dropping real gaps; no cap risks a session that cannot end | Affects whether "close all gaps" is a promise we can keep |
 | **LQ9** | Can a node be `understood` with a **non-blocking** gap open, or is every gap blocking? Making every gap blocking is simpler and more honest; allowing non-blocking gaps keeps journeys moving | Decides whether `blocking` exists at all |
@@ -2218,157 +2218,188 @@ and **deliberately not implemented**. "Try again" still re-shows the answered
 question. That is the follow-up phase's first job, and it is recorded here so the
 gap is not mistaken for an oversight.
 
-### 18.16 PROPOSED policy — LQ6–LQ10 (revision 2, awaiting decision, 2026-08-15)
+### 18.16 PROPOSED policy — LQ6–LQ10 (revision 3, awaiting decision, 2026-08-16)
 
-**Not accepted. Nothing here is implemented.** Revision 2 resolves three semantic
-inconsistencies found in revision 1: `waived` could yield `understood`, `blocking`
-was contaminated by a queue limit, and resume inferred intent from `visited`.
+**Not accepted. Nothing here is implemented.** Revision 3 adds two refinements to
+revision 2: a learner's decision to stop remediating is no longer routed through
+`mark_understood`, and **journey completion is separated from verified
+understanding**.
 
-Three principles now run through every answer:
+Four principles now run through every answer:
 
 > **A gap closes only on positive evidence. Silence never closes one.**
 > **Caps bound the SYSTEM's insistence, never the learner's freedom to continue.**
 > **Progression and mastery are different claims. An override buys the first, never the second.**
-
-The third is new in revision 2, and it is what keeps `waived` honest.
+> **Finishing the journey and having demonstrated it are different measures. Neither gates the other.**
 
 #### The five decisions
 
 | # | Decision | Resolution |
 |---|---|---|
-| **LQ6** | May a learner dismiss a gap? | **Waive, never delete — and waiving never confers mastery.** A waived gap stops blocking traversal and stops the system asking, stays permanently visible and permanently distinct from `verified`, and **does not let the node reach `understood`**. Re-openable: the learner may ask to verify a waived gap at any time |
-| **LQ7** | Cross-session gaps? | **Session-scoped now**, each gap carrying a stable `objective_key` (repo, file, symbol, objective hash) so cross-session is later a *query*, not a redesign. Blocked on learner identity, which Phases 1–3 defer |
-| **LQ8** | Cap on gaps per node? | **No cap on blocking. A cap on the remediation queue.** See [§18.16.1](#18161-blocking-is-semantic-the-queue-is-operational) — the two were conflated in revision 1 |
-| **LQ9** | Which gaps block? | **`missing_prerequisite` and `wrong_model`, all of them.** `right_idea_wrong_altitude` recorded non-blocking; `no_attempt` opens no gap. Pure function of `kind` — code decides, the model never votes |
+| **LQ6** | May a learner dismiss a gap? | **Waive, never delete — and waiving never confers mastery.** A waived gap stops blocking and stops the system asking, stays permanently visible and permanently distinct from `verified`, and does not let the node reach `understood`. Reversible: the learner may ask to verify it at any time |
+| **LQ7** | Cross-session gaps? | **Session-scoped now**, each gap carrying a stable `objective_key`. Blocked on learner identity, which Phases 1–3 defer |
+| **LQ8** | Cap on gaps per node? | **No cap on blocking; a cap on the remediation queue** ([§18.16.1](#18161-blocking-is-semantic-the-queue-is-operational)) |
+| **LQ9** | Which gaps block? | **`missing_prerequisite` and `wrong_model`, all of them.** `right_idea_wrong_altitude` recorded non-blocking; `no_attempt` opens no gap. Pure function of `kind` |
 | **LQ10** | How many rounds? | **2 verification attempts per gap, 4 remediation rounds per node.** On reaching either the system stops *proposing*; the gap stays `open`. A deliberate return resets the counters |
 
 #### 18.16.1 `blocking` is semantic; the queue is operational
 
-Revision 1 said "record all gaps, at most 3 block", which made the *meaning* of a
-gap depend on a queue limit and would have needed a second prioritisation rule to
-decide which three of five `wrong_model` gaps were "really" blocking. That was
-wrong. The two ideas are separated:
-
 | | **`blocking`** | **active remediation set** |
 |---|---|---|
 | what it is | semantic property of the gap | operational working set for one cycle |
-| derived from | `kind` alone | the open blocking gaps, by §18.5 precedence |
-| bounded? | **no** — every `wrong_model` / `missing_prerequisite` gap is blocking | **yes** — at most 3 worked at once |
-| stored? | derived, never stored | derived per cycle, never stored |
+| derived from | `kind` alone | open blocking gaps, by §18.5 precedence |
+| bounded? | **no** | **yes** — at most 3 at once |
 | affects `understood`? | **yes** | **no** |
 
-Queue membership changes nothing about any gap's recorded status. A blocking gap
-outside the current working set is still `open` and still blocking — it is simply
-not what the system is teaching to right now.
+Queue membership never changes a gap's recorded status. A blocking gap outside
+the working set is still `open` and still blocking — it is simply not what is
+being taught right now. When more blocking gaps are open than the queue holds,
+that is one signal (the unit did not land), so the response collapses to a
+**single full re-teach** instead of a fan-out of warm-ups; every gap keeps its
+kind, status and blocking property, and the count is shown.
 
-**The collapse rule changes the response shape, not the record.** When more
-blocking gaps are open than the queue holds, that is one signal — the unit did not
-land — so the response is a **single full re-teach** instead of a fan-out of
-warm-ups. Every gap keeps its kind, its status and its blocking property. Nothing
-is demoted, discarded, or silently reclassified, and the count is shown.
+#### 18.16.2 `verified` has exactly one producer
 
-A consequence worth stating plainly: with blocking uncapped, a node answered with
-seven misconceptions **cannot reach `understood` in one visit**, because the round
-caps will be hit first. That is correct — a learner with seven misconceptions has
-not understood the unit — and it does not trap anyone, because termination comes
-from traversal and override, never from reaching `understood`.
+> **`verified` is produced only by passing a fresh verification question.**
+> **No learner assertion, override, or UI action can produce it.**
 
-#### 18.16.2 Waiving buys progression, not mastery
+That single rule is what keeps the artifact meaningful, and it forces the naming.
+A learner choosing to stop remediating is **not** claiming mastery, so the action
+must not be called "mark understood":
 
-The revision-1 rule was *"no blocking gap is `open`"*, and a waived gap is not
-open — so waiving silently bought `understood`. Corrected:
-
-> **`understood` requires every blocking gap to be `verified`.**
-
-Stated positively rather than as an absence, which is what closes the hole:
-`waived` is not `verified`, so it can never satisfy the rule. No new
-`understanding_state` value is needed — **`partial` + the gap list is already the
-distinguishable condition**, and the three shapes it covers are distinguished by
-gap status rather than by a fourth enum value:
-
-| situation | `understanding_state` | gaps | system behaviour |
+| action | scope | effect | produces `verified`? |
 |---|---|---|---|
-| still working | `partial` | some `open` | may propose remediation |
-| continued past | `partial` | some `open`, node has a `continue` override | stops proposing this visit |
-| waived | `partial` | some `waived` | never proposes again unless asked |
-| mastered | `understood` | all blocking `verified` | — |
+| `waive` | one gap | that gap → `waived` | **no** |
+| `waive_remaining` | node | every open blocking gap → `waived` | **no** |
+| `continue` | node | gaps stay `open`; resume may pass the node | **no** |
+| `skip` | node | node never engaged; existing behaviour | **no** |
+| passing verification | one gap | gap → `verified` | **yes — the only producer** |
 
-Two consequences to accept deliberately:
+UX wording is deliberately left open ("I already know this" / "Skip verification"
+/ "Move on anyway"); the semantics above are what must hold whatever the label
+says.
 
-- **A node with a waived blocking gap stays `partial` permanently** unless the
-  learner later verifies it. So a journey containing any waived gap never reaches
-  100% readiness. That is the honest reading and it is the point, but it should be
-  visible in the UI rather than discovered.
-- **Waiving is reversible.** A learner may request verification on a waived gap at
-  any time; passing moves it to `verified` and can lift the node to `understood`.
-  This matters because the Grader is not perfect — the 48-case evaluation found
-  3 gap-kind disagreements — so waiving must not be a permanent sentence for a
-  gap that was wrong in the first place.
+**`mark_understood` is migration debt, not the vehicle.** It currently sets
+`understanding_state = "understood"` directly, which would let a learner claim
+mastery over unverified gaps by a different door. Proposed treatment:
 
-**`mark_understood` has the same hole, and must change with this.** `override()`
-currently sets `understanding_state = "understood"` directly, which would let a
-learner claim mastery over unverified blocking gaps by a different door.
-Recommendation: on a node with unverified blocking gaps, `mark_understood`
-behaves as a **bulk waive** — every open blocking gap becomes `waived`, and the
-node caps at `partial`. This follows the rule already accepted for LQ1: *prior
-knowledge is validated through learner performance rather than trusted from
-self-report*. It is a change to shipped behaviour and is called out for that
-reason.
+- On a node with **no gap records at all** (every session written before this
+  design), `mark_understood` keeps working exactly as it does today. Vacuously,
+  no blocking gap is unverified, so nothing is bypassed.
+- On a gap-bearing node it is **not offered**, and if encountered in stored data
+  it is **read as `waive_remaining`**.
+- End state: once no live sessions predate the gap model, the action is removed.
+  Recorded here as debt with a defined exit rather than left to decay.
 
-#### 18.16.3 Resume returns to unfinished work; only an explicit override passes it
+This follows the rule already accepted for LQ1 — *prior knowledge is validated
+through learner performance rather than trusted from self-report*.
 
-Revision 1 proposed relaxing `resume_point()`'s prerequisite check to `visited`.
-That inferred intent from a side effect: refreshing mid-remediation would have
-read as "continue anyway". Corrected — **the signal must be explicit and
-persisted.**
+#### 18.16.3 Journey completion ≠ verified understanding
 
-`user_override` is already that channel (`skip`, `mark_understood`, `mark_weak`),
-so continue-anyway becomes a fourth action rather than a new field. It is written
-only by the learner pressing "Move on anyway", never by traversal, never by a
-refresh.
+Two measures, two names, and **neither gates the other**:
+
+| | **Journey completion** | **Verified understanding** (`readiness()`) |
+|---|---|---|
+| question | has the learner dealt with everything on the journey? | how much has been demonstrated by evidence? |
+| type | boolean predicate | fraction, 0.0–1.0 |
+| waived gaps | **do not prevent completion** | **never count as verified** |
+| at journey end | reaches `true` | may legitimately sit below 100% |
+
+**Completion.** Every non-optional node is *settled*, where settled means
+`understood` **or** carrying an explicit learner override (`continue`,
+`waive_remaining`, or `skip`). Plain `visited` is deliberately **not** settled —
+that is refinement 3 of revision 2 applied consistently: intent must be recorded,
+never inferred.
+
+What makes completion reachable is that **advancing away from a node with open
+blocking gaps records `continue`.** That is an explicit button press, not an
+inference — a refresh never advances, so a refresh never settles anything. Walking
+the journey to its end therefore settles every stop by construction.
+
+**The target final state is legitimate and expected:**
 
 ```
-resume_point():
-  1. an unvisited remedial warm-up            → resume there
-  2. else, first non-optional node in walk order that is
-       unvisited, OR has open blocking gaps and NO `continue` override
-  3. else current_node_id                     (unchanged fallback)
-
-prerequisite satisfied  ⟺  understood  OR  (visited AND `continue` override)
+Journey complete
+Verified understanding: 92%  —  1 gap waived
 ```
 
-- Ordinary refresh mid-remediation → **returns to the unfinished work.**
-- Explicit "Move on anyway" → recorded, and resume passes it.
-- Waived gaps do not hold resume: `waived` is not `open`, which is exactly what
-  waiving is for.
-- **The `continue` override is withdrawn by a new attempt on that node.** It means
-  "not now"; deliberately coming back and engaging means "now", and without this
-  a learner who returned and then refreshed would be skipped past their own work
-  a second time.
+Better than either extreme: not pretending to 100% mastery, and not leaving the
+product permanently unfinished because the learner deliberately chose not to
+remediate one thing.
+
+**What this changes, concretely:**
+
+| surface | change |
+|---|---|
+| `understanding_state` | **unchanged from revision 2.** Still four values; `understood` still requires every blocking gap `verified`. A waived gap still caps its node at `partial` — that is what keeps the *measure* honest, and completion no longer depends on it |
+| `readiness()` | **formula unchanged.** Its meaning is now explicitly *verified understanding*, and it is relabelled in the UI. Documented as **not** a completion measure. (Deliberately left node-weighted, `partial` = 0.5, rather than gap-weighted: a second weighting scheme would be more precision than the decision needs) |
+| journey completion | **new derived predicate**, `is_complete()`. Authoritative for the completion screen |
+| traversal | **unchanged.** Nothing blocks; `/advance` still ends at `next_in_path() is None`. Where the two disagree — a learner who jumped around the rail reaches the end with earlier stops unsettled — the screen says so ("end of path reached, 2 stops still open") rather than claiming completion |
+| completion UI | shows **both** numbers, plus a breakdown: waived, unresolved-but-continued, and cap-reached. Each waived gap named, each with an offer to verify it now |
+| waived-gap presentation | named, never a bare count — "what you chose not to check" is the most useful thing the artifact can say |
+| **existing logic assuming readiness == completion** | **none exists.** `readiness()` appears only in `to_dict`, the `/session/{id}` response, and three display sites; it is never compared against a threshold, and `done` already comes from traversal. The conflation is **purely the label** — one gauge captioned "Readiness" doing double duty. Renaming it and adding `is_complete()` is the whole change |
+
+#### 18.16.4 The lifecycle of a gap
+
+```
+     ASSESSMENT ATTEMPT
+            │
+            ├─ no_attempt ─────────────────────▶  (no gap: silence is not a misconception)
+            ├─ right_idea_wrong_altitude ──────▶  recorded, NON-BLOCKING
+            └─ wrong_model | missing_prerequisite
+                        │
+                        ▼
+                     ┌──────┐
+        ┌───────────▶│ open │◀────────────┐
+        │            └──┬───┘             │
+        │               │                 │ verification failed
+        │               │                 │ (attempts += 1, cap 2)
+        │      active remediation set     │ …or answer silent about it
+        │      (≤3, by §18.5 precedence;  │
+        │       >3 open ⇒ ONE re-teach)   │
+        │               │                 │
+        │               ▼                 │
+        │      remediation: warm-up       │
+        │      or re-teach                │
+        │               │                 │
+        │               ▼                 │
+        │      FRESH verification ────────┘
+        │      question (§18.7)
+        │               │ passed
+        │               ▼
+        │         ┌──────────┐
+        │         │ verified │  ✔ the only state that permits `understood`
+        │         └──────────┘
+        │               ▲
+        │               │ learner asks to verify it
+        │          ┌────┴────┐
+        └─ waive ─▶│ waived  │  ✘ never counts as evidence
+                   └─────────┘
+
+  At any moment, independent of all of the above:
+    • learner continues     → node gets `continue` override; gaps stay `open`
+    • cap reached (2/gap, 4/node) → system stops proposing; gaps stay `open`
+    • deliberate return     → counters reset; a new attempt withdraws `continue`
+```
 
 #### The final state model
 
-**Gap status** — three values, the whole semantic lifecycle:
+**Gap status** — three values:
 
-| status | meaning | blocks traversal? | permits `understood`? | reachable from |
+| status | blocks traversal | permits `understood` | counts as evidence | reachable from |
 |---|---|---|---|---|
-| `open` | detected, unresolved | no (nothing blocks traversal) | **no** | detection |
-| `verified` | closed by positive evidence on a **fresh** question | no | **yes** | `open`, `waived` |
-| `waived` | learner asserted they do not need it | no | **no** | `open` |
+| `open` | no | **no** | no | detection, failed verification |
+| `verified` | no | **yes** | **yes** | passed verification only |
+| `waived` | no | **no** | no | `open`, via learner waive |
 
-**Gap properties** — derived or counted, never learner- or model-assigned:
+Nothing blocks traversal in any state — that is the termination guarantee.
+Blocking governs `understood` only.
 
-- `blocking: bool` — pure function of `kind`; uncapped.
-- `verification_attempts: int` — per-gap, cap 2.
-- `objective_key` — stable identity for a later cross-session query.
+**Gap properties:** `blocking` (pure function of `kind`, uncapped),
+`verification_attempts` (cap 2), `objective_key` (for a later cross-session query).
+**Node counters:** `remediation_rounds` (cap 4).
 
-**Node counters:** `remediation_rounds: int`, cap 4.
-
-**Active remediation set:** derived each cycle from open blocking gaps by §18.5
-precedence, truncated to 3; over capacity → one full re-teach. Never stored,
-never alters a gap's status.
-
-**`understanding_state`** — still four values, now derived:
+**`understanding_state`** — four values, derived:
 
 | value | condition |
 |---|---|
@@ -2377,12 +2408,16 @@ never alters a gap's status.
 | `understood` | latest assessment reaches the objective **and** every blocking gap is `verified` |
 | `failed` | latest classification `confused`; `weak_spot` sticky while any blocking gap is unverified |
 
-**Continue-anyway:** `user_override = "continue"` — explicit, persisted, marks
-visited, leaves gaps `open`, permits resume past, withdrawn by a new attempt.
+**Node settled** (for completion) — `understood` OR an explicit override in
+{`continue`, `waive_remaining`, `skip`}. Never plain `visited`.
 
-**Termination:** three exits — continue, waive, cap — and no path that requires
-the learner to satisfy the system. Every bound is a constant independent of
-learner behaviour.
+**Journey complete** — every non-optional node is settled.
+
+**Verified understanding** — `readiness()`, evidence-weighted, waived never counts,
+legitimately below 100% at completion.
+
+**Termination:** three exits — continue, waive, cap — none of which requires the
+learner to satisfy the system, and completion is reachable from all of them.
 
 ---
 
