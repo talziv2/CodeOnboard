@@ -56,12 +56,23 @@ Priority = Literal["required", "recommended", "optional"]
 
 # Typical journey size by code_depth, as a guard band rather than a target.
 #
-# UNCALIBRATED (LD14). These numbers were chosen by judgement, not measured, and
-# §6.3 defines how they get replaced. They are deliberately wide: the band exists
-# to catch pathological output, not to be hit. A narrow goal on a small repo
-# legitimately lands below its range.
+# The band exists to catch pathological output, not to be hit. A narrow goal on a
+# small repo legitimately lands below its range.
+#
+# `map`'s ceiling is CALIBRATED (2026-08-15, 18 runs — see learning-engine.md
+# §6.3). It was 14, and at 14 it stopped being a guard: on `fastapi` it fired in
+# two runs of three and pinned the journey at exactly 14 in all three, flattening
+# the variance while the underlying demand still moved (core 11-13). Measured
+# demand across the six `map` runs was 11-15; 18 is max + 2sd (and mean + 3sd),
+# so it now fires only on output statistically unlike anything observed, while
+# staying 4 clear of `working` so the three bands remain ordered and distinct.
+#
+# `working` and `implementation` remain UNCALIBRATED judgement (LD14). The same
+# matrix showed both behaving as guards should — neither fired, with slack of +5
+# and +4 over the largest journey seen — so the evidence gives nothing to correct
+# and they were deliberately left alone.
 _SCOPE_BANDS: dict[str, tuple[int, int]] = {
-    "map": (5, 14),
+    "map": (5, 18),
     "working": (8, 22),
     "implementation": (10, 28),
 }

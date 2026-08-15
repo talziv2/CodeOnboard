@@ -537,9 +537,14 @@ A coarse table, not a formula:
 
 | `code_depth` | Typical journey | Guard band | Status |
 |---|---|---|---|
-| `map` | 6–10 units | 5–14 | **Initial default — uncalibrated** |
-| `working` | 10–16 units | 8–22 | **Initial default — uncalibrated** |
-| `implementation` | 12–20 units | 10–28 | **Initial default — uncalibrated** |
+| `map` | 11–15 units | 5–**18** | **Ceiling calibrated 2026-08-15** (was 14) — see below |
+| `working` | 13–17 units | 8–22 | Ceiling **uncalibrated**, but measured as behaving correctly |
+| `implementation` | 18–24 units | 10–28 | Ceiling **uncalibrated**, but measured as behaving correctly |
+
+> All three **floors** remain uncalibrated judgement, and are inert: the smallest core
+> observed across 18 runs was 9 and the smallest journey 11, so none came close to firing.
+> The floor is advisory and only logs, so an inert floor costs nothing — but it is not
+> evidence-backed either.
 
 Repository scale (from the skeleton, C1) and `goal_type` nudge *within* the band; they do
 not move it. A narrow goal on a small repo legitimately lands below the typical range —
@@ -659,6 +664,51 @@ exercises it is the one band the evidence says is mis-set.
 
 **Not established:** anything about `goal_type`, which was held fixed at
 `understand_architecture` across the whole matrix.
+
+#### The `map` ceiling: 14 → 18
+
+**Only the `map` ceiling changed.** `working` and `implementation` were left exactly as
+they were: the same matrix showed neither firing, with slack of +5 and +4 over the largest
+journey each produced, so the evidence gives nothing to correct and changing them would be
+re-introducing judgement where measurement said "fine".
+
+**What the old value was doing.** A guard band is supposed to be invisible on normal runs.
+At 14 it was not: it fired in two of three `fastapi × map` runs and produced journeys of
+14, 14, 14 — *zero variance* — while the demand underneath it still moved (core 11, 11,
+13). Flattening the output variance of the thing you are trying to measure is the
+signature of a clamp, not a guard.
+
+**Deriving the new value.** The observed journeys understate demand, because they *are*
+the clamped number. Unclamped demand is recoverable exactly: `demoted_by_band` counts the
+units the planner wanted taught and the band demoted, so demand = `journey + demoted_by_band`.
+
+| run | core | journey | demoted | **demand** |
+|---|---|---|---|---|
+| `requests × map` #1–3 | 11, 10, 9 | 14, 13, 11 | 0, 0, 0 | 14, 13, 11 |
+| `fastapi × map` #1–3 | 11, 13, 11 | 14, 14, 14 | 0, 1, 1 | 14, **15**, **15** |
+
+Across all six `map` runs: demand **11–15**, mean 13.7, sd 1.51.
+
+Two independent margin rules land on the same number:
+
+- **max + 2sd** = 15 + 3.0 = **18.0**
+- **mean + 3sd** = 13.7 + 4.5 = **18.2**
+
+**Why not smaller.** 15 is the smallest value that never binds on observed runs, but it
+carries zero headroom — and a proposal of 16 was already observed, so the next ordinary run
+would clamp again. 16 sits ~0.7sd above max, 17 ~1.3sd; both would bind on a run only
+modestly larger than what we happened to sample. 18 is the smallest value at which binding
+requires output genuinely unlike anything measured, which is what §6.3 asks a ceiling to be.
+
+**Why not larger.** `working` and `implementation` happen to carry margins of +5 and +4
+over their largest journeys, but those margins are judgement, not measurement — inheriting
+them as a rule would launder a guess into a derivation. And 18 stays **4 clear of
+`working`'s 22**, so the three ceilings remain ordered and distinct rather than collapsing
+together.
+
+**Why the ceilings need not scale steeply with depth.** Core demand is nearly flat across
+`code_depth` (9–13 / 10–13 / 10–18) because depth changes *composition*, not *size*. A
+`map` ceiling far below `working`'s was encoding a size difference that does not exist.
 
 Not established, and explicitly not claimed: anything about variance (one attempt per
 cell), and the isolated cost of the planning call ([LQ2](#152-open-lq)) — wall-clock was
@@ -1095,6 +1145,12 @@ learning "feels better".
 13. **The guard-band values in §6.3 have been replaced by calibrated numbers**, with the
     runs they came from recorded — or the table still carries its "uncalibrated" marker
     and the phase is explicitly not closed on this point ([LD14](#151-accepted-ld)).
+    *Status 2026-08-15: **partly met**. The 18-run matrix is recorded in §6.3 and the
+    `map` ceiling is calibrated from it ([LD16](#151-accepted-ld)). The other two ceilings
+    were measured as behaving correctly but were not themselves derived from the data, and
+    all three floors never fired — so those four numbers keep the marker. This item is
+    honestly satisfied only in its second form: the phase is **not closed** on the
+    uncalibrated floors and the two untouched ceilings.*
 14. **No `SCHEMA_VERSION` bump.** A session created before this phase loads and continues.
     Exactly one additive `ALTER TABLE` in the whole phase (the area list).
 15. `CODEONBOARD_CURRICULUM=0` reproduces current behaviour, and the two flags are
@@ -1126,6 +1182,7 @@ Settled. Implementation may rely on these.
 | **LD12** | **Defect fixes ship independently of the redesign** | F1–F3 are wrong today. Bundling them would make the redesign look responsible for behaviour it did not cause, and delay fixes that need no design work |
 | **LD13** | **A unit is grounded by one or more verified anchors. There is no semantically privileged "primary" anchor** — `display_anchor` is a derived UI affordance | System-level units (`flow`, `architecture`, `boundary`, `synthesis`) are genuinely grounded in several equally important locations. Forcing one to be primary would be a false claim about the evidence, and would let the existing single-anchor storage model constrain the learning design — the inversion this phase exists to undo (L4, L5). Grounding is unchanged in strength: `len(anchors) >= 1`, each verified through Phase A's `resolve()` |
 | **LD15** | **`background` reduces the teaching cost of a required objective; it never removes it** (resolves [LQ1](#152-open-lq)) | Self-report is a weak signal, and a dropped unit is invisible — a learner cannot skip what they were never shown, so a wrong self-assessment silently removes a foundation the dependency closure then teaches on top of. Prior knowledge is validated through performance instead: answering well, or `mark_understood`, both of which leave a record. `background` keeps its current job — eliding explanation *within* a lesson |
+| **LD16** | **The `map` ceiling is calibrated (14 → 18); `working` and `implementation` remain judgement, and all three floors remain inert** | Partially discharges [LD14](#151-accepted-ld). The 18-run matrix showed the `map` ceiling clamping — two of three `fastapi` runs demoted, journeys flattened to 14/14/14 against a demand of 14/15/15 — while the other two ceilings never fired and kept slack. Correcting only what was measured to be wrong is the point: changing the other two would substitute judgement for evidence that said "fine". The phase is therefore **partly calibrated**, and §6.3 says exactly which parts |
 | **LD14** | **The §6.3 guard-band numbers are uncalibrated initial defaults, not product constants** | They were chosen by judgement. Freezing them would recreate L1 — a curriculum size nobody can justify — one layer further down. §6.3 defines how they get measured and recorded |
 
 ### 15.2 Open (LQ)
@@ -1282,6 +1339,9 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 
 | 2026-08-15 | **The full ≥3-repeat calibration matrix completed: 18/18 planning runs, 0 failures, 0 grounding drops. Bands NOT changed** | Evidence and per-band verdict in [§6.3](#63-sizing--how-the-journeys-length-is-actually-decided). `working` and `implementation` behave as guards should — never firing, with slack. The `map` ceiling of 14 does not: it fired on 2 of 3 `fastapi` repeats and pinned that cell's journey at exactly 14 across all three, with zero variance against a core demand of 11–13. Changing a number is a separate, deliberate act and was not taken here | — |
 | 2026-08-15 | **Core demand is far flatter across `code_depth` than the bands assume** | Measured core: `map` 9–13, `working` 10–13, `implementation` 10–18, against ceilings stepping 14 → 22 → 28. Depth changes *composition* much more than *size* — precisely what LP4 claims and what the kind distributions show — so a `map` ceiling set well below `working`'s clamps a demand that is barely smaller. This, rather than any single cell, is the substantive calibration finding | Wider sampling across `goal_type`, which this matrix held fixed |
+
+| 2026-08-15 | **`map` ceiling 14 → 18, derived from the 18-run matrix. `working` and `implementation` untouched** ([LD16](#151-accepted-ld)) | Full derivation in [§6.3](#63-sizing--how-the-journeys-length-is-actually-decided). Unclamped demand is recoverable exactly as `journey + demoted_by_band`, giving 11–15 across the six `map` runs; **max + 2sd = 18.0 and mean + 3sd = 18.2** both land on 18. Smaller values (15, 16, 17) sit inside one standard deviation of the observed maximum and would clamp the next ordinary run — a proposal of 16 was already seen. Larger values would inherit `working`'s and `implementation`'s margins, which are themselves judgement, and 22 would collapse the band into `working` | A wider matrix — more `goal_type` values, or a third repository — showing `map` demand routinely above 15 |
+| 2026-08-15 | **The corrected ceiling was validated by direct observation, not left on reconstructed arithmetic** | Every `fastapi × map` run in the matrix was clamped, so its unclamped demand was inferred rather than seen. Two runs at the new ceiling observe what the cell produces when nothing constrains it — the one thing eighteen clamped runs cannot show. Kept to that single cell, because it is the only one where the evidence was reconstructed | — |
 
 **Note on scope:** this cleanup is independent of the repository-understanding
 migration in [`repo-understanding.md`](repo-understanding.md). It touches the

@@ -61,14 +61,14 @@ def test_every_required_objective_survives_selection():
 
 
 def test_the_required_set_outranks_the_band():
-    # A goal that genuinely needs twelve concepts gets twelve, even though the
-    # `map` band tops out at fourteen with only two units of room left over.
-    objectives = [obj(f"r{i}", priority="required") for i in range(12)]
+    # A goal that genuinely needs sixteen concepts gets sixteen, even though the
+    # `map` band tops out at eighteen with only two units of room left over.
+    objectives = [obj(f"r{i}", priority="required") for i in range(16)]
     objectives += [obj(f"x{i}") for i in range(6)]
     selected = select(objectives, [area("a1")], "map")
     got = priorities(selected)
-    assert all(got[f"r{i}"] == "required" for i in range(12))
-    # Two units of room remain under the band of 14; the rest are demoted.
+    assert all(got[f"r{i}"] == "required" for i in range(16))
+    # Two units of room remain under the band of 18; the rest are demoted.
     assert sum(1 for k, v in got.items() if k.startswith("x") and v != "optional") == 2
 
 
@@ -141,11 +141,11 @@ def test_overflow_is_demoted_never_discarded():
     selected = select(objectives, [area("a1")], "map")
     # Nothing is lost — depth stays one click away.
     assert len(selected) == 30
-    assert journey_size(selected) == 14  # the `map` ceiling
+    assert journey_size(selected) == 18  # the `map` ceiling
 
 
 @pytest.mark.parametrize(
-    "code_depth,ceiling", [("map", 14), ("working", 22), ("implementation", 28)]
+    "code_depth,ceiling", [("map", 18), ("working", 22), ("implementation", 28)]
 )
 def test_the_band_moves_with_code_depth(code_depth, ceiling):
     objectives = [obj(f"n{i}") for i in range(40)]
