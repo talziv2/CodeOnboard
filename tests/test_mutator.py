@@ -380,3 +380,35 @@ def test_an_inserted_warm_up_is_marked_required(mock_pool):
     new_id = state.last_mutation["new_node_id"]
     assert graph.nodes[new_id].lesson_brief["priority"] == "required"
     assert new_id not in scope.shorten(graph)
+
+
+@patch("backend.agents.mentor.mutator.candidate_pool", return_value=FAKE_POOL)
+def test_a_planned_dependency_edge_does_not_block_remediation(mock_pool):
+    """The B3 regression this guard nearly shipped with.
+
+    The planner emits one `prerequisite` edge per `depends_on` — dozens per real
+    journey — so counting every prerequisite edge left the one-per-node guard
+    permanently satisfied, and remediation could never fire except on units
+    nothing depends on. Measured on a real psf/requests journey: every insertion
+    declined with `prerequisite_exists`, on nodes never remediated.
+    """
+    state, graph, a_id, x_id = _make_state()
+    # A PLANNED dependency: A -> X, where A also keeps its sequence edge.
+    graph.add_edge(a_id, x_id, kind="prerequisite")
+
+    mutate(state, "prerequisite", client=_mock_client(FAKE_PREREQ_NODE))
+
+    assert state.last_mutation["kind"] == "prerequisite"
+
+
+@patch("backend.agents.mentor.mutator.candidate_pool", return_value=FAKE_POOL)
+def test_a_real_warm_up_still_blocks_a_second_one(mock_pool):
+    # The guard must still do its job: repeated confusion cannot stack warm-ups.
+    state, graph, a_id, x_id = _make_state()
+    mutate(state, "prerequisite", client=_mock_client(FAKE_PREREQ_NODE))
+    assert state.last_mutation["kind"] == "prerequisite"
+
+    graph.set_current(x_id)
+    mutate(state, "prerequisite", client=_mock_client(FAKE_PREREQ_NODE))
+    assert state.last_mutation["kind"] == "none"
+    assert state.last_mutation["reason"] == "prerequisite_exists"

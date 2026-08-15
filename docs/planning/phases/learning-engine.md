@@ -1292,8 +1292,16 @@ learning "feels better".
     uncalibrated floors and the two untouched ceilings.*
 14. **No `SCHEMA_VERSION` bump.** A session created before this phase loads and continues.
     Exactly one additive `ALTER TABLE` in the whole phase (the area list).
-15. `CODEONBOARD_CURRICULUM=0` reproduces current behaviour, and the two flags are
-    orthogonal (all four combinations load).
+15. `CODEONBOARD_CURRICULUM=0` reproduces the pre-B3 planner's behaviour, and a graph built
+    under either setting loads and runs under the other — Teaching, the Grader and the
+    adaptation policy have one implementation each, with the pre-B3 fallbacks (`objective()`
+    → `understand`, absent `priority` → on the walk) doing the compatibility work.
+    *Corrected 2026-08-15: this criterion previously required "the two flags are orthogonal
+    (all four combinations load)". There is no second flag — Phase A Stage 5 deleted
+    `CODEONBOARD_EXPLORER` along with the pipeline shape it selected, so the four-combination
+    test became unsatisfiable as written rather than failing. What it was protecting —
+    that turning the curriculum flag off is a real, loadable configuration and not a dead
+    branch — is what the wording now states.*
 16. Cost per session stays within the `$0.10` target, measured — planning is one Sonnet
     call, teaching one Haiku per unit, grading one Haiku per answer, as today.
     *Status 2026-08-15: **NOT MET — measured at ~$0.41 for a 12-unit session, 4× the
@@ -1363,6 +1371,49 @@ planner on the same dossier — $0.1186 vs $0.0817, almost entirely output token
    nearer **$0.53**.
 2. **The projection assumes each unit is answered once.** A hint or re-teach invites
    another answer, and each re-answer is another grade plus another adaptation.
+
+---
+
+
+### Final validation audit — 2026-08-15
+
+One `psf/requests` × `use_library` session (`a3234f41`), planned with the complete system
+and driven with real Teaching, Grader, Mutator and traversal. Controlled learner answers;
+**no stubbed verdicts**. Classification per criterion:
+
+| # | criterion | status | evidence |
+|---|---|---|---|
+| 1 | areas named and navigable | **observed end-to-end** | 5 areas, every unit assigned, rail renders headings + why-lines: "Sending authenticated requests: the public surface", "Extending auth: custom handlers" |
+| 2 | `map` vs `implementation` differ in composition | **calibrated/measured** | 18-run matrix, both repos: `component` share 2–3 → 7–10 on `requests`, 4–7 → 6–7 on `fastapi` |
+| 3 | `requests` vs `fastapi` structurally different | **calibrated/measured** | matrix: different area counts and kind mixes. Not separately observed as two side-by-side journeys |
+| 4 | multi-anchor `flow` traced in order | **observed end-to-end** | 10 of 13 units multi-anchor, up to **6 anchors**; step 2 of a 3-anchor flow opened its own file at its own range |
+| 5 | learner answers before the explanation | **observed end-to-end** | on an unanswered unit, `reveal` and `takeaway` absent from the DOM; both appear with the verdict after submitting |
+| 6 | sustained correct answers shorten the journey | **unit/integration tested only** | prune-ahead never fired live: across ~15 real graded answers the Grader awarded `understood` twice and never twice consecutively in one area. See the open concern below |
+| 7 | `no_attempt`→hint, `wrong_model`→re-teach | **observed end-to-end** (hint), **observed in an earlier run** (re-teach) | hint reproduced repeatedly; `wrong_model` was observed on the `fastapi` session but the Grader did not reproduce it in the final pass |
+| 8 | prerequisite → return → re-grade | **observed end-to-end** | `fastapi`: 16 → 17 units, advance returned to the original (still unvisited), re-answer recorded a third attempt |
+| 9 | no node count in any prompt; sizing unit-testable | **unit/integration tested** | `test_curriculum.py` asserts closure, coverage and band without an API key |
+| 10 | `objective` reaches both prompts | **unit/integration tested** | asserted in the Teaching and Grader prompts |
+| 11 | ≥4 prompt forms in one real journey | **observed end-to-end** | **6 distinct forms** in this one journey: compare, predict-next, predict-then-reveal, locate, explain-back, critique |
+| 12 | every anchor resolves; display columns ∈ anchors | **calibrated/measured** | 0 grounding drops across 18 calibration runs; invariant asserted in tests and in the sanity script |
+| 13 | guard bands calibrated | **partly calibrated, partly judgement** | `map` ceiling derived and validated; `working`/`implementation` ceilings *observed* correct but not derived; three floors never fired |
+| 14 | no `SCHEMA_VERSION` bump; one `ALTER TABLE` | **unit/integration tested** | `areas_json` is the only column this phase added |
+| 15 | flag-off is a real configuration | **obsolete wording, corrected** | rewritten — `CODEONBOARD_EXPLORER` was deleted by Phase A Stage 5, making the old "four combinations" test unsatisfiable rather than failing |
+| 16 | ≤$0.10/session | **measured, NOT met** | $0.4053 warm / ≈$0.53 cold. Deferred to a dedicated phase; Baseline 1 recorded |
+
+**Also exercised and working:** AI-critique on both `risk` units (repo-specific flaws — a
+`functools.wraps`-style encoding shortcut, and dropping `Session.close()`); scope control
+(13 → 11 → 13 stops, readiness *rising* 0.115 → 0.136 when shortened, 11 `required`
+preserved); readiness and stop-count behaviour; `/advance` stepping over optional units.
+
+**One defect found and fixed during this pass** — see the decision log: the Mutator's
+one-warm-up-per-node guard counted *planned* prerequisite edges, so on any B3 graph it was
+permanently satisfied and remediation could never fire except on units nothing depends on.
+
+**Open, and deliberately not acted on:** the Grader awards `understood` rarely. Across the
+final pass it graded strong, specific, correct answers as `partial` /
+`right_idea_wrong_altitude` more often than not. That starves prune-ahead (#6) and may make
+journeys feel unrewarding. It is a **Grader-calibration question, not an adaptation defect**,
+and tuning it during a closure pass would invalidate the behaviour being validated.
 
 ---
 
@@ -1612,6 +1663,10 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 
 | 2026-08-15 | **LQ5 resolved by implementing `use_library`, and validated on `psf/requests`** | Full comparison in [§5.4](#54-existing-signals-and-one-mapping-to-revisit). The journey opens on `requests.get(url, auth=…)` — what a caller types — under an area named "the public surface", carries three flows explaining what happens behind the call, and ends at the `AuthBase` extension point. It did not become a usage tutorial: the retained flow floor held | — |
 | 2026-08-15 | **The `use_library` validation is honest about being a weak discriminator** | `understand_component` produced the same four `public_api` entry points and also opened near the public surface, because `psf/requests` *is* a library whose goal-relevant behaviour largely is its public API, the focus area was already caller-shaped, and the `render_dossier` fix benefits every goal type. The durable claim is therefore the **guarantee** — an investigation can no longer satisfy this goal without establishing what a developer imports — not the size of this particular diff | A run on a repository whose public surface and internals diverge more |
+
+| 2026-08-15 | **The Mutator's one-warm-up-per-node guard counted PLANNED prerequisite edges, so remediation could never fire on a B3 graph** | Found in the final validation pass. B3 emits one `prerequisite` edge per `depends_on`, so almost every unit carries one before the learner answers anything — the guard was permanently satisfied and every insertion declined with `prerequisite_exists`, on nodes never remediated. It worked on the `fastapi` session only because that target was the journey's first unit, which nothing depends on. Same class as the B6 route-rail defect, third occurrence of the same root cause: **planned and remedial `prerequisite` edges conflated**. Fixed with the documented tell — a spliced warm-up has no outgoing `sequence` edge | — |
+| 2026-08-15 | **Final validation audit recorded**, classifying every Done-when criterion | See the audit above §15. Eight criteria observed end-to-end, three calibrated/measured, four tested-only, one obsolete-and-corrected, one measured-and-not-met. Two behaviours remain unobserved live and are named rather than claimed: prune-ahead (#6) and `wrong_model` → re-teach in this particular pass (#7) | — |
+| 2026-08-15 | **Grader strictness recorded as an open validation concern, deliberately untuned** | Across the final pass the Grader awarded `understood` twice in roughly fifteen graded answers, marking strong specific answers `partial` / `right_idea_wrong_altitude`. That starves prune-ahead and may make journeys feel unrewarding. It is a Grader-calibration question rather than an adaptation defect, and tuning it during a closure pass would invalidate the behaviour under validation | Evidence from real learners that correct answers are being under-credited |
 
 **Note on scope:** this cleanup is independent of the repository-understanding
 migration in [`repo-understanding.md`](repo-understanding.md). It touches the

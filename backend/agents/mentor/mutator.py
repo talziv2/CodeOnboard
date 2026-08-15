@@ -106,9 +106,29 @@ def _mutate_skip(state: OnboardState, current: str) -> OnboardState:
 
 
 def _has_prerequisite(graph: LearningGraph, node_id: str) -> bool:
-    # True if a prerequisite node has already been spliced in before this one.
+    """Has a REMEDIAL warm-up already been spliced in before this node?
+
+    Counting every `prerequisite` edge was correct until B3, when the planner
+    began emitting one per `depends_on` — dozens per journey. On such a graph
+    almost every unit has an incoming prerequisite edge before the learner
+    answers anything, so this guard was permanently satisfied and remediation
+    could never fire except on the few units nothing depends on. Measured: a
+    real `psf/requests` journey declined every insertion with
+    `prerequisite_exists`, on nodes that had never been remediated.
+
+    The distinction is the one `learning/graph.py` documents: `insert_before`
+    reroutes the incoming sequence edge onto the spliced node, so a REMEDIAL
+    node has no outgoing `sequence` edge, while a planned dependency sits on the
+    chain and keeps one.
+    """
+    has_sequence_out = {
+        e.from_node_id for e in graph.edges if e.kind == "sequence"
+    }
     return any(
-        e.kind == "prerequisite" and e.to_node_id == node_id for e in graph.edges
+        e.kind == "prerequisite"
+        and e.to_node_id == node_id
+        and e.from_node_id not in has_sequence_out
+        for e in graph.edges
     )
 
 
