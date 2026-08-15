@@ -402,6 +402,44 @@ def test_confused_inserts_prerequisite_and_walk_returns_to_node(
 @patch("backend.api.clone_repo", return_value="data/repos/requests")
 @patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_advancing_from_a_prerequisite_returns_to_the_failed_node(
+    mock_pipeline, mock_teaching, mock_clone, client
+):
+    # The point of a remediation prerequisite is a second attempt at the
+    # objective the learner failed. Advancing off the warm-up must land back on
+    # that node — not jump past it, which would leave it permanently unlearned.
+    start = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()
+    session_id = start["session_id"]
+    confused_node = start["graph"]["current_node_id"]
+    client.get(f"/session/{session_id}/lesson")
+
+    with patch("backend.api.run_grader", side_effect=_grader_side_effect("confused")), \
+         patch("backend.api.mutate_graph", side_effect=_mutator_inserts_prerequisite):
+        prereq_id = client.post(
+            f"/session/{session_id}/respond", json={"response": "lost"}
+        ).json()["mutation"]["new_node_id"]
+
+    client.get(f"/session/{session_id}/lesson")  # learn the warm-up
+    advanced = client.post(
+        f"/session/{session_id}/advance", json={"signal": "next"}
+    ).json()
+
+    assert advanced["done"] is False
+    assert advanced["node_id"] == confused_node
+
+    graph = client.get(f"/session/{session_id}").json()
+    assert graph["current_node_id"] == confused_node
+    original = next(n for n in graph["nodes"] if n["id"] == confused_node)
+    # Still unvisited: the learner is being asked to attempt it again, so the
+    # node must not carry a "done" marker it never earned.
+    assert original["visited"] is False
+
+
+@patch("backend.api.clone_repo", return_value="data/repos/requests")
+@patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_understood_does_not_mutate(mock_pipeline, mock_teaching, mock_clone, client):
     session_id = client.post(
         "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}

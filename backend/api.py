@@ -20,6 +20,7 @@
 # The api.py layer only handles HTTP concerns (routing, status codes, request
 # parsing). All dialogue logic lives in agent.py.
 
+import logging
 import os
 
 import anthropic
@@ -45,6 +46,7 @@ from backend.pipeline.state import OnboardState
 from backend.repo.cloner import check_repo_reachable, clone_repo, get_commit_sha
 
 load_dotenv(override=True)
+logger = logging.getLogger(__name__)
 app = FastAPI(title="CodeOnboard API")
 
 app.add_middleware(
@@ -254,7 +256,9 @@ def _render_current_lesson(graph, client) -> dict:
     learning_store.save_graph(graph, SESSIONS_DB_PATH)
     if state.current_lesson is None:
         # Surface why teaching failed — state.errors is otherwise discarded.
-        print(f"[teaching fallback] node={graph.current_node_id} errors={state.errors}", flush=True)
+        logger.warning(
+            "teaching fallback: node=%s errors=%s", graph.current_node_id, state.errors
+        )
         # Fallback: return a minimal lesson so the session isn't blocked.
         node = graph.nodes.get(graph.current_node_id)
         fallback = {
@@ -397,20 +401,13 @@ def session_advance(session_id: str, body: AdvanceRequest) -> dict:
 
     # signal == "next"
     graph.mark_visited(current)
+    # A prerequisite edge points at the node it unlocks, so next_in_path already
+    # walks a warm-up back to the objective the user failed. That return is the
+    # point of the remediation: they get another attempt at the thing they got
+    # wrong, now that the missing piece has been taught. Nothing here special-
+    # cases prerequisites — jumping *past* the original node would leave the
+    # failed objective permanently unlearned.
     nxt = graph.next_in_path(current)
-
-    # If the current node is a prerequisite, skip the node it unlocks —
-    # the user already tried it (got it wrong) and chose "Try again" which
-    # inserted this prerequisite. After learning the prereq, move forward
-    # past the original node rather than retrying it.
-    # A prerequisite node has an outgoing prerequisite edge to the node it unlocks
-    current_is_prereq = any(
-        e.kind == "prerequisite" and e.from_node_id == current
-        for e in graph.edges
-    )
-    if current_is_prereq and nxt is not None:
-        graph.mark_visited(nxt)
-        nxt = graph.next_in_path(nxt)
 
     if nxt is None:
         learning_store.save_graph(graph, SESSIONS_DB_PATH)

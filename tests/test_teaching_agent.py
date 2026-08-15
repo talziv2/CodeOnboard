@@ -15,7 +15,9 @@ from backend.agents.teaching.agent import (
     _SYSTEM_PROMPT,
     _build_prior_context,
     _build_user_content,
+    _format_doc_context,
     _parse_output,
+    _pick_extra_doc,
 )
 from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
 from backend.pipeline.state import OnboardState
@@ -384,3 +386,57 @@ def test_parse_output_defaults_prompt_kind():
     payload = {k: v for k, v in FAKE_LESSON_OUTPUT.items() if k != "prompt_kind"}
     output = _parse_output(json.dumps(payload))
     assert output.prompt_kind == "predict-then-reveal"
+
+
+# ── docs/ pairing (F4) ────────────────────────────────────────────────────────
+
+_DOCS = {
+    "docs/index.rst": "Requests: HTTP for Humans.",
+    "docs/user/advanced.rst": (
+        "Session Objects\n"
+        "The Session object lets you persist parameters across requests. "
+        "A Session also persists cookies. Create a Session to reuse a connection."
+    ),
+    "docs/user/authentication.rst": "Many web services require authentication.",
+}
+
+
+def test_a_docs_page_named_after_the_module_wins():
+    picked = _pick_extra_doc(
+        "requests/authentication.py",
+        {"docs/user/advanced.rst": "x", "docs/user/authentication.rst": "auth docs"},
+    )
+    assert picked == ("docs/user/authentication.rst", "auth docs")
+
+
+def test_a_docs_page_that_discusses_the_module_is_found_by_body():
+    # The real case the old path-only match missed: docs are named by topic,
+    # so "sessions" appears in advanced.rst's prose, never in its filename.
+    picked = _pick_extra_doc("requests/sessions.py", _DOCS)
+    assert picked is not None
+    assert picked[0] == "docs/user/advanced.rst"
+
+
+def test_a_single_passing_mention_is_not_enough():
+    picked = _pick_extra_doc(
+        "requests/adapters.py", {"docs/index.rst": "…uses adapters internally."}
+    )
+    assert picked is None
+
+
+def test_a_generic_module_name_pairs_with_nothing():
+    # "utils" would match half the documentation of any project.
+    assert _pick_extra_doc("requests/utils.py", _DOCS) is None
+    assert _pick_extra_doc("requests/__init__.py", _DOCS) is None
+
+
+def test_no_docs_at_all_is_not_an_error():
+    assert _pick_extra_doc("requests/sessions.py", {}) is None
+
+
+def test_the_docs_section_reaches_the_prompt():
+    node = _make_node()
+    node.code_anchor = CodeAnchor(file="requests/sessions.py", line_start=1, line_end=40)
+    section = _format_doc_context(node, {"extra_docs": _DOCS})
+    assert "docs/user/advanced.rst" in section
+    assert "Session object lets you persist" in section

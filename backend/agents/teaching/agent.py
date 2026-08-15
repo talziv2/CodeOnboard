@@ -158,6 +158,50 @@ def _build_prior_context(graph: LearningGraph, current_id: str) -> str:
     return "The developer already understands these earlier nodes:\n" + "\n".join(lines)
 
 
+# Module names too generic to identify a docs page — matching on them produces
+# a confidently wrong pairing rather than no pairing, which is worse.
+_GENERIC_STEMS = frozenset({
+    "__init__", "__main__", "main", "app", "base", "core", "utils", "util",
+    "helpers", "common", "types", "compat", "constants", "config", "settings",
+})
+# How many times a module must be named in a docs page before we accept that
+# page as being about it. One passing mention is not a topic.
+_MIN_DOC_MENTIONS = 2
+
+
+def _pick_extra_doc(file: str, extra: dict[str, str]) -> tuple[str, str] | None:
+    """Pick the docs/ page most likely to be *about* `file`, or None.
+
+    Two passes, strongest signal first:
+      1. the module's name appears in the docs filename ("sessions" → sessions.rst)
+      2. otherwise, the page that names the module most often in its body
+
+    The second pass is what makes this fire at all. Projects name docs pages
+    after topics ("advanced.rst", "quickstart.rst"), not after modules, so
+    requiring the module name in the *path* — as this once did — meant the
+    section was almost never emitted.
+    """
+    stem = Path(file).stem.lower()
+    if len(stem) < 4 or stem in _GENERIC_STEMS:
+        return None
+    # Modules are named in the plural, prose is written in the singular:
+    # `sessions.py` is documented as "the Session object". Searching for the
+    # singular finds both, since it is a prefix of the plural.
+    needle = stem[:-1] if stem.endswith("s") and len(stem) > 4 else stem
+
+    for doc_path, content in extra.items():
+        if needle in Path(doc_path).stem.lower():
+            return doc_path, content
+
+    best: tuple[str, str] | None = None
+    best_mentions = _MIN_DOC_MENTIONS - 1
+    for doc_path, content in extra.items():
+        mentions = content.lower().count(needle)
+        if mentions > best_mentions:
+            best, best_mentions = (doc_path, content), mentions
+    return best
+
+
 def _format_doc_context(node: LearningNode, doc_context: dict | None) -> str:
     """Build the documentation-context section for the Teaching Agent prompt.
 
@@ -190,15 +234,11 @@ def _format_doc_context(node: LearningNode, doc_context: dict | None) -> str:
     if readme:
         parts.append(f"README excerpt:\n{readme[:400]}")
 
-    # 4. Relevant docs/ file — pick the first extra_doc whose key mentions
-    #    the stem of the node's file (e.g. "sessions" matches docs/api.rst
-    #    only if "sessions" appears in the key; otherwise skip).
-    file_stem = Path(file).stem  # e.g. "sessions" from "requests/sessions.py"
-    extra: dict[str, str] = doc_context.get("extra_docs") or {}
-    for doc_path, content in extra.items():
-        if file_stem in doc_path:
-            parts.append(f"Docs file ({doc_path}):\n{content[:500]}")
-            break
+    # 4. Relevant docs/ file
+    picked = _pick_extra_doc(file, doc_context.get("extra_docs") or {})
+    if picked is not None:
+        doc_path, content = picked
+        parts.append(f"Docs file ({doc_path}):\n{content[:500]}")
 
     if not parts:
         return ""
