@@ -455,10 +455,55 @@ common real entry point.
 However, `goal_type` keys Phase A's exploration exit criteria (C8). Adding a value is a
 **cross-phase change** (§1.5). Therefore:
 
-- **In scope now:** re-point the option to `understand_system` or `understand_architecture`
-  (a one-line change with no new exit criteria required), *or* leave it and note it.
-- **Deferred:** a dedicated `use_library` goal type, to be added once Phase A's exit-criteria
-  structure is stable. Recorded as [LQ5](#152-open-lq).
+**Resolved 2026-08-15 by implementing the dedicated goal type** ([LD17](#151-accepted-ld)),
+not by the interim re-point. The re-point was rejected on learning behaviour: neither
+`understand_system` nor `understand_architecture` demands a caller-facing entry point
+either, so it would have replaced one wrong emphasis with another.
+
+What made it cheap is that Phase A had already collected the distinguishing evidence and
+nothing consumed it:
+
+| already existed | added |
+|---|---|
+| `entry_points[].perspective: runtime \| public_api`, documented as "the name a developer USING this code imports and calls" | `ExitCriteria.min_public_api_entry_points`, checked separately from the entry-point count because the fix differs — not "find another way in" but "find the name a caller types" |
+| `skeleton.exports_of()` / `PublicExport`, giving the dotted path a caller types | a `use_library` criteria entry: 1 public-API entry point, 2 entry points, 2 contracts, base flow floor retained |
+| `public_surface_gaps()`, which already rejects citing an internal twin of an exported name and inspects `perspective` | `render_dossier` emitting each entry point's perspective — it was dropped for **every** goal type, so the planner could never tell the two apart |
+| B3 kinds `extension_point`, `risk`, `component`, `flow` | one planner calibration block: caller-facing surface first, then what happens behind the call, then contracts, configuration, extension points and misuse risks — internals as supporting evidence, not the spine |
+
+The three-way distinction the implementation preserves: **`public_api` is what the learner
+imports and calls; runtime flow explains what happens behind that call where it matters;
+internal components are supporting evidence, never the starting point.** The base flow floor
+is kept deliberately — without it the journey degrades into a usage tutorial that cannot say
+why anything behaves as it does.
+
+**Validated 2026-08-15 on `psf/requests`**, same repo, same focus area ("sending
+authenticated requests and handling responses") and same `code_depth`, so goal type was the
+only variable.
+
+| | `use_library` | `understand_component` |
+|---|---|---|
+| units | 13 | 12 |
+| first unit | **`flow` on `api.py:get`** — "Call the module-level convenience functions with auth" | `architecture` on `api.py:request` — "Distinguish module-level functions from Session" |
+| first area | **"Sending authenticated requests: the public surface"** | "Entry points and session choice" |
+| kinds | flow 3, component 4, architecture 2, risk 2, extension_point 1, synthesis 1 | flow 2, component 4, architecture 1, risk 3, extension_point 1, synthesis 1 |
+| contracts | 4 | 4 |
+
+The `use_library` journey opens on what a caller *types* (`requests.get(url, auth=…)`),
+carries three flows explaining what happens behind that call, and closes on a custom auth
+handler at the `AuthBase` extension point — with risks about `response.text` encoding and
+Session lifetime. It did not become a usage tutorial: the flow floor held.
+
+**What this run does NOT establish, stated plainly.** `understand_component` produced the
+same four `public_api` entry points and also opened near the public surface. Two reasons,
+and both matter: `psf/requests` is *itself* a library whose goal-relevant behaviour largely
+**is** its public API, and the focus area was already caller-shaped; and the `render_dossier`
+fix now shows `perspective` to the planner for **every** goal type, so the comparison run
+benefits from part of this change too. This repository is therefore a weak discriminator.
+
+**The durable claim is the guarantee, not this diff.** Before, an investigation could satisfy
+every floor for this goal without ever establishing what a developer imports; now it cannot.
+A sharper behavioural difference would need a repository whose public surface and internals
+diverge more, or a focus area that is not already caller-facing.
 
 ---
 
@@ -1343,6 +1388,7 @@ Settled. Implementation may rely on these.
 | **LD12** | **Defect fixes ship independently of the redesign** | F1–F3 are wrong today. Bundling them would make the redesign look responsible for behaviour it did not cause, and delay fixes that need no design work |
 | **LD13** | **A unit is grounded by one or more verified anchors. There is no semantically privileged "primary" anchor** — `display_anchor` is a derived UI affordance | System-level units (`flow`, `architecture`, `boundary`, `synthesis`) are genuinely grounded in several equally important locations. Forcing one to be primary would be a false claim about the evidence, and would let the existing single-anchor storage model constrain the learning design — the inversion this phase exists to undo (L4, L5). Grounding is unchanged in strength: `len(anchors) >= 1`, each verified through Phase A's `resolve()` |
 | **LD15** | **`background` reduces the teaching cost of a required objective; it never removes it** (resolves [LQ1](#152-open-lq)) | Self-report is a weak signal, and a dropped unit is invisible — a learner cannot skip what they were never shown, so a wrong self-assessment silently removes a foundation the dependency closure then teaches on top of. Prior knowledge is validated through performance instead: answering well, or `mark_understood`, both of which leave a record. `background` keeps its current job — eliding explanation *within* a lesson |
+| **LD17** | **`use_library` is a real goal type, not a re-pointed mapping** (resolves [LQ5](#152-open-lq)) | The user-facing option existed while the intent never reached the backend, so the engine was optimising for internals for someone who wanted to make a call. Phase A had already collected what distinguishes the two — `entry_points[].perspective`, package re-exports with the dotted import path, and a validator that rejects citing an internal twin of an exported name — and **nothing asked for any of it**. Implementing therefore cost plumbing plus one criteria field (`min_public_api_entry_points`), not a taxonomy or Phase A redesign. Scope held to one goal type: no Reviewer pass, no other taxonomy change, no frontend or persistence change |
 | **LD16** | **The `map` ceiling is calibrated (14 → 18); `working` and `implementation` remain judgement, and all three floors remain inert** | Partially discharges [LD14](#151-accepted-ld). The 18-run matrix showed the `map` ceiling clamping — two of three `fastapi` runs demoted, journeys flattened to 14/14/14 against a demand of 14/15/15 — while the other two ceilings never fired and kept slack. Correcting only what was measured to be wrong is the point: changing the other two would substitute judgement for evidence that said "fine". The phase is therefore **partly calibrated**, and §6.3 says exactly which parts |
 | **LD14** | **The §6.3 guard-band numbers are uncalibrated initial defaults, not product constants** | They were chosen by judgement. Freezing them would recreate L1 — a curriculum size nobody can justify — one layer further down. §6.3 defines how they get measured and recorded |
 
@@ -1384,9 +1430,14 @@ position off `path_order()`, so it follows the walk rather than a stored pointer
 correct after a mid-session mutation. Moving it to the planner remains available if
 continuity reads poorly across a whole journey, which one unit at a time cannot show.
 
-**LQ5 — Does `use_library` become a real goal type?**
-Requires exit criteria in Phase A's structure (§5.4). The interim fix is re-pointing the
-existing option. *Decide after Phase A Stage 2.*
+**LQ5 — Does `use_library` become a real goal type? — RESOLVED 2026-08-15: yes, implemented.**
+Not the interim mapping, because it would not have preserved the semantics: re-pointing to
+`understand_system` or `understand_architecture` swaps "four internal components + one
+contract" for flow- or architecture-heavy criteria, and **neither demands a caller-facing
+entry point** — a different wrong emphasis rather than a fix.
+
+Implemented instead, because the evidence layer already carried the distinction and only
+one mechanism was missing. See [LD17](#151-accepted-ld).
 
 **LQ8 — Why has overflow demotion never fired on a real run? — SHARPENED by calibration,
 still open, and arguably now moot.**
@@ -1558,6 +1609,9 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 | 2026-08-15 | **`/advance` now steps over `optional` units, closing a mismatch that predated U4** | Optional units sit on the same spine by design (§6.3) so nothing is lost and depth stays one click away — but the stop counter and `readiness()` have always *excluded* them, so walking into one contradicted the number on screen: a sixteen-unit graph said "stop 3 of 15" and still made the learner pass through all sixteen. `resume_point()` skips them for the same reason. This is what makes "make it shorter" shorten anything, and what makes prune-ahead genuinely shorten a journey rather than relabel it. Reaching one deliberately from the rail still works | — |
 | 2026-08-15 | **Mutator-inserted warm-ups are explicitly `required`** | They previously carried no `priority` at all, and every consumer happened to treat an absent value as non-optional — correct by accident, one refactor from being wrong. A warm-up the learner demonstrably needed is not up for demotion, so "make it shorter" must never take it away | — |
 | 2026-08-15 | **Validated both directions live**: `shorter` 15 → 13 stops with readiness *rising* 22% → 25%, `deeper` restoring 13 → 15 and 25% → 22%, all four areas still staffed, 13 `required` units untouched throughout, and a third press reporting "nothing further in this journey" | Readiness rising on a shortened journey is the point, not a quirk: the same understanding over a smaller journey is more progress, so the gauge must not punish a learner for asking for less. `deeper` promoted 2 of 3 optional units and correctly left alone the one already worked through | — |
+
+| 2026-08-15 | **LQ5 resolved by implementing `use_library`, and validated on `psf/requests`** | Full comparison in [§5.4](#54-existing-signals-and-one-mapping-to-revisit). The journey opens on `requests.get(url, auth=…)` — what a caller types — under an area named "the public surface", carries three flows explaining what happens behind the call, and ends at the `AuthBase` extension point. It did not become a usage tutorial: the retained flow floor held | — |
+| 2026-08-15 | **The `use_library` validation is honest about being a weak discriminator** | `understand_component` produced the same four `public_api` entry points and also opened near the public surface, because `psf/requests` *is* a library whose goal-relevant behaviour largely is its public API, the focus area was already caller-shaped, and the `render_dossier` fix benefits every goal type. The durable claim is therefore the **guarantee** — an investigation can no longer satisfy this goal without establishing what a developer imports — not the size of this particular diff | A run on a repository whose public surface and internals diverge more |
 
 **Note on scope:** this cleanup is independent of the repository-understanding
 migration in [`repo-understanding.md`](repo-understanding.md). It touches the
