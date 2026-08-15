@@ -1291,16 +1291,23 @@ trusted from self-report. The required set stays the floor of the curriculum, an
 `background` keeps doing exactly what it does today: eliding explanation inside a lesson.
 See [LD15](#151-accepted-ld).
 
-**LQ2 — What is the real upfront planning cost on `fastapi`?**
-Measure before accepting [LD11](#151-accepted-ld). If a full curriculum over a large
-dossier costs materially more than one Sonnet call, or blows the latency budget,
-progressive expansion returns to the table. *Measure during B3.*
+**LQ2 — What is the real upfront planning cost on `fastapi`? — RESOLVED 2026-08-15:
+one call, no case to reopen [LD11](#151-accepted-ld).**
+Planning is exactly one Sonnet call, as designed. Measured cost $0.1186 on `psf/requests`
+(Baseline 1); measured latency on `fastapi` across nine calibration runs was 65–85s, in the
+same range as `requests`' 75s. So upfront planning over a large dossier is neither
+materially more expensive nor materially slower, and **progressive expansion does not
+return to the table**. Note the cost figure itself is from `requests`; `fastapi` latency was
+measured, `fastapi` planning *cost* was not — but a single call at the same latency cannot
+differ by an order of magnitude.
 
-**LQ3 — Should `code_depth` feed Phase A's exploration exit criteria?**
-Arguably a learner wanting implementation mastery should trigger deeper investigation, not
-just deeper lesson framing. That would make `code_depth` a cross-phase input (§1.5). The
-default is **no** — it shapes selection and teaching only. *Decide only if B3 shows the
-dossier lacks implementation-level evidence.*
+**LQ3 — Should `code_depth` feed Phase A's exploration exit criteria? — RESOLVED
+2026-08-15: no, the trigger condition never fired.**
+The default was "no unless B3 shows the dossier lacks implementation-level evidence". It
+does not: `implementation` cells produced component-led journeys (7–10 `component` units on
+`requests`, 6–7 on `fastapi`) with **zero grounding drops in 18 runs**, so the dossier
+carries implementation-level evidence without being asked for it. `code_depth` stays a
+selection-and-teaching input, and this phase touches no Phase A exit criteria.
 
 **LQ4 — Who owns "why now"? — RESOLVED 2026-08-15: the teacher.**
 Written from the previous unit's objective, which B1 made available and B3 made reliable.
@@ -1314,22 +1321,27 @@ continuity reads poorly across a whole journey, which one unit at a time cannot 
 Requires exit criteria in Phase A's structure (§5.4). The interim fix is re-pointing the
 existing option. *Decide after Phase A Stage 2.*
 
-**LQ8 — Why has overflow demotion never fired on a real run?**
-`optional` was 0 in all four sanity cells: the planner proposes roughly the journey it
-wants and there is nothing left over to demote, despite being told to enumerate without
-limit. The cut layer is structurally correct and unit-tested, but the mechanism that is
-supposed to keep a large-repo journey finite has not been exercised outside tests.
+**LQ8 — Why has overflow demotion never fired on a real run? — SHARPENED by calibration,
+still open, and arguably now moot.**
 
-Recorded as an **observation, not a defect**. Two readings fit the evidence equally well:
-the model self-limits despite the instruction, or these four goals genuinely have no
-surplus worth teaching. Four runs cannot separate them.
+The sanity pass saw `optional` = 0 in all four cells. The 20-run calibration evidence is
+more precise: `demoted_by_band` was **0 in 16 of 18 matrix runs**, and both exceptions were
+`fastapi` × `map` — the one cell whose ceiling was subsequently found to be mis-set. After
+raising that ceiling to 18, the validation runs demoted **nothing** (0 of 2).
 
-**Explicitly not to be resolved by inflating the proposal prompt.** Pushing volume purely
-to make the cut fire would be optimising for a mechanism rather than for the learner, and
-would corrupt the calibration input (`core_before_band`) at the same time. If the question
-matters later, the honest instrument is the repeat matrix — which records proposal volume
-per cell — not a prompt change made to produce a desired number. *Revisit after
-calibration, if at all.*
+So the sharpened finding is: **with correctly-set bands, overflow demotion does not fire at
+all.** The planner proposes roughly the journey it wants; the `optional` units that do
+appear (0–2 per journey) are its own labels, not the band's doing.
+
+That makes the mechanism's *purpose* the open question rather than its behaviour. Two
+readings still fit: the planner self-limits despite being told to enumerate without limit,
+or these goals genuinely have no surplus worth teaching. What the evidence now adds is that
+the guard is not idle by accident — it is idle because demand never approaches it, which is
+what §6.3 says a guard should look like.
+
+**Still explicitly not to be resolved by inflating the proposal prompt**, which would
+optimise for a mechanism rather than a learner and corrupt `core_before_band`, the
+calibration's own input. *Revisit only if a real journey is ever reported as too long.*
 
 **LQ6 — What are the guard bands, and should the lower bound scale with the repository?**
 §6.3's numbers are **uncalibrated initial defaults**, to be replaced by measured values via
@@ -1337,17 +1349,37 @@ the calibration procedure there. Separately: the bands are global, and a very sm
 repository may legitimately have fewer than five teachable objectives, which would make the
 lower bound fire spuriously.
 
-*Partly settled during B3.* The floor is **implemented as advisory** — `band_report()` logs
-and `select()` never pads, because padding a journey to reach a number would be inventing
-curriculum. The ceiling is enforced by demotion. What remains open is the **numbers**: the
-sanity pass (§6.3) saw neither bound fire in four cells, which is evidence that they are not
-currently constraining anything, and no evidence at all about where they should sit.
-*Still requires the ≥3-repeat matrix; until then the table keeps its LD14 marker.*
+*Mostly settled 2026-08-15.* Three parts, at three different levels of certainty:
 
-**LQ7 — What does prune-ahead do to a journey already in progress?**
-Demoting `recommended` units to `optional` changes `readiness()` mid-session and shifts
-"stop N of M". Whether that is motivating ("you're ahead") or disorienting ("the plan
-changed under me") is a UX question. *Decide during B5/B6.*
+- **Floor behaviour — SETTLED.** The floor is advisory: `band_report()` logs and `select()`
+  never pads, because padding a journey to reach a number would be inventing curriculum.
+  The "should the lower bound scale with the repository?" half of this question is
+  therefore moot — an advisory floor that never fires needs no scaling rule.
+- **`map` ceiling — CALIBRATED** from the 18-run matrix and validated by direct
+  observation: 14 → 18 ([LD16](#151-accepted-ld)).
+- **`working` / `implementation` ceilings and all three floors — STILL JUDGEMENT.** The
+  matrix *observed* both ceilings behaving correctly (neither fired; slack +5 and +4) and
+  observed all three floors never firing (smallest core 9, smallest journey 11, against
+  floors of 5/8/10). But "observed not to misbehave" is weaker than "derived from the
+  data": nothing in the evidence says where these four numbers *should* sit, only that they
+  are not currently causing harm. **They keep the LD14 marker.**
+
+*What would close the rest:* a matrix wide enough to bound demand from below — more
+`goal_type` values, and at least one repository small enough to test a floor. Neither is
+required to close the phase, which §14 item 13 explicitly permits in its second form.
+
+**LQ7 — What does prune-ahead do to a journey already in progress? — IMPLEMENTED, NOT
+VALIDATED.**
+B5 built it and B6 surfaced it: demoted units collapse into the rail's optional section,
+`readiness()` excludes them from the denominator so the gauge *rises* rather than falls,
+"stop N of M" stops counting them, and the panel says "You're ahead — N stops moved to
+optional". The mechanical disorientation the question worried about is therefore designed
+out — the counter and the gauge both move in the learner's favour.
+
+**What remains is the actual question, and it is not answerable from code:** whether a
+learner reads a mid-session plan change as encouragement or as the ground shifting. That
+needs a person, not a test. *Carry into end-to-end validation; it is a UX observation, not
+a blocker.*
 
 ---
 
