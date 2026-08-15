@@ -1711,6 +1711,7 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 | 2026-08-15 | **The `use_library` validation is honest about being a weak discriminator** | `understand_component` produced the same four `public_api` entry points and also opened near the public surface, because `psf/requests` *is* a library whose goal-relevant behaviour largely is its public API, the focus area was already caller-shaped, and the `render_dossier` fix benefits every goal type. The durable claim is therefore the **guarantee** — an investigation can no longer satisfy this goal without establishing what a developer imports — not the size of this particular diff | A run on a repository whose public surface and internals diverge more |
 
 | 2026-08-15 | **The Mutator's one-warm-up-per-node guard counted PLANNED prerequisite edges, so remediation could never fire on a B3 graph** | Found in the final validation pass. B3 emits one `prerequisite` edge per `depends_on`, so almost every unit carries one before the learner answers anything — the guard was permanently satisfied and every insertion declined with `prerequisite_exists`, on nodes never remediated. It worked on the `fastapi` session only because that target was the journey's first unit, which nothing depends on. Same class as the B6 route-rail defect, third occurrence of the same root cause: **planned and remedial `prerequisite` edges conflated**. Fixed with the documented tell — a spliced warm-up has no outgoing `sequence` edge | — |
+| 2026-08-16 | **The gap policy is approved and the build is planned; `readiness()` stays node-weighted** | Policy in [§18.16](#1816-gap-policy--lq6lq10-revision-3-approved-2026-08-16), build in [§19](#19-implementation-plan--the-gap-model-1816-approved-2026-08-16). Three semantic defects were fixed across two revisions before approval: `waived` could yield `understood` because the rule was stated as an absence (`no gap is open`) rather than positively (`every blocking gap is verified`); `blocking` was contaminated by the remediation queue's cap, which would have made a gap's meaning depend on a queue limit; and resume inferred `continue` from `visited`, so a refresh mid-remediation read as a decision. A fourth instance of the first defect was found in `mark_understood`, which assigns `understood` directly and is now migration debt with a defined exit. Journey completion and verified understanding are separated — and the separation turned out to be almost entirely presentational, since `readiness()` is never compared against anything and `done` already comes from traversal. Gap-weighting `readiness()` was considered and **rejected**: the number of detected gaps is not a reliable measure of how much of an objective is understood, and adopting it as a weight needs separate evidence | A cheap, well-founded evidence measure finer than the node-level `partial` = 0.5 |
 | 2026-08-15 | **The two bounded fixes shipped: prerequisite generation is diagnosis-aware, and a learner-requested warm-up no longer depends on the automatic action** | Detail and live A/B in [§18.15](#1815-the-two-bounded-fixes--shipped-and-validated). Across five real recorded failures the diagnosis moved the decision **twice, in opposite directions** — it suppressed an irrelevant warm-up that the pre-fix arm inserted for a learner who had said they did not know what a decorator was, and it produced a precisely targeted one on a node the pre-fix arm had wrongly declined. That two-way movement is what shows the diagnosis decides *between* candidates rather than biasing the outcome; the foundational bar was explicitly not relaxed, and the decline path stayed reachable in every case. The warm-up gating was backwards — a `partial` learner could ask for one while a `confused` learner whose gap was `wrong_model` could not — and validating the fix surfaced a second defect, `handleRetry` swallowing the `inserted` flag, which the change made common enough to belong in its blast radius | Evidence that the diagnosis biases the model toward inserting warm-ups nobody needed — the failure mode the foundational rule exists to prevent |
 | 2026-08-15 | **Multi-gap remediation designed, not implemented — the phase closes with two small fixes instead** | Full design in [§18](#18-outstanding-gaps--multi-gap-remediation-and-verification). A live trace showed one answer carrying two independent misconceptions, both correctly detected by the Grader and only one surviving: the schema holds a scalar `gap_kind`, re-teach's prompt is written in the singular, the Mutator never sees the answer at all, and nothing reads attempt history. The node could then reach `understood` with the second misconception intact. The architectural response changes the Grader schema, adds a column, makes `understanding_state` derived and touches API and frontend — the surface area of the whole B-series — so it goes to a dedicated phase rather than the tail of this one, where Phase 3's own roadmap already places the persistent understanding graph. Two defects are small enough to close here: the Mutator's diagnosis-blindness and learner-requested warm-up being unavailable in exactly the states that need it most | LQ8 and LQ10 (gap cap, verification rounds) decide whether the design can produce a non-terminating session; both are answered before implementation, not during |
 | 2026-08-15 | **Final validation audit recorded**, classifying every Done-when criterion | See the audit above §15. Eight criteria observed end-to-end, three calibrated/measured, four tested-only, one obsolete-and-corrected, one measured-and-not-met. Two behaviours remain unobserved live and are named rather than claimed: prune-ahead (#6) and `wrong_model` → re-teach in this particular pass (#7) | — |
@@ -2218,9 +2219,9 @@ and **deliberately not implemented**. "Try again" still re-shows the answered
 question. That is the follow-up phase's first job, and it is recorded here so the
 gap is not mistaken for an oversight.
 
-### 18.16 PROPOSED policy — LQ6–LQ10 (revision 3, awaiting decision, 2026-08-16)
+### 18.16 Gap policy — LQ6–LQ10 (revision 3, **APPROVED 2026-08-16**)
 
-**Not accepted. Nothing here is implemented.** Revision 3 adds two refinements to
+**Approved 2026-08-16. Not yet implemented** — the build is planned in [§19](#19-implementation-plan--the-gap-model-1816-approved-2026-08-16). Revision 3 added two refinements to
 revision 2: a learner's decision to stop remediating is no longer routed through
 `mark_understood`, and **journey completion is separated from verified
 understanding**.
@@ -2418,6 +2419,208 @@ legitimately below 100% at completion.
 
 **Termination:** three exits — continue, waive, cap — none of which requires the
 learner to satisfy the system, and completion is reachable from all of them.
+
+---
+
+## 19. Implementation plan — the gap model (§18.16 approved 2026-08-16)
+
+**Plan only. Nothing here is implemented.** §18.16 revision 3 is approved; this
+turns it into an ordered build. When this phase actually starts, this section
+should be lifted into its own phase document — it is here because §18 is where
+the design lives.
+
+### 19.1 The sequencing constraint that sets the order
+
+> **Blocking must land AFTER closure exists.**
+
+If `understanding_state` starts requiring verified gaps before verification is
+built, a flag-on session accumulates blocking gaps with no mechanism to close
+them, and no node can ever reach `understood`. So detection, policy, remediation
+and verification all land *before* the derived state that gives gaps their teeth.
+
+Everything ships behind **`CODEONBOARD_GAPS=0`** (default off), the pattern
+`CODEONBOARD_CURRICULUM` established: the two models coexist rather than one
+replacing the other mid-phase.
+
+### 19.2 Build order
+
+| # | Step | Invariant after this step | What could regress |
+|---|---|---|---|
+| **M1** | **Gap model + persistence, write-only.** `Gap` dataclass, `LearningNode.gaps`, additive nullable `gaps_json` column via the existing swallow-the-error `ALTER TABLE` idiom. `SCHEMA_VERSION` does not move. Nothing reads it | All 813 tests pass **unchanged**. No observable behaviour change. A graph saved and reloaded is identical | Store round-trip; the 61 existing sessions must still load |
+| **M2** | **Grader emits a gap list.** `GraderOutput.gaps: list[GapOut]` (`kind`, `claim`, `objective_part`, `foundational`). Scalar `classification` kept; scalar `gap_kind` **derived** from the highest-precedence gap. Ids minted by our code on persist, never by the model | `/respond`'s `gap_kind` equals what the single-gap Grader produced. Gaps are recorded but **inert** — nothing blocks, nothing is remediated per-gap | **Classification calibration.** A prompt change can shift the verdict distribution. Gate: re-run the 48-case evaluation and require classification agreement ≥ the recorded 48/48 |
+| **M3** | **Gap identity across re-grades** (§19.3.2). Re-grade mode shows open gaps *with their ids*; the model references an id or declares `new`. Code validates membership | A gap id never changes. A `verified` gap never reopens under a new id. An id the model invents is rejected and the gap stays as it was | Duplicate gaps if the model over-reports `new`. Bounded by the queue cap; measured, not assumed |
+| **M4** | **Adaptation policy → plan.** `decide_all(classification, gaps) → Plan{actions, active_set}`. §18.5 precedence, active set ≤ 3, collapse to one re-teach above 3 | With exactly one gap, `decide_all` produces exactly what `decide` produces today — asserted directly against the existing table | The B5 adaptation tests; the `off-topic` + named-gap rule must survive intact |
+| **M5** | **Remediation becomes gap-scoped.** Re-teach receives *every* open gap of its kind and is instructed in the plural; the Mutator's `Diagnosis` (step G) gains the specific `Gap` it must unblock, recorded as `lesson_brief["remediates"]` | With one gap, both produce the same shape as today. The warm-up decline path stays reachable | Re-teach quality with 3 gaps at once — a prompt property no test asserts (LR3-class risk) |
+| **M6** | **Verification.** `teaching.verify(node, gaps, source) → VerificationPrompt` stored on `node.pending_verification`, **separate from `cached_lesson`**, carrying **no `reveal`**. Grader verification mode returns per-gap `resolved` + any new gaps. Per-gap and per-node counters persisted | A gap moves to `verified` **only** here. Silence about a gap leaves it `open`. Caps stop the system proposing without closing anything | Cost: this adds calls per gap. The Baseline-1 cost record must be re-measured (§19.7) |
+| **M7** | **Derived `understanding_state`.** `understood` ⟺ latest assessment reaches the objective **and** every blocking gap is `verified`. **Blocking takes effect here — after M6 made closure possible** | On any graph with `gaps == []`, every derived value **equals the stored value**. This is the compatibility gate, run over all 61 stored sessions | `prune_ahead` (reads `understood`), `resume_point` (reads `understood`), `readiness()` (reads state), `mark_understanding` (currently assigns) |
+| **M8** | **Learner intents + resume + completion.** `continue`, `waive`, `waive_remaining`; `/advance` records `continue` when leaving a node with open blocking gaps; `resume_point()` per §18.16.3; `is_complete()`; `mark_understood` migration | A refresh **never** records `continue`. Resume returns to unfinished remediation. `is_complete()` is reachable by walking the journey | `resume_point` stranding a learner; `/advance` recording `continue` on nodes without blocking gaps |
+| **M9** | **API + frontend.** `/respond` returns `gaps`; `POST /session/{id}/verify`; waive endpoints; the gauge relabelled *Verified understanding*; completion screen shows both measures with waived gaps **named** | Existing response keys unchanged; an un-updated client keeps working | The B6 route rail; the stop counter; the completion screen's `understood` count drops legitimately and needs its "N waived" context |
+| **M10** | **Acceptance + live E2E** (§19.5). Both named acceptance cases, on real repositories | AC1 and AC2 both observed live, not simulated | — |
+
+M1–M3 are detection; M4–M6 are response; M7 gives it teeth; M8–M9 are agency and
+surface. Each step is independently revertable.
+
+### 19.3 Area specifications
+
+#### 19.3.1 Grader schema and prompts
+
+```python
+class GapOut(BaseModel):          # what the model returns
+    kind: GapKind                 # existing five-value enum, unchanged
+    claim: str                    # the misconception in one sentence
+    objective_part: str           # the clause it violates
+    foundational: bool            # observed, not decisive
+
+class GraderOutput(BaseModel):
+    classification: Classification
+    rationale: str
+    gaps: list[GapOut] = []       # defaulted — an omission is not a parse failure
+    gap_kind: GapKind = "none"    # RETAINED, derived from gaps for compatibility
+```
+
+Prompt changes: report **every** distinct misconception, not the dominant one;
+two misconceptions about different claims are two gaps even when they share a
+`kind`; `no_attempt` and `off-topic` report **no** gaps. `blocking` is never
+asked for — it is derived from `kind` in code.
+
+`gap_kind` stays on the wire so `/respond` consumers and every pre-M2 test keep
+working; it is the highest-precedence gap's kind, which is exactly what the
+single-gap Grader used to return.
+
+#### 19.3.2 Gap identity and matching across re-grades
+
+Identity is **ours**. The model never mints an id.
+
+- **First detection:** each `GapOut` gets a fresh id at persist time.
+- **Any later grade of the same node:** the open gaps are supplied *with their
+  ids*, and the model must, for each gap it reports, either **reference one of
+  those ids** or explicitly declare it **new**.
+- **Validation:** a referenced id not in the supplied set is rejected — the gap
+  it claimed to be is left untouched, and the report is dropped rather than
+  guessed at.
+- **No fuzzy matching.** Deliberately no text-similarity merge: a heuristic that
+  silently merges two distinct misconceptions is worse than a duplicate. The
+  known failure mode is the model over-reporting `new`, producing a duplicate;
+  it is bounded by the queue cap and must be **measured** during M3, not assumed
+  away.
+
+#### 19.3.3 Persistence and migration
+
+One additive nullable `gaps_json` column on `nodes`; `SCHEMA_VERSION` unchanged.
+Counters (`verification_attempts` per gap, `remediation_rounds` per node) live
+inside the same payload — nothing queries them. `pending_verification` rides in
+the existing node JSON, not `cached_lesson_json`, whose owner overwrites it.
+
+`mark_understood` migration (§18.16.2): honoured unchanged on nodes with **no**
+gap records; not offered on gap-bearing nodes; read as `waive_remaining` if found
+in stored data; removed once no live session predates the gap model.
+
+#### 19.3.4 Derived `understanding_state`
+
+One function owns it, as `objective()` and `readiness()` already do. The
+compatibility gate is exact: **for every stored graph with no gaps, the derived
+value equals the stored value.** `mark_understanding` stops assigning and becomes
+a recorder of the latest assessment; the state is computed from that plus the gap
+list.
+
+`readiness()` is **untouched** — node-weighted, `partial` = 0.5. Explicitly *not*
+gap-weighted: the number of detected gaps is not a reliable measure of how much of
+an objective is understood, and adopting it as a weight would need separate
+evidence and design (decision recorded 2026-08-16).
+
+#### 19.3.5 Round caps and their persistence
+
+`gap.verification_attempts` (cap 2) and `node.remediation_rounds` (cap 4), both
+persisted. Reaching a cap sets nothing on the gap — it only removes the gap from
+the active set, so the system stops proposing. A deliberate return to the node
+resets both. **A cap never writes `verified` and never writes `waived`.**
+
+#### 19.3.6 `continue`, `waive`, `waive_remaining`, resume, completion
+
+All three are `user_override` actions — the existing explicit-intent channel.
+`continue` is recorded by `/advance` **only** when the node being left has open
+blocking gaps, and is withdrawn by a new attempt on that node. `resume_point()`
+follows §18.16.3 exactly; `is_complete()` is "every non-optional node settled",
+where settled is `understood` or an explicit override — **never plain `visited`**.
+
+#### 19.3.7 API and frontend
+
+`/respond` gains `gaps` (open list) alongside every existing key.
+`POST /session/{id}/verify` returns a fresh verification prompt; its answer posts
+to `/respond` with `kind="verification"`. Waive endpoints are per-gap and
+per-node. The header gauge is relabelled **Verified understanding** and
+`is_complete()` drives the completion screen, which reports both measures and
+names each waived gap with an offer to verify it now.
+
+### 19.4 Acceptance cases — carried from the original defect
+
+These are the reason the phase exists. Both are **live** criteria; neither may be
+satisfied by a unit test alone.
+
+**AC1 — two misconceptions, one resolved, the other survives.**
+The original trace (`Node.expand` / `solution()`, AIMA `search.py`): one answer
+containing (A) child metadata is filled in later by the search algorithm, and
+(B) `solution()` returns states *and* actions.
+
+Required, in order:
+1. Both detected and persisted as **two distinct gaps** — distinct ids, distinct
+   `claim` text — even though both are `wrong_model`.
+2. Remediation addresses one of them.
+3. A **fresh** verification question closes that one: it becomes `verified`.
+4. **B remains `open`, blocking, and visible by name.** It must not be silently
+   dropped, must not be inferred resolved from an answer that never mentions it,
+   and must not be closed by the round cap.
+5. The node is **not** `understood`, and says why.
+
+**AC2 — verification is a new question, not the original.**
+After remediation has revealed the correct reasoning, the learner is tested with
+a question targeting the diagnosed weakness through a *different application*.
+Required: the verification prompt is **not** the original prompt (asserted
+mechanically), and a learner still holding the misconception cannot answer it
+correctly (judged live — the one property no assertion can carry).
+
+### 19.5 Tests and live validation
+
+**Deterministic, no API key** — the ten from §18.12 plus:
+
+11. Two `wrong_model` gaps with different claims stay two gaps through save →
+    load → re-grade.
+12. A referenced gap id outside the supplied set is rejected and changes nothing.
+13. A cap being reached writes neither `verified` nor `waived`.
+14. `waive_remaining` waives every open blocking gap and the node stays `partial`.
+15. `/advance` records `continue` **only** when open blocking gaps exist.
+16. A refresh (`GET /session/{id}`) records no override of any kind.
+17. A new attempt withdraws a prior `continue`.
+18. `is_complete()` is true with waived gaps present, and `readiness()` is
+    simultaneously below 1.0 — the §18.16.3 target state, asserted directly.
+19. Every stored graph with no gaps derives exactly its stored
+    `understanding_state` (run over all 61 sessions).
+20. `mark_understood` on a gap-bearing node behaves as `waive_remaining`.
+
+**Live** — AC1 and AC2 end to end on `psf/requests` and `aimacode/aima-python`,
+plus the M2 calibration gate: the 48-case Grader evaluation re-run, requiring
+classification agreement no worse than the recorded 48/48.
+
+### 19.6 What could regress, collected
+
+| Risk | Where | Guard |
+|---|---|---|
+| Grader calibration shifts | M2 prompt change | Re-run the 48-case evaluation as a gate |
+| Stored sessions derive a different state | M7 | Golden test over all 61 stored graphs |
+| `prune_ahead` becomes rarer | M7 | Expected and correct — `understood` is genuinely harder. Stated so it is not read as a bug |
+| `resume_point` strands a learner | M8 | Fallback to `current_node_id` is unchanged |
+| `continue` recorded too eagerly | M8 | Fires only with open blocking gaps; test 15 |
+| Route rail / stop counter | M9 | The two defects B6 found both lived here; a browser pass is required, not optional |
+| Duplicate gaps from over-reported `new` | M3 | Measured during M3; bounded by the queue cap |
+| **B3 guard-band calibration** | — | **Unaffected.** Nothing here touches curriculum proposal or selection |
+
+### 19.7 Cost — this phase increases it
+
+Verification adds model calls per gap, on top of remediation. Baseline 1 is
+frozen and **will not survive this phase unchanged**; it must be re-measured after
+M6, per session path, before any optimisation decision. Recorded here so the
+increase is a known consequence rather than a surprise in the cost record.
+Optimisation remains deferred.
 
 ---
 
