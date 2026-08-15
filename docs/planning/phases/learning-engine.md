@@ -747,6 +747,32 @@ investigation.
 an exhausting journey while keeping depth one click away, and it is why we do not need
 branching paths (§4.5).
 
+> #### What `optional` means — the invariant (established by U4, 2026-08-15)
+>
+> **An `optional` unit is excluded from the default walk, and remains directly
+> accessible.** Both halves are load-bearing, and every consumer must honour both:
+>
+> | | behaviour |
+> |---|---|
+> | `/advance` | steps **over** it |
+> | `resume_point()` | skips it |
+> | "stop N of M" | does not count it |
+> | `readiness()` | excluded from the denominator; still counts in the numerator if completed |
+> | route rail | collapsed behind "N optional stops" |
+> | `path_order()` / the graph | **still present** — never deleted |
+> | `jump` from the rail | reaches it normally, and it teaches and grades like any other unit |
+>
+> Before U4 the first four held and the walk did not, so a sixteen-unit graph reported
+> "stop 3 of 15" and still made the learner pass through all sixteen. That inconsistency
+> is what made "make it shorter" a relabelling rather than a change, and it made
+> prune-ahead's claim to *shorten* a journey untrue.
+>
+> The rule that keeps the two halves coherent: **`optional` describes the promised
+> journey, not the graph.** Nothing is removed, so nothing is lost and every earlier
+> decision stays inspectable; what changes is only what the learner is walked through by
+> default. A unit with **no** `priority` at all — a pre-B3 node, or anything the planner
+> did not label — is *not* optional and stays on the walk.
+
 **Deliberately not doing:** a weighted 0.0–1.0 importance score with a threshold. It would
 be arithmetic dressed as rigour — the inputs are model judgements, and three ordered
 buckets carry the same information with far less false precision. Determinism is applied
