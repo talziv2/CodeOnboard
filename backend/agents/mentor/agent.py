@@ -46,6 +46,7 @@ class NodeWire(BaseModel):
     file: str
     line_start: int
     line_end: int
+    objective: str = ""      # → lesson_brief["objective"] — see dossier.py
     why: str                 # → lesson_brief["why"]
     understand: str          # → lesson_brief["understand"]
     concept_tags: list[str]
@@ -97,7 +98,11 @@ def _build_learning_graph(state: OnboardState, output: MentorOutput) -> Learning
                 symbol=wire_node.resolved_symbol,
             ),
             concept_tags=list(wire_node.concept_tags),
-            lesson_brief={"why": wire_node.why, "understand": wire_node.understand},
+            lesson_brief={
+                "objective": wire_node.objective,
+                "why": wire_node.why,
+                "understand": wire_node.understand,
+            },
         )
         graph.add_node(node)
         wire_to_uuid[wire_node.id] = node.id
@@ -179,6 +184,7 @@ def _flatten_to_learning_path(graph: LearningGraph) -> list[dict]:
             "title": node.title,
             "file": node.code_anchor.file,
             "line_range": [node.code_anchor.line_start, node.code_anchor.line_end],
+            "objective": node.lesson_brief.get("objective", ""),
             "why": node.lesson_brief.get("why", ""),
             "understand": node.lesson_brief.get("understand", ""),
             "concepts": list(node.concept_tags),

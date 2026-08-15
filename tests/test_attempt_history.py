@@ -246,3 +246,75 @@ def test_grade_survives_a_failed_warm_up(mock_p, mock_t, mock_c, client):
     graph = client.get(f"/session/{session_id}").json()
     node = next(n for n in graph["nodes"] if n["id"] == node_id)
     assert node["attempts"][0]["answer"] == "no idea"
+
+
+# ── gap_kind (B1) ─────────────────────────────────────────────────────────────
+
+def _grader_with_gap(classification: str, gap_kind: str):
+    def _apply(state, user_response, client=None):
+        node = state.graph.nodes[state.graph.current_node_id]
+        mapping = {"understood": "understood", "partial": "partial",
+                   "confused": "failed"}
+        if classification in mapping:
+            state.graph.mark_understanding(node.id, mapping[classification])
+        state.last_grade = {
+            "classification": classification,
+            "gap_kind": gap_kind,
+            "rationale": "because",
+        }
+        return state
+    return _apply
+
+
+@patch("backend.api.clone_repo", return_value="data/repos/requests")
+@patch("backend.api.run_teaching", side_effect=_teaching)
+@patch("backend.api.run_pipeline", side_effect=_pipeline)
+def test_why_the_answer_fell_short_is_persisted_with_it(mock_p, mock_t, mock_c, client):
+    # Two answers can be equally wrong and want opposite responses. The history
+    # has to remember which kind of wrong, or B5's adaptation cannot look back.
+    session_id, node_id = _start(client)
+
+    with patch(
+        "backend.api.run_grader",
+        side_effect=_grader_with_gap("confused", "wrong_model"),
+    ):
+        body = client.post(
+            f"/session/{session_id}/respond", json={"response": "adapters are on the request"}
+        ).json()
+
+    assert body["gap_kind"] == "wrong_model"
+    graph = client.get(f"/session/{session_id}").json()
+    node = next(n for n in graph["nodes"] if n["id"] == node_id)
+    assert node["attempts"][0]["gap_kind"] == "wrong_model"
+
+
+@patch("backend.api.clone_repo", return_value="data/repos/requests")
+@patch("backend.api.run_teaching", side_effect=_teaching)
+@patch("backend.api.run_pipeline", side_effect=_pipeline)
+def test_a_grade_without_a_gap_records_none(mock_p, mock_t, mock_c, client):
+    session_id, node_id = _start(client)
+
+    with patch("backend.api.run_grader", side_effect=_grader("understood")):
+        client.post(f"/session/{session_id}/respond", json={"response": "yes"})
+
+    graph = client.get(f"/session/{session_id}").json()
+    node = next(n for n in graph["nodes"] if n["id"] == node_id)
+    assert node["attempts"][0]["gap_kind"] == "none"
+
+
+def test_attempts_recorded_before_gap_kind_existed_still_load(tmp_path):
+    db = tmp_path / "s.db"
+    graph = _two_node_graph()
+    node = graph.nodes[graph.current_node_id]
+    # Exactly the shape the store wrote before this field existed.
+    node.attempts.append(
+        {"answer": "a", "classification": "partial", "rationale": "close",
+         "at": "2026-08-01T00:00:00+00:00"}
+    )
+    learning_store.save_graph(graph, db)
+
+    loaded = learning_store.load_graph(graph.session_id, db)
+
+    attempt = loaded.nodes[graph.current_node_id].attempts[0]
+    assert attempt["classification"] == "partial"
+    assert "gap_kind" not in attempt

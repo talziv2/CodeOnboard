@@ -49,6 +49,10 @@ class _NodeWire(BaseModel):
     file: str
     line_start: int
     line_end: int
+    # An inserted node is taught and graded like any other, so it carries the
+    # same contract (learning-engine.md §8.1). Defaulted for the same reason the
+    # planner's is: an omission costs one weaker warm-up, not the remediation.
+    objective: str = ""
     why: str
     understand: str
     concept_tags: list[str]
@@ -309,7 +313,11 @@ def _generate_prerequisite_node(
             symbol=grounded.symbol,
         ),
         concept_tags=list(wire.concept_tags),
-        lesson_brief={"why": wire.why, "understand": wire.understand},
+        lesson_brief={
+            "objective": wire.objective,
+            "why": wire.why,
+            "understand": wire.understand,
+        },
     )
 
 
@@ -323,6 +331,10 @@ Return a JSON object with exactly these keys:
   file:         path of the chosen candidate chunk (copied VERBATIM)
   line_start:   start line of the chosen chunk (copied VERBATIM)
   line_end:     end line of the chosen chunk (copied VERBATIM)
+  objective:    the claim the developer should be able to MAKE once they have
+                learned this warm-up — written as a claim, not a topic, and
+                narrow enough that reaching it plausibly unblocks the node they
+                got wrong. This is what their answer will be marked against.
   why:          one sentence — why this is a prerequisite for the confused node
   understand:   one sentence — what the developer should take away
   concept_tags: list of short concept tags (≤ 4)
@@ -379,6 +391,7 @@ def _build_prereq_prompt(
         f"  experience level: {goal.get('experience_level', 'unknown')}\n\n"
         f"The developer was confused while learning this node:\n"
         f"  title: {anchor.title}\n"
+        f"  the claim they could not make: {anchor.objective() or '(none stated)'}\n"
         f"  why: {brief.get('why', '')}\n"
         f"  understand: {brief.get('understand', '')}\n"
         f"  concepts: {', '.join(anchor.concept_tags) if anchor.concept_tags else '—'}\n\n"

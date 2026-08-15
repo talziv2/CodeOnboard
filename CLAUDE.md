@@ -127,11 +127,19 @@ class OnboardState:
   "title": "Understand the Session object",
   "file": "requests/sessions.py",
   "line_range": [1, 80],
+  "objective": "Explain what Session owns that a bare request does not — connection reuse, cookie persistence, default configuration — and why sending through a Session changes behaviour",
   "why": "The Session object is the core abstraction — everything flows through it",
   "understand": "How Session stores state, how it builds requests, what adapters do",
   "concepts": ["adapter pattern", "connection pooling"]
 }
 ```
+
+`objective` is the **contract between the Planner, Teaching and the Grader**: the
+claim the learner should be able to make afterwards. Teaching is instructed to
+build exactly it; the Grader marks against it rather than against the
+`expected_answer` Teaching invented. Read it through `LearningNode.objective()`,
+never straight off `lesson_brief` — that method holds the fallback to
+`understand` which keeps graphs planned before the contract working.
 
 ---
 

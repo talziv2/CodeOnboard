@@ -156,9 +156,10 @@ def test_node_with_no_tags_or_brief_still_renders_user_content():
     client = _mock_client("understood")
     run(state, "answer", client=client)
     user_msg = client.messages.create.call_args.kwargs["messages"][0]["content"]
-    # Falls back to a "(none)" / "(none provided)" line rather than crashing.
+    # Falls back to placeholder lines rather than crashing: no tags, and no
+    # objective to mark against, so the question itself becomes the standard.
     assert "(none)" in user_msg
-    assert "(none provided)" in user_msg
+    assert "(none stated" in user_msg
 
 
 def test_system_prompt_includes_per_tag_rubric():
@@ -239,3 +240,72 @@ def test_parse_output_handles_fenced_json():
     out = _parse_output(fenced)
     assert isinstance(out, GraderOutput)
     assert out.classification == "understood"
+
+
+# ── the objective contract (B1) ───────────────────────────────────────────────
+
+_OBJECTIVE = (
+    "Explain why auth is a callable attached to the request rather than a "
+    "branch inside Session.send"
+)
+
+
+def _state_with_objective() -> tuple[OnboardState, str]:
+    state, node_id = _make_state_with_lesson()
+    state.graph.nodes[node_id].lesson_brief["objective"] = _OBJECTIVE
+    return state, node_id
+
+
+def test_the_objective_is_what_the_grader_marks_against():
+    state, _ = _state_with_objective()
+    client = _mock_client("understood")
+    run(state, "answer", client=client)
+    user_msg = client.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert _OBJECTIVE in user_msg
+    # …and it is named as the standard, while the teacher's answer is demoted.
+    assert user_msg.index(_OBJECTIVE) < user_msg.index("The mutated PreparedRequest.")
+    assert "marking standard" in user_msg
+    assert "NOT the standard" in user_msg
+
+
+def test_a_graph_planned_before_objectives_falls_back_to_understand():
+    # Every session created before B1 carries only `understand`. It must still
+    # grade — against that — rather than against nothing.
+    state, node_id = _make_state_with_lesson()
+    assert "objective" not in state.graph.nodes[node_id].lesson_brief
+    client = _mock_client("understood")
+    run(state, "answer", client=client)
+    user_msg = client.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert "AuthBase subclasses are callables" in user_msg
+
+
+def test_the_grader_records_why_the_answer_fell_short():
+    state, _ = _state_with_objective()
+    payload = json.dumps({
+        "classification": "confused",
+        "gap_kind": "wrong_model",
+        "rationale": "they think adapters mount on the request",
+    })
+    message = MagicMock()
+    message.content = [MagicMock(text=payload)]
+    client = MagicMock()
+    client.messages.create.return_value = message
+
+    run(state, "adapters live on the request", client=client)
+    assert state.last_grade["gap_kind"] == "wrong_model"
+
+
+def test_a_grader_that_omits_the_gap_defaults_to_none():
+    state, _ = _state_with_objective()
+    run(state, "answer", client=_mock_client("understood"))
+    assert state.last_grade["gap_kind"] == "none"
+
+
+def test_a_bad_gap_kind_is_rejected_at_parse():
+    import pytest
+    with pytest.raises(Exception):
+        _parse_output(json.dumps({
+            "classification": "confused",
+            "gap_kind": "vibes",
+            "rationale": "x",
+        }))

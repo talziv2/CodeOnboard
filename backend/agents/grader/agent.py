@@ -28,6 +28,13 @@ MODEL = "claude-haiku-4-5"
 MAX_TOKENS = 512
 
 Classification = Literal["understood", "partial", "confused", "off-topic"]
+GapKind = Literal[
+    "none",
+    "no_attempt",
+    "missing_prerequisite",
+    "wrong_model",
+    "right_idea_wrong_altitude",
+]
 
 # How each classification updates the node.
 # An off-topic answer is deliberately ABSENT from this map, not mapped to
@@ -45,7 +52,16 @@ _CLASSIFICATION_TO_STATE: dict[str, str] = {
 
 class GraderOutput(BaseModel):
     classification: Classification
-    rationale: str  # one sentence — for debugging, not shown to the user in v1
+    rationale: str  # one sentence — surfaced in the UI
+    # WHY the answer fell short, not just how far (learning-engine.md §8.3).
+    # The verdict alone cannot choose a response: "I don't know" and a confident
+    # misconception are both wrong, and want a hint and a correction
+    # respectively — not the same prerequisite insertion. B5 branches on this;
+    # B1 records it, so the signal exists before anything depends on it.
+    #
+    # Defaulted because it is additive: a model that omits it, and every attempt
+    # recorded before this field existed, read as an unclassified gap.
+    gap_kind: GapKind = "none"
 
 
 # The rationale is surfaced in the UI, so even this fallback — used when the
@@ -60,22 +76,50 @@ developer needs to grasp to reason about, critique, or safely change this
 system — not a piece of code they need to be able to write.
 
 You are given:
-  - the node's title (its learning objective)
-  - the node's concept tags (which dictate the kind of understanding to check)
-  - what the node intends the developer to take away
+  - the LEARNING OBJECTIVE — the claim this node exists to make the developer
+    able to make. THIS IS THE MARKING STANDARD.
+  - the node's title and concept tags (the tags dictate the KIND of
+    understanding to check)
   - the active-learning question they were asked
-  - a model answer (what a developer who understood this node would say)
+  - a calibration reference: one way a developer who reached the objective
+    might have phrased it
   - the developer's actual response
 
+MARK AGAINST THE OBJECTIVE, NOT AGAINST THE REFERENCE. The reference shows you
+roughly what reaching the objective sounds like; it is one phrasing among many,
+written by the teacher rather than by the planner who designed this developer's
+path. An answer that makes the objective's claim in completely different words,
+covering none of the reference's specific examples, is "understood". An answer
+that echoes the reference's wording without making the claim is not.
+
 Classify the response as EXACTLY one of:
-  understood — correct and substantial; they clearly grasp the idea
-  partial    — partially correct; some grasp but with gaps or imprecision
+  understood — they can make the objective's claim; correct and substantial
+  partial    — partially there; some grasp but with gaps or imprecision
   confused   — incorrect, or shows a real misunderstanding
   off-topic  — does not address the question (e.g. "I don't know", blank,
                or an unrelated answer)
 
+Then say WHY the answer fell short, so the system can respond to this
+developer's actual difficulty instead of treating every wrong answer the same.
+Return `gap_kind` as EXACTLY one of:
+  none                       — nothing fell short (use this with "understood")
+  no_attempt                 — they did not try: "I don't know", blank, or an
+                               answer about something else entirely. They need
+                               a hint, not a diagnosis.
+  missing_prerequisite       — the answer shows a foundation is genuinely
+                               absent; something must be taught BEFORE this
+                               node can land.
+  wrong_model                — they answered confidently with an incorrect
+                               mental model. The misconception itself is the
+                               thing to correct.
+  right_idea_wrong_altitude  — the substance is right but pitched at the wrong
+                               level: implementation detail where the objective
+                               asked for responsibility, or vice versa.
+
 Return a JSON object with exactly these keys:
   classification: one of "understood", "partial", "confused", "off-topic"
+  gap_kind:       one of "none", "no_attempt", "missing_prerequisite",
+                  "wrong_model", "right_idea_wrong_altitude"
   rationale:      one short sentence explaining the call
 
 Rubric by dominant concept tag (pick the first tag from this vocabulary that
@@ -110,15 +154,15 @@ fences, no preamble.
 
 def _build_user_content(node: LearningNode, user_response: str) -> str:
     lesson = node.cached_lesson or {}
-    brief = node.lesson_brief or {}
     tags = ", ".join(node.concept_tags) if node.concept_tags else "(none)"
-    takeaway = brief.get("understand") or "(none provided)"
+    objective = node.objective() or "(none stated — mark against the question)"
     return (
+        f"LEARNING OBJECTIVE (the marking standard):\n{objective}\n\n"
         f"Node title:\n{node.title}\n\n"
         f"Concept tags:\n{tags}\n\n"
-        f"What the developer should take away from this node:\n{takeaway}\n\n"
         f"Question:\n{lesson.get('prompt', '')}\n\n"
-        f"Model answer:\n{lesson.get('expected_answer', '')}\n\n"
+        f"Calibration reference (one phrasing, NOT the standard):\n"
+        f"{lesson.get('expected_answer', '')}\n\n"
         f"Developer's response:\n{user_response}"
     )
 
@@ -176,7 +220,11 @@ def run(
         output = GraderOutput(classification="partial", rationale=_GRADING_FAILED)
 
     _apply_grade(state, current_id, output.classification)
-    state.last_grade = {"classification": output.classification, "rationale": output.rationale}
+    state.last_grade = {
+        "classification": output.classification,
+        "gap_kind": output.gap_kind,
+        "rationale": output.rationale,
+    }
     return state
 
 

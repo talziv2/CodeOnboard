@@ -66,6 +66,15 @@ class DossierNodeWire(BaseModel):
     symbol: str | None = None
     line_start: int | None = None
     line_end: int | None = None
+    # The checkable claim the learner should be able to make afterwards. This is
+    # the contract between planner, teacher and grader (learning-engine.md §7.1,
+    # §8.1): Teaching builds exactly this, the Grader marks against exactly this.
+    #
+    # Defaulted rather than required: a model that omits one key should cost the
+    # user one weaker node, not the entire graph — a parse failure here produces
+    # no learning path at all. Teaching and the Grader both fall back to
+    # `understand`, which is what a pre-B1 graph carries.
+    objective: str = ""
     why: str
     understand: str
     concept_tags: list[str]
@@ -144,9 +153,27 @@ Each node is an object with exactly these keys:
                 and line_end from the dossier instead.
   line_start:   null when `symbol` is given; otherwise the range start
   line_end:     null when `symbol` is given; otherwise the range end
+  objective:    the single claim this developer should be able to MAKE, in
+                their own words, once they have learned this node
   why:          one sentence — why this node matters for the user's goal
   understand:   one sentence — what the user should take away
   concept_tags: list of short concept tags (≤ 4 entries)
+
+The `objective` is the most important field you write. It is not a topic and
+not a summary of the code — it is the sentence the developer should be able to
+say afterwards, and it is what their answer will be marked against. Write it as
+a claim, specific enough that a wrong answer is visibly wrong:
+
+  BAD   "Understand the Session object"            (a topic, not a claim)
+  BAD   "Learn how sessions work"                  (nothing to be right about)
+  GOOD  "Explain what Session owns that a bare request does not — connection
+         reuse, cookie persistence and default configuration — and why sending
+         through a Session changes behaviour"
+  GOOD  "Explain why the adapter layer exists between Session and urllib3, and
+         what Session is therefore able not to know about transport"
+
+An objective a developer could satisfy by repeating the lesson's wording back
+is a bad objective. Aim at the claim, not the vocabulary.
 
 Each edge is an object with exactly these keys:
   from_id, to_id: node ids from this response
@@ -456,7 +483,7 @@ def _to_mentor_output(output: DossierMentorOutput):
             id=n.id, title=n.title, file=n.file,
             line_start=int(n.resolved_start or 0),
             line_end=int(n.resolved_end or 0),
-            why=n.why, understand=n.understand,
+            objective=n.objective, why=n.why, understand=n.understand,
             concept_tags=list(n.concept_tags),
             resolved_symbol=n.resolved_symbol,
         )

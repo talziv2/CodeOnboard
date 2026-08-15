@@ -369,3 +369,42 @@ def test_the_graph_wire_shape_is_unchanged(repo):
     assert {"id", "title", "file", "line_start", "line_end"} <= set(node_payload)
     assert isinstance(node_payload["line_start"], int)
     assert node_payload["line_start"] > 0
+
+
+# ── the objective contract (B1) ───────────────────────────────────────────────
+
+_OBJECTIVE = "Explain what the signer owns that the client deliberately does not"
+
+
+def test_the_planners_objective_reaches_the_nodes_lesson_brief(repo):
+    wire = [dict(GOOD_WIRE[0], objective=_OBJECTIVE)] + GOOD_WIRE[1:]
+    state = mentor_agent.run(make_state(repo), FakeClient([wire_response(wire)]))
+    node_ = next(
+        n for n in state.graph.nodes.values() if n.code_anchor.symbol == "fetch"
+    )
+    assert node_.lesson_brief["objective"] == _OBJECTIVE
+    assert node_.objective() == _OBJECTIVE
+    # …and out through the flat path the /onboard response still returns.
+    assert state.learning_path[0]["objective"] == _OBJECTIVE
+
+
+def test_a_node_missing_an_objective_costs_one_node_not_the_graph(repo):
+    # GOOD_WIRE carries no `objective` at all — the pre-B1 shape. A required
+    # field would fail the parse and leave the user with no learning path.
+    state = mentor_agent.run(make_state(repo), FakeClient([wire_response(GOOD_WIRE)]))
+    assert state.graph is not None
+    assert len(state.graph.nodes) == 3
+    node_ = next(iter(state.graph.nodes.values()))
+    assert node_.lesson_brief["objective"] == ""
+    # Falls back to the takeaway, which is what Teaching and the Grader use.
+    assert node_.objective() == "takeaway"
+
+
+def test_the_prompt_demands_a_claim_rather_than_a_topic():
+    # LR3: the one quality property no test can assert is that objectives are
+    # sharp. The least we can pin is that the prompt asks for a claim and shows
+    # what a bad one looks like.
+    assert "objective" in dossier_path._SYSTEM_PROMPT
+    assert "BAD" in dossier_path._SYSTEM_PROMPT
+    assert "GOOD" in dossier_path._SYSTEM_PROMPT
+    assert "marked against" in dossier_path._SYSTEM_PROMPT

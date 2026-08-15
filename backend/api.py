@@ -440,8 +440,13 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
 
     grade = state.last_grade or {}
     classification = grade.get("classification") or "partial"
+    gap_kind = grade.get("gap_kind") or "none"
     graph.record_attempt(
-        current, body.response, classification, grade.get("rationale") or ""
+        current,
+        body.response,
+        classification,
+        grade.get("rationale") or "",
+        gap_kind=gap_kind,
     )
 
     # A WRONG answer gets a warm-up automatically — being stuck is exactly when
@@ -473,6 +478,9 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
 
     return {
         "classification": classification,
+        # Recorded and returned, not yet acted on: the adaptation behaviours
+        # that branch on it are B5 (learning-engine.md §9.1).
+        "gap_kind": gap_kind,
         "rationale": grade.get("rationale"),
         "understanding_state": graph.nodes[current].understanding_state,
         "mutation": mutation,

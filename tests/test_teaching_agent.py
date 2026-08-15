@@ -440,3 +440,45 @@ def test_the_docs_section_reaches_the_prompt():
     section = _format_doc_context(node, {"extra_docs": _DOCS})
     assert "docs/user/advanced.rst" in section
     assert "Session object lets you persist" in section
+
+
+# ── the objective contract (B1) ───────────────────────────────────────────────
+
+_OBJECTIVE = (
+    "Explain why auth is a callable attached to the request rather than a "
+    "branch inside Session.send"
+)
+
+
+def _content_for(brief: dict) -> str:
+    node = LearningNode(
+        title="Identify the auth extension point",
+        code_anchor=CodeAnchor(file="requests/auth.py", line_start=1, line_end=5),
+        concept_tags=["extension_point"],
+        lesson_brief=brief,
+    )
+    return _build_user_content(FAKE_GOAL, node, "source code", "no prior context", [])
+
+
+def test_the_objective_reaches_the_teaching_prompt():
+    content = _content_for(
+        {"objective": _OBJECTIVE, "why": "x", "understand": "y"}
+    )
+    assert _OBJECTIVE in content
+    # Named as the brief, not buried as one line among the others — Teaching is
+    # told to build exactly this.
+    assert "LEARNING OBJECTIVE" in content
+
+
+def test_teaching_falls_back_to_understand_on_a_pre_objective_graph():
+    # The same fallback the Grader uses. If these two diverged, the teacher and
+    # the marker would aim at different claims on every old session.
+    content = _content_for({"why": "x", "understand": "the takeaway"})
+    assert "the takeaway" in content
+    assert "LEARNING OBJECTIVE" in content
+
+
+def test_the_system_prompt_subordinates_the_lesson_to_the_objective():
+    assert "THE OBJECTIVE IS YOUR BRIEF" in _SYSTEM_PROMPT
+    # expected_answer is demoted to a calibration reference, not the standard.
+    assert "calibration reference" in _SYSTEM_PROMPT

@@ -52,25 +52,37 @@ piece of an unfamiliar Python codebase. You are given:
     background — known languages/frameworks)
   - their overall goal and the depth they requested
   - what they already understand (so you don't re-explain it)
+  - the LEARNING OBJECTIVE for this lesson (see below)
   - a "lesson brief": why this piece matters and what they should take away
   - the actual source code for this piece
   - system context: how this piece connects to the rest of the codebase
   - the node's concept tags (frame your walkthrough around the dominant tag)
 
+THE OBJECTIVE IS YOUR BRIEF. It is the claim the developer should be able to
+make, in their own words, when the lesson ends — written by the planner who
+designed their whole path, and the same claim their answer will be marked
+against. Build exactly that claim. If the code shown would support a more
+interesting lesson than the objective asks for, you still build the objective:
+the path depends on this node delivering what the next ones assume. Teach
+whatever the objective requires and no more.
+
 CRITICAL: Your ENTIRE response must be under 600 words. Be very concise.
 
 Produce a JSON object with exactly these keys:
   walkthrough:     markdown. MAX 250 words. Explain this code so the developer
-                   understands it in service of their goal. Be brief and direct.
+                   can make the objective's claim. Be brief and direct.
                    Reference key identifiers only — no exhaustive walkthroughs.
   prompt:          ONE active-learning question of the "predict-then-reveal"
                    form — ask the developer to predict something about this code
                    BEFORE they read your explanation in full (e.g. "Before
                    reading on: what do you think `Session.send` does with the
                    adapter it looks up?"). It must be answerable from the code
-                   shown.
-  expected_answer: a concise model answer to your prompt — what a developer who
-                   understood the code would say. Used to grade their response.
+                   shown, and answering it well must require the objective's
+                   claim — not a detail beside it.
+  expected_answer: a concise model answer to your prompt — one way a developer
+                   who reached the objective might phrase it. This is a
+                   calibration reference for the grader, not the marking
+                   standard: the objective is what gets marked.
   prompt_kind:     always the string "predict-then-reveal".
 
 Framing by dominant concept tag:
@@ -269,6 +281,8 @@ def _build_user_content(
         f"Depth requested: {goal.get('depth', 'normal')}\n\n"
         f"{prior_context}\n\n"
         f"{doc_section}"
+        f"LEARNING OBJECTIVE — build exactly this claim:\n"
+        f"  {node.objective() or '(none stated — build the takeaway below)'}\n\n"
         f"Lesson brief for this node:\n"
         f"  title: {node.title}\n"
         f"  why: {brief.get('why', '')}\n"

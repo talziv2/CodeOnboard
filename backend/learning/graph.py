@@ -80,11 +80,29 @@ class LearningNode:
     # Stored on the node so revisits are free; regenerated only on explicit
     # refresh.
     cached_lesson: dict | None = None
-    # Every graded answer, oldest first: {answer, classification, rationale, at}.
+    # Every graded answer, oldest first:
+    # {answer, classification, gap_kind, rationale, at}.
     # understanding_state only records where the user ended up; this records how
     # they got there, so revisiting a node adds to the record instead of
     # silently overwriting it.
     attempts: list[dict] = field(default_factory=list)
+
+    def objective(self) -> str:
+        """The claim this node must teach, and that the user's answer is marked against.
+
+        The objective is the contract between the three agents that touch a node
+        (learning-engine.md §8.1): the Planner writes it, Teaching builds exactly
+        it, the Grader marks exactly it. Before it existed each agent aimed at
+        its own target, so the system verified that the user had reproduced the
+        teacher rather than reached what the planner intended.
+
+        Falls back to the older `understand` brief — which is what every graph
+        planned before the contract carries. Teaching and the Grader MUST share
+        this fallback: if they disagreed about the target on old graphs, the
+        drift the contract exists to end would simply move here.
+        """
+        brief = self.lesson_brief or {}
+        return (brief.get("objective") or brief.get("understand") or "").strip()
 
 
 @dataclass
@@ -134,13 +152,22 @@ class LearningGraph:
         self.nodes[node_id].visited = True
 
     def record_attempt(
-        self, node_id: str, answer: str, classification: str, rationale: str
+        self,
+        node_id: str,
+        answer: str,
+        classification: str,
+        rationale: str,
+        gap_kind: str = "none",
     ) -> dict:
         # Append-only: a re-answer on a revisited node adds to the record rather
         # than replacing it, so the history survives a change of state.
         attempt = {
             "answer": answer,
             "classification": classification,
+            # Why the answer fell short, so a later attempt can be compared with
+            # this one on more than its verdict. Defaulted, so attempts recorded
+            # before the field existed load unchanged.
+            "gap_kind": gap_kind,
             "rationale": rationale,
             "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
