@@ -44,20 +44,46 @@ def test_an_understood_answer_earns_no_response():
     assert decide("understood", "none") == "none"
 
 
-def test_an_off_topic_answer_never_reshapes_the_path():
-    # Preserved from the 2026-08-14 fix: an unrelated answer is evidence of
-    # neither understanding nor misunderstanding, so nothing STRUCTURAL.
-    for gap in ("wrong_model", "missing_prerequisite", None, "none"):
+def test_an_unrelated_off_topic_answer_never_reshapes_the_path():
+    # Preserved from the 2026-08-14 fix, and now stated precisely: what earns
+    # nothing is an off-topic answer that names NO gap. That is the case where
+    # there is genuinely no evidence — not off-topic as such.
+    for gap in (None, "none", ""):
         assert decide("off-topic", gap) == "none"
 
 
 def test_i_dont_know_still_gets_a_hint_even_though_it_grades_off_topic():
     # The Grader classifies "I don't know" as off-topic with a no_attempt gap.
-    # Withholding the hint because of the classification would apply a guard
-    # meant for the GRAPH to a response that never touches it — and would leave
-    # the one case the hint exists for with nothing at all.
     assert decide("off-topic", "no_attempt") == "hint"
     assert decide("off-topic", "right_idea_wrong_altitude") == "followup"
+
+
+def test_a_named_missing_prerequisite_survives_an_off_topic_classification():
+    """The defect this pins, found in live fastapi validation.
+
+    A learner wrote "I can't follow this because I don't know what a function
+    signature is". The Grader read it exactly right and reported
+    `missing_prerequisite`; the policy discarded the signal because the same
+    answer was also classified `off-topic`, and the learner got nothing at all —
+    in the one case a prerequisite exists for.
+    """
+    assert decide("off-topic", "missing_prerequisite") == "prerequisite"
+
+
+def test_the_named_gap_outranks_the_coarse_classification():
+    # The general rule behind that fix: classification says how far the answer
+    # fell short, gap_kind says why. The specific signal decides.
+    for classification in ("off-topic", "confused", "partial"):
+        assert decide(classification, "missing_prerequisite") == "prerequisite"
+        assert decide(classification, "no_attempt") == "hint"
+        assert decide(classification, "wrong_model") == "reteach"
+
+
+def test_understood_still_outranks_everything():
+    # The one place the classification does win: an answer that reached the
+    # objective needs no response, whatever gap the Grader also volunteered.
+    for gap in ("missing_prerequisite", "no_attempt", "wrong_model", "none"):
+        assert decide("understood", gap) == "none"
 
 
 def test_a_grade_without_a_gap_keeps_the_pre_b5_behaviour():

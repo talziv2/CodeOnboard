@@ -239,3 +239,39 @@ def test_pruning_ahead_is_reported_when_it_fires(p, t, c, client):
     assert body["adaptation"].get("pruned") == 1
     after = client.get(f"/session/{session_id}").json()
     assert next(n for n in after["nodes"] if n["id"] == extra.id)["priority"] == "optional"
+
+
+# ── a named gap outranks the coarse classification (live-found defect) ────────
+
+@CLONE
+@TEACH
+@PIPE
+def test_off_topic_with_a_named_missing_prerequisite_still_remediates(p, t, c, client):
+    # Found in live fastapi validation: the Grader reported
+    # `missing_prerequisite` and the policy discarded it because the same answer
+    # was also `off-topic`, so a learner stuck on a foundation got nothing.
+    session_id, _ = _start(client)
+    body = _respond(client, session_id, "off-topic", "missing_prerequisite")
+
+    assert body["adaptation"]["kind"] == "prerequisite"
+    assert body["mutation"]["kind"] == "prerequisite"
+    graph = client.get(f"/session/{session_id}").json()
+    assert len(graph["nodes"]) == 3
+
+
+@CLONE
+@TEACH
+@PIPE
+def test_an_unrelated_off_topic_answer_still_changes_nothing(p, t, c, client):
+    # The guard that must survive the fix: no named gap, no evidence, no change.
+    session_id, node_id = _start(client)
+    body = _respond(client, session_id, "off-topic", "none")
+
+    assert body["adaptation"]["kind"] == "none"
+    assert body["mutation"]["kind"] == "none"
+    graph = client.get(f"/session/{session_id}").json()
+    assert len(graph["nodes"]) == 2
+    node = next(n for n in graph["nodes"] if n["id"] == node_id)
+    # And it still does not touch the earned state or the weak-spot flag.
+    assert node["understanding_state"] == "not_started"
+    assert node["weak_spot"] is False

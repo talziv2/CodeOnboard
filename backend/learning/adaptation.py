@@ -47,23 +47,29 @@ _ACTION_BY_GAP: dict[str, Action] = {
 }
 
 
-# What an `off-topic` answer may earn. It is evidence of neither understanding
-# nor misunderstanding, so it must never reshape a path — but "I don't know"
-# grades as off-topic with a `no_attempt` gap, and offering a way in is the whole
-# point of that gap. Withholding one because the answer was also off-topic would
-# be applying a guard meant for the graph to a response that never touches it.
-_OFFERABLE_TO_OFF_TOPIC: tuple[Action, ...] = ("hint", "followup")
-
-
 def decide(classification: str, gap_kind: str | None) -> Action:
     """What to do about this answer. Deterministic, and the whole policy.
 
-    An answer that reached the objective needs no response.
+    **A named `gap_kind` outranks the coarse classification.** The two are not
+    competing verdicts: `classification` says how far the answer fell short and
+    `gap_kind` says why, so the specific signal decides the response and the
+    coarse one only fills in when no gap was named.
 
-    `off-topic` may be offered help but never restructured around — the
-    2026-08-14 decision, preserved: an unrelated answer says nothing about
-    understanding, so it cannot earn a prerequisite. It can earn a hint, because
-    a hint changes nothing except what is on screen.
+    That ordering is the whole fix for a defect found in live validation. A
+    learner wrote "I can't follow this because I don't know what a function
+    signature is" — genuinely stuck on a foundation. The Grader read it exactly
+    right and reported `missing_prerequisite`, and the policy threw the signal
+    away because the same answer had also been classified `off-topic`. An earlier
+    version whitelisted which actions an off-topic answer could earn, which is
+    the same mistake in smaller form: it treats the vaguer evidence as the
+    stronger one.
+
+    What the off-topic guard actually protects is the **unclassified** case. An
+    answer that addresses nothing and names no gap is evidence of neither
+    understanding nor misunderstanding, so it earns nothing and must not reshape
+    a path — the 2026-08-14 decision, preserved exactly. Note that `off-topic`
+    never changes `understanding_state` either way; that is the Grader's
+    `_CLASSIFICATION_TO_STATE`, which this function does not touch.
 
     A gap the Grader did not classify falls back to `prerequisite` when the
     answer was `confused`, which is the pre-B5 behaviour: a session graded before
@@ -72,11 +78,13 @@ def decide(classification: str, gap_kind: str | None) -> Action:
     if classification == "understood":
         return "none"
 
+    # The specific signal, when there is one.
     action = _ACTION_BY_GAP.get(gap_kind or "")
-    if classification == "off-topic":
-        return action if action in _OFFERABLE_TO_OFF_TOPIC else "none"
     if action is not None:
         return action
+
+    # No gap named — now, and only now, the classification decides. `off-topic`
+    # earns nothing: with no gap to point at, an unrelated answer says nothing.
     return "prerequisite" if classification == "confused" else "none"
 
 

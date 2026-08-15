@@ -1155,6 +1155,13 @@ learning "feels better".
    `wrong_model` produces a **corrected re-teach** — not a prerequisite in both cases.
 8. After a prerequisite is taught, the learner is **returned to the original objective and
    re-graded on it** (F1 resolved).
+   *Status 2026-08-15: **OBSERVED END-TO-END** on a real `fastapi/fastapi` session
+   (`d1e5fc95`), real Grader, real Mutator, no stubbed verdict. A learner answer describing
+   an absent foundation graded `off-topic / missing_prerequisite`; the Mutator inserted
+   "Trace how FastAPI.\_\_init\_\_ creates and owns self.router" (16 → 17 units) with a
+   real `prerequisite` edge to the original; advancing off the warm-up landed exactly on
+   the original, which was **not** marked visited; re-answering it recorded a third attempt
+   and moved its state to `partial`. All five steps of §9.2's RETURN arrow.*
 
 **Engineering outcomes**
 
@@ -1475,6 +1482,11 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 | 2026-08-15 | **The budget is a planning-time problem, not a session-time one** | Planning is **74%** of a session, teaching and grading **26%**, and adaptation a rounding error (+$0.0005 for a hint, +$0.0008 for a follow-up). Any optimisation aimed at lessons or adaptation is aimed at the quarter of the bill that is already cheap. The two real line items are `goal_investigation` at $0.1832 and the single planner call at $0.1186 | — |
 | 2026-08-15 | **The investigation's cost is output tokens, not input** — prompt caching is already near-perfect there | 352,686 cache reads against 509 uncached input tokens, and 21,614 **output** tokens across 20 turns (~59% of that stage's cost). Recorded because the obvious first instinct — "add caching" — is aimed at a problem that does not exist; what would move the number is how much the exploration *writes*. The planner call is the opposite case: 16,635 input tokens with **zero** cache reads | — |
 | 2026-08-15 | **B3's planner costs +$0.037 (+45%) against the pre-B3 planner on the same dossier** | $0.1186 vs $0.0817, almost entirely output (4,579 vs 2,251 tokens) — the price of over-generating objectives with anchors and areas. This is what flipping `CODEONBOARD_CURRICULUM` to `1` costs per session, measured rather than guessed. Whether the curriculum is worth four cents is a product judgement, not a measurement | — |
+
+| 2026-08-15 | **A named `gap_kind` outranks the coarse `classification` in adaptation selection** | Found in live `fastapi` validation: a learner wrote "I can't follow this because I don't know what a function signature is", the Grader read it exactly right and reported `missing_prerequisite`, and the policy **discarded the signal** because the same answer was also classified `off-topic` — so the one case a prerequisite exists for got nothing at all. The earlier whitelist of "actions an off-topic answer may earn" was the same mistake in smaller form: it treats the vaguer evidence as the stronger. What the off-topic guard actually protects is the **unclassified** case, and that is preserved exactly — no named gap, no evidence, no change, and `understanding_state` is untouched either way | Evidence that the Grader emits `missing_prerequisite` loosely enough that acting on it grows journeys spuriously |
+| 2026-08-15 | **The full remediation path is observed end-to-end**, closing §14 item 8 | Real session, real Grader, real Mutator, nothing stubbed: genuine `missing_prerequisite` → prerequisite inserted with a real edge → warm-up taught → advance returns to the original (unvisited) → re-answer recorded and re-graded. F1's fix and B5's policy verified together on live data rather than in isolation | — |
+| 2026-08-15 | **The first real `fastapi` E2E run also observed six criteria that had only been unit-tested** | One planned session (16 units, 4 areas, 197s, zero errors): areas render with every unit assigned; **six distinct prompt forms in one journey** (≥4 required); all 16 lessons carry every B4 element; a 3-anchor flow step opened its own file at its own range; the reveal was absent from the DOM before answering and appeared with the verdict after; "STOP n OF 15" correctly excluded the one `optional` unit. The full table update is deferred to the final validation pass | — |
+| 2026-08-15 | **Prune-ahead remains implemented and tested but NOT live-validated** | Four deliberately strong answers across two runs graded `partial` / `right_idea_wrong_altitude`, so the two-consecutive-`understood` streak never formed. That is the Grader being strict, not a prune-ahead fault. Recorded as unobserved rather than forced: distorting answers or verdicts to make a mechanism fire would produce evidence about the harness, not the product | A journey where a learner genuinely earns two consecutive `understood` in one area |
 
 **Note on scope:** this cleanup is independent of the repository-understanding
 migration in [`repo-understanding.md`](repo-understanding.md). It touches the
