@@ -1,0 +1,98 @@
+[
+  {
+    "cell": "fastapi-map",
+    "code_depth": "map",
+    "ok": true,
+    "band": [
+      5,
+      18
+    ],
+    "investigate_seconds": 154.3,
+    "runs": [
+      {
+        "repeat": 1,
+        "ok": true,
+        "seconds": 66.2,
+        "proposed": 12,
+        "grounding_drops": 0,
+        "core_before_band": 9,
+        "journey": 11,
+        "optional": 1,
+        "band_bound": null,
+        "demoted_by_band": 0,
+        "areas": 4,
+        "kinds": {
+          "architecture": 2,
+          "flow": 3,
+          "component": 3,
+          "extension_point": 2,
+          "risk": 1,
+          "synthesis": 1
+        },
+        "covers_goal": true,
+        "confidence": "medium"
+      },
+      {
+        "repeat": 2,
+        "ok": true,
+        "seconds": 73.5,
+        "proposed": 15,
+        "grounding_drops": 0,
+        "core_before_band": 10,
+        "journey": 15,
+        "optional": 0,
+        "band_bound": null,
+        "demoted_by_band": 0,
+        "areas": 5,
+        "kinds": {
+          "architecture": 2,
+          "flow": 4,
+          "component": 4,
+          "extension_point": 2,
+          "synthesis": 2,
+          "risk": 1
+        },
+        "covers_goal": true,
+        "confidence": "medium"
+      }
+    ],
+    "spread": {
+      "proposed": {
+        "min": 12,
+        "max": 15,
+        "mean": 13.5,
+        "stdev": 2.12
+      },
+      "core_before_band": {
+        "min": 9,
+        "max": 10,
+        "mean": 9.5,
+        "stdev": 0.71
+      },
+      "journey": {
+        "min": 11,
+        "max": 15,
+        "mean": 13,
+        "stdev": 2.83
+      },
+      "optional": {
+        "min": 0,
+        "max": 1,
+        "mean": 0.5,
+        "stdev": 0.71
+      },
+      "areas": {
+        "min": 4,
+        "max": 5,
+        "mean": 4.5,
+        "stdev": 0.71
+      },
+      "bound": {
+        "ceiling": 0,
+        "floor": 0,
+        "none": 2
+      },
+      "grounding_drops_total": 0
+    }
+  }
+]

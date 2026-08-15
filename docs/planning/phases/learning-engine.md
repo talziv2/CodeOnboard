@@ -710,6 +710,33 @@ together.
 `code_depth` (9–13 / 10–13 / 10–18) because depth changes *composition*, not *size*. A
 `map` ceiling far below `working`'s was encoding a size difference that does not exist.
 
+**Validation — `fastapi × map` at the new ceiling, 2 runs**
+([`evidence/map-ceiling-check/`](evidence/map-ceiling-check/band-calibration.json)):
+
+| | before (ceiling 14) | after (ceiling 18) |
+|---|---|---|
+| journeys | 14, 14, 14 | **11, 15** |
+| journey sd | **0.00** | **2.83** |
+| ceiling fired | 2 of 3 | **0 of 2** |
+| largest journey vs ceiling | 14 = 14 (at the limit) | 15 vs 18 (+3 slack) |
+
+Three things this establishes that the clamped matrix could not:
+
+1. **The clamp is gone.** Journey-size variance returned — 11 and 15 where three
+   consecutive runs had produced exactly 14. That variance is the planner responding to the
+   goal rather than to the band.
+2. **The reconstruction method was sound.** `journey + demoted_by_band` predicted an
+   unclamped maximum of 15, and the unclamped runs produced exactly 15. The arithmetic used
+   to derive 18 is therefore trustworthy, which matters because it is the same method any
+   future recalibration will use.
+3. **18 keeps real headroom** — +3 over the largest unclamped journey, comparable to
+   `working`'s +5 and `implementation`'s +4.
+
+One honest caveat: these runs re-investigated, so they carry a different dossier, and their
+core came out at 9–10 against the matrix's 11–13. That is *cross-dossier* variance, which
+the matrix deliberately excluded by sharing one dossier per cell — a reminder that the
+recorded spreads are planner variance and the end-to-end spread is wider.
+
 Not established, and explicitly not claimed: anything about variance (one attempt per
 cell), and the isolated cost of the planning call ([LQ2](#152-open-lq)) — wall-clock was
 measured for the whole pipeline, of which planning is one call among the survey and the
@@ -1341,7 +1368,7 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 | 2026-08-15 | **Core demand is far flatter across `code_depth` than the bands assume** | Measured core: `map` 9–13, `working` 10–13, `implementation` 10–18, against ceilings stepping 14 → 22 → 28. Depth changes *composition* much more than *size* — precisely what LP4 claims and what the kind distributions show — so a `map` ceiling set well below `working`'s clamps a demand that is barely smaller. This, rather than any single cell, is the substantive calibration finding | Wider sampling across `goal_type`, which this matrix held fixed |
 
 | 2026-08-15 | **`map` ceiling 14 → 18, derived from the 18-run matrix. `working` and `implementation` untouched** ([LD16](#151-accepted-ld)) | Full derivation in [§6.3](#63-sizing--how-the-journeys-length-is-actually-decided). Unclamped demand is recoverable exactly as `journey + demoted_by_band`, giving 11–15 across the six `map` runs; **max + 2sd = 18.0 and mean + 3sd = 18.2** both land on 18. Smaller values (15, 16, 17) sit inside one standard deviation of the observed maximum and would clamp the next ordinary run — a proposal of 16 was already seen. Larger values would inherit `working`'s and `implementation`'s margins, which are themselves judgement, and 22 would collapse the band into `working` | A wider matrix — more `goal_type` values, or a third repository — showing `map` demand routinely above 15 |
-| 2026-08-15 | **The corrected ceiling was validated by direct observation, not left on reconstructed arithmetic** | Every `fastapi × map` run in the matrix was clamped, so its unclamped demand was inferred rather than seen. Two runs at the new ceiling observe what the cell produces when nothing constrains it — the one thing eighteen clamped runs cannot show. Kept to that single cell, because it is the only one where the evidence was reconstructed | — |
+| 2026-08-15 | **The corrected ceiling was validated by direct observation, and the validation passed** | Every `fastapi × map` run in the matrix was clamped, so its unclamped demand was inferred rather than seen. Two runs at ceiling 18 produced journeys of **11 and 15** with the ceiling firing **0 of 2** — variance restored (sd 0.00 → 2.83), and a maximum of exactly 15, which is what `journey + demoted_by_band` had predicted. That agreement validates the derivation method itself, not just this one number, which matters because any future recalibration will use it | — |
 
 **Note on scope:** this cleanup is independent of the repository-understanding
 migration in [`repo-understanding.md`](repo-understanding.md). It touches the
