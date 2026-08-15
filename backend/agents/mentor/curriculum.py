@@ -100,8 +100,12 @@ class ObjectiveWire(BaseModel):
     # is grounding, not cardinality (LD13).
     anchors: list[AnchorWire]
     why: str
-    understand: str
     concept_tags: list[str] = []
+    # `understand` is deliberately absent. It meant "what the user should take
+    # away", which is what `objective` now is, said twice — and the second
+    # saying was costing a sentence per objective in a response that was
+    # overflowing its token budget on implementation-depth runs. The field
+    # survives on pre-B3 graphs, where it is what `objective()` falls back to.
 
 
 class AreaWire(BaseModel):
@@ -366,9 +370,14 @@ An OBJECTIVE is one learning unit. Keys:
   area_id:      the id of the area this belongs to
   depends_on:   ids of objectives that must be understood FIRST (may be empty)
   anchors:      one or more pieces of evidence — see ANCHORS below
-  why:          one sentence — why this unit matters for the goal
-  understand:   one sentence — what the developer should take away
+  why:          why this unit matters for the goal — AT MOST 15 WORDS, and it
+                must add something `objective` does not already say. Do not
+                restate the objective here.
   concept_tags: list of short tags (<= 4), free-form domain terms welcome
+
+Write every field except `objective` tersely. Titles are short imperatives, not
+sentences. `why` is a fragment, not a paragraph. The objective is where your
+words belong; everything else is a label.
 
 THE OBJECTIVE IS THE MOST IMPORTANT FIELD YOU WRITE. It is not a topic and not
 a summary of the code — it is the sentence the developer should be able to say
@@ -600,7 +609,6 @@ def build_graph(
             lesson_brief={
                 "objective": objective.objective,
                 "why": objective.why,
-                "understand": objective.understand,
                 "kind": objective.kind,
                 "priority": objective.priority,
                 "area_id": objective.area_id,
@@ -642,7 +650,6 @@ def to_learning_path(graph: LearningGraph) -> list[dict]:
             "line_range": [node.code_anchor.line_start, node.code_anchor.line_end],
             "objective": node.lesson_brief.get("objective", ""),
             "why": node.lesson_brief.get("why", ""),
-            "understand": node.lesson_brief.get("understand", ""),
             "concepts": list(node.concept_tags),
         }
         for i, node in enumerate(nodes)
@@ -707,6 +714,50 @@ def _plan_report(
     }
 
 
+# Appended to the user turn on the one retry after a truncated proposal.
+#
+# It asks for the SAME curriculum written tighter — never for fewer objectives.
+# "Propose less" is a size instruction, and putting one back into this prompt
+# would undo the whole point of B3 (L1): the model does not choose the length,
+# our code does. A retry that shrinks the curriculum to fit a token budget is
+# the old failure wearing a new hat.
+_TOO_LONG = """
+
+YOUR PREVIOUS RESPONSE WAS CUT OFF before the JSON closed, because it was too
+long. Return the SAME curriculum again — the same objectives, the same
+priorities, the same anchors, nothing dropped — but written to fit:
+
+  - `why`: at most 10 words, or omit the reasoning and state the connection
+  - `title`: a short imperative, under 8 words
+  - `objective`: keep it complete. This is the one field worth its length.
+  - no trailing commentary of any kind, inside or outside the JSON
+
+Do NOT reduce the number of objectives. The length problem is prose, not
+count."""
+
+
+def _propose(client, user_content: str, suffix: str = ""):
+    """One proposal call. Returns (response, raw text)."""
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=MAX_TOKENS,
+        system=_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_content + suffix}],
+    )
+    return response, response.content[0].text
+
+
+def _was_truncated(response) -> bool:
+    """Did the model run out of room, rather than write something malformed?
+
+    The API says so directly. Matching on the decoder's message ("Unterminated
+    string...") would work today and break the day the payload happens to end
+    on a different token — and it cannot tell a truncated response from a
+    genuinely malformed one, which wants a different fix.
+    """
+    return getattr(response, "stop_reason", None) == "max_tokens"
+
+
 _CONFIDENCE_CAP = {"high": "medium", "medium": "medium", "low": "low"}
 
 
@@ -742,13 +793,23 @@ def run(state: OnboardState, client: anthropic.Anthropic | None = None) -> Onboa
     )
 
     try:
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            system=_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_content}],
-        )
-        output = _parse_output(response.content[0].text)
+        response, raw = _propose(client, user_content)
+        try:
+            output = _parse_output(raw)
+        except Exception as parse_error:
+            if not _was_truncated(response):
+                raise
+            # One bounded retry, and only for the failure we can name. A
+            # malformed-but-complete payload is a different problem and is not
+            # retried here — repeating a call that produced valid-length
+            # nonsense mostly buys a second helping of it.
+            state.errors.append(
+                f"curriculum: proposal truncated at the token limit "
+                f"({parse_error}); retried once, asking for the same "
+                f"curriculum written tighter"
+            )
+            _, raw = _propose(client, user_content, _TOO_LONG)
+            output = _parse_output(raw)
     except Exception as e:
         state.errors.append(f"curriculum: proposal call failed: {e}")
         return state

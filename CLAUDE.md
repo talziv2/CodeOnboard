@@ -146,7 +146,6 @@ text) are both genuinely elicited and carry the real signal.
   "line_range": [1, 80],
   "objective": "Explain what Session owns that a bare request does not — connection reuse, cookie persistence, default configuration — and why sending through a Session changes behaviour",
   "why": "The Session object is the core abstraction — everything flows through it",
-  "understand": "How Session stores state, how it builds requests, what adapters do",
   "concepts": ["adapter pattern", "connection pooling"]
 }
 ```
@@ -157,6 +156,10 @@ build exactly it; the Grader marks against it rather than against the
 `expected_answer` Teaching invented. Read it through `LearningNode.objective()`,
 never straight off `lesson_brief` — that method holds the fallback to
 `understand` which keeps graphs planned before the contract working.
+
+`understand` is **not** emitted by the objective-first planner: it meant "what
+the user should take away", which is what `objective` already is. It survives
+only on pre-B1/B3 graphs, as `objective()`'s fallback.
 
 ---
 

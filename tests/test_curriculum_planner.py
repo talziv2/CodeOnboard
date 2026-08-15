@@ -42,14 +42,26 @@ def _curriculum_on(monkeypatch):
 
 
 class FakeClient:
-    def __init__(self, text: str):
-        self.text = text
+    """Scripted replies. `texts` may be one string or a list, one per call.
+
+    `stop_reasons` mirrors it — "max_tokens" is what the API reports when the
+    model ran out of room, which is how the planner tells a truncated response
+    from a malformed one.
+    """
+
+    def __init__(self, texts, stop_reasons=None):
+        self.texts = [texts] if isinstance(texts, str) else list(texts)
+        self.stop_reasons = list(stop_reasons or ["end_turn"] * len(self.texts))
         self.requests = []
         self.messages = SimpleNamespace(create=self._create)
 
     def _create(self, **kwargs):
         self.requests.append(kwargs)
-        return SimpleNamespace(content=[SimpleNamespace(type="text", text=self.text)])
+        i = min(len(self.requests) - 1, len(self.texts) - 1)
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="text", text=self.texts[i])],
+            stop_reason=self.stop_reasons[min(i, len(self.stop_reasons) - 1)],
+        )
 
 
 def anchor(file: str, symbol: str) -> dict:
@@ -75,7 +87,6 @@ def objective(
         "depends_on": depends_on or [],
         "anchors": anchors,
         "why": "matters for the goal",
-        "understand": "the takeaway",
         "concept_tags": ["auth"],
     }
 
@@ -375,3 +386,86 @@ def test_flag_on_routes_through_the_curriculum_planner(repo):
     state = make_state(repo)
     mentor_agent.run(state, FakeClient(response(DEFAULT)))
     assert state.graph.areas != []
+
+
+# ── truncation recovery ───────────────────────────────────────────────────────
+
+def _truncated(objectives) -> str:
+    """A payload cut off mid-string, exactly as a max_tokens stop produces."""
+    return response(objectives)[:-120]
+
+
+def test_a_truncated_proposal_is_retried_once_and_recovers(repo):
+    state = make_state(repo)
+    client = FakeClient(
+        [_truncated(DEFAULT), response(DEFAULT)],
+        stop_reasons=["max_tokens", "end_turn"],
+    )
+    curriculum.run(state, client)
+
+    assert len(client.requests) == 2
+    assert state.graph is not None and len(state.graph.nodes) == 3
+    assert any("truncated at the token limit" in e for e in state.errors)
+
+
+def test_the_retry_asks_for_the_same_curriculum_written_tighter(repo):
+    # NOT for fewer objectives. "Propose less" is a size instruction, and
+    # putting one back in this prompt would undo B3's whole point (L1).
+    state = make_state(repo)
+    client = FakeClient(
+        [_truncated(DEFAULT), response(DEFAULT)],
+        stop_reasons=["max_tokens", "end_turn"],
+    )
+    curriculum.run(state, client)
+
+    retry = client.requests[1]["messages"][0]["content"]
+    assert "Do NOT reduce the number of objectives" in retry
+    assert "the same objectives" in retry
+
+
+def test_a_malformed_but_complete_response_is_not_retried(repo):
+    # A model that returned valid-length nonsense will mostly return more of it;
+    # the retry is for the one failure we can name.
+    state = make_state(repo)
+    client = FakeClient(["{ not json at all", "{ still not json"],
+                        stop_reasons=["end_turn", "end_turn"])
+    curriculum.run(state, client)
+
+    assert len(client.requests) == 1
+    assert state.graph is None
+
+
+def test_a_second_truncation_gives_up_without_a_third_call(repo):
+    state = make_state(repo)
+    client = FakeClient(
+        [_truncated(DEFAULT), _truncated(DEFAULT)],
+        stop_reasons=["max_tokens", "max_tokens"],
+    )
+    curriculum.run(state, client)
+
+    assert len(client.requests) == 2
+    assert state.graph is None
+    assert any("proposal call failed" in e for e in state.errors)
+
+
+def test_a_clean_first_response_never_costs_a_second_call(repo):
+    state = make_state(repo)
+    client = FakeClient(response(DEFAULT))
+    curriculum.run(state, client)
+    assert len(client.requests) == 1
+
+
+# ── verbosity: understand is gone, objective carries it ───────────────────────
+
+def test_the_planner_no_longer_asks_for_understand(repo):
+    # It meant "what the user should take away", which is what `objective` is.
+    assert "understand:" not in curriculum._SYSTEM_PROMPT
+    assert "AT MOST 15 WORDS" in curriculum._SYSTEM_PROMPT
+
+
+def test_a_b3_brief_carries_no_understand_key(repo):
+    state = plan(repo)
+    node = next(iter(state.graph.nodes.values()))
+    assert "understand" not in node.lesson_brief
+    # …and the objective is still what Teaching and the Grader read.
+    assert node.objective().startswith("Explain what")

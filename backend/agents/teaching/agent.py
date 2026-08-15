@@ -314,6 +314,10 @@ def _source_header(node: LearningNode) -> str:
     )
 
 
+def _brief_line(label: str, value: str | None) -> str:
+    return f"  {label}: {value}\n" if value else ""
+
+
 def _build_user_content(
     goal: dict,
     node: LearningNode,
@@ -338,11 +342,14 @@ def _build_user_content(
         f"{prior_context}\n\n"
         f"{doc_section}"
         f"LEARNING OBJECTIVE — build exactly this claim:\n"
-        f"  {node.objective() or '(none stated — build the takeaway below)'}\n\n"
+        f"  {node.objective() or '(none stated — build the brief below)'}\n\n"
         f"Lesson brief for this node:\n"
         f"  title: {node.title}\n"
-        f"  why: {brief.get('why', '')}\n"
-        f"  understand: {brief.get('understand', '')}\n"
+        # `understand` is absent on objective-first graphs, where it would only
+        # restate the objective above. An empty labelled line reads as a gap the
+        # model should fill, so it is omitted rather than blanked.
+        f"{_brief_line('why', brief.get('why'))}"
+        f"{_brief_line('understand', brief.get('understand'))}"
         f"  concepts: {', '.join(node.concept_tags) if node.concept_tags else '—'}\n\n"
         f"{_source_header(node)}\n"
         f"{source}\n\n"
