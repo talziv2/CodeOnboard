@@ -54,16 +54,69 @@
     "confidence": "high",
     "objectives_present": 14,
     "failures": {},
-    "planner_notes": []
+    "planner_notes": [],
+    "provenance": "first attempt"
   },
   {
     "cell": "requests-implementation",
-    "ok": false,
-    "seconds": 259.5,
-    "died": "no graph",
-    "errors": [
-      "curriculum: proposal call failed: Unterminated string starting at: line 416 column 22 (char 32535)"
-    ]
+    "ok": true,
+    "seconds": 289.7,
+    "code_depth": "implementation",
+    "plan_report": {
+      "code_depth": "implementation",
+      "proposed": 22,
+      "grounded": 22,
+      "dropped_by_grounding": 0,
+      "core_before_band": 15,
+      "journey": 22,
+      "optional": 0,
+      "band": [
+        10,
+        28
+      ],
+      "band_bound": null,
+      "demoted_by_band": 0,
+      "areas_declared": 7,
+      "covers_goal": true
+    },
+    "units_total": 22,
+    "journey_size": 22,
+    "optional": 0,
+    "priorities": {
+      "required": 15,
+      "recommended": 7
+    },
+    "band": [
+      10,
+      28
+    ],
+    "in_band": true,
+    "areas": 7,
+    "area_titles": [
+      "Entry point and Session architecture",
+      "Request vs PreparedRequest: the two-model design",
+      "Preparation pipeline: per-step transforms",
+      "Session dispatch: settings merging and adapter routing",
+      "Adapter layer: transmission and response construction",
+      "Post-transmission: hooks, cookies, redirects",
+      "Extension points and invariants"
+    ],
+    "kinds": {
+      "flow": 4,
+      "architecture": 3,
+      "component": 10,
+      "risk": 2,
+      "extension_point": 2,
+      "synthesis": 1
+    },
+    "multi_anchor_units": 10,
+    "max_anchors": 6,
+    "prerequisite_edges": 37,
+    "confidence": "high",
+    "objectives_present": 22,
+    "failures": {},
+    "planner_notes": [],
+    "provenance": "rerun after the truncation fix (dropped `understand` from the proposal, capped `why` at 15 words). The first attempt died with the proposal cut off at the token limit; the bounded retry did not fire on this run, so the verbosity reduction alone was sufficient and MAX_TOKENS was left at 8192."
   },
   {
     "cell": "fastapi-map",
@@ -121,7 +174,8 @@
     "confidence": "medium",
     "objectives_present": 11,
     "failures": {},
-    "planner_notes": []
+    "planner_notes": [],
+    "provenance": "first attempt"
   },
   {
     "cell": "fastapi-implementation",
@@ -177,6 +231,7 @@
     "confidence": "medium",
     "objectives_present": 16,
     "failures": {},
-    "planner_notes": []
+    "planner_notes": [],
+    "provenance": "first attempt"
   }
 ]
