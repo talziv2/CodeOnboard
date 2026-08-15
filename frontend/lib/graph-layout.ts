@@ -29,8 +29,29 @@ function outgoing(edges: GraphEdge[], from: string, kind: string): string | null
   return edge ? edge.to_id : null;
 }
 
-/** A node is a prerequisite when it points at the node it was inserted to unblock. */
+/**
+ * The node this one was spliced in to unblock, or null when it is not a warm-up.
+ *
+ * Two different things now write `prerequisite` edges, and only one of them is a
+ * detour the rail should mark:
+ *
+ *   PLANNED     the objective-first planner emits one per `depends_on`, so a
+ *               normal graph carries dozens of them. These describe the
+ *               dependency structure of the curriculum — they are not events,
+ *               and every unit they touch is an ordinary stop on the spine.
+ *   REMEDIAL    the Mutator splices a warm-up in after a wrong answer, using
+ *               insert_before: the incoming `sequence` edge is rerouted onto the
+ *               new node, which is then joined to the original by a
+ *               `prerequisite` edge.
+ *
+ * The structural difference is that a spliced warm-up has NO outgoing sequence
+ * edge — the reroute gave its sequence slot away — whereas a planned unit sits
+ * on the chain and keeps one. Without this distinction a planned graph renders
+ * with almost every stop indented and captioned "added after confusion", and
+ * spineLength collapses to near one.
+ */
 function unlockTargetOf(edges: GraphEdge[], nodeId: string): string | null {
+  if (outgoing(edges, nodeId, "sequence") !== null) return null;
   return outgoing(edges, nodeId, "prerequisite");
 }
 
@@ -72,12 +93,24 @@ export function buildRoute(nodes: GraphNode[], edges: GraphEdge[]): RouteStop[] 
 
   let spineSeen = 0;
   return walked.map((stop) => {
-    if (!stop.isPrerequisite) spineSeen += 1;
-    return { ...stop, position: stop.isPrerequisite ? spineSeen + 1 : spineSeen };
+    if (countsAsStation(stop)) spineSeen += 1;
+    return { ...stop, position: countsAsStation(stop) ? spineSeen : spineSeen + 1 };
   });
 }
 
-/** Stops that count toward "stop N of M" — prerequisites are detours, not stations. */
+/**
+ * Does this stop consume a number in "stop N of M"?
+ *
+ * Prerequisites are detours rather than stations. Optional units are depth the
+ * learner did not ask for and the rail collapses them, so counting them would
+ * promise a journey longer than the one on screen — "stop 1 of 4" above three
+ * visible stops.
+ */
+function countsAsStation(stop: Omit<RouteStop, "position">): boolean {
+  return !stop.isPrerequisite && stop.node.priority !== "optional";
+}
+
+/** Stops that count toward "stop N of M". */
 export function spineLength(stops: RouteStop[]): number {
-  return stops.filter((s) => !s.isPrerequisite).length;
+  return stops.filter(countsAsStation).length;
 }

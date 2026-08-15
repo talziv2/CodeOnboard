@@ -264,6 +264,34 @@ Three changes from today, all of them consequences of L4–L6:
 > A concept that genuinely lives in three places is grounded by three verified anchors,
 > not by picking one and hoping the lesson explains the rest.
 
+#### 4.1.2 The read-time grounding guarantee
+
+Verification happens at plan time; **reading happens at lesson time**, and a range that
+resolved when the curriculum was planned can still fail to load when the lesson is
+rendered — a moved file, a changed checkout, a re-clone. Multi-anchor units make the
+partial case common enough to need a stated rule, and it is asymmetric:
+
+| At lesson time | Behaviour | Why |
+|---|---|---|
+| **Some** anchors fail to load | **Degrade.** Teach from the anchors that loaded, and record the failures | A four-step flow whose third step went stale is still a real three-step flow. Failing the lesson would spend a verified unit to punish one bad range |
+| **All** anchors fail to load | **Fail the lesson.** Never generate | With no source, the model has only the objective — and it will write a complete, fluent, confident lesson out of it. That is not a degraded lesson; it is an ungrounded one wearing the same shape |
+
+The second row is the load-bearing half, and it is **not** an implementation detail of the
+teaching agent. A unit's grounding is a claim that what the learner is told traces to code
+that was actually read. A source-less lesson breaks that claim *silently* — nothing in the
+output looks wrong, which is precisely why it has to be refused at the point of reading
+rather than caught downstream.
+
+A multi-anchor unit with no readable anchor is in exactly the same position as a
+single-anchor unit whose file is gone, and must fail the same way: the caller records the
+error and the session shows its "read the source directly" fallback. Losing one lesson is
+the correct price; the alternative is teaching something nobody verified.
+
+> This was found by probing real lessons, not by review: a `flow` unit whose two anchors
+> both pointed at a moved path rendered a complete lesson that read as authoritative.
+> Discovering it that way is the argument for stating it here — the failure is invisible in
+> the output, so only an explicit rule keeps a future change from reintroducing it.
+
 ### 4.1.1 `display_anchor` is a UI affordance, not part of the learning model
 
 The UI needs *somewhere* to open the code pane, and the rail needs a file path to show
@@ -922,9 +950,9 @@ flowchart TB
 | **B1** — objective contract | F | ✅ **done** 2026-08-15 | The single highest-leverage change, and it **works on today's graphs**: `objective` is a key in an existing JSON payload, so this ships and delivers value before the planner is rewritten |
 | **B2** — `code_depth` question | nothing | ✅ **done** 2026-08-15 | One question. Independent of everything; can run in parallel with B1 |
 | **B3** — objective-first planner | B1, B2, **Phase A Stage 3** | ✅ **done** 2026-08-15, behind `CODEONBOARD_CURRICULUM=1`; sanity-validated 4/4 (§6.3). Band calibration remains open ([LQ6](#152-open-lq)) and does **not** gate B4 — see the note below | Ends L1, L3, L4, L5. The core of the phase |
-| **B4** — lesson forms + reveal split | B1, B3 | ✅ **done** 2026-08-15 (backend). **L8 is only half-closed until U1** — the split exists in the payload, and the panel still renders it as one block | Ends L7, L8. Lesson quality is half the product value of this phase |
-| **B5** — bidirectional adaptation | B3 | ready (B3 met) | Ends L9, L10. Prune-ahead is nearly free |
-| **B6** — frontend U1–U3 | B3, B4 | **next** — both dependencies met | Without U1 the reveal split does nothing; without U2 a large curriculum is illegible |
+| **B4** — lesson forms + reveal split | B1, B3 | ✅ **done** 2026-08-15 | Ends L7, L8. Lesson quality is half the product value of this phase |
+| **B5** — bidirectional adaptation | B3 | **next** — B3 met | Ends L9, L10. Prune-ahead is nearly free |
+| **B6** — frontend U1–U3 (+U5) | B3, B4 | ✅ **done** 2026-08-15 — U1, U2, U3 and U5 shipped and driven end-to-end in a browser. **L8 is now fully closed.** U4 (scope control) remains in the high-value tier | Without U1 the reveal split does nothing; without U2 a large curriculum is illegible |
 
 > **Calibration does not gate B4 or B5.** Nothing in this dependency graph depends on the
 > band *numbers*: B4 chooses a lesson form from a unit's `kind`, and B5 branches on
@@ -1172,6 +1200,11 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 | 2026-08-15 | **All eight kinds are mapped now, rather than shipping LR5's three-form subset** | LR5's concern is quality dilution across many half-specified forms, and it is real. But the B3 sanity matrix showed every kind appearing in real journeys, so a three-form subset would have left `risk`, `extension_point` and `synthesis` — 4–5 units of a typical journey — on a form written for "explain this piece". The mitigation is kept in a different place: each form is one tight paragraph, **only the chosen one is shown to the model** (a menu of six invites blending), and any unmapped kind still falls back to the original | Live evidence that a specific form reads worse than the default |
 | 2026-08-15 | **`walkthrough` is assembled from `setup` + `reveal` rather than removed** | The reveal split is worthless until the panel withholds `reveal` (U1), and B6 has not shipped. Emitting only the halves would have broken every current client. Assembling the old field keeps today's UI rendering exactly what it rendered before, makes the change invisible until B6 opts in, and needs no migration or cache invalidation — the same additive discipline as the rest of the phase | B6 landing, after which `walkthrough` becomes a pure compatibility artefact for pre-B4 cached lessons |
 | 2026-08-15 | **A multi-anchor unit whose anchors ALL fail to read now fails the lesson instead of degrading to a source-less one** | Found live while probing B4's forms: a `flow` unit whose two anchors both pointed at a moved path produced a complete, confident, fluent lesson written from the objective alone. B3's per-anchor tolerance is right — one stale anchor should not sink a four-step flow — but tolerating *total* failure hands the model an empty source and lets it confabulate, which is the exact failure the anchor machinery exists to make impossible (LP7). A multi-anchor unit with no readable anchor is in the same position as a single-anchor unit whose file is gone, and now fails the same way | — |
+
+| 2026-08-15 | **B6 shipped: U1, U2, U3 and U5.** The learner now answers before the explanation exists on screen | L8, and the half of B4 that a payload could not close. Verified by driving a real session in a browser: `setup` + `prompt` render with no `reveal` anywhere in the DOM, and the reveal, takeaway and ownership note appear together with the grader's verdict after `/respond` | — |
+| 2026-08-15 | **The reveal also opens on a REVISIT, not only on a fresh answer** | Withholding is pedagogy the first time and pointless friction afterwards. Someone returning to a node they already answered is reading, not being tested — and their answer and its feedback are already on screen in the attempt history, so hiding the explanation would protect nothing | — |
+| 2026-08-15 | **A frontend regression that B3 introduced, found in B6**: `buildRoute` treated any outgoing `prerequisite` edge as a Mutator warm-up, so a planned graph rendered with nearly every stop indented and captioned "added after confusion" | B3 writes one prerequisite edge per `depends_on` — 16–37 of them per real journey — and they describe dependency structure rather than events. A spliced warm-up is distinguishable because `insert_before` gives its sequence slot away, so it has **no outgoing sequence edge**; a planned unit sits on the chain and keeps one. This is the kind of defect that only appears where two changes meet, which is why B6 had to come before B5 | — |
+| 2026-08-15 | **`optional` units do not consume a number in "stop N of M"** | Found by reading the real UI: the rail collapsed one optional unit while the header still counted it, promising "stop 1 of 4" above three visible stops. Prerequisites were already excluded for the same reason — a counter should describe the journey the learner can see | — |
 
 **Note on scope:** this cleanup is independent of the repository-understanding
 migration in [`repo-understanding.md`](repo-understanding.md). It touches the

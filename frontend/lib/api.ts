@@ -97,18 +97,47 @@ export interface Attempt {
   at: string;
 }
 
+/** One verified location a unit is grounded in. */
+export interface Anchor {
+  file: string;
+  symbol: string | null;
+  line_start: number;
+  line_end: number;
+}
+
 export interface GraphNode {
   id: string;
   title: string;
+  /**
+   * The DISPLAY anchor — where the code pane opens by default. A unit may be
+   * grounded in several equally real locations; this one carries no claim to
+   * being the most important. `anchors` below is the full set.
+   */
   file: string;
   line_start: number;
   line_end: number;
+  /** Empty on graphs planned before multi-anchor units existed. */
+  anchors?: Anchor[];
+  /** The unit's primary kind. Empty string on pre-B3 graphs. */
+  kind?: string;
+  /** "required" | "recommended" | "optional". Empty on pre-B3 graphs. */
+  priority?: string;
+  /** Which area this unit belongs to. Empty on pre-B3 graphs. */
+  area_id?: string;
   concept_tags: string[];
   understanding_state: UnderstandingState;
   visited: boolean;
   weak_spot: boolean;
   has_lesson: boolean;
   attempts: Attempt[];
+}
+
+/** One level of curriculum grouping. Empty list on pre-B3 graphs. */
+export interface Area {
+  id: string;
+  title: string;
+  why: string;
+  order: number;
 }
 
 export interface GraphEdge {
@@ -124,6 +153,7 @@ export interface SessionGraph {
   current_node_id: string | null;
   nodes: GraphNode[];
   edges: GraphEdge[];
+  areas?: Area[];
   readiness: number; // 0.0 – 1.0
 }
 
@@ -133,9 +163,25 @@ export const getSession = (session_id: string) =>
 // --- Lesson ---
 
 export interface LessonBody {
+  /**
+   * The whole lesson as one block. Always present: for a lesson written before
+   * the setup/reveal split it is the only body there is, and for a split lesson
+   * the backend assembles it from setup + reveal. Rendering it is the legacy
+   * path — see LessonPanel.
+   */
   walkthrough: string;
   prompt: string;
   prompt_kind: string;
+  /** One line connecting to the unit just finished. Absent on pre-B4 lessons. */
+  why_now?: string;
+  /** Framing and code, WITHOUT the answer. Absent on pre-B4 lessons. */
+  setup?: string;
+  /** The explanation. Withheld until the learner has answered. */
+  reveal?: string;
+  /** The objective restated as something to remember. */
+  takeaway?: string;
+  /** What to hold yourself here versus what you can safely delegate. */
+  ownership?: string;
 }
 
 export interface Lesson {

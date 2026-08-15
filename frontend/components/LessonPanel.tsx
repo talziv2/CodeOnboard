@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import MapView from "@/components/MapView";
 import { getLesson, respond, advance, retry } from "@/lib/api";
 import type {
-  Attempt, Classification, GraphNode, Lesson, RespondResult, SessionGraph,
+  Anchor, Attempt, Classification, GraphNode, Lesson, RespondResult, SessionGraph,
 } from "@/lib/api";
 import { tagStyle, tagLabel } from "@/lib/tags";
 import { errorText, t } from "@/lib/strings";
@@ -18,7 +18,8 @@ interface Props {
   total: number;
   isPrerequisite: boolean;
   graph: SessionGraph;
-  onFileClick: (file: string) => void;
+  /** A range is passed for multi-anchor units so the pane highlights THAT step. */
+  onFileClick: (file: string, lineStart?: number, lineEnd?: number) => void;
   onAdvance: () => Promise<void>;
   onRespond: () => void;
   onFinish: () => void;
@@ -230,6 +231,20 @@ export default function LessonPanel({
       : null;
   const attempts = pending ? [...recorded, pending] : recorded;
   const latest = attempts[attempts.length - 1];
+
+  // A lesson written before the setup/reveal split has one body and nothing to
+  // withhold. `setup` is what distinguishes the two — `walkthrough` is present
+  // either way, because the backend assembles it for clients that only know it.
+  const isSplit = Boolean(lesson.lesson.setup);
+
+  // The explanation is withheld until the learner has committed to an answer —
+  // that withholding IS the active-learning mechanism. It opens on a graded
+  // answer, and also on a REVISIT: someone returning to a node they already
+  // answered is reading, not being tested, and hiding it from them would be
+  // pointless friction rather than pedagogy.
+  const revealed = Boolean(result) || attempts.length > 0;
+
+  const anchors: Anchor[] = node.anchors ?? [];
   const recovered =
     warmUpTitle !== null &&
     attempts.some((a) => FAILED.includes(a.classification)) &&
@@ -286,12 +301,46 @@ export default function LessonPanel({
         </div>
       )}
 
+      {isSplit && lesson.lesson.why_now && (
+        <p className="measure border-s-2 border-rule ps-3 text-[12.5px] italic leading-relaxed text-graphite">
+          {lesson.lesson.why_now}
+        </p>
+      )}
+
       <div className="flex flex-col gap-3">
-        <SectionLabel>{t.lesson.walkthrough}</SectionLabel>
+        {/* A pre-B4 lesson has no halves to withhold, so it renders exactly as
+            it always did, under the label it always had. */}
+        <SectionLabel>{isSplit ? t.lesson.setup : t.lesson.walkthrough}</SectionLabel>
         <p className="measure whitespace-pre-wrap text-[13.5px] leading-[1.72] text-paper">
-          {lesson.lesson.walkthrough}
+          {isSplit ? lesson.lesson.setup : lesson.lesson.walkthrough}
         </p>
       </div>
+
+      {anchors.length > 1 && (
+        <div className="flex flex-col gap-2">
+          <SectionLabel>{t.lesson.tracePath}</SectionLabel>
+          <ol className="flex flex-col gap-1">
+            {anchors.map((a, i) => (
+              <li key={`${a.file}-${a.line_start}-${i}`}>
+                <button
+                  onClick={() => onFileClick(a.file, a.line_start, a.line_end)}
+                  className="group flex w-full items-baseline gap-2.5 rounded px-2 py-1 text-start transition hover:bg-slab"
+                >
+                  <span className="font-mono text-[9.5px] uppercase tracking-[0.13em] text-graphite">
+                    {t.lesson.anchorStep(i + 1, anchors.length)}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-signal transition group-hover:text-chalk">
+                    {a.symbol ?? a.file}
+                  </span>
+                  <span className="shrink-0 font-mono text-[10px] text-graphite">
+                    {t.lesson.lines(a.line_start, a.line_end)}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
 
       {attempts.length > 0 && (
         <div className="flex flex-col gap-3">
@@ -344,6 +393,40 @@ export default function LessonPanel({
               {t.lesson.submitHint}
             </span>
           </div>
+        </div>
+      )}
+
+      {/* The reveal. Held back until the learner has answered, which is the
+          whole point of the split — then shown with the verdict rather than
+          before it, so the explanation lands against what they actually said. */}
+      {isSplit && revealed && lesson.lesson.reveal && (
+        <div className="flex flex-col gap-3">
+          <SectionLabel>{t.lesson.reveal}</SectionLabel>
+          <p className="measure whitespace-pre-wrap text-[13.5px] leading-[1.72] text-paper">
+            {lesson.lesson.reveal}
+          </p>
+
+          {lesson.lesson.takeaway && (
+            <div className="mt-1 flex flex-col gap-1.5 rounded border border-signal-dim/40 bg-signal/[0.06] px-4 py-3">
+              <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-signal">
+                {t.lesson.takeaway}
+              </span>
+              <p className="measure text-[13px] leading-[1.65] text-chalk">
+                {lesson.lesson.takeaway}
+              </p>
+            </div>
+          )}
+
+          {lesson.lesson.ownership && (
+            <div className="flex flex-col gap-1.5 rounded border border-rule bg-slab px-4 py-3">
+              <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-graphite">
+                {t.lesson.ownership}
+              </span>
+              <p className="measure text-[12.5px] leading-[1.65] text-paper">
+                {lesson.lesson.ownership}
+              </p>
+            </div>
+          )}
         </div>
       )}
 

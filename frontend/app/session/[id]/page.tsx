@@ -16,6 +16,10 @@ export default function SessionPage() {
   const router = useRouter();
   const [graph, setGraph] = useState<SessionGraph | null>(null);
   const [viewingFile, setViewingFile] = useState<string | null>(null);
+  // Set only when the learner opened a SPECIFIC anchor of a multi-anchor unit.
+  // Without it the pane highlighted the node's display range in whatever file
+  // was opened, so step 2 of a flow opened the right file at the wrong lines.
+  const [viewingRange, setViewingRange] = useState<[number, number] | null>(null);
   const [showCode, setShowCode] = useState(true);
   const [tab, setTab] = useState<"lesson" | "map">("lesson");
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +54,7 @@ export default function SessionPage() {
 
   const handleAdvance = async () => {
     setViewingFile(null);
+    setViewingRange(null);
     await loadGraph();
   };
 
@@ -57,6 +62,7 @@ export default function SessionPage() {
   const handleJump = async (node: GraphNode) => {
     setTab("lesson");
     setViewingFile(null);
+    setViewingRange(null);
     try {
       await jump(id, node.id);
       await loadGraph();
@@ -96,6 +102,13 @@ export default function SessionPage() {
   const currentStop = stops.find((s) => s.node.id === currentNodeId);
   const pct = Math.round(graph.readiness * 100);
   const openFile = viewingFile ?? currentNode?.file ?? null;
+  // The node's stored range describes ITS display file and nothing else. Using
+  // it for whatever file happens to be open highlights arbitrary lines in an
+  // unrelated one, so it applies only when the two agree.
+  const highlightForOpenFile =
+    currentNode && openFile === currentNode.file
+      ? { start: currentNode.line_start, end: currentNode.line_end }
+      : null;
   const depth = graph.goal?.depth;
 
   return (
@@ -164,6 +177,7 @@ export default function SessionPage() {
         <RouteRail
           stops={stops}
           currentNodeId={currentNodeId}
+          areas={graph.areas}
           onJump={handleJump}
           onExpand={() => setTab("map")}
         />
@@ -205,7 +219,13 @@ export default function SessionPage() {
                   total={spineLength(stops)}
                   isPrerequisite={currentStop?.isPrerequisite ?? false}
                   graph={graph}
-                  onFileClick={(file) => { setViewingFile(file); setShowCode(true); }}
+                  onFileClick={(file, lineStart, lineEnd) => {
+                    setViewingFile(file);
+                    setViewingRange(
+                      lineStart && lineEnd ? [lineStart, lineEnd] : null
+                    );
+                    setShowCode(true);
+                  }}
                   onAdvance={handleAdvance}
                   onRespond={loadGraph}
                   onFinish={() => router.push("/")}
@@ -232,8 +252,11 @@ export default function SessionPage() {
           <CodeViewer
             sessionId={id}
             filePath={openFile}
-            highlightStart={currentNode?.line_start}
-            highlightEnd={currentNode?.line_end}
+            // A chosen anchor wins; otherwise the node's display range, as
+            // before. CodeViewer itself is unchanged — this is which range it
+            // is handed, not how it renders one.
+            highlightStart={viewingRange?.[0] ?? highlightForOpenFile?.start}
+            highlightEnd={viewingRange?.[1] ?? highlightForOpenFile?.end}
             onClose={() => setShowCode(false)}
           />
         )}

@@ -90,6 +90,9 @@ export const t = {
     openMap: "Open map",
     addedAfterConfusion: "added after confusion",
     markedWeak: "⚑ marked weak",
+    optionalStops: (count: number) =>
+      count === 1 ? "1 optional stop" : `${count} optional stops`,
+    hideOptional: "Hide optional",
   },
 
   // --- lesson panel ---
@@ -103,6 +106,12 @@ export const t = {
     recoveredBodyEnd:
       "first. It stays marked as a rough patch, but you came back from it.",
     walkthrough: "Walkthrough",
+    setup: "Before you answer",
+    reveal: "What's actually happening",
+    takeaway: "Take away",
+    ownership: "Yours to hold",
+    tracePath: "This path crosses several places",
+    anchorStep: (index: number, total: number) => `Step ${index} of ${total}`,
     yourAnswers: (count: number) => `Your answers (${count})`,
     youWrote: "You wrote",
     feedback: "Feedback",
