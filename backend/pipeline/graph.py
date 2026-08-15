@@ -72,6 +72,7 @@ def mentor_node(state: OnboardState) -> dict:
         "graph": state.graph,
         "learning_path": state.learning_path,
         "confidence": state.confidence,
+        "plan_report": state.plan_report,
         "errors": _extract_new_errors(state, prev_errors),
     }
 

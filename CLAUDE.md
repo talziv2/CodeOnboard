@@ -11,7 +11,8 @@ This is a final-year CS project. Prefer working code over perfect architecture. 
 Full end-to-end roadmap: `docs/planning/phases/roadmap.md`
 
 - **Phase 1:** Goal Agent → Code Structure Agent → Mentor Agent → FastAPI → minimal Next.js UI → see `docs/planning/phases/phase1.md`
-- **Phase 2 (current):** Documentation Agent, Prioritization Agent, LangGraph migration
+- **Phase 2:** Documentation Agent, Prioritization Agent, LangGraph migration
+- **Learning engine (current):** turn the code tour into a curriculum — see `docs/planning/phases/learning-engine.md`
 - **Phase 3:** Interactive learning graph — Mentor splits into Planner + Teaching + Grader; static path becomes an adaptive, stateful learning session
 - **Phase 4:** TTS audio narration, code walkthrough video
 - **Phase 5 (stretch):** VS Code extension
@@ -34,8 +35,11 @@ backend/
   agents/
     goal/         # dialogue → goal JSON
     documentation/# README + docstrings → doc_context (no LLM)
-    mentor/       # agent.py: wire format + LearningGraph construction
-                  # dossier.py: plans the graph from the Investigation Dossier
+    mentor/       # agent.py: wire format + LearningGraph construction + the
+                  #   CODEONBOARD_CURRICULUM dispatch between the two planners
+                  # curriculum.py: the objective-first planner (B3) — the model
+                  #   over-generates objectives, our code cuts them to a journey
+                  # dossier.py: the pre-B3 planner, still the default
                   # mutator.py: reshapes the graph on user/Grader signals
     reviewer/     # architectural review for goal types that need one
     teaching/     # one graph node → the lesson the user reads
@@ -236,6 +240,11 @@ ANTHROPIC_API_KEY=
 GITHUB_TOKEN=        # optional, increases rate limit
 ```
 
+Optional flags:
+```
+CODEONBOARD_CURRICULUM=1   # objective-first planner (B3). Default 0 = pre-B3 planner
+```
+
 ---
 
 ## Design decisions
@@ -244,4 +253,6 @@ GITHUB_TOKEN=        # optional, increases rate limit
 - **No MCP yet.** Add it when 4+ agents share tools.
 - **Goal Agent runs first, always.** Its output JSON is the single source of truth for all downstream agents.
 - **Mentor Agent is the only Sonnet call.** Everything upstream uses Haiku.
+- **Curriculum size is decided by code, not by a prompt.** Under `CODEONBOARD_CURRICULUM=1` the planner is told to enumerate everything worth learning and is given no target number; `backend/agents/mentor/curriculum.py` then cuts by required-set closure, dependency closure, area coverage and a guard band. Overflow is demoted to `priority: optional` on the same spine, never discarded. Every sizing rule is a pure function, so it is testable without an API key — that is the point, not a side effect.
+- **A learning unit is grounded by one *or more* verified anchors.** A flow crossing three files is anchored on all three. `nodes.file` / `line_start` / `line_end` hold a *derived display projection*; `lesson_brief["anchors"]` is the semantic truth. The invariant, asserted in tests and in the sanity script: the display columns always equal one member of `anchors`.
 - **Interactive learning graph (Phase 3, future).** The current Mentor Agent will retire; its responsibilities split across a Planner Agent (owns and mutates the learning graph), a Teaching Agent (expands a node into the actual lesson), and a Grader Agent (classifies user responses). The current step JSON becomes the *lesson brief*, not the lesson itself. The Planner's learning graph is also the **user's understanding graph** — the same object, persisted across sessions and surfaced to the user as the product's centerpiece artifact (this is the project's X-factor). Strategic positioning: CodeOnboard complements AI code generation by training humans to understand, critique, and direct it — Grader scope expands to critique-of-AI-output tasks, and a new AI-Assisted Development Mode operationalizes this. See `docs/planning/phases/roadmap.md` for the full Phase 3 description and the deferred design decisions.

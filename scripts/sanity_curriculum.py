@@ -231,14 +231,24 @@ def measure(name: str, repo_url: str, goal_dict: dict, client) -> dict:
     failures = {label: check(graph) for label, check in CHECKS.items()}
     failures["GROUNDED"] = check_grounded(graph, state.repo_path)
 
+    priorities: dict[str, int] = {}
+    for brief in briefs:
+        key = brief.get("priority") or "?"
+        priorities[key] = priorities.get(key, 0) + 1
+
     return {
         "cell": name,
         "ok": not any(failures.values()),
         "seconds": seconds,
         "code_depth": code_depth,
+        # The planner's own account of the cut — proposal volume, the required
+        # set plus its dependency closure BEFORE the band, and whether the band
+        # bound. Everything below it is measured off the finished graph instead.
+        "plan_report": state.plan_report,
         "units_total": len(units),
         "journey_size": len(journey),
         "optional": len(units) - len(journey),
+        "priorities": priorities,
         "band": [low, high],
         "in_band": low <= len(journey) <= high,
         "areas": len(graph.areas),
@@ -267,8 +277,20 @@ def report(results: list[dict]) -> None:
             continue
         band = f"{r['band'][0]}-{r['band'][1]}"
         flag = "" if r["in_band"] else "   <-- OUTSIDE BAND"
+        pr = r.get("plan_report") or {}
+        print(
+            f"  proposed {pr.get('proposed', '?')}"
+            f" -> grounded {pr.get('grounded', '?')}"
+            f" -> core (required + closure, pre-band) {pr.get('core_before_band', '?')}"
+        )
         print(f"  journey {r['journey_size']} units (band {band}){flag}")
         print(f"  + {r['optional']} optional, {r['units_total']} total")
+        bound = pr.get("band_bound")
+        print(
+            f"  band bound: {bound or 'no'}"
+            + (f" ({pr.get('demoted_by_band')} demoted)" if bound == "ceiling" else "")
+        )
+        print(f"  priorities {r['priorities']}")
         print(f"  areas {r['areas']}: {', '.join(r['area_titles'])}")
         print(f"  kinds {r['kinds']}")
         print(

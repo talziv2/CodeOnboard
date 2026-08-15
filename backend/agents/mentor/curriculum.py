@@ -47,19 +47,12 @@ MAX_TOKENS = 8192
 
 Priority = Literal["required", "recommended", "optional"]
 
-# A unit's kind is one primary tag from the vocabulary four agents already share,
-# rather than a parallel taxonomy (LD9). `synthesis` is new: a unit that connects
-# several previously-taught units and introduces no new code, which is where a
-# mental model actually consolidates and which had no way to be expressed at all.
-KIND_VOCABULARY = (
-    "architecture",
-    "flow",
-    "component",
-    "extension_point",
-    "risk",
-    "test_coverage",
-    "synthesis",
-)
+# A unit's `kind` is one primary tag from the vocabulary four agents already
+# share, rather than a parallel taxonomy (LD9) — the prompt below lists it.
+# `synthesis` is the one addition: a unit that connects several previously-taught
+# units and introduces no new code, which is where a mental model consolidates
+# and which had no way to be expressed at all before. An unrecognised kind is not
+# rejected here; it becomes a free-form tag, which the frontend already renders.
 
 # Typical journey size by code_depth, as a guard band rather than a target.
 #
@@ -153,6 +146,37 @@ def dependency_closure(
     return closed
 
 
+def core_set(
+    objectives: list[ObjectiveWire], areas: list[AreaWire]
+) -> set[str]:
+    """What the curriculum needs BEFORE any band is considered.
+
+    The required set, its dependency closure, and one promoted unit per declared
+    area that the closure left unstaffed. This is the number §6.3's calibration
+    procedure asks for: the band is only a guard around it, so a band that binds
+    on a normal run is a band set below what curricula genuinely need — and the
+    right response is to widen the band, not to prune real requirements.
+
+    Extracted from `select` so it can be measured and tested on its own.
+    """
+    by_id = {o.id: o for o in objectives}
+    core = dependency_closure(
+        {o.id for o in objectives if o.priority == "required"}, by_id
+    )
+
+    # An area the planner declared but never staffed is either a planning slip
+    # or a subsystem quietly dropped; either way the learner should meet it once.
+    for area in areas:
+        if any(by_id[i].area_id == area.id for i in core):
+            continue
+        candidates = [o for o in objectives if o.area_id == area.id]
+        if not candidates:
+            continue
+        best = min(candidates, key=lambda o: _PRIORITY_ORDER[o.priority])
+        core = dependency_closure(core | {best.id}, by_id)
+    return core
+
+
 def select(
     objectives: list[ObjectiveWire],
     areas: list[AreaWire],
@@ -179,22 +203,8 @@ def select(
     model judgements, and three ordered buckets carry the same information
     without the false precision (LD8).
     """
-    by_id = {o.id: o for o in objectives}
-    core = dependency_closure(
-        {o.id for o in objectives if o.priority == "required"}, by_id
-    )
-
-    # (2) Area coverage. An area the planner declared but never staffed is
-    # either a planning slip or a subsystem quietly dropped; either way the
-    # learner should meet it once. Promote that area's best candidate.
-    for area in areas:
-        if any(by_id[i].area_id == area.id for i in core):
-            continue
-        candidates = [o for o in objectives if o.area_id == area.id]
-        if not candidates:
-            continue
-        best = min(candidates, key=lambda o: _PRIORITY_ORDER[o.priority])
-        core = dependency_closure(core | {best.id}, by_id)
+    # (1) and (2) — the floor, and the breadth obligation on top of it.
+    core = core_set(objectives, areas)
 
     # (3) The band, applied to whatever is NOT already core. The core is counted
     # first, before any room is handed out: the floor outranks the guard, so a
@@ -655,6 +665,48 @@ def _parse_output(raw: str) -> CurriculumOutput:
     return CurriculumOutput(**decoded)
 
 
+def _plan_report(
+    output: CurriculumOutput,
+    grounded: list[ObjectiveWire],
+    core: set[str],
+    selected: list[ObjectiveWire],
+    code_depth: str,
+) -> dict:
+    """What the planner proposed, what the cut kept, and whether the band bound.
+
+    `core` is the number that matters for judging the band: it is what the
+    curriculum genuinely needs, measured before the guard is applied. A band
+    that binds on ordinary runs is set below real demand.
+    """
+    low, high = _SCOPE_BANDS.get(code_depth, _DEFAULT_BAND)
+    journey = journey_size(selected)
+    # The ceiling bound iff something the model wanted taught ended up demoted.
+    proposed_priority = {o.id: o.priority for o in grounded}
+    demoted = [
+        o.id for o in selected
+        if o.priority == "optional"
+        and o.id not in core
+        and proposed_priority.get(o.id) != "optional"
+    ]
+    bound = "ceiling" if demoted else ("floor" if journey < low else None)
+    return {
+        "code_depth": code_depth,
+        "proposed": len(output.objectives),
+        "grounded": len(grounded),
+        "dropped_by_grounding": len(output.objectives) - len(grounded),
+        # The required set + dependency closure + area-coverage promotions,
+        # before the band — §6.3's calibration input.
+        "core_before_band": len(core),
+        "journey": journey,
+        "optional": len(selected) - journey,
+        "band": [low, high],
+        "band_bound": bound,
+        "demoted_by_band": len(demoted),
+        "areas_declared": len(output.areas),
+        "covers_goal": output.covers_goal,
+    }
+
+
 _CONFIDENCE_CAP = {"high": "medium", "medium": "medium", "low": "low"}
 
 
@@ -710,7 +762,11 @@ def run(state: OnboardState, client: anthropic.Anthropic | None = None) -> Onboa
 
     grounded = drop_dangling_dependencies(grounded)
     code_depth = str(state.goal.get("code_depth") or "working")
+    core = core_set(grounded, output.areas)
     selected = select(grounded, output.areas, code_depth)
+    state.plan_report = _plan_report(
+        output, grounded, core, selected, code_depth
+    )
     report = band_report(selected, code_depth)
     if report:
         state.errors.append(report)

@@ -21,6 +21,18 @@ class OnboardState:
     doc_context: dict | None = None
     learning_path: list | None = None
     confidence: str = "low"
+    # The objective-first planner's account of the cut it made: how many
+    # objectives were proposed, how many survived grounding, how large the
+    # required set plus its dependency closure was BEFORE any band, where the
+    # journey landed, and whether the band bound.
+    #
+    # This exists because the band is a guard around a number nobody had ever
+    # measured (learning-engine.md §6.3): "the curriculum genuinely needs N" and
+    # "the band allowed N" are different facts, and only the first can tell you
+    # whether a band is set correctly. Sits next to `confidence` because it is
+    # the same kind of thing — the planner's self-report, not its output.
+    # None for the pre-B3 planner, which does not make a cut.
+    plan_report: dict | None = None
     # Phase 3: the interactive learning graph. Set by the Planner Agent,
     # mutated by the mutator on each user signal, persisted by the store.
     # The Phase 1 `learning_path` field stays around for compatibility while

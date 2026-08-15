@@ -14,6 +14,7 @@ from backend.agents.mentor.curriculum import (
     AreaWire,
     ObjectiveWire,
     band_report,
+    core_set,
     dependency_closure,
     journey_size,
     order,
@@ -210,3 +211,37 @@ def test_ordering_keeps_every_objective_exactly_once():
     objectives = [obj(f"n{i}", depends_on=[f"n{i-1}"] if i else []) for i in range(10)]
     ordered = order(objectives)
     assert [o.id for o in ordered] == [f"n{i}" for i in range(10)]
+
+
+# ── the plan report: what the band is guarding ────────────────────────────────
+
+def test_the_core_is_measured_before_the_band_touches_it():
+    # The band is a guard around this number. Measuring it only AFTER the guard
+    # has run would make a mis-set band invisible — the journey would always
+    # look like it fitted.
+    objectives = [obj(f"r{i}", priority="required") for i in range(20)]
+    core = core_set(objectives, [area("a1")])
+    assert len(core) == 20
+    assert journey_size(select(objectives, [area("a1")], "map")) == 20
+
+
+def test_the_core_counts_dependency_closure_and_area_promotions():
+    objectives = [
+        obj("req", priority="required", area="a1", depends_on=["dep"]),
+        obj("dep", priority="optional", area="a1"),
+        obj("other", priority="recommended", area="a2"),
+    ]
+    core = core_set(objectives, [area("a1"), area("a2")])
+    assert core == {"req", "dep", "other"}
+
+
+def test_core_and_select_agree_on_what_is_required():
+    objectives = [
+        obj("req", priority="required", depends_on=["dep"]),
+        obj("dep", priority="optional"),
+        obj("spare", priority="recommended"),
+    ]
+    areas = [area("a1")]
+    core = core_set(objectives, areas)
+    selected = select(objectives, areas, "map")
+    assert {o.id for o in selected if o.priority == "required"} == core
