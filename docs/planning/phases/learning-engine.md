@@ -1710,6 +1710,7 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 | 2026-08-15 | **The `use_library` validation is honest about being a weak discriminator** | `understand_component` produced the same four `public_api` entry points and also opened near the public surface, because `psf/requests` *is* a library whose goal-relevant behaviour largely is its public API, the focus area was already caller-shaped, and the `render_dossier` fix benefits every goal type. The durable claim is therefore the **guarantee** — an investigation can no longer satisfy this goal without establishing what a developer imports — not the size of this particular diff | A run on a repository whose public surface and internals diverge more |
 
 | 2026-08-15 | **The Mutator's one-warm-up-per-node guard counted PLANNED prerequisite edges, so remediation could never fire on a B3 graph** | Found in the final validation pass. B3 emits one `prerequisite` edge per `depends_on`, so almost every unit carries one before the learner answers anything — the guard was permanently satisfied and every insertion declined with `prerequisite_exists`, on nodes never remediated. It worked on the `fastapi` session only because that target was the journey's first unit, which nothing depends on. Same class as the B6 route-rail defect, third occurrence of the same root cause: **planned and remedial `prerequisite` edges conflated**. Fixed with the documented tell — a spliced warm-up has no outgoing `sequence` edge | — |
+| 2026-08-15 | **The two bounded fixes shipped: prerequisite generation is diagnosis-aware, and a learner-requested warm-up no longer depends on the automatic action** | Detail and live A/B in [§18.15](#1815-the-two-bounded-fixes--shipped-and-validated). Across five real recorded failures the diagnosis moved the decision **twice, in opposite directions** — it suppressed an irrelevant warm-up that the pre-fix arm inserted for a learner who had said they did not know what a decorator was, and it produced a precisely targeted one on a node the pre-fix arm had wrongly declined. That two-way movement is what shows the diagnosis decides *between* candidates rather than biasing the outcome; the foundational bar was explicitly not relaxed, and the decline path stayed reachable in every case. The warm-up gating was backwards — a `partial` learner could ask for one while a `confused` learner whose gap was `wrong_model` could not — and validating the fix surfaced a second defect, `handleRetry` swallowing the `inserted` flag, which the change made common enough to belong in its blast radius | Evidence that the diagnosis biases the model toward inserting warm-ups nobody needed — the failure mode the foundational rule exists to prevent |
 | 2026-08-15 | **Multi-gap remediation designed, not implemented — the phase closes with two small fixes instead** | Full design in [§18](#18-outstanding-gaps--multi-gap-remediation-and-verification). A live trace showed one answer carrying two independent misconceptions, both correctly detected by the Grader and only one surviving: the schema holds a scalar `gap_kind`, re-teach's prompt is written in the singular, the Mutator never sees the answer at all, and nothing reads attempt history. The node could then reach `understood` with the second misconception intact. The architectural response changes the Grader schema, adds a column, makes `understanding_state` derived and touches API and frontend — the surface area of the whole B-series — so it goes to a dedicated phase rather than the tail of this one, where Phase 3's own roadmap already places the persistent understanding graph. Two defects are small enough to close here: the Mutator's diagnosis-blindness and learner-requested warm-up being unavailable in exactly the states that need it most | LQ8 and LQ10 (gap cap, verification rounds) decide whether the design can produce a non-terminating session; both are answered before implementation, not during |
 | 2026-08-15 | **Final validation audit recorded**, classifying every Done-when criterion | See the audit above §15. Eight criteria observed end-to-end, three calibrated/measured, four tested-only, one obsolete-and-corrected, one measured-and-not-met. Two behaviours remain unobserved live and are named rather than claimed: prune-ahead (#6) and `wrong_model` → re-teach in this particular pass (#7) | — |
 | 2026-08-15 | **Grader strictness investigated and refuted — nothing tuned** | Evaluation in [§14.1](#141-grader-calibration--evaluation-2026-08-15). 48 authored cases across six real objectives, five lesson kinds and both repositories: **classification agreement 48/48**, and every one of the twelve strong answers (`complete` and `concise`) graded `understood`. A second probe answering the *prompt* rather than the *objective* — predicted to be marked down — also returned 6/6 `understood`. The live observation is explained by the corpus: attempts of 80+ words are `understood` 8/9, and most live attempts were deliberately-degraded probes written to exercise the adaptation branches. Expected labels were committed before any output was seen | Evidence from real learners — not authored probes — that full answers are being under-credited |
@@ -1782,7 +1783,7 @@ Mutator did not know A existed.** It picked the most foundational structural nei
 `Node.expand`. It would have produced the same warm-up for *any* wrong answer on that node.
 The targeting was proximity, not diagnosis.
 
-**Minimal fix** (specified, not implemented; ~30 lines, no schema change, no new column):
+**FIXED 2026-08-15.** Shipped as one of the two bounded fixes that close this phase; the specification below is what was built, and [§18.15](#1815-the-two-bounded-fixes--shipped-and-validated) records the live A/B. No schema change, no new column:
 
 1. A frozen `Diagnosis` dataclass in `mutator.py`: `answer`, `rationale`, `gap_kind`, and
    (once §18.3 exists) `claim`.
@@ -2036,6 +2037,8 @@ a failed answer the button appears **only when the system already decided to ins
 The result is backwards: a `partial` learner can request a warm-up, and a `confused` learner
 whose gap was `wrong_model` cannot. The learner with the weaker grasp has fewer options.
 
+**FIXED 2026-08-15**, together with a decline message the change made necessary — see [§18.15](#1815-the-two-bounded-fixes--shipped-and-validated).
+
 **Design.** Separate the two concepts explicitly:
 
 - **System-selected prerequisite** — the policy found a foundational gap; the graph mutates
@@ -2093,7 +2096,7 @@ padding the path.
 
 ### 18.13 Recommendation: phase placement
 
-**Split it.**
+**Split it.** *Accepted 2026-08-15; the two bounded fixes are shipped and validated ([§18.15](#1815-the-two-bounded-fixes--shipped-and-validated)). The dedicated phase is not started.*
 
 **Close the Learning Engine phase with the two small fixes**, both of which repair shipped
 behaviour and neither of which touches the schema:
@@ -2127,6 +2130,92 @@ Phase 3's centrepiece in the wrong phase.
 
 `LQ8` and `LQ10` together decide whether this design can produce a session that never
 terminates. Both should be answered before implementation starts, not during.
+
+### 18.15 The two bounded fixes — shipped and validated
+
+Both close **this** phase. Neither touches the Grader schema, the persistence
+schema, `understanding_state`, or the adaptation policy's shape, so neither
+disturbs the B3 guard-band calibration or the frozen cost baseline. 813 tests pass.
+
+#### Fix 1 — prerequisite generation is diagnosis-aware
+
+A frozen `Diagnosis` (`answer`, `rationale`, `gap_kind`) threaded
+`mutate` → `_mutate_prerequisite` → `_generate_prerequisite_node` →
+`_build_prereq_prompt`, defaulting to `None` everywhere so every prior call path
+is unchanged. `/respond` builds one from the grade it already holds. `/retry`
+passes none and the Mutator recovers it from `node.attempts[-1]` — **the first
+real consumer of attempt history in the codebase** (§18.1, loss point 4).
+
+The foundational rule is deliberately *not* relaxed. `_PREREQ_SYSTEM_PROMPT`
+gains: the diagnosis decides **between** candidates that already clear the bar,
+it does not lower it; a candidate that speaks to the misconception but is a peer
+of the confused node is still wrong and must return `{"decision": "none"}`; and
+never repeat the misconception back as a lesson topic.
+
+**Live A/B on five real recorded failures** — real repositories, real candidate
+pools, real Sonnet calls, real grounding (`scripts/validate_prereq_diagnosis.py`).
+Arm A passes no diagnosis (pre-fix), arm B passes the recorded one:
+
+| case | gap | A — pre-fix | B — post-fix |
+|---|---|---|---|
+| aima `63644c89` — the two-misconception answer | `wrong_model` | decline, generic | decline, **naming the actual gap** |
+| fastapi `567b6d88` | `missing_prerequisite` | decline, generic | decline, identifying the gap as a *Python language* concept no chunk can teach |
+| requests `50eccc35` | `missing_prerequisite` | **INSERTED an irrelevant warm-up** (`prepare_*` ordering, for a learner who said they do not know what a decorator is) | **declined — correct** |
+| fastapi `a1f6dd40` | `wrong_model` | decline | decline (pool genuinely too thin) |
+| aima `a3df61ad` — `actions()`/`result()` swapped | `wrong_model` | **declined — missed it** | **INSERTED**, anchored on `Problem.result`, objective: *"`actions` is always called first to get candidates, and `result` is called afterward with one of those"* |
+
+Three unchanged with visibly better-reasoned declines; **two changed, in opposite
+directions and both correct** — one unhelpful insertion suppressed, one helpful
+insertion that the pre-fix arm had wrongly declined. That two-way movement is the
+evidence that the diagnosis is *deciding between candidates* rather than simply
+biasing toward inserting or toward declining.
+
+Worth recording honestly: on this corpus, declining is usually the right answer.
+These are high-level nodes whose candidate pools are siblings and sub-methods,
+not foundations — and several recorded gaps are Python *language* knowledge that
+no chunk of the target repository can teach. The pre-fix arm could not tell those
+apart, and padded the path once because of it.
+
+#### Fix 2 — a learner-requested warm-up no longer depends on the automatic action
+
+The gating was `FAILED.includes(classification) && adaptation?.kind === "prerequisite"`.
+It is now one derived flag — offered wherever the objective was not reached,
+suppressed only when a warm-up was just spliced in (the Mutator caps them at one
+per node, so offering there would promise something it would decline). The
+`partial` branch's own copy of the button is gone; there is now one offer in one
+place.
+
+**A second defect surfaced while validating it, and is fixed here.**
+`handleRetry` ignored the `inserted` flag the API already returns, so a declined
+warm-up silently reset the form — the learner clicked a button and nothing
+visibly happened. That path was previously reachable only from `partial`; making
+the offer general made it common, so it is part of this change's blast radius
+rather than a pre-existing issue to leave. It now reports the decline and keeps
+the verdict panel up, so the other ways forward stay reachable.
+
+**Live validation**, isolated copy on ports 3021/8021 so the running dev servers
+on 3000/8000 were never touched, against a throwaway clone of a real session so
+no evidence session gained attempts:
+
+1. Answered `Understand the Agent–Environment contract` with a confident
+   misconception ("storing `program` as a callable is purely a performance
+   optimization").
+2. Graded **`confused`** with adaptation **`reteach`** and `mutation.kind: none`
+   — **exactly the state that previously offered nothing**.
+3. **"Build me a warm-up" was offered**, alongside "Try again" and "Move on
+   anyway".
+4. Clicking it reached `/retry` → `200`, the Mutator declined, and the UI now
+   says so: *"We couldn't build a warm-up for this one, so it's your call how to
+   continue."*
+
+#### What was NOT done
+
+The verification principle — that after remediation has revealed the answer,
+understanding should be re-checked with a **new question testing the same
+concept**, not by re-asking the original — is designed in [§18.7](#187-verification--a-fresh-question-never-the-same-one)
+and **deliberately not implemented**. "Try again" still re-shows the answered
+question. That is the follow-up phase's first job, and it is recorded here so the
+gap is not mistaken for an oversight.
 
 ---
 

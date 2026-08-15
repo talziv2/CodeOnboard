@@ -185,7 +185,16 @@ export default function LessonPanel({
   const handleRetry = async () => {
     setLoading(true);
     try {
-      await retry(sessionId, nodeId);
+      const { inserted } = await retry(sessionId, nodeId);
+      if (!inserted) {
+        // Declining is a real answer — no candidate was a smaller foundation
+        // than the stop they are on. Say so and leave the verdict panel up, so
+        // the other ways forward stay reachable. Silently resetting the form
+        // read as the button doing nothing, and this path became far easier to
+        // reach once the offer stopped depending on the automatic action.
+        setError(t.lesson.warmUpUnavailable);
+        return;
+      }
       setResult(null);
       setAnswer("");
       await onAdvance();
@@ -257,6 +266,18 @@ export default function LessonPanel({
   const canAnswerAgain =
     adaptation !== undefined &&
     ["hint", "followup", "reteach"].includes(adaptation.kind);
+  // Stepping back is the LEARNER's call, and it must not depend on the system
+  // having independently chosen `prerequisite` (§18.11). That gating was
+  // backwards: a `partial` learner could ask for a warm-up, while a `confused`
+  // one whose gap was `wrong_model` — re-taught, not re-structured — could not.
+  // The weaker grasp got fewer options. Offered wherever the objective was not
+  // reached, except when a warm-up was just spliced in: the Mutator caps them at
+  // one per node, so offering there would promise something it would decline.
+  const warmUpInserted = result?.mutation?.kind === "prerequisite";
+  const canRequestWarmUp =
+    result !== null &&
+    result?.classification !== "understood" &&
+    !warmUpInserted;
   const recovered =
     warmUpTitle !== null &&
     attempts.some((a) => FAILED.includes(a.classification)) &&
@@ -502,24 +523,16 @@ export default function LessonPanel({
               </button>
             )}
 
-            {/* Partly there: moving on is the default, a warm-up is on offer. */}
+            {/* Partly there: moving on is the default. The warm-up offer is
+                shared with every other non-understood state, below. */}
             {result.classification === "partial" && (
-              <>
-                <button
-                  onClick={handleAdvance}
-                  disabled={loading}
-                  className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
-                >
-                  {loading ? t.lesson.loadingShort : t.lesson.nextStop}
-                </button>
-                <button
-                  onClick={handleRetry}
-                  disabled={loading}
-                  className="rounded border border-rule px-4 py-2 text-[13px] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
-                >
-                  {t.lesson.buildWarmUp}
-                </button>
-              </>
+              <button
+                onClick={handleAdvance}
+                disabled={loading}
+                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+              >
+                {loading ? t.lesson.loadingShort : t.lesson.nextStop}
+              </button>
             )}
 
             {canAnswerAgain && (
@@ -560,6 +573,17 @@ export default function LessonPanel({
                     : t.lesson.moveOnAnyway}
                 </button>
               </>
+            )}
+
+            {/* One offer, every state where the objective was not reached. */}
+            {canRequestWarmUp && (
+              <button
+                onClick={handleRetry}
+                disabled={loading}
+                className="rounded border border-rule px-4 py-2 text-[13px] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+              >
+                {t.lesson.buildWarmUp}
+              </button>
             )}
           </div>
         </div>

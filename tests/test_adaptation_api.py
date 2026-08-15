@@ -275,3 +275,73 @@ def test_an_unrelated_off_topic_answer_still_changes_nothing(p, t, c, client):
     # And it still does not touch the earned state or the weak-spot flag.
     assert node["understanding_state"] == "not_started"
     assert node["weak_spot"] is False
+
+
+# ── the warm-up is chosen for the diagnosis, not just for the node (§18.2) ────
+
+
+@CLONE
+@TEACH
+@PIPE
+def test_respond_passes_the_graded_answer_into_prerequisite_generation(p, t, c, client):
+    """The branch that reshapes the graph now sees what the learner wrote.
+
+    `hint`, `followup` and `reteach` always did; `prerequisite` did not, so it
+    selected a warm-up for the NODE from structural candidates alone.
+    """
+    session_id, _ = _start(client)
+    seen = {}
+
+    def _capture(state, signal, client=None, diagnosis=None):
+        seen["diagnosis"] = diagnosis
+        state.last_mutation = {"kind": "none"}
+        return state
+
+    with patch("backend.api.run_grader",
+               side_effect=_grader("confused", "missing_prerequisite")), \
+         patch("backend.api.mutate_graph", side_effect=_capture):
+        client.post(f"/session/{session_id}/respond",
+                    json={"response": "depth is filled in later by the search"})
+
+    diagnosis = seen["diagnosis"]
+    assert diagnosis is not None
+    assert diagnosis.answer == "depth is filled in later by the search"
+    assert diagnosis.rationale == "because"
+    assert diagnosis.gap_kind == "missing_prerequisite"
+
+
+@CLONE
+@TEACH
+@PIPE
+def test_retry_recovers_the_diagnosis_from_the_recorded_attempt(p, t, c, client):
+    """A learner-requested warm-up carries the diagnosis even with no grade in scope.
+
+    `/retry` passes none, so the Mutator reads the node's own attempt history —
+    which nothing read before this fix.
+    """
+    session_id, node_id = _start(client)
+    with patch("backend.api.run_grader",
+               side_effect=_grader("confused", "wrong_model")), \
+         patch("backend.api._node_source", return_value="source"), \
+         patch("backend.api.teaching_respond.reteach", return_value=None):
+        client.post(f"/session/{session_id}/respond",
+                    json={"response": "solution() returns states and actions"})
+
+    seen = {}
+
+    def _capture(state, signal, client=None, diagnosis=None):
+        from backend.agents.mentor.mutator import Diagnosis
+        node = state.graph.nodes[state.graph.current_node_id]
+        seen["recovered"] = Diagnosis.from_attempt(
+            node.attempts[-1] if node.attempts else None
+        )
+        state.last_mutation = {"kind": "none"}
+        return state
+
+    with patch("backend.api.mutate_graph", side_effect=_capture):
+        client.post(f"/session/{session_id}/retry", json={"node_id": node_id})
+
+    recovered = seen["recovered"]
+    assert recovered is not None
+    assert recovered.answer == "solution() returns states and actions"
+    assert recovered.gap_kind == "wrong_model"

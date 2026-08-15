@@ -37,7 +37,7 @@ from backend.agents.goal import (
     start_session,
 )
 from backend.agents.grader import run as run_grader
-from backend.agents.mentor.mutator import mutate as mutate_graph
+from backend.agents.mentor.mutator import Diagnosis, mutate as mutate_graph
 from backend.agents.teaching import run as run_teaching
 from backend.agents.teaching import respond as teaching_respond
 from backend.learning import adaptation
@@ -517,7 +517,14 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
             mutation_state.repo_path = clone_repo(graph.repo_url)
             # The Mutator's one-prerequisite-per-node cap still applies, so
             # repeated failures cannot stack warm-ups.
-            mutate_graph(mutation_state, "prerequisite", client=client)
+            mutate_graph(
+                mutation_state, "prerequisite", client=client,
+                # The warm-up is chosen for the diagnosed misconception, not
+                # merely for the node (§18.2). We already hold the grade here.
+                diagnosis=Diagnosis(
+                    answer=body.response, rationale=rationale, gap_kind=gap_kind,
+                ),
+            )
             mutation = mutation_state.last_mutation or {"kind": "none"}
             state.errors.extend(mutation_state.errors)
         except Exception as exc:  # a failed warm-up must not lose the grade
@@ -577,6 +584,9 @@ def session_retry(session_id: str, body: dict) -> dict:
     state = OnboardState(repo_url=graph.repo_url, goal=graph.goal, client=client)
     state.graph = graph
     state.repo_path = clone_repo(graph.repo_url)
+    # No grade in scope — the learner asked for this warm-up after answering, so
+    # the diagnosis comes off the node's own attempt history. `mutate` does the
+    # lookup when we pass nothing, which keeps the fallback in one place.
     mutate_graph(state, "prerequisite", client=client)
     learning_store.save_graph(graph, SESSIONS_DB_PATH)
     if graph.current_node_id == current:

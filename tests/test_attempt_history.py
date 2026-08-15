@@ -80,7 +80,7 @@ def _grader(classification: str):
     return _apply
 
 
-def _inserts_prerequisite(state, signal, client=None):
+def _inserts_prerequisite(state, signal, client=None, diagnosis=None):
     current = state.graph.current_node_id
     prereq = LearningNode(
         title="Prerequisite",

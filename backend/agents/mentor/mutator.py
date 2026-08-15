@@ -44,6 +44,48 @@ MAX_TOKENS = 1024
 CANDIDATE_COUNT = 5
 
 
+@dataclass(frozen=True)
+class Diagnosis:
+    """What the learner actually got wrong, for the branch that reshapes the graph.
+
+    `hint`, `followup` and `reteach` have always received the learner's answer and
+    the Grader's rationale; `prerequisite` — the only adaptation that changes the
+    graph — received neither (learning-engine.md §18.2). It selected a warm-up for
+    the NODE, from structural candidates, without knowing what the developer
+    believed. When that happened to look well-targeted it was proximity, not
+    diagnosis: the same warm-up would have been generated for any wrong answer on
+    that node.
+
+    Optional everywhere. A caller with no grade in hand — an older session, a
+    direct `mutate()` call in a test — passes nothing and gets the previous
+    behaviour exactly.
+    """
+
+    answer: str = ""
+    rationale: str = ""
+    gap_kind: str = ""
+
+    def __bool__(self) -> bool:
+        return bool(self.answer.strip() or self.rationale.strip())
+
+    @classmethod
+    def from_attempt(cls, attempt: dict | None) -> "Diagnosis | None":
+        """Build one from a recorded attempt, or None if there is nothing to say.
+
+        `/retry` reaches the Mutator with no grade in scope — the learner clicked
+        "build me a warm-up" some time after answering. The diagnosis is on the
+        node, in `attempts`, which until now nothing read.
+        """
+        if not attempt:
+            return None
+        diagnosis = cls(
+            answer=str(attempt.get("answer") or ""),
+            rationale=str(attempt.get("rationale") or ""),
+            gap_kind=str(attempt.get("gap_kind") or ""),
+        )
+        return diagnosis or None
+
+
 class _NodeWire(BaseModel):
     title: str
     file: str
@@ -65,6 +107,7 @@ def mutate(
     state: OnboardState,
     signal: str,
     client: anthropic.Anthropic | None = None,
+    diagnosis: Diagnosis | None = None,
 ) -> OnboardState:
     if state.graph is None:
         state.errors.append("mutator: graph missing")
@@ -82,7 +125,7 @@ def mutate(
     if signal == "prerequisite":
         if client is None:
             client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-        return _mutate_prerequisite(state, current, client)
+        return _mutate_prerequisite(state, current, client, diagnosis)
 
     state.errors.append(f"mutator: unknown signal {signal!r}")
     state.last_mutation = {"kind": "none"}
@@ -133,7 +176,10 @@ def _has_prerequisite(graph: LearningGraph, node_id: str) -> bool:
 
 
 def _mutate_prerequisite(
-    state: OnboardState, current: str, client: anthropic.Anthropic
+    state: OnboardState,
+    current: str,
+    client: anthropic.Anthropic,
+    diagnosis: Diagnosis | None = None,
 ) -> OnboardState:
     graph = state.graph
 
@@ -144,7 +190,13 @@ def _mutate_prerequisite(
         return state
 
     anchor = graph.nodes[current]
-    new_node = _generate_prerequisite_node(state, anchor, client)
+    if diagnosis is None:
+        # `/retry` arrives with no grade in scope: the learner asked for a warm-up
+        # after the fact. The diagnosis is already on the node.
+        diagnosis = Diagnosis.from_attempt(
+            anchor.attempts[-1] if anchor.attempts else None
+        )
+    new_node = _generate_prerequisite_node(state, anchor, client, diagnosis)
     if isinstance(new_node, _Declined):
         # A real answer, not a failure: candidates were offered and none was a
         # smaller foundation than the node the developer is already on. Inserting
@@ -258,7 +310,10 @@ class _Declined:
 
 
 def _generate_prerequisite_node(
-    state: OnboardState, anchor: LearningNode, client: anthropic.Anthropic
+    state: OnboardState,
+    anchor: LearningNode,
+    client: anthropic.Anthropic,
+    diagnosis: Diagnosis | None = None,
 ) -> LearningNode | _Declined | None:
     """A prerequisite node, a `_Declined`, or None on failure.
 
@@ -280,7 +335,8 @@ def _generate_prerequisite_node(
 
     # D8, step 2 of 3: PEDAGOGICAL SELECTION — a reasoning step, not a lookup.
     user_content = _build_prereq_prompt(
-        anchor, candidates, state.goal or {}, structural=structural
+        anchor, candidates, state.goal or {}, structural=structural,
+        diagnosis=diagnosis,
     )
     try:
         response = client.messages.create(
@@ -377,6 +433,15 @@ Rules:
 - The concept must be genuinely MORE foundational than the node the developer
   was confused about — something that, once understood, makes the harder node
   click.
+- If the user content includes WHAT THE DEVELOPER ACTUALLY WROTE and why it fell
+  short, that diagnosis decides BETWEEN candidates that clear the foundational
+  bar — it does not lower the bar. Among candidates that are genuinely more
+  foundational, choose the one that unblocks THAT specific misconception. A
+  candidate that speaks directly to what they got wrong but is a peer of the
+  node, not a foundation for it, is still the wrong answer: return
+  {"decision": "none"} rather than teaching a sibling concept. Never repeat the
+  misconception back as a lesson topic — teach the foundation that makes it
+  impossible to hold.
 - The developer's background and familiarity (in the user content) are a
   TIEBREAKER, not a primary signal. First, ensure the chosen prerequisite
   teaches the foundational concept that actually unblocks the confused node.
@@ -390,6 +455,7 @@ Rules:
 def _build_prereq_prompt(
     anchor: LearningNode, candidates: list[dict], goal: dict,
     structural: list | None = None,
+    diagnosis: Diagnosis | None = None,
 ) -> str:
     brief = anchor.lesson_brief or {}
     # Why each candidate was offered, when the dossier supplied it. This is what
@@ -410,10 +476,22 @@ def _build_prereq_prompt(
         if why_offered:
             header += f"\n  offered because: {why_offered}"
         chunk_lines.append(f"{header}\n{c['content']}")
+    # What they actually got wrong, when we know it. Placed BEFORE the node
+    # description because it is the sharper signal: the node says which lesson
+    # failed, this says why.
+    diagnosed = ""
+    if diagnosis:
+        parts = ["What the developer actually wrote:\n" + diagnosis.answer.strip()]
+        if diagnosis.rationale.strip():
+            parts.append("Why it fell short:\n" + diagnosis.rationale.strip())
+        if diagnosis.gap_kind and diagnosis.gap_kind != "none":
+            parts.append(f"Diagnosed gap: {diagnosis.gap_kind}")
+        diagnosed = "\n\n".join(parts) + "\n\n"
     return (
         f"Developer profile:\n"
         f"  familiarity with THIS codebase: {goal.get('familiarity', 'unknown')}\n"
         f"  background: {goal.get('background', 'unknown')}\n\n"
+        f"{diagnosed}"
         f"The developer was confused while learning this node:\n"
         f"  title: {anchor.title}\n"
         f"  the claim they could not make: {anchor.objective() or '(none stated)'}\n"

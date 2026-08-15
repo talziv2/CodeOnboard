@@ -346,7 +346,7 @@ def test_respond_unknown_session_404(client):
 
 # ── Part 6: mutation on confused, skip, override ──────────────────────────────
 
-def _mutator_inserts_prerequisite(state, signal, client=None):
+def _mutator_inserts_prerequisite(state, signal, client=None, diagnosis=None):
     # Mimic the real mutator's prerequisite insertion without RAG/LLM.
     graph = state.graph
     current = graph.current_node_id
