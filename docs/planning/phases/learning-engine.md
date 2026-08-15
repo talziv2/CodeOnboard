@@ -1189,6 +1189,17 @@ learning "feels better".
 
 ### Cost — measured 2026-08-15
 
+> **The durable record is [`evidence/learning-engine-cost.md`](evidence/learning-engine-cost.md)**
+> — an append-only cost history, where this measurement is **Baseline 1 —
+> pre-cost-optimization**. Future measurements are appended there rather than replacing it,
+> so the phase keeps a comparable trail of baseline → optimisation attempts → final result.
+> The summary below is a pointer; that document holds the full provenance, configuration,
+> pricing table, cache figures, assumptions and limitations.
+>
+> **Cost optimisation is deferred to a dedicated phase** after the planned functionality is
+> complete — optimising prompts, outputs, model usage or pipeline stages that are still
+> changing would tune the wrong system and invalidate the calibration already done.
+
 `psf/requests`, `understand_architecture`, `code_depth: working`, 16 units planned. Raw
 data: [`evidence/cost-measurement.json`](evidence/cost-measurement.json). Costs use the
 repo's existing `PRICING` table with its cache multipliers. **Nothing was changed to chase
@@ -1427,6 +1438,8 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 | 2026-08-15 | **The corrected ceiling was validated by direct observation, and the validation passed** | Every `fastapi × map` run in the matrix was clamped, so its unclamped demand was inferred rather than seen. Two runs at ceiling 18 produced journeys of **11 and 15** with the ceiling firing **0 of 2** — variance restored (sd 0.00 → 2.83), and a maximum of exactly 15, which is what `journey + demoted_by_band` had predicted. That agreement validates the derivation method itself, not just this one number, which matters because any future recalibration will use it | — |
 
 | 2026-08-15 | **Cost measured per path: ~$0.41 for a 12-unit session against a $0.10 target — [§14](#14-done-when) item 16 is NOT met** | Full table in §14. Nothing was changed to chase the target; the instruction was to measure the system as it is, and a measurement taken while tuning the thing measured is worth nothing | — |
+| 2026-08-15 | **Cost evidence moved to its own append-only record**, [`evidence/learning-engine-cost.md`](evidence/learning-engine-cost.md), with this measurement as **Baseline 1 — pre-cost-optimization** | A decision-log row and a §14 table can say what cost is *today*; neither can show a trajectory. Cost work will produce a baseline, several attempts and a final number, and the question at the end is not only "did it fall" but "did the Learning Engine's behaviour and quality survive the fall" — which needs entries side by side, appended and never rewritten | — |
+| 2026-08-15 | **Cost optimisation deferred to a dedicated phase after the planned functionality is complete** | Optimising prompts, outputs, model usage or pipeline stages while they are still changing would tune a system that no longer exists by the time the phase closes — and any change to what the planner proposes invalidates the guard-band calibration already paid for. Baseline 1 is frozen as the comparison point; §14 item 16 stays explicitly open, and calibration is **not** reopened on account of cost | — |
 | 2026-08-15 | **The budget is a planning-time problem, not a session-time one** | Planning is **74%** of a session, teaching and grading **26%**, and adaptation a rounding error (+$0.0005 for a hint, +$0.0008 for a follow-up). Any optimisation aimed at lessons or adaptation is aimed at the quarter of the bill that is already cheap. The two real line items are `goal_investigation` at $0.1832 and the single planner call at $0.1186 | — |
 | 2026-08-15 | **The investigation's cost is output tokens, not input** — prompt caching is already near-perfect there | 352,686 cache reads against 509 uncached input tokens, and 21,614 **output** tokens across 20 turns (~59% of that stage's cost). Recorded because the obvious first instinct — "add caching" — is aimed at a problem that does not exist; what would move the number is how much the exploration *writes*. The planner call is the opposite case: 16,635 input tokens with **zero** cache reads | — |
 | 2026-08-15 | **B3's planner costs +$0.037 (+45%) against the pre-B3 planner on the same dossier** | $0.1186 vs $0.0817, almost entirely output (4,579 vs 2,251 tokens) — the price of over-generating objectives with anchors and areas. This is what flipping `CODEONBOARD_CURRICULUM` to `1` costs per session, measured rather than guessed. Whether the curriculum is worth four cents is a product judgement, not a measurement | — |
