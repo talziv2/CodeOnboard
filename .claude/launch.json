@@ -19,13 +19,6 @@
       "runtimeArgs": ["run", "dev"],
       "cwd": "frontend",
       "port": 3000
-    },
-    {
-      "name": "frontend-e2e-3010",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "-p", "3010"],
-      "cwd": "_tmp_compare/fe3010",
-      "port": 3010
     }
   ]
 }
