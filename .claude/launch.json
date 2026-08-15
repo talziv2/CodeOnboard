@@ -8,6 +8,12 @@
       "port": 8000
     },
     {
+      "name": "backend-curriculum",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "python", "-c", "import os; os.environ['CODEONBOARD_CURRICULUM'] = '1'; os.environ['CODEONBOARD_ALLOWED_ORIGINS'] = 'http://localhost:3000,http://localhost:3010'; import uvicorn; uvicorn.run('backend.api:app', port=8010)"],
+      "port": 8010
+    },
+    {
       "name": "frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
