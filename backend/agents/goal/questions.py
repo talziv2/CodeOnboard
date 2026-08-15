@@ -44,7 +44,12 @@ FAMILIARITY_OPTIONS: list[str] = [
 # Display string → the goal_type it routes to. The display string is what comes
 # back on the wire and what the rest of the backend reasons about.
 GOAL_TYPE_MAP: dict[str, str] = {
-    "Use it in my own project": "understand_component",
+    # Someone who wants to USE a library needs its public surface, its contracts
+    # and how to configure and extend it — not a dive into one internal feature.
+    # This routed to `understand_component` until 2026-08-15, which optimised the
+    # investigation for four internal components and never required a
+    # caller-facing entry point (LQ5).
+    "Use it in my own project": "use_library",
     "Understand the architecture (layers, boundaries, design)": "understand_architecture",
     "Improve or extend the codebase safely": "improve_existing_system",
     "Contribute code / open a PR": "contribute_code",
@@ -114,7 +119,15 @@ _ARCHITECTURE_FOLLOWUP = Question(
     text="Any specific architectural concern (e.g. request lifecycle, extension surface, plugin system), or a full architectural tour?",
 )
 
+_USE_LIBRARY_FOLLOWUP = Question(
+    key="focus_area",
+    text="What are you trying to do with it? (e.g. \"send authenticated requests\", \"stream large responses\") — or say \"the main surface\" for the usual entry points.",
+)
+
 FOLLOWUP_QUESTIONS: dict[str, list[Question]] = {
+    # Keyed on `focus_area` like the other understand-style follow-ups, so
+    # everything downstream that already reads `focus_area` keeps working.
+    "use_library": [_USE_LIBRARY_FOLLOWUP],
     "understand_system": [_UNDERSTAND_FOLLOWUP],
     "understand_component": [_UNDERSTAND_FOLLOWUP],
     "understand_architecture": [_ARCHITECTURE_FOLLOWUP],

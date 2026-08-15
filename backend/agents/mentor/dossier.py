@@ -280,9 +280,23 @@ def render_dossier(
 
     entry_points = _entries(dossier, "entry_points")[0]
     if entry_points:
-        section = ["## Entry points into the goal-relevant behaviour"]
+        section = [
+            "## Entry points into the goal-relevant behaviour",
+            "`public_api` is what a developer USING this code imports and calls; "
+            "`runtime` is what invokes the behaviour when the system runs. They "
+            "are often different definitions, and which one a learner should meet "
+            "first depends on the goal.",
+        ]
         for e in entry_points:
-            section.append(f"- {e.get('file')}:{e.get('symbol')} — {e.get('how_it_enters')}")
+            # The perspective was collected by the investigation and dropped
+            # here, so the planner could not tell a caller-facing entry point
+            # from a runtime one for ANY goal type. Phase A gathered the
+            # distinction; this is what makes it usable.
+            perspective = str(e.get("perspective") or "").strip()
+            label = f" [{perspective}]" if perspective else ""
+            section.append(
+                f"- {e.get('file')}:{e.get('symbol')}{label} — {e.get('how_it_enters')}"
+            )
         parts.append("\n".join(section))
 
     flows = _entries(dossier, "flows")[0]

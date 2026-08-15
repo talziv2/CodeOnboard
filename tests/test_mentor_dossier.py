@@ -12,6 +12,7 @@ state.investigation is present.
 
 No network: scripted fake client.
 """
+import copy
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -408,3 +409,42 @@ def test_the_prompt_demands_a_claim_rather_than_a_topic():
     assert "BAD" in dossier_path._SYSTEM_PROMPT
     assert "GOOD" in dossier_path._SYSTEM_PROMPT
     assert "marked against" in dossier_path._SYSTEM_PROMPT
+
+
+# ── entry-point perspective reaches the planner (LQ5) ─────────────────────────
+
+def test_entry_point_perspective_survives_dossier_rendering(repo):
+    """Phase A collected `perspective`; the renderer dropped it.
+
+    Without this the planner could not tell a caller-facing entry point from a
+    runtime one for ANY goal type — the distinction existed in the schema, was
+    verified by the investigation, and then vanished on the way to the prompt.
+    """
+    from backend.repo.skeleton import build_skeleton
+
+    dossier = copy.deepcopy(DOSSIER)
+    dossier["entry_points"] = [
+        {"file": "src/app/client.py", "symbol": "fetch",
+         "perspective": "public_api", "how_it_enters": "what callers import"},
+        {"file": "src/app/transport.py", "symbol": "send",
+         "perspective": "runtime", "how_it_enters": "invoked internally"},
+    ]
+    rendered = dossier_path.render_dossier(build_skeleton(repo), dossier, dict(GOAL))
+
+    assert "[public_api]" in rendered
+    assert "[runtime]" in rendered
+    # …and the prompt explains what the two mean, so the label is usable.
+    assert "USING this code imports and calls" in rendered
+
+
+def test_rendering_survives_an_entry_point_with_no_perspective(repo):
+    # Dossiers written before the field was required.
+    from backend.repo.skeleton import build_skeleton
+
+    dossier = copy.deepcopy(DOSSIER)
+    dossier["entry_points"] = [
+        {"file": "src/app/client.py", "symbol": "fetch", "how_it_enters": "public API"},
+    ]
+    rendered = dossier_path.render_dossier(build_skeleton(repo), dossier, dict(GOAL))
+    assert "src/app/client.py:fetch" in rendered
+    assert "[]" not in rendered

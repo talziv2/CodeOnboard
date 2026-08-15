@@ -50,6 +50,7 @@ _DEPTH_BY_CODE_DEPTH: dict[str, str] = {
 class GoalOutput(BaseModel):
     primary_goal: str
     goal_type: Literal[
+        "use_library",
         "understand_system",
         "understand_component",
         "understand_architecture",
@@ -160,6 +161,10 @@ And these optional keys (include only when the user provided relevant data):
 
 Rules:
 - goal_type must be one of:
+    use_library                  — the developer wants to USE this code in their
+                                   own project: what to import and call, how to
+                                   configure and extend it, what its contracts
+                                   and pitfalls are
     understand_system            — broad "read this library" tour
     understand_component         — focused dive into one feature
     understand_architecture      — layers, boundaries, extension surface, design

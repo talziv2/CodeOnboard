@@ -688,3 +688,42 @@ def test_the_brief_names_no_repository_or_framework():
     for banned in ("fastapi", "requests", "psf", "starlette", "pydantic",
                    "urllib3", "security/", "sessions.py", "dependency injection"):
         assert banned not in corpus, banned
+
+
+# ── use_library exit criteria (LQ5) ───────────────────────────────────────────
+
+def test_use_library_requires_a_public_api_entry_point():
+    """The distinction Phase A collected but no criteria ever demanded.
+
+    A `use_library` investigation can satisfy every other floor with runtime
+    entry points alone — and then the learner is never told what to import.
+    """
+    criteria = investigation.CRITERIA_BY_GOAL_TYPE["use_library"]
+    assert criteria.min_public_api_entry_points >= 1
+
+
+def test_other_goal_types_do_not_demand_a_public_api_entry_point():
+    # It is the right answer for a caller and the wrong one for most goals, so
+    # it must not become a global floor.
+    for name, criteria in investigation.CRITERIA_BY_GOAL_TYPE.items():
+        if name != "use_library":
+            assert criteria.min_public_api_entry_points == 0
+    assert investigation.BASE_CRITERIA.min_public_api_entry_points == 0
+
+
+def test_use_library_keeps_contracts_and_a_runtime_flow():
+    # Without these it degrades into a usage tutorial that cannot explain why
+    # anything behaves as it does.
+    criteria = investigation.CRITERIA_BY_GOAL_TYPE["use_library"]
+    assert criteria.min_contracts >= 2
+    assert criteria.min_flows >= 1
+    assert criteria.min_flow_steps >= 3
+
+
+def test_runtime_only_entry_points_do_not_satisfy_use_library():
+    from backend.repo.investigation import ExitCriteria
+
+    criteria = ExitCriteria(min_public_api_entry_points=1)
+    entries = [{"perspective": "runtime"}, {"perspective": "runtime"}]
+    public = [e for e in entries if e.get("perspective") == "public_api"]
+    assert len(public) < criteria.min_public_api_entry_points

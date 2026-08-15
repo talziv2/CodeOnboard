@@ -447,6 +447,23 @@ ANCHORS — every unit is grounded in real code
   claiming to be about a cross-file flow while pointing at one file is not.
 
 CALIBRATION
+  By `goal_type`, when it is `use_library` — the developer intends to USE this
+  code in their own project, not to study it:
+    - START FROM THE CALLER-FACING SURFACE. The first units are about what they
+      import and call: the entry points marked `public_api`, and the shape of a
+      correct call. An internal definition is not where this journey begins,
+      even when it is the more interesting code.
+    - Then what happens BEHIND that call, where it changes how they use it —
+      enough runtime flow to explain the behaviour they will observe, not a tour
+      of the implementation for its own sake.
+    - Cover CONTRACTS and CONSTRAINTS (what they must honour, what they may
+      rely on), the CONFIGURATION and EXTENSION points they are meant to reach
+      for, and the RISKS of common misuse.
+    - Internal components are SUPPORTING EVIDENCE for those objectives, not the
+      starting point and not the spine of the journey.
+    A journey that teaches this repository's internals in a sensible order has
+    answered the wrong question here.
+
   By `code_depth` (the developer chose this):
     map            → mostly `architecture` and `flow`. Anchor on classes and
                      entry points as concept representatives. `component` units

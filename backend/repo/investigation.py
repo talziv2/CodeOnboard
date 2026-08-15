@@ -352,11 +352,30 @@ class ExitCriteria:
     min_relationships: int = 2
     min_contracts: int = 0
     min_prerequisites: int = 1
+    # Entry points whose `perspective` is `public_api` — the name a developer
+    # USING this code imports and calls, as opposed to whatever invokes the
+    # behaviour at runtime.
+    #
+    # The schema has carried this distinction since Phase A Stage 4b, but no
+    # criteria demanded it, so an investigation could satisfy every floor with
+    # runtime entry points alone. That is the right answer for most goals and the
+    # wrong one for a caller who has to know what to type.
+    min_public_api_entry_points: int = 0
 
 
 BASE_CRITERIA = ExitCriteria()
 
 CRITERIA_BY_GOAL_TYPE: dict[str, ExitCriteria] = {
+    # Using a library: the caller-facing surface is the deliverable. Demand a
+    # verified `public_api` entry point (what they import), two contracts (what
+    # they must honour and may rely on), and keep the base flow floor so the
+    # journey can explain what happens behind the call — without that it degrades
+    # into a usage tutorial that cannot say why anything behaves as it does.
+    "use_library": ExitCriteria(
+        min_public_api_entry_points=1,
+        min_entry_points=2,
+        min_contracts=2,
+    ),
     # A component: internals + contract + who uses it.
     "understand_component": ExitCriteria(min_components=4, min_contracts=1),
     # A system/flow goal: the flow is the deliverable — demand a real trace.
@@ -696,8 +715,29 @@ def validate_dossier(
             f"{len(components)} goal-relevant component(s) established; at least "
             f"{criteria.min_components} are needed to explain this kind of goal"
         )
-    if len(payload.get("entry_points") or []) < criteria.min_entry_points:
-        unmet.append("no verified entry point into the goal-relevant behaviour")
+    entry_points = [
+        e for e in (payload.get("entry_points") or []) if isinstance(e, dict)
+    ]
+    if len(entry_points) < criteria.min_entry_points:
+        unmet.append(
+            f"{len(entry_points)} verified entry point(s) into the goal-relevant "
+            f"behaviour; at least {criteria.min_entry_points} needed"
+        )
+    public_api = [
+        e for e in entry_points
+        if str(e.get("perspective") or "") == "public_api"
+    ]
+    if len(public_api) < criteria.min_public_api_entry_points:
+        # Named separately from the count above because the fix is different:
+        # not "find another way in" but "find the name a CALLER types". The
+        # `neighbors` tool with `exported_by` gives the dotted import path.
+        unmet.append(
+            f"{len(public_api)} entry point(s) with perspective `public_api`; at "
+            f"least {criteria.min_public_api_entry_points} needed — this goal is "
+            f"about USING this code, so the symbol a developer imports and calls "
+            f"must be established, not only what invokes the behaviour at runtime "
+            f"(use `neighbors` with `exported_by` for the dotted import path)"
+        )
 
     flows = _entries(payload, "flows")[0]
     if len(flows) < criteria.min_flows:

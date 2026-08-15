@@ -469,3 +469,44 @@ def test_a_b3_brief_carries_no_understand_key(repo):
     assert "understand" not in node.lesson_brief
     # …and the objective is still what Teaching and the Grader read.
     assert node.objective().startswith("Explain what")
+
+
+# ── use_library reaches the planner (LQ5) ─────────────────────────────────────
+
+def test_the_planner_is_told_to_start_from_the_caller_facing_surface():
+    prompt = curriculum._SYSTEM_PROMPT
+    assert "use_library" in prompt
+    assert "START FROM THE CALLER-FACING SURFACE" in prompt
+    # The three-way distinction: what they call, what happens behind it, and
+    # what is merely supporting evidence.
+    assert "SUPPORTING EVIDENCE" in prompt
+    assert "CONTRACTS and CONSTRAINTS" in prompt
+
+
+def test_the_planner_is_warned_off_an_internals_tour_for_use_library():
+    assert (
+        "teaches this repository's internals in a sensible order has"
+        in curriculum._SYSTEM_PROMPT
+    )
+
+
+def test_a_use_library_plan_sees_the_public_api_distinction(repo):
+    """The whole chain: a use_library goal renders a dossier whose entry points
+    carry their perspective, and that text is what the planner is given."""
+    state = make_state(repo)
+    state.goal = dict(state.goal, goal_type="use_library",
+                      primary_goal="use this in my own project")
+    state.investigation = dict(state.investigation)
+    dossier = json.loads(json.dumps(state.investigation["dossier"]))
+    dossier["entry_points"] = [
+        {"file": "src/app/client.py", "symbol": "fetch",
+         "perspective": "public_api", "how_it_enters": "what callers import"},
+    ]
+    state.investigation["dossier"] = dossier
+
+    client = FakeClient(response(DEFAULT))
+    curriculum.run(state, client)
+
+    sent = client.requests[0]["messages"][0]["content"]
+    assert "[public_api]" in sent
+    assert '"goal_type": "use_library"' in sent

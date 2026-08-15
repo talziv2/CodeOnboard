@@ -100,10 +100,13 @@ def test_q2_contribute_sets_goal_type():
 
 
 def test_q2_use_sets_goal_type():
+    # "Use it in my own project" routed to `understand_component` until
+    # 2026-08-15, which optimised the investigation for internal components and
+    # never required a caller-facing entry point (LQ5).
     session = start_session(REPO_URL)
     process_answer(session, ANS_FAMILIARITY, client=None)
     process_answer(session, ANS_GOAL_USE, client=None)
-    assert session.goal_type == "understand_component"
+    assert session.goal_type == "use_library"
 
 
 def test_q2_architecture_sets_goal_type():
@@ -358,3 +361,43 @@ def test_the_model_is_no_longer_asked_for_depth_or_experience_level():
 
     assert "experience_level" not in _SYSTEM_PROMPT
     assert "depth must be one of" not in _SYSTEM_PROMPT
+
+
+# ── use_library (LQ5) ─────────────────────────────────────────────────────────
+
+def test_the_use_option_reaches_the_interview_as_use_library():
+    from backend.agents.goal.questions import GOAL_TYPE_MAP
+
+    assert GOAL_TYPE_MAP["Use it in my own project"] == "use_library"
+
+
+def test_use_library_has_a_follow_up_so_the_interview_does_not_crash():
+    # `_get_question_sequence` looks the goal type up unguarded; a missing entry
+    # is a KeyError in the middle of a user's interview.
+    from backend.agents.goal.questions import FOLLOWUP_QUESTIONS
+
+    assert FOLLOWUP_QUESTIONS["use_library"]
+    # Keyed on focus_area so everything downstream that reads it keeps working.
+    assert FOLLOWUP_QUESTIONS["use_library"][0].key == "focus_area"
+
+
+def test_a_use_library_goal_is_accepted_and_carried():
+    session = start_session(REPO_URL)
+    mock_client = make_mock_client({**VALID_GOAL_JSON, "goal_type": "use_library"})
+    process_answer(session, ANS_FAMILIARITY, client=None)
+    process_answer(session, ANS_GOAL_USE, client=None)
+    process_answer(session, ANS_PRIMARY_GOAL, client=None)
+    process_answer(session, CODE_DEPTH_OPTIONS[1], client=None)
+    process_answer(session, ANS_BACKGROUND, client=None)
+    _, goal = process_answer(session, "send authenticated requests", client=mock_client)
+
+    assert goal is not None
+    assert goal.goal_type == "use_library"
+    assert goal.focus_area
+
+
+def test_the_synthesis_prompt_describes_use_library():
+    from backend.agents.goal.agent import _SYSTEM_PROMPT
+
+    assert "use_library" in _SYSTEM_PROMPT
+    assert "USE this code" in _SYSTEM_PROMPT
