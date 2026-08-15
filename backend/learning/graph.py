@@ -309,9 +309,14 @@ class LearningGraph:
         # walk order, whose prerequisites are all understood. Falls back to the
         # saved current_node_id when everything's been visited (or nothing
         # qualifies). Heuristic, not rigorous — just a sensible re-entry point.
+        #
+        # `optional` units are skipped for the same reason `/advance` steps over
+        # them: they are not part of the journey the learner was promised, so
+        # dropping someone back into one on their return would resume a path
+        # they did not leave. They stay reachable from the rail.
         for node_id in self.path_order():
             node = self.nodes[node_id]
-            if node.visited:
+            if node.visited or self.is_optional(node):
                 continue
             prereqs = [
                 e.from_node_id
@@ -346,7 +351,7 @@ class LearningGraph:
         for it here would mean inventing a signal this method cannot see.
         """
         weight = {"understood": 1.0, "partial": 0.5}
-        core = [n for n in self.nodes.values() if not self._is_optional(n)]
+        core = [n for n in self.nodes.values() if not self.is_optional(n)]
         if not core:
             return 0.0
 
@@ -355,7 +360,10 @@ class LearningGraph:
         return min(earned / len(core), 1.0)
 
     @staticmethod
-    def _is_optional(node: LearningNode) -> bool:
+    def is_optional(node: LearningNode) -> bool:
+        """Depth the learner was not promised — collapsed in the rail, excluded
+        from the stop counter and from `readiness()`, and stepped over by
+        `/advance`. Reachable deliberately, never walked into."""
         return (node.lesson_brief or {}).get("priority") == "optional"
 
     # --- serialization (for API responses / UI) ---

@@ -6,7 +6,7 @@ import MapView from "@/components/MapView";
 import RouteRail from "@/components/RouteRail";
 import LessonPanel from "@/components/LessonPanel";
 import CodeViewer from "@/components/CodeViewer";
-import { getSession, jump, sessionStart } from "@/lib/api";
+import { getSession, jump, sessionStart, setScope } from "@/lib/api";
 import type { GraphNode, SessionGraph } from "@/lib/api";
 import { buildRoute, spineLength } from "@/lib/graph-layout";
 import { errorText, t } from "@/lib/strings";
@@ -24,6 +24,33 @@ export default function SessionPage() {
   const [tab, setTab] = useState<"lesson" | "map">("lesson");
   const [error, setError] = useState<string | null>(null);
   const [restarting, setRestarting] = useState(false);
+  const [scoping, setScoping] = useState(false);
+  const [scopeNote, setScopeNote] = useState<string | null>(null);
+
+  // §5.3: scope is derived from evidence, then adjusted against a plan the
+  // learner can see. This is the "adjusted" half — it moves existing units
+  // between priority buckets and never plans anything new.
+  const adjustScope = async (direction: "shorter" | "deeper") => {
+    setScoping(true);
+    setScopeNote(null);
+    try {
+      const res = await setScope(id, direction);
+      setScopeNote(
+        !res.applied
+          ? direction === "shorter"
+            ? t.scope.nothingShorter
+            : t.scope.nothingDeeper
+          : direction === "shorter"
+          ? t.scope.shortened(res.changed)
+          : t.scope.deepened(res.changed)
+      );
+      await loadGraph();
+    } catch {
+      setScopeNote(t.scope.failed);
+    } finally {
+      setScoping(false);
+    }
+  };
 
   const loadGraph = useCallback(async () => {
     try {
@@ -137,6 +164,31 @@ export default function SessionPage() {
             />
           </span>
           <span className="font-mono text-xs tabular-nums text-chalk">{pct}%</span>
+        </span>
+
+        {/* Scope control (U4). Sits in the header beside readiness because it
+            is a statement about the whole journey, not about a stop. */}
+        <span className="flex shrink-0 items-center gap-1.5">
+          <span className="font-mono text-[10px] uppercase tracking-[0.13em] text-graphite">
+            {t.scope.label(spineLength(stops))}
+          </span>
+          <button
+            onClick={() => adjustScope("shorter")}
+            disabled={scoping}
+            className="rounded border border-rule px-2 py-1 font-mono text-[10.5px] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+          >
+            {scoping ? t.scope.working : t.scope.shorter}
+          </button>
+          <button
+            onClick={() => adjustScope("deeper")}
+            disabled={scoping}
+            className="rounded border border-rule px-2 py-1 font-mono text-[10.5px] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+          >
+            {t.scope.deeper}
+          </button>
+          {scopeNote && (
+            <span className="font-mono text-[10px] text-signal">{scopeNote}</span>
+          )}
         </span>
 
         {tab === "lesson" && (

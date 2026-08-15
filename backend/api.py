@@ -41,6 +41,7 @@ from backend.agents.mentor.mutator import mutate as mutate_graph
 from backend.agents.teaching import run as run_teaching
 from backend.agents.teaching import respond as teaching_respond
 from backend.learning import adaptation
+from backend.learning import scope
 from backend.learning import store as learning_store
 from backend.pipeline.runner import run_pipeline
 from backend.repo import dossier_store
@@ -440,6 +441,22 @@ def session_advance(session_id: str, body: AdvanceRequest) -> dict:
     # failed objective permanently unlearned.
     nxt = graph.next_in_path(current)
 
+    # Step over `optional` units. They sit on the same spine by design (§6.3) so
+    # that nothing is lost and depth stays one click away in the rail — but they
+    # are not part of the journey the learner was promised, and the stop counter
+    # and `readiness()` have always excluded them. Walking into one contradicted
+    # both: a sixteen-unit graph that says "stop 3 of 15" would still make the
+    # learner pass through all sixteen.
+    #
+    # This is what makes "make it shorter" mean anything, and what makes
+    # prune-ahead actually shorten a journey rather than only relabel it.
+    # Reaching an optional unit deliberately, from the rail, still works — `jump`
+    # sets it as current and nothing here interferes.
+    seen: set[str] = {current}
+    while nxt is not None and graph.is_optional(graph.nodes[nxt]) and nxt not in seen:
+        seen.add(nxt)
+        nxt = graph.next_in_path(nxt)
+
     if nxt is None:
         learning_store.save_graph(graph, SESSIONS_DB_PATH)
         return {"done": True}
@@ -578,6 +595,46 @@ def session_jump(session_id: str, body: dict) -> dict:
     graph.set_current(node_id)
     learning_store.save_graph(graph, SESSIONS_DB_PATH)
     return {"current_node_id": node_id}
+
+
+class ScopeRequest(BaseModel):
+    direction: str  # "shorter" | "deeper"
+
+
+@app.post("/session/{session_id}/scope")
+def session_scope(session_id: str, body: ScopeRequest) -> dict:
+    """Adjust the journey's scope after the learner has seen it (§5.3).
+
+    Pure Python, no LLM, no planning: it moves existing units between the
+    `priority` buckets the planner already assigned. `deeper` exposes material
+    that is already in the graph and never generates more — a journey with
+    nothing optional left has nothing further to offer, and says so rather than
+    inventing something to look responsive.
+    """
+    if body.direction not in ("shorter", "deeper"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"unsupported direction {body.direction!r}; supported: "
+                   f"'shorter', 'deeper'",
+        )
+
+    graph = _load_session_or_404(session_id)
+    before = scope.journey_size(graph)
+    changed = (
+        scope.shorten(graph) if body.direction == "shorter" else scope.deepen(graph)
+    )
+    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+
+    return {
+        "direction": body.direction,
+        "changed": len(changed),
+        "journey_size_before": before,
+        "journey_size": scope.journey_size(graph),
+        "readiness": graph.readiness(),
+        # False means there was nothing left to move — the caller should say so
+        # plainly instead of implying the request did something.
+        "applied": bool(changed),
+    }
 
 
 @app.post("/session/{session_id}/override")

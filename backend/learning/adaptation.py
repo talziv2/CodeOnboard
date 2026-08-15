@@ -114,7 +114,10 @@ def prune_ahead(graph: LearningGraph) -> list[str]:
       - units the learner has already visited or answered are left alone —
         demoting something already worked through would rewrite history.
       - a unit the learner OVERRODE is untouchable: user overrides always win
-        (§9.2), and this is a system opinion, not a user one.
+        (§9.2), and this is a system opinion, not a user one. That includes a
+        unit moved by scope control (`scope_locked`), which is the same
+        principle applied to a decision about the journey rather than about
+        one node's state.
 
     Returns the ids demoted, for the caller to report.
     """
@@ -144,6 +147,12 @@ def prune_ahead(graph: LearningGraph) -> list[str]:
         if brief.get("priority") != "recommended":
             continue
         if node.visited or node.attempts or node.user_override:
+            continue
+        if brief.get("scope_locked"):
+            # The learner moved this unit by hand. Prune-ahead demotes in the
+            # same direction as "make it shorter", so without this it would
+            # quietly re-take a unit the user had just asked to keep — the
+            # silent undo §9.2 forbids.
             continue
         brief["priority"] = "optional"
         node.lesson_brief = brief

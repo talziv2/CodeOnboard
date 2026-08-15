@@ -95,6 +95,24 @@ export const t = {
     hideOptional: "Hide optional",
   },
 
+  // --- scope control ---
+  scope: {
+    label: (count: number) => `${count} stops`,
+    shorter: "Make it shorter",
+    deeper: "Go deeper",
+    working: "Adjusting…",
+    // The stop count is NOT repeated here: the header beside it already shows
+    // the live number, and the backend's own count treats a remedial warm-up as
+    // a station where the rail treats it as a detour. One source of truth.
+    shortened: (count: number) =>
+      count === 1 ? "1 moved to optional" : `${count} moved to optional`,
+    deepened: (count: number) =>
+      count === 1 ? "1 added back" : `${count} added back`,
+    nothingShorter: "Everything left is required",
+    nothingDeeper: "Nothing further in this journey",
+    failed: "Couldn't adjust the journey.",
+  },
+
   // --- lesson panel ---
   lesson: {
     writing: "Writing this lesson…",

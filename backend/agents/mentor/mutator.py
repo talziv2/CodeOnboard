@@ -317,6 +317,12 @@ def _generate_prerequisite_node(
             "objective": wire.objective,
             "why": wire.why,
             "understand": wire.understand,
+            # A warm-up the learner demonstrably needed is not optional and is
+            # not up for demotion — "make it shorter" must never take away the
+            # remediation that unblocked them. Stated rather than left absent:
+            # an empty priority happens to behave correctly everywhere today,
+            # and correctness by accident is one refactor from being wrong.
+            "priority": "required",
         },
     )
 

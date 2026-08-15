@@ -362,3 +362,21 @@ def test_prerequisite_on_real_but_unoffered_code_is_rejected(mock_pool):
     assert len(graph.nodes) == before, "no node may be inserted"
     assert state.last_mutation["kind"] == "none"
     assert any("not in candidates" in e for e in state.errors)
+
+
+@patch("backend.agents.mentor.mutator.candidate_pool", return_value=FAKE_POOL)
+def test_an_inserted_warm_up_is_marked_required(mock_pool):
+    """A warm-up the learner demonstrably needed is not up for demotion.
+
+    Scope control's "make it shorter" moves the `recommended` bucket, so marking
+    remediation `required` keeps it out of reach explicitly rather than by the
+    accident of an absent key.
+    """
+    from backend.learning import scope
+
+    state, graph, _, _ = _make_state()
+    mutate(state, "prerequisite", client=_mock_client(FAKE_PREREQ_NODE))
+
+    new_id = state.last_mutation["new_node_id"]
+    assert graph.nodes[new_id].lesson_brief["priority"] == "required"
+    assert new_id not in scope.shorten(graph)

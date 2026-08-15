@@ -245,6 +245,21 @@ export const respond = (session_id: string, answer: string, node_id?: string) =>
 export const advance = (session_id: string, signal: "next" | "skip" = "next", node_id?: string) =>
   post(`/session/${session_id}/advance`, { signal, node_id });
 
+// --- Scope control (U4) ---
+
+export interface ScopeResult {
+  direction: "shorter" | "deeper";
+  changed: number;
+  journey_size_before: number;
+  journey_size: number;
+  readiness: number;
+  /** False when there was nothing left to move in that direction. */
+  applied: boolean;
+}
+
+export const setScope = (session_id: string, direction: "shorter" | "deeper") =>
+  post<ScopeResult>(`/session/${session_id}/scope`, { direction });
+
 export const jump = (session_id: string, node_id: string) =>
   post(`/session/${session_id}/jump`, { node_id });
 
