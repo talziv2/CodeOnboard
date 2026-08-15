@@ -473,5 +473,243 @@
       },
       "grounding_drops_total": 0
     }
+  },
+  {
+    "cell": "fastapi-working",
+    "code_depth": "working",
+    "ok": true,
+    "band": [
+      8,
+      22
+    ],
+    "investigate_seconds": 176.4,
+    "runs": [
+      {
+        "repeat": 1,
+        "ok": true,
+        "seconds": 90.2,
+        "proposed": 16,
+        "grounding_drops": 0,
+        "core_before_band": 11,
+        "journey": 16,
+        "optional": 0,
+        "band_bound": null,
+        "demoted_by_band": 0,
+        "areas": 4,
+        "kinds": {
+          "flow": 4,
+          "architecture": 2,
+          "component": 5,
+          "extension_point": 2,
+          "synthesis": 2,
+          "risk": 1
+        },
+        "covers_goal": true,
+        "confidence": "high"
+      },
+      {
+        "repeat": 2,
+        "ok": true,
+        "seconds": 81.1,
+        "proposed": 15,
+        "grounding_drops": 0,
+        "core_before_band": 13,
+        "journey": 14,
+        "optional": 1,
+        "band_bound": null,
+        "demoted_by_band": 0,
+        "areas": 4,
+        "kinds": {
+          "architecture": 1,
+          "flow": 3,
+          "component": 6,
+          "extension_point": 2,
+          "synthesis": 2,
+          "risk": 1
+        },
+        "covers_goal": true,
+        "confidence": "high"
+      },
+      {
+        "repeat": 3,
+        "ok": true,
+        "seconds": 78.8,
+        "proposed": 14,
+        "grounding_drops": 0,
+        "core_before_band": 10,
+        "journey": 13,
+        "optional": 1,
+        "band_bound": null,
+        "demoted_by_band": 0,
+        "areas": 5,
+        "kinds": {
+          "architecture": 1,
+          "flow": 4,
+          "component": 4,
+          "extension_point": 2,
+          "risk": 2,
+          "synthesis": 1
+        },
+        "covers_goal": true,
+        "confidence": "high"
+      }
+    ],
+    "spread": {
+      "proposed": {
+        "min": 14,
+        "max": 16,
+        "mean": 15,
+        "stdev": 1.0
+      },
+      "core_before_band": {
+        "min": 10,
+        "max": 13,
+        "mean": 11.3,
+        "stdev": 1.53
+      },
+      "journey": {
+        "min": 13,
+        "max": 16,
+        "mean": 14.3,
+        "stdev": 1.53
+      },
+      "optional": {
+        "min": 0,
+        "max": 1,
+        "mean": 0.7,
+        "stdev": 0.58
+      },
+      "areas": {
+        "min": 4,
+        "max": 5,
+        "mean": 4.3,
+        "stdev": 0.58
+      },
+      "bound": {
+        "ceiling": 0,
+        "floor": 0,
+        "none": 3
+      },
+      "grounding_drops_total": 0
+    }
+  },
+  {
+    "cell": "fastapi-implementation",
+    "code_depth": "implementation",
+    "ok": true,
+    "band": [
+      10,
+      28
+    ],
+    "investigate_seconds": 343.4,
+    "runs": [
+      {
+        "repeat": 1,
+        "ok": true,
+        "seconds": 110.8,
+        "proposed": 19,
+        "grounding_drops": 0,
+        "core_before_band": 10,
+        "journey": 18,
+        "optional": 1,
+        "band_bound": null,
+        "demoted_by_band": 0,
+        "areas": 5,
+        "kinds": {
+          "flow": 4,
+          "architecture": 2,
+          "component": 7,
+          "extension_point": 2,
+          "risk": 2,
+          "synthesis": 2
+        },
+        "covers_goal": true,
+        "confidence": "medium"
+      },
+      {
+        "repeat": 2,
+        "ok": true,
+        "seconds": 98.6,
+        "proposed": 18,
+        "grounding_drops": 0,
+        "core_before_band": 13,
+        "journey": 18,
+        "optional": 0,
+        "band_bound": null,
+        "demoted_by_band": 0,
+        "areas": 6,
+        "kinds": {
+          "flow": 5,
+          "architecture": 1,
+          "component": 6,
+          "synthesis": 2,
+          "extension_point": 2,
+          "risk": 2
+        },
+        "covers_goal": true,
+        "confidence": "medium"
+      },
+      {
+        "repeat": 3,
+        "ok": true,
+        "seconds": 100.4,
+        "proposed": 20,
+        "grounding_drops": 0,
+        "core_before_band": 16,
+        "journey": 20,
+        "optional": 0,
+        "band_bound": null,
+        "demoted_by_band": 0,
+        "areas": 6,
+        "kinds": {
+          "flow": 5,
+          "architecture": 1,
+          "component": 7,
+          "extension_point": 2,
+          "synthesis": 2,
+          "risk": 3
+        },
+        "covers_goal": true,
+        "confidence": "medium"
+      }
+    ],
+    "spread": {
+      "proposed": {
+        "min": 18,
+        "max": 20,
+        "mean": 19,
+        "stdev": 1.0
+      },
+      "core_before_band": {
+        "min": 10,
+        "max": 16,
+        "mean": 13,
+        "stdev": 3.0
+      },
+      "journey": {
+        "min": 18,
+        "max": 20,
+        "mean": 18.7,
+        "stdev": 1.15
+      },
+      "optional": {
+        "min": 0,
+        "max": 1,
+        "mean": 0.3,
+        "stdev": 0.58
+      },
+      "areas": {
+        "min": 5,
+        "max": 6,
+        "mean": 5.7,
+        "stdev": 0.58
+      },
+      "bound": {
+        "ceiling": 0,
+        "floor": 0,
+        "none": 3
+      },
+      "grounding_drops_total": 0
+    }
   }
 ]

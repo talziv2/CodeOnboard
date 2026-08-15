@@ -610,6 +610,56 @@ What it establishes:
 Open observation, recorded rather than acted on: **`optional` is 0 in all four cells**
 — see [LQ8](#152-open-lq).
 
+#### Calibration — 2026-08-15 (the full ≥3-repeat matrix)
+
+Six cells (both repos × all three `code_depth` values) × 3 repeats = **18 planning runs,
+0 failures, 0 grounding drops**. Raw data:
+[`evidence/band-calibration.json`](evidence/band-calibration.json). Each cell investigated
+**once** and planned three times against that one dossier, because §6.3 calibrates
+"objective proposal + selection" — repeats measure *planner* variance, not exploration
+variance. **The bands below were not changed by this run.**
+
+| cell | band | core (pre-band) | journey | ceiling fired | areas |
+|---|---|---|---|---|---|
+| `requests` × `map` | 5–14 | 9, 10, 11 | 11, 13, **14** | 0/3 | 5–6 |
+| `requests` × `working` | 8–22 | 10, 11, 13 | 13, 14, 17 | 0/3 | 5–6 |
+| `requests` × `implementation` | 10–28 | 15, 16, 18 | 20, 22, 24 | 0/3 | 7 |
+| `fastapi` × `map` | 5–14 | 11, 11, 13 | **14, 14, 14** | **2/3** | 4 |
+| `fastapi` × `working` | 8–22 | 10, 11, 13 | 13, 14, 16 | 0/3 | 4–5 |
+| `fastapi` × `implementation` | 10–28 | 10, 13, 16 | 18, 18, 20 | 0/3 | 5–6 |
+
+**Verdict, per band:**
+
+- **`map` (5–14) — the ceiling binds too often.** It fired on 2 of 3 `fastapi` repeats and
+  pinned the journey at exactly 14 in all three, with **zero variance**. A journey whose
+  size has no spread while its underlying demand does (core 11–13) is not a measurement;
+  it is the clamp. §6.3 asks that the ceiling fire "only on genuinely pathological output",
+  and a normal `map` run on a large repository is not pathological.
+- **`working` (8–22) — appropriate.** Never fired on either repo; the largest observed
+  journey was 17, leaving five units of slack.
+- **`implementation` (10–28) — appropriate, arguably loose.** Never fired; largest journey
+  24 against a ceiling of 28.
+- **All three floors (5 / 8 / 10) — inert.** The smallest core observed anywhere was 9 and
+  the smallest journey 11, so no floor came close to firing. They cost nothing (the floor
+  is advisory and only logs) but they are not doing anything either.
+
+**The finding underneath the map result: core demand is much flatter across `code_depth`
+than the bands assume.** Core ran 9–13 for `map`, 10–13 for `working`, and 10–18 for
+`implementation` — while the ceilings step 14 → 22 → 28. Depth changes *composition* far
+more than it changes *size*, which is exactly what [LP4](#3-product--learning-principles)
+predicts and what the kind distributions confirm (`component` share rises from 2–3 to 7–10
+on `requests`, 4–7 to 6–7 on `fastapi`). A `map` ceiling set well below the `working` one
+therefore clamps a demand that is barely smaller.
+
+**Bearing on [LQ8](#152-open-lq):** overflow demotion *does* now fire — but only in
+`fastapi` × `map`, i.e. only where the ceiling is the thing under suspicion. Everywhere
+else `optional` units (0–2 per journey) are the planner's own labels, not band demotions
+(`demoted_by_band` is 0 in 16 of 18 runs). So the cut mechanism is exercised, and what
+exercises it is the one band the evidence says is mis-set.
+
+**Not established:** anything about `goal_type`, which was held fixed at
+`understand_architecture` across the whole matrix.
+
 Not established, and explicitly not claimed: anything about variance (one attempt per
 cell), and the isolated cost of the planning call ([LQ2](#152-open-lq)) — wall-clock was
 measured for the whole pipeline, of which planning is one call among the survey and the
@@ -1229,6 +1279,9 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 | 2026-08-15 | **`explore`'s time budget cannot bound a stalled call** — it is checked between turns, never during one | `explore.py`'s loop tests `max_seconds` at the top of each turn, so once a request is in flight the budget is unreachable. With the SDK's 600s read timeout and 2 retries, one turn can consume ~30 minutes against a 720s budget. This is a real limitation of the exploration harness, recorded here because it was found from the outside; **no production behaviour was changed for it** — the calibration script bounds its own client instead | — |
 | 2026-08-15 | **The calibration harness gained `--resume`, a refuse-to-clobber guard, an explicit 180s per-call timeout with SDK retries off, and named failure records** | The first version wrote only the current run's cells to the shared file, so `--only fastapi-map` would have destroyed three paid-for cells. Failed repeats are now kept with a classified cause (`timeout` / `timeout_suspected` / `truncated_proposal` / `other`) rather than dropped — a calibration that discards its slow runs is measuring a population the user will never meet. Methodology, bands, repeat counts and planner behaviour are unchanged | — |
 | 2026-08-15 | **The refuse-to-clobber guard was itself broken, and its own test caught it by starting a live run** | `existing` was loaded only under `--resume`, so it was empty in exactly the case the guard existed to catch. Recorded because the lesson generalises: a guard whose precondition is computed from the flag it is guarding against cannot fire. Now the file is always read; only whether it is *reused* depends on the flag | — |
+
+| 2026-08-15 | **The full ≥3-repeat calibration matrix completed: 18/18 planning runs, 0 failures, 0 grounding drops. Bands NOT changed** | Evidence and per-band verdict in [§6.3](#63-sizing--how-the-journeys-length-is-actually-decided). `working` and `implementation` behave as guards should — never firing, with slack. The `map` ceiling of 14 does not: it fired on 2 of 3 `fastapi` repeats and pinned that cell's journey at exactly 14 across all three, with zero variance against a core demand of 11–13. Changing a number is a separate, deliberate act and was not taken here | — |
+| 2026-08-15 | **Core demand is far flatter across `code_depth` than the bands assume** | Measured core: `map` 9–13, `working` 10–13, `implementation` 10–18, against ceilings stepping 14 → 22 → 28. Depth changes *composition* much more than *size* — precisely what LP4 claims and what the kind distributions show — so a `map` ceiling set well below `working`'s clamps a demand that is barely smaller. This, rather than any single cell, is the substantive calibration finding | Wider sampling across `goal_type`, which this matrix held fixed |
 
 **Note on scope:** this cleanup is independent of the repository-understanding
 migration in [`repo-understanding.md`](repo-understanding.md). It touches the
