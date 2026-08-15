@@ -2,38 +2,180 @@
   {
     "cell": "requests-map",
     "ok": true,
-    "seconds": 326.9,
+    "seconds": 269.6,
     "code_depth": "map",
-    "units_total": 18,
+    "plan_report": {
+      "code_depth": "map",
+      "proposed": 14,
+      "grounded": 14,
+      "dropped_by_grounding": 0,
+      "core_before_band": 12,
+      "journey": 14,
+      "optional": 0,
+      "band": [
+        5,
+        14
+      ],
+      "band_bound": null,
+      "demoted_by_band": 0,
+      "areas_declared": 4,
+      "covers_goal": true
+    },
+    "units_total": 14,
     "journey_size": 14,
-    "optional": 4,
+    "optional": 0,
+    "priorities": {
+      "required": 12,
+      "recommended": 2
+    },
     "band": [
       5,
       14
     ],
     "in_band": true,
-    "areas": 6,
+    "areas": 4,
     "area_titles": [
-      "Public API and Session as orchestrator",
-      "Request vs PreparedRequest: the two-stage model",
-      "Session defaults and the merge pipeline",
-      "Adapter layer and the transport boundary",
-      "Network transmission and response wrapping",
-      "Cross-cutting runtime concerns"
+      "Entry points and the Session as orchestrator",
+      "Request construction and preparation pipeline",
+      "Transport layer: adapters and the wire",
+      "Post-send processing and extensibility seams"
     ],
     "kinds": {
-      "architecture": 3,
-      "flow": 6,
-      "component": 4,
-      "extension_point": 2,
-      "risk": 2,
+      "architecture": 4,
+      "flow": 4,
+      "component": 2,
+      "extension_point": 1,
+      "synthesis": 2,
+      "risk": 1
+    },
+    "multi_anchor_units": 9,
+    "max_anchors": 4,
+    "prerequisite_edges": 22,
+    "confidence": "high",
+    "objectives_present": 14,
+    "failures": {},
+    "planner_notes": []
+  },
+  {
+    "cell": "requests-implementation",
+    "ok": false,
+    "seconds": 259.5,
+    "died": "no graph",
+    "errors": [
+      "curriculum: proposal call failed: Unterminated string starting at: line 416 column 22 (char 32535)"
+    ]
+  },
+  {
+    "cell": "fastapi-map",
+    "ok": true,
+    "seconds": 206.1,
+    "code_depth": "map",
+    "plan_report": {
+      "code_depth": "map",
+      "proposed": 11,
+      "grounded": 11,
+      "dropped_by_grounding": 0,
+      "core_before_band": 9,
+      "journey": 11,
+      "optional": 0,
+      "band": [
+        5,
+        14
+      ],
+      "band_bound": null,
+      "demoted_by_band": 0,
+      "areas_declared": 5,
+      "covers_goal": true
+    },
+    "units_total": 11,
+    "journey_size": 11,
+    "optional": 0,
+    "priorities": {
+      "required": 9,
+      "recommended": 2
+    },
+    "band": [
+      5,
+      14
+    ],
+    "in_band": true,
+    "areas": 5,
+    "area_titles": [
+      "The two-phase model: declaration vs. execution",
+      "Route declaration: from decorator to APIRoute",
+      "Dependency graph construction: get_dependant and Dependant",
+      "Request execution: resolving dependencies and calling the endpoint",
+      "Synthesis: ownership and extension"
+    ],
+    "kinds": {
+      "architecture": 2,
+      "flow": 4,
+      "component": 2,
+      "risk": 1,
+      "extension_point": 1,
       "synthesis": 1
     },
-    "multi_anchor_units": 5,
-    "max_anchors": 6,
-    "prerequisite_edges": 31,
-    "confidence": "high",
-    "objectives_present": 18,
+    "multi_anchor_units": 7,
+    "max_anchors": 5,
+    "prerequisite_edges": 16,
+    "confidence": "medium",
+    "objectives_present": 11,
+    "failures": {},
+    "planner_notes": []
+  },
+  {
+    "cell": "fastapi-implementation",
+    "ok": true,
+    "seconds": 202.2,
+    "code_depth": "implementation",
+    "plan_report": {
+      "code_depth": "implementation",
+      "proposed": 16,
+      "grounded": 16,
+      "dropped_by_grounding": 0,
+      "core_before_band": 10,
+      "journey": 16,
+      "optional": 0,
+      "band": [
+        10,
+        28
+      ],
+      "band_bound": null,
+      "demoted_by_band": 0,
+      "areas_declared": 4,
+      "covers_goal": true
+    },
+    "units_total": 16,
+    "journey_size": 16,
+    "optional": 0,
+    "priorities": {
+      "required": 10,
+      "recommended": 6
+    },
+    "band": [
+      10,
+      28
+    ],
+    "in_band": true,
+    "areas": 4,
+    "area_titles": [
+      "Route declaration pipeline",
+      "Dependency tree construction",
+      "Request-time resolution and execution",
+      "Invariants, risks, and extension points"
+    ],
+    "kinds": {
+      "flow": 3,
+      "component": 8,
+      "synthesis": 2,
+      "extension_point": 2,
+      "risk": 1
+    },
+    "multi_anchor_units": 11,
+    "max_anchors": 5,
+    "prerequisite_edges": 27,
+    "confidence": "medium",
+    "objectives_present": 16,
     "failures": {},
     "planner_notes": []
   }
