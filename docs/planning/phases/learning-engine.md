@@ -542,6 +542,51 @@ Keep the bands **coarse** afterwards. Three buckets of two integers is the right
 resolution for a signal this soft; per-goal-type or per-repo-size bands would be tuning
 noise dressed as precision, and would be unfalsifiable at this sample size.
 
+#### Sanity pass — 2026-08-15 (NOT the calibration)
+
+Four cells, one attempt each, run after B3 landed to catch structurally wrong or wildly
+mis-sized output before spending the repeats. Raw data:
+[`evidence/b3-sanity-matrix.json`](evidence/b3-sanity-matrix.json). **The bands below are
+unchanged and still carry their [LD14](#151-accepted-ld) marker** — four single runs are
+not a calibration, and nothing here was used to move a number.
+
+| cell | proposed | core (pre-band) | journey | optional | areas | multi-anchor | band bound | structural |
+|---|---|---|---|---|---|---|---|---|
+| `requests` × `map` | 14 | 12 | 14 | 0 | 4 | 9/14 (max 4) | no (5–14) | 6/6 |
+| `requests` × `implementation` | 22 | 15 | 22 | 0 | 7 | 10/22 (max 6) | no (10–28) | 6/6 |
+| `fastapi` × `map` | 11 | 9 | 11 | 0 | 5 | 7/11 (max 5) | no (5–14) | 6/6 |
+| `fastapi` × `implementation` | 16 | 10 | 16 | 0 | 4 | 11/16 (max 5) | no (10–28) | 6/6 |
+
+Structural checks (all passing, all four cells): every anchor on every unit resolves;
+the display columns equal one member of `anchors`; `path_order()` reaches every node;
+no prerequisite cycles; every dependency is taught before the unit declaring it; every
+declared area contributes a non-optional unit.
+
+What it establishes:
+
+- **`code_depth` changes composition, not merely length, on both repositories.**
+  `requests` goes architecture-led at `map` (architecture 4, component 2) to
+  component-led at `implementation` (component 10, architecture 3); `fastapi` does the
+  same (component 2 → 8). This is [§14](#14-done-when) outcome 2, on both target repos.
+- **Multi-anchor units are real, not theoretical.** 9–11 units per journey span several
+  files, up to six anchors, and **grounding dropped nothing in any cell** — every
+  objective kept every anchor it proposed. [§14](#14-done-when) outcome 4.
+- **Priority assignment discriminates.** `core` is below `journey` in every cell
+  (12<14, 15<22, 9<11, 10<16), so `required` vs `recommended` is a distinction the
+  planner actually draws rather than a rubber stamp.
+- **The bands did not bind anywhere**, at either boundary. An earlier discarded run of
+  `requests` × `map` did hit the ceiling at 14 while the recorded run landed at 14
+  without binding — same cell, same prompt. That variance is the reason four runs
+  cannot move a band.
+
+Open observation, recorded rather than acted on: **`optional` is 0 in all four cells**
+— see [LQ8](#152-open-lq).
+
+Not established, and explicitly not claimed: anything about variance (one attempt per
+cell), and the isolated cost of the planning call ([LQ2](#152-open-lq)) — wall-clock was
+measured for the whole pipeline, of which planning is one call among the survey and the
+investigation.
+
 **Overflow is demoted, never discarded.** Objectives that do not fit become
 `priority: optional` units on the same spine, collapsed in the UI. This is what prevents
 an exhausting journey while keeping depth one click away, and it is why we do not need
@@ -871,15 +916,24 @@ flowchart TB
 
 ### Must-have
 
-| Step | Depends on | Why it is must-have |
-|---|---|---|
-| **F** — defect fixes (§2.3) | nothing | Current behaviour is wrong today. Not part of the redesign |
-| **B1** — objective contract | F | The single highest-leverage change, and it **works on today's graphs**: `objective` is a key in an existing JSON payload, so this ships and delivers value before the planner is rewritten |
-| **B2** — `code_depth` question | nothing | One question. Independent of everything; can run in parallel with B1 |
-| **B3** — objective-first planner | B1, B2, **Phase A Stage 3** | Ends L1, L3, L4, L5. The core of the phase |
-| **B4** — lesson forms + reveal split | B1, B3 | Ends L7, L8. Lesson quality is half the product value of this phase |
-| **B5** — bidirectional adaptation | B3 | Ends L9, L10. Prune-ahead is nearly free |
-| **B6** — frontend U1–U3 | B3, B4 | Without U1 the reveal split does nothing; without U2 a large curriculum is illegible |
+| Step | Depends on | State | Why it is must-have |
+|---|---|---|---|
+| **F** — defect fixes (§2.3) | nothing | ✅ **done** 2026-08-15 | Current behaviour is wrong today. Not part of the redesign |
+| **B1** — objective contract | F | ✅ **done** 2026-08-15 | The single highest-leverage change, and it **works on today's graphs**: `objective` is a key in an existing JSON payload, so this ships and delivers value before the planner is rewritten |
+| **B2** — `code_depth` question | nothing | ✅ **done** 2026-08-15 | One question. Independent of everything; can run in parallel with B1 |
+| **B3** — objective-first planner | B1, B2, **Phase A Stage 3** | ✅ **done** 2026-08-15, behind `CODEONBOARD_CURRICULUM=1`; sanity-validated 4/4 (§6.3). Band calibration remains open ([LQ6](#152-open-lq)) and does **not** gate B4 — see the note below | Ends L1, L3, L4, L5. The core of the phase |
+| **B4** — lesson forms + reveal split | B1, B3 | next | Ends L7, L8. Lesson quality is half the product value of this phase |
+| **B5** — bidirectional adaptation | B3 | ready (B3 met) | Ends L9, L10. Prune-ahead is nearly free |
+| **B6** — frontend U1–U3 | B3, B4 | blocked on B4 | Without U1 the reveal split does nothing; without U2 a large curriculum is illegible |
+
+> **Calibration does not gate B4 or B5.** Nothing in this dependency graph depends on the
+> band *numbers*: B4 chooses a lesson form from a unit's `kind`, and B5 branches on
+> `gap_kind` — neither reads a band, and neither changes what `select()` does. What
+> calibration gates is **closing the phase**: [§14](#14-done-when) item 13 is satisfied
+> either by calibrated numbers *or* by the table still carrying its uncalibrated marker
+> with the phase explicitly not closed on that point ([LD14](#151-accepted-ld)). It is
+> therefore an open item to carry, not a blocker to clear — and running it later costs
+> nothing extra, since B4 and B5 do not touch curriculum sizing.
 
 **B1 before B3 is deliberate.** It makes the planner→teacher→grader contract explicit
 while the planner is still the old one, so the two hard changes are never in flight
@@ -1017,13 +1071,35 @@ reads poorly, move it to the planner. *Decide during B4.*
 Requires exit criteria in Phase A's structure (§5.4). The interim fix is re-pointing the
 existing option. *Decide after Phase A Stage 2.*
 
+**LQ8 — Why has overflow demotion never fired on a real run?**
+`optional` was 0 in all four sanity cells: the planner proposes roughly the journey it
+wants and there is nothing left over to demote, despite being told to enumerate without
+limit. The cut layer is structurally correct and unit-tested, but the mechanism that is
+supposed to keep a large-repo journey finite has not been exercised outside tests.
+
+Recorded as an **observation, not a defect**. Two readings fit the evidence equally well:
+the model self-limits despite the instruction, or these four goals genuinely have no
+surplus worth teaching. Four runs cannot separate them.
+
+**Explicitly not to be resolved by inflating the proposal prompt.** Pushing volume purely
+to make the cut fire would be optimising for a mechanism rather than for the learner, and
+would corrupt the calibration input (`core_before_band`) at the same time. If the question
+matters later, the honest instrument is the repeat matrix — which records proposal volume
+per cell — not a prompt change made to produce a desired number. *Revisit after
+calibration, if at all.*
+
 **LQ6 — What are the guard bands, and should the lower bound scale with the repository?**
 §6.3's numbers are **uncalibrated initial defaults**, to be replaced by measured values via
 the calibration procedure there. Separately: the bands are global, and a very small
 repository may legitimately have fewer than five teachable objectives, which would make the
-lower bound fire spuriously. Options: scale the lower bound by skeleton size, or treat the
-floor as advisory and log rather than enforce. *Calibrate and decide during B3; record the
-result in §6.3 and the decision log.*
+lower bound fire spuriously.
+
+*Partly settled during B3.* The floor is **implemented as advisory** — `band_report()` logs
+and `select()` never pads, because padding a journey to reach a number would be inventing
+curriculum. The ceiling is enforced by demotion. What remains open is the **numbers**: the
+sanity pass (§6.3) saw neither bound fire in four cells, which is evidence that they are not
+currently constraining anything, and no evidence at all about where they should sit.
+*Still requires the ≥3-repeat matrix; until then the table keeps its LD14 marker.*
 
 **LQ7 — What does prune-ahead do to a journey already in progress?**
 Demoting `recommended` units to `optional` changes `readiness()` mid-session and shifts
@@ -1081,6 +1157,13 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 
 | 2026-08-15 | **LQ1 resolved as LD15**: `background` may cut how much a required objective costs to teach, but never drops it | Prior knowledge should be validated through learner performance, not trusted from self-report. A dropped unit is also invisible — the learner cannot notice the omission and correct it, unlike a lesson they can skim or `mark_understood` | Evidence that experienced developers abandon journeys over material they demonstrably already knew, which would argue for demotion to `optional` (visible, one click away) rather than for silent dropping |
 | 2026-08-15 | **Guard-band calibration is sequenced after B3, in two passes**: a small sanity matrix (both repos, at least `map` and `implementation`) to catch structurally wrong or wildly mis-sized output, then the full ≥3-repeat matrix once selection behaviour is stable | The expensive matrix measures variance, which is only meaningful once the thing being measured has stopped changing. Running it against a planner still being adjusted would buy numbers that expire. §6.3's provisional bands and their LD14 marker stand until the second pass replaces them | — |
+
+| 2026-08-15 | **B3 shipped: the planner enumerates, our code cuts** | L1, L3, L4, L5. No node count appears in any prompt; curriculum size comes from required-set closure, dependency closure, area coverage and a guard band, all pure functions unit-tested without an API key. A unit is grounded by one *or more* verified anchors, with `nodes.file`/`line_start`/`line_end` demoted to a derived display projection. Planned `prerequisite` edges make `resume_point()`'s prerequisite check meaningful on a fresh graph. One additive column (`areas_json`) for the whole phase | Evidence that the deterministic cut produces worse curricula than the model's own selection — which the sanity pass cannot show either way, since the cut never fired (LQ8) |
+| 2026-08-15 | **The B3 sanity matrix is complete at 4/4** — all four cells pass all six structural checks | Full data and interpretation in [§6.3](#63-sizing--how-the-journeys-length-is-actually-decided). It establishes that `code_depth` changes curriculum *composition* and not merely length on **both** target repositories, and that multi-anchor units are produced and grounded on real repositories with zero anchors dropped in any cell. It establishes nothing about variance — one attempt per cell | — |
+| 2026-08-15 | **The provisional guard bands are unchanged.** They did not bind in any of the four cells, at either boundary | Four single runs are not a calibration, and the one discarded repeat of `requests` × `map` landed on the ceiling where the recorded run did not — same cell, same prompt. That variance is the argument against moving a number on this sample. The §6.3 table keeps its LD14 marker | The ≥3-repeat matrix producing bands that bind on ordinary runs, at which point the response is to widen them, not to prune real requirements |
+| 2026-08-15 | **The proposal truncation was fixed by cutting verbosity, NOT by raising `MAX_TOKENS`** | `understand` meant "what the developer should take away", which is what `objective` already is — the same claim twice, costing a sentence per objective in a response that was overflowing. Removing it and capping `why` at 15 words was sufficient on its own: the cell that died now proposes **22** objectives where the truncating attempt produced fewer, in less space. `MAX_TOKENS` stays at 8192, so headroom remains a real reserve rather than something already spent on redundant prose | A truncation that recurs after the retry, which would mean the budget genuinely is the constraint |
+| 2026-08-15 | **A bounded retry stays in place for `stop_reason == "max_tokens"` specifically** | It did not fire on the rerun, and is kept as protection rather than removed as unused: the failure it covers is real, was observed once, and costs one call only when it happens. Keyed on the API's own truncation signal — matching the JSON decoder's message would work today, break the day a payload ends on a different token, and cannot tell a truncated response from a malformed one. A malformed-but-complete payload is deliberately **not** retried, and the retry asks for the same curriculum written tighter, never for fewer objectives — "propose less" is a size instruction and would reintroduce L1 | — |
+| 2026-08-15 | **`optional = 0` on every real run is recorded as an open observation ([LQ8](#152-open-lq)), not a defect** | The cut layer is structurally correct and tested; what is unobserved is real-run *overflow*, because the planner proposes roughly the journey it wants. Priority assignment is nonetheless discriminating — `core` is below `journey` in all four cells — so the selection layer is doing real work even when the band never has to act. **The proposal prompt must not be inflated to make the mechanism fire**: that optimises for a mechanism rather than a learner, and corrupts `core_before_band`, which is the calibration's own input | The repeat matrix showing proposal volume genuinely exceeding what journeys keep |
 
 **Note on scope:** this cleanup is independent of the repository-understanding
 migration in [`repo-understanding.md`](repo-understanding.md). It touches the
