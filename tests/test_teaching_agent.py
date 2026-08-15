@@ -17,6 +17,8 @@ from backend.agents.teaching.agent import (
     _build_user_content,
     _format_doc_context,
     _parse_output,
+    _read_node_source,
+    _source_header,
     _pick_extra_doc,
 )
 from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
@@ -482,3 +484,59 @@ def test_the_system_prompt_subordinates_the_lesson_to_the_objective():
     assert "THE OBJECTIVE IS YOUR BRIEF" in _SYSTEM_PROMPT
     # expected_answer is demoted to a calibration reference, not the standard.
     assert "calibration reference" in _SYSTEM_PROMPT
+
+
+# ── multi-anchor units (B3) ───────────────────────────────────────────────────
+
+_FLOW_ANCHORS = [
+    {"file": "a.py", "symbol": "entry", "line_start": 1, "line_end": 2},
+    {"file": "b.py", "symbol": "middle", "line_start": 1, "line_end": 2},
+    {"file": "c.py", "symbol": "exit", "line_start": 1, "line_end": 2},
+]
+
+
+def _flow_node() -> LearningNode:
+    return LearningNode(
+        title="Trace the signed request",
+        code_anchor=CodeAnchor(file="a.py", line_start=1, line_end=2),
+        concept_tags=["flow"],
+        lesson_brief={
+            "objective": "Trace where a request is signed",
+            "why": "x", "understand": "y", "anchors": _FLOW_ANCHORS,
+        },
+    )
+
+
+def test_every_anchors_source_reaches_the_lesson(tmp_path):
+    for name in ("a", "b", "c"):
+        (tmp_path / f"{name}.py").write_text(
+            f"def {name}():\n    return '{name}-body'\n", encoding="utf-8"
+        )
+    source = _read_node_source(str(tmp_path), _flow_node())
+    for name in ("a", "b", "c"):
+        assert f"{name}-body" in source
+    # Labelled and numbered, so the model can trace them in order.
+    assert "anchor 1 of 3" in source and "anchor 3 of 3" in source
+
+
+def test_a_single_anchor_node_reads_exactly_as_before(tmp_path):
+    (tmp_path / "requests").mkdir()
+    (tmp_path / "requests/auth.py").write_text(
+        "line one\nline two\nline three\n", encoding="utf-8"
+    )
+    node = _make_node()  # no `anchors` key at all — a pre-B3 graph
+    source = _read_node_source(str(tmp_path), node)
+    assert "anchor 1 of" not in source
+
+
+def test_one_stale_anchor_does_not_cost_the_whole_lesson(tmp_path):
+    (tmp_path / "a.py").write_text("def a():\n    return 'a-body'\n", encoding="utf-8")
+    (tmp_path / "c.py").write_text("def c():\n    return 'c-body'\n", encoding="utf-8")
+    source = _read_node_source(str(tmp_path), _flow_node())  # b.py never written
+    assert "a-body" in source and "c-body" in source
+
+
+def test_the_prompt_says_the_anchor_order_is_the_lesson_order():
+    header = _source_header(_flow_node())
+    assert "3 anchors, in order" in header
+    assert "Teach across all of them" in header

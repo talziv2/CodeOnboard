@@ -127,6 +127,13 @@ class LearningGraph:
     # on the graph so Teaching Agent can access it during interactive sessions
     # (where state is reconstructed from the persisted graph, not from the pipeline).
     doc_context: dict | None = None
+    # Ordered curriculum areas: [{id, title, why, order}]. One level of grouping
+    # so a sixteen-stop journey is legible as a shape rather than a list
+    # (learning-engine.md LD3). Deliberately metadata, not an entity: an area
+    # has no state, no lifecycle and no traversal of its own — units point at
+    # one by `lesson_brief["area_id"]`. Empty for every graph the objective-first
+    # planner did not build.
+    areas: list[dict] = field(default_factory=list)
 
     # --- construction helpers ---
 
@@ -330,13 +337,23 @@ class LearningGraph:
             "goal": self.goal,
             "current_node_id": self.current_node_id,
             "readiness": self.readiness(),
+            "areas": self.areas,
             "nodes": [
                 {
                     "id": n.id,
                     "title": n.title,
+                    # The DISPLAY anchor. A unit may be grounded in several
+                    # equally real locations (a flow crossing three files); this
+                    # is the one the code pane opens by default, and it carries
+                    # no claim that it matters most. The full set lives in
+                    # lesson_brief["anchors"] (learning-engine.md §4.1.1).
                     "file": n.code_anchor.file,
                     "line_start": n.code_anchor.line_start,
                     "line_end": n.code_anchor.line_end,
+                    "anchors": (n.lesson_brief or {}).get("anchors", []),
+                    "kind": (n.lesson_brief or {}).get("kind", ""),
+                    "priority": (n.lesson_brief or {}).get("priority", ""),
+                    "area_id": (n.lesson_brief or {}).get("area_id", ""),
                     "concept_tags": n.concept_tags,
                     "understanding_state": n.understanding_state,
                     "visited": n.visited,

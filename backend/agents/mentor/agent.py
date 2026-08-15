@@ -32,6 +32,23 @@ MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 4096
 
 
+def curriculum_enabled() -> bool:
+    """Whether to plan objectives-first (B3) or with the pre-B3 node planner.
+
+    `0` is the old planner, byte-identical — the migration discipline this
+    codebase already used for the repository-understanding rewrite. Both paths
+    produce a `LearningGraph` whose new fields are optional keys in JSON that
+    already existed, so a graph from either path loads under either setting, and
+    Teaching and the Grader have one implementation each (§12).
+
+    Read per call rather than cached at import so tests can flip it with
+    monkeypatch, which is the only place it changes mid-process.
+    """
+    import os
+
+    return os.environ.get("CODEONBOARD_CURRICULUM", "0") == "1"
+
+
 # ── Wire-format Pydantic models ────────────────────────────────────────────────
 #
 # These mirror Sonnet's JSON output exactly. The agent translates them into
@@ -213,6 +230,11 @@ def run(
         # behaviour this migration existed to remove.
         state.errors.append("mentor_agent: no investigation to plan from")
         return state
+
+    if curriculum_enabled():
+        from backend.agents.mentor import curriculum
+
+        return curriculum.run(state, client)
 
     from backend.agents.mentor import dossier as dossier_path
 

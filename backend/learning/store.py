@@ -125,6 +125,15 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
             conn.execute("ALTER TABLE nodes ADD COLUMN symbol TEXT")
         except Exception:
             pass
+        # The curriculum's area list — the ONE additive column the learning-engine
+        # phase spends (LD6). Everything else it needed (objective, kind,
+        # priority, area_id, anchors, gap_kind) went into JSON payloads that
+        # already existed, because nothing queries by them. Areas get a column
+        # only because they belong to the session rather than to any one node.
+        try:
+            conn.execute("ALTER TABLE sessions ADD COLUMN areas_json TEXT")
+        except Exception:
+            pass
 
 
 def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
@@ -134,13 +143,14 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
             """
             INSERT INTO sessions
                 (session_id, repo_url, goal_json, current_node_id,
-                 doc_context_json, schema_version)
-            VALUES (?, ?, ?, ?, ?, ?)
+                 doc_context_json, areas_json, schema_version)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(session_id) DO UPDATE SET
                 repo_url         = excluded.repo_url,
                 goal_json        = excluded.goal_json,
                 current_node_id  = excluded.current_node_id,
                 doc_context_json = excluded.doc_context_json,
+                areas_json       = excluded.areas_json,
                 schema_version   = excluded.schema_version,
                 updated_at       = strftime('%Y-%m-%d %H:%M:%f', 'now')
             """,
@@ -150,6 +160,7 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
                 json.dumps(graph.goal),
                 graph.current_node_id,
                 json.dumps(graph.doc_context) if graph.doc_context is not None else None,
+                json.dumps(graph.areas) if graph.areas else None,
                 SCHEMA_VERSION,
             ),
         )
@@ -195,6 +206,7 @@ def load_graph(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> LearningGrap
             session_id=session_row["session_id"],
             current_node_id=session_row["current_node_id"],
             doc_context=json.loads(raw_doc) if raw_doc is not None else None,
+            areas=_json_or_default(session_row, "areas_json", []),
         )
         for node_row in conn.execute(
             "SELECT * FROM nodes WHERE session_id = ?", (session_id,)

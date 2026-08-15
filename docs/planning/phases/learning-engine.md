@@ -982,18 +982,20 @@ Settled. Implementation may rely on these.
 | **LD11** | **Progressive expansion is deferred, not adopted** | Phase A's complete dossier weakens the cost argument for it, and it changes the runtime flow significantly. Revisit on evidence, not on principle |
 | **LD12** | **Defect fixes ship independently of the redesign** | F1–F3 are wrong today. Bundling them would make the redesign look responsible for behaviour it did not cause, and delay fixes that need no design work |
 | **LD13** | **A unit is grounded by one or more verified anchors. There is no semantically privileged "primary" anchor** — `display_anchor` is a derived UI affordance | System-level units (`flow`, `architecture`, `boundary`, `synthesis`) are genuinely grounded in several equally important locations. Forcing one to be primary would be a false claim about the evidence, and would let the existing single-anchor storage model constrain the learning design — the inversion this phase exists to undo (L4, L5). Grounding is unchanged in strength: `len(anchors) >= 1`, each verified through Phase A's `resolve()` |
+| **LD15** | **`background` reduces the teaching cost of a required objective; it never removes it** (resolves [LQ1](#152-open-lq)) | Self-report is a weak signal, and a dropped unit is invisible — a learner cannot skip what they were never shown, so a wrong self-assessment silently removes a foundation the dependency closure then teaches on top of. Prior knowledge is validated through performance instead: answering well, or `mark_understood`, both of which leave a record. `background` keeps its current job — eliding explanation *within* a lesson |
 | **LD14** | **The §6.3 guard-band numbers are uncalibrated initial defaults, not product constants** | They were chosen by judgement. Freezing them would recreate L1 — a curriculum size nobody can justify — one layer further down. §6.3 defines how they get measured and recorded |
 
 ### 15.2 Open (LQ)
 
 Genuinely undecided. Each needs a call before the step that depends on it.
 
-**LQ1 — Should a required objective ever be skippable?**
-`required` currently means "always in the curriculum". A learner who already knows it can
-`mark_understood`, but should the *planner* be able to drop a required objective when
-`background` strongly suggests prior knowledge? Today `background` only elides explanation
-within a lesson. Making it drop whole units is more powerful and more dangerous — self-report
-is a weak signal. *Decide before B3.*
+**LQ1 — Should a required objective ever be skippable? — RESOLVED 2026-08-15: no.**
+`background` may reduce the **teaching cost** of a required objective — a shorter lesson,
+less re-explanation — but it never removes the objective itself. Prior knowledge is
+validated through learner performance (`mark_understood`, or simply answering well), not
+trusted from self-report. The required set stays the floor of the curriculum, and
+`background` keeps doing exactly what it does today: eliding explanation inside a lesson.
+See [LD15](#151-accepted-ld).
 
 **LQ2 — What is the real upfront planning cost on `fastapi`?**
 Measure before accepting [LD11](#151-accepted-ld). If a full curriculum over a large
@@ -1076,6 +1078,9 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 
 | 2026-08-15 | **B2 shipped: `code_depth` is asked, `depth` is derived, `experience_level` is deleted** | LD1 and LD2. The interview grows to five core questions — `code_depth` sits between `primary_goal` and `background`, phrased as outcomes ("give me the map" / "I'll be working in here" / "master the internals") because asking "how deep?" invites everyone to answer "deep". `depth` is now a pure function of that answer, so the field that decides how much gets taught is no longer a guess. Scope is deliberately still not asked — §5.3 adjusts it against a visible plan instead | Evidence that the derived `depth` mapping is consistently wrong for some goal type, which would argue for deriving it from `goal_type` as well rather than for asking a second question |
 | 2026-08-15 | **`experience_level` was dropped rather than derived** | §5.4 permitted either. Deriving a level from free-text `background` in Python means keyword heuristics — a guess with a different author, calibrating lessons exactly as before. `familiarity` (fixed options) and `background` (free text) are both genuinely elicited and already carry the signal, so four prompts lost a line and gained nothing to replace it. The `goal_investigation` task line now carries `code_depth` in its place, which is at least a real answer | A measured lesson-quality drop attributable to the missing line, which would argue for a fifth interview question rather than for reinstating the invention |
+
+| 2026-08-15 | **LQ1 resolved as LD15**: `background` may cut how much a required objective costs to teach, but never drops it | Prior knowledge should be validated through learner performance, not trusted from self-report. A dropped unit is also invisible — the learner cannot notice the omission and correct it, unlike a lesson they can skim or `mark_understood` | Evidence that experienced developers abandon journeys over material they demonstrably already knew, which would argue for demotion to `optional` (visible, one click away) rather than for silent dropping |
+| 2026-08-15 | **Guard-band calibration is sequenced after B3, in two passes**: a small sanity matrix (both repos, at least `map` and `implementation`) to catch structurally wrong or wildly mis-sized output, then the full ≥3-repeat matrix once selection behaviour is stable | The expensive matrix measures variance, which is only meaningful once the thing being measured has stopped changing. Running it against a planner still being adjusted would buy numbers that expire. §6.3's provisional bands and their LD14 marker stand until the second pass replaces them | — |
 
 **Note on scope:** this cleanup is independent of the repository-understanding
 migration in [`repo-understanding.md`](repo-understanding.md). It touches the

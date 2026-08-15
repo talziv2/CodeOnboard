@@ -155,6 +155,46 @@ def _read_source_lines(repo_path: str, file: str, start: int, end: int) -> str:
     return "\n".join(lines[start - 1:end])
 
 
+def _read_node_source(repo_path: str, node: LearningNode) -> str:
+    """Every anchor's source, in order — not just the displayed one.
+
+    A unit may be grounded in several equally real locations: a flow across
+    three files, a boundary on both sides of a seam. Reading only the display
+    anchor would hand the model one file and ask it to teach three, which is the
+    exact failure the single-anchor model used to force (learning-engine.md L5).
+
+    Falls back to the display anchor for every graph planned before multi-anchor
+    units existed — which is what `anchors` being absent means.
+    """
+    stored = (node.lesson_brief or {}).get("anchors") or []
+    if len(stored) < 2:
+        return _read_source_lines(
+            repo_path,
+            node.code_anchor.file,
+            node.code_anchor.line_start,
+            node.code_anchor.line_end,
+        )
+
+    parts: list[str] = []
+    for i, anchor in enumerate(stored, start=1):
+        try:
+            body = _read_source_lines(
+                repo_path,
+                anchor["file"],
+                int(anchor["line_start"]),
+                int(anchor["line_end"]),
+            )
+        except Exception:
+            # One stale anchor must not cost the whole lesson; the others are
+            # still verified, and the unit is still grounded.
+            continue
+        label = anchor.get("symbol") or f"lines {anchor['line_start']}-{anchor['line_end']}"
+        parts.append(
+            f"--- anchor {i} of {len(stored)}: {anchor['file']} — {label} ---\n{body}"
+        )
+    return "\n\n".join(parts)
+
+
 def _build_prior_context(graph: LearningGraph, current_id: str) -> str:
     understood = [
         n
@@ -257,6 +297,23 @@ def _format_doc_context(node: LearningNode, doc_context: dict | None) -> str:
     return "\n\n".join(parts) + "\n\n"
 
 
+def _source_header(node: LearningNode) -> str:
+    stored = (node.lesson_brief or {}).get("anchors") or []
+    if len(stored) < 2:
+        return (
+            f"Source code for this node ({node.code_anchor.file} lines "
+            f"{node.code_anchor.line_start}–{node.code_anchor.line_end}):"
+        )
+    # Say that the ordering means something. A flow's anchors are its steps in
+    # execution order, and a lesson that traces them out of order is wrong even
+    # when every individual claim is right.
+    return (
+        f"Source code for this node — {len(stored)} anchors, in order. "
+        f"Teach across all of them; the order is the order the lesson should "
+        f"follow:"
+    )
+
+
 def _build_user_content(
     goal: dict,
     node: LearningNode,
@@ -287,9 +344,7 @@ def _build_user_content(
         f"  why: {brief.get('why', '')}\n"
         f"  understand: {brief.get('understand', '')}\n"
         f"  concepts: {', '.join(node.concept_tags) if node.concept_tags else '—'}\n\n"
-        f"Source code for this node "
-        f"({node.code_anchor.file} lines "
-        f"{node.code_anchor.line_start}–{node.code_anchor.line_end}):\n"
+        f"{_source_header(node)}\n"
         f"{source}\n\n"
         f"{context_section}"
     )
@@ -370,12 +425,7 @@ def run(
         return state
 
     try:
-        source = _read_source_lines(
-            state.repo_path,
-            node.code_anchor.file,
-            node.code_anchor.line_start,
-            node.code_anchor.line_end,
-        )
+        source = _read_node_source(state.repo_path, node)
     except Exception as e:
         state.errors.append(f"teaching_agent: could not read source: {e}")
         return state
