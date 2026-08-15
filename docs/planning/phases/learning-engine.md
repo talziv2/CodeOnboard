@@ -1710,6 +1710,7 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 | 2026-08-15 | **The `use_library` validation is honest about being a weak discriminator** | `understand_component` produced the same four `public_api` entry points and also opened near the public surface, because `psf/requests` *is* a library whose goal-relevant behaviour largely is its public API, the focus area was already caller-shaped, and the `render_dossier` fix benefits every goal type. The durable claim is therefore the **guarantee** — an investigation can no longer satisfy this goal without establishing what a developer imports — not the size of this particular diff | A run on a repository whose public surface and internals diverge more |
 
 | 2026-08-15 | **The Mutator's one-warm-up-per-node guard counted PLANNED prerequisite edges, so remediation could never fire on a B3 graph** | Found in the final validation pass. B3 emits one `prerequisite` edge per `depends_on`, so almost every unit carries one before the learner answers anything — the guard was permanently satisfied and every insertion declined with `prerequisite_exists`, on nodes never remediated. It worked on the `fastapi` session only because that target was the journey's first unit, which nothing depends on. Same class as the B6 route-rail defect, third occurrence of the same root cause: **planned and remedial `prerequisite` edges conflated**. Fixed with the documented tell — a spliced warm-up has no outgoing `sequence` edge | — |
+| 2026-08-15 | **Multi-gap remediation designed, not implemented — the phase closes with two small fixes instead** | Full design in [§18](#18-outstanding-gaps--multi-gap-remediation-and-verification). A live trace showed one answer carrying two independent misconceptions, both correctly detected by the Grader and only one surviving: the schema holds a scalar `gap_kind`, re-teach's prompt is written in the singular, the Mutator never sees the answer at all, and nothing reads attempt history. The node could then reach `understood` with the second misconception intact. The architectural response changes the Grader schema, adds a column, makes `understanding_state` derived and touches API and frontend — the surface area of the whole B-series — so it goes to a dedicated phase rather than the tail of this one, where Phase 3's own roadmap already places the persistent understanding graph. Two defects are small enough to close here: the Mutator's diagnosis-blindness and learner-requested warm-up being unavailable in exactly the states that need it most | LQ8 and LQ10 (gap cap, verification rounds) decide whether the design can produce a non-terminating session; both are answered before implementation, not during |
 | 2026-08-15 | **Final validation audit recorded**, classifying every Done-when criterion | See the audit above §15. Eight criteria observed end-to-end, three calibrated/measured, four tested-only, one obsolete-and-corrected, one measured-and-not-met. Two behaviours remain unobserved live and are named rather than claimed: prune-ahead (#6) and `wrong_model` → re-teach in this particular pass (#7) | — |
 | 2026-08-15 | **Grader strictness investigated and refuted — nothing tuned** | Evaluation in [§14.1](#141-grader-calibration--evaluation-2026-08-15). 48 authored cases across six real objectives, five lesson kinds and both repositories: **classification agreement 48/48**, and every one of the twelve strong answers (`complete` and `concise`) graded `understood`. A second probe answering the *prompt* rather than the *objective* — predicted to be marked down — also returned 6/6 `understood`. The live observation is explained by the corpus: attempts of 80+ words are `understood` 8/9, and most live attempts were deliberately-degraded probes written to exercise the adaptation branches. Expected labels were committed before any output was seen | Evidence from real learners — not authored probes — that full answers are being under-credited |
 | 2026-08-15 | **Prune-ahead stays unobserved, but the reason is no longer a suspected Grader fault** | The earlier entry attributed the missing two-`understood` streak to strictness. That attribution is withdrawn: the Grader awards `understood` to complete answers reliably. The streak never formed because no live session contained two consecutive genuinely-complete answers in one area — the validation answers were probes. #6 is unchanged at **tested-but-unobserved**; the change is to the explanation, not the status | A journey where a learner genuinely earns two consecutive `understood` in one area |
@@ -1717,6 +1718,415 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 migration in [`repo-understanding.md`](repo-understanding.md). It touches the
 Grader, the session API and the learning graph's tests; it shares no code with
 Stage 5 and is recorded here rather than in that document's log.
+
+---
+
+## 18. Outstanding gaps — multi-gap remediation and verification
+
+**Status: design only. Nothing here is implemented.** Written 2026-08-15 after a live
+trace of one deliberately half-correct answer (session `9d432157`, node `63644c89`,
+`Node.expand` / `solution()` in AIMA `search.py`). Recommendation on where this belongs
+is in [§18.13](#1813-recommendation-phase-placement).
+
+### 18.1 The confirmed problem: one answer, two misconceptions, one survivor
+
+The learner's answer contained two independent, unrelated misconceptions:
+
+| | claim | truth |
+|---|---|---|
+| **A** | child `path_cost` / `depth` are filled in later by the search algorithm | both are set during `Node.__init__` / `child_node()` construction |
+| **B** | `solution()` walks the parent chain and returns states *and* actions | `solution()` returns the action sequence; `path()` owns the Node sequence |
+
+**The Grader detected both.** The persisted rationale names them: *"...misunderstands WHEN
+path_cost and depth are computed... **and** conflates the return value of `solution()` with
+what it reconstructs internally."* Detection is not the failure. Everything downstream is.
+
+Traced loss points, in order:
+
+| # | Where | What is lost |
+|---|---|---|
+| 1 | `GraderOutput` ([`grader/agent.py`](../../../backend/agents/grader/agent.py)) | Schema is `classification` + **scalar** `gap_kind` + a one-sentence `rationale`. Both misconceptions here shared a kind (`wrong_model`), so the enum is not lossy in *kind* — it is lossy in **cardinality**. B survives only as prose, and nothing parses prose |
+| 2 | `_RETEACH_SYSTEM` ([`teaching/respond.py`](../../../backend/agents/teaching/respond.py)) | The branch that actually fired. It receives the full answer *and* the full rationale — so both gaps reached it — but the prompt is singular throughout: "*THE misconception*", "*the wrong turn*", "*what they believed*". The retaught lesson now cached on that node attacks A head-on and uses `solution()` **only as evidence for A** ("if path_cost and depth were NOT set... how would `solution()` extract `node.action`?"). It never states that `solution()` returns actions alone. `path()` does not appear in it at all |
+| 3 | `mutator._build_prereq_prompt` | Receives the anchor node's title / objective / why / understand / tags and the candidate chunks — **never the learner's answer, the rationale, or the gap.** See [§18.2](#182-defect-the-mutator-is-blind-to-the-diagnosis) |
+| 4 | `record_attempt` + every reader of `node.attempts` | The full answer text — containing B verbatim — is persisted and **never read**. `grep` finds three consumers and all three test *existence*, not content: `prune_ahead`, `scope.is_movable`, and `store` serialization. No agent reads attempt history |
+| 5 | The return path | `/advance` returns to the node (F1); `cached_lesson` is non-null so Teaching reuses it byte-for-byte. The learner meets the retaught prompt, which asks about construction-time fields. **A complete, correct answer to that prompt need not mention `solution()` at all** — so the node can reach `understood` with B intact, and with no record that B was ever outstanding |
+
+Loss point 5 is the sharp end: the gap is not merely unremediated, it can be **silently
+marked resolved**.
+
+**This was never a design decision.** The plan contains no statement, anywhere, that
+remediation handles one gap at a time. `decide()` is single-valued because its input was
+never multi-valued; §9.1's work was about mapping gap→response, not about arbitrating
+between simultaneous gaps. The multi-gap case was not chosen — it was never considered.
+
+### 18.2 Defect: the Mutator is blind to the diagnosis
+
+Separable from the architecture above, and independently shippable.
+
+Three of the four adaptation branches receive the learner's own words:
+
+| action | gets `answer`? | gets `rationale`? |
+|---|---|---|
+| `hint` | yes | yes |
+| `followup` | yes | yes |
+| `reteach` | yes | yes |
+| **`prerequisite`** | **no** | **no** |
+
+The one branch that **changes the graph** is the one that cannot see what the learner got
+wrong. `/retry` ([`api.py`](../../../backend/api.py)) builds a fresh `OnboardState` carrying
+no grade at all.
+
+This reframes what looked like good targeting. The warm-up generated for the trace above —
+`Node.__init__` at `search.py:78-86` — appears well aimed at misconception A, but **the
+Mutator did not know A existed.** It picked the most foundational structural neighbour of
+`Node.expand`. It would have produced the same warm-up for *any* wrong answer on that node.
+The targeting was proximity, not diagnosis.
+
+**Minimal fix** (specified, not implemented; ~30 lines, no schema change, no new column):
+
+1. A frozen `Diagnosis` dataclass in `mutator.py`: `answer`, `rationale`, `gap_kind`, and
+   (once §18.3 exists) `claim`.
+2. `mutate(state, signal, client, diagnosis=None)` → threaded through
+   `_mutate_prerequisite` → `_generate_prerequisite_node` → `_build_prereq_prompt`, which
+   gains a block: *"What the developer actually wrote / why it fell short / the specific
+   misconception this warm-up must unblock."*
+3. `_PREREQ_SYSTEM_PROMPT` gains one rule: among candidates that are genuinely more
+   foundational, **prefer the one that unblocks this diagnosed misconception**; the existing
+   `{"decision": "none"}` escape is unchanged and becomes more meaningful, since "nothing
+   here addresses that misconception" is now a judgement the model can actually make.
+4. Two call sites. `/respond` already holds the grade in scope. `/retry` does not, and must
+   read `graph.nodes[current].attempts[-1]` — which is exactly the "nothing reads attempts"
+   defect from loss point 4, fixed at its first real consumer.
+
+`diagnosis=None` keeps every existing test and every pre-diagnosis call path working
+unchanged.
+
+### 18.3 Gap representation
+
+A gap is a **claim the learner made that is false**, attached to the objective clause it
+violates. Not a topic, not a score.
+
+```python
+class Gap(BaseModel):
+    id: str                      # OURS, not the model's — see below
+    kind: GapKind                # the existing five-value enum, unchanged
+    claim: str                   # the misconception in one sentence, in the
+                                 #   learner's own terms ("child path_cost and
+                                 #   depth are filled in later by the search")
+    objective_part: str          # which clause of the objective it violates
+    foundational: bool           # does something need teaching BEFORE this node?
+    status: GapStatus            # open | remediating | verified | waived
+    origin_attempt: int          # index into node.attempts
+    resolved_by: int | None      # index of the attempt that closed it
+```
+
+Three decisions carry the design:
+
+**Gap identity is assigned by our code, never by the model.** This is what distinguishes two
+gaps that both carry `kind="wrong_model"`: they are different objects with different `claim`
+text and different ids, and the id is minted once at detection. On a re-grade the Grader is
+*shown* the open gaps with their ids and asked which of **those** the new answer resolves —
+it references ids it was given, and never invents one. Without this rule every re-grade risks
+re-opening a closed gap under a fresh id, or silently merging two distinct ones. `claim` is
+the human discriminator; `id` is the machine one.
+
+**`foundational` is observed; `blocking` is derived.** The model reports what it can see in
+the answer — whether a foundation appears genuinely absent. Whether a gap *blocks*
+`understood` is a policy question, computed by our code from `kind` and objective coverage.
+This follows the rule the project already applies to `depth` (LD2) and to curriculum size:
+**models observe, code decides.** A model-assigned "severity" would be exactly the invented
+dial `depth` used to be — a number nobody elicited, silently steering the session.
+
+**No new taxonomy.** `GapKind` stays as it is. The change is from one gap to a list of gaps,
+not from five kinds to fifteen. Every kind already has a defined response in `_ACTION_BY_GAP`.
+
+### 18.4 Persistence — where outstanding gaps live
+
+Three candidates, assessed:
+
+| Option | Verdict |
+|---|---|
+| **Inside attempts only** | Rejected. An attempt is an immutable historical record of one answer. "Gap A was later closed" is not a fact about the attempt that opened it, and writing it there makes history mutable |
+| **Derived from attempt history** | Rejected, despite being tempting. It can be made to work if closure events are also appended — but "what is still open" then becomes a fold recomputed on every read, and any bug in the fold loses a gap **silently**. The requirement that a refresh must not forget that A was remediated while B was not is precisely a requirement that this not be recomputed |
+| **Explicit state on the node** | **Chosen.** `LearningNode.gaps: list[Gap]`, persisted in one additive nullable `gaps_json` column |
+
+This mirrors a split the codebase already makes: `understanding_state` is explicit state,
+`attempts` is append-only evidence. Outstanding gaps are state, and belong on the same side
+of that line. Attempts remain the audit trail — each records which gaps it opened and which
+it resolved — so the history is fully reconstructible without being the source of truth.
+
+One new column is a real cost against LD6's rule ("everything else went into JSON payloads
+that already existed, because nothing queries by them"). It is justified on ownership rather
+than on querying: gaps belong to the *node's learner state*, and the two existing JSON
+payloads are owned by other producers — `lesson_brief_json` is the **planner's** contract and
+must not accumulate learner state, `cached_lesson_json` is the **teacher's** artifact and is
+overwritten by re-teach. Using either would couple gap lifetime to an unrelated writer.
+The `ALTER TABLE ... ADD COLUMN` + swallow-the-error idiom already used four times in
+`store.py` applies unchanged; `SCHEMA_VERSION` does not move.
+
+### 18.5 Arbitration policy
+
+Explicit, deterministic, and a pure function — the same standard `adaptation.decide()` is
+held to today.
+
+**Ordering.** Open gaps are sorted by a fixed precedence, not by detection order:
+
+```
+missing_prerequisite  →  wrong_model  →  right_idea_wrong_altitude  →  no_attempt
+```
+
+Foundational first, because a gap that blocks comprehension makes remediation of the others
+land on nothing. Within a rank, detection order breaks ties. **This replaces an accidental
+"first gap wins" with a stated rule**, and it is testable without an API key.
+
+**One structural mutation at a time.** At most one prerequisite insert per graded answer, and
+the existing one-remedial-warm-up-per-node cap (`_has_prerequisite`) stands. Two warm-ups
+grown from one answer is a worse journey, and the second is frequently moot once the first
+lands. The `prerequisite` action is taken for the **highest-ranked foundational gap only**.
+
+**Non-structural remediation may cover several gaps at once.** This is the other half of the
+rule and the part that fixes the traced case. Re-teach is a lesson, not a graph change:
+it can and must name *every* open `wrong_model` gap on the node in one pass. The split is:
+
+> **one mutation, many corrections.**
+
+**When gaps must stay separate.** Two gaps merge into one remediation only when they share a
+`kind` **and** the same node. Gaps of different kinds want structurally different responses
+(a hint and a correction are not the same act) and must not be merged. Gaps on different
+nodes are different lessons by construction.
+
+**What happens to the rest.** Nothing. Unaddressed gaps stay `open`, do not decay, are not
+re-detected as duplicates (they are already on the node), and continue to block `understood`.
+They surface in the UI as outstanding work.
+
+### 18.6 Re-teach and warm-up changes
+
+**Re-teach** must be given the full open-gap list and instructed in the plural. Concretely,
+`_RETEACH_SYSTEM` changes from "NAME THE MISCONCEPTION" to naming **each** open misconception,
+and its prompt rule strengthens: the new question must not be answerable while holding *any*
+of them. Where two gaps are genuinely connected, saying so is good teaching; where they are
+independent — as A and B are — the lesson must address both without pretending they are one
+idea. `_node_context` gains the gap list; `LessonOutput` is unchanged.
+
+**Prerequisite generation** gets §18.2's `Diagnosis`, extended to carry the specific `Gap`
+it is meant to unblock. A warm-up is generated *for a gap*, and its id is recorded on the
+inserted node (`lesson_brief["remediates"] = [gap_id]`) so the verification step knows what
+this warm-up was supposed to fix.
+
+### 18.7 Verification — a fresh question, never the same one
+
+**The current behaviour is the weakness.** After `hint` / `followup` / `reteach`, the
+frontend's "Try again" (`canAnswerAgain`) simply clears the form and re-shows **the same
+prompt** — after the corrected reasoning has already been revealed in `reveal`. That is a
+memory check, not evidence of understanding.
+
+Target: a **verification question** — same objective clause, same diagnosed gap, *different
+application*.
+
+```
+gap A closed?  →  test metadata timing in a NEW scenario
+                  (e.g. "a node built by child_node() three levels deep — which of
+                   its five fields are already set the instant expand() returns?")
+                  NOT "explain expand() and solution()" again
+```
+
+Design:
+
+- A new Teaching entry point `verify(node, gaps, source) → VerificationPrompt`, given the
+  objective, the specific gap `claim`s under test, and the source. Instructed to build a
+  question that a learner still holding any of those claims **cannot** answer correctly, and
+  that is **not** a restatement of the question already answered.
+- It is stored **separately from `cached_lesson`**, as `node.pending_verification`. Re-teach
+  overwrites `cached_lesson`; if verification did too, the learner would lose the corrected
+  lesson they are meant to be able to re-read. The two artifacts have different lifetimes.
+- Verification carries **no `reveal`**. Revealing the answer alongside the question is what
+  made re-asking meaningless in the first place.
+- Grading a verification answer is a distinct Grader mode: given the objective, the answer,
+  and the open gaps **with their ids**, it returns per-gap `resolved: true/false` plus any
+  newly detected gaps.
+
+**Silence never closes a gap.** A verification answer that is correct about A and says
+nothing about B closes A and leaves B `open`. This is the single most important rule in
+§18: a gap is closed only by **evidence that it is closed**, never by absence of evidence.
+It is also why verification questions are generated per-gap rather than one blanket question
+per node — a blanket question invites exactly the partial answer that would otherwise look
+like completion.
+
+### 18.8 Understanding state
+
+`understanding_state` becomes **derived** rather than assigned — one function owns it, in the
+same spirit as `objective()` and `readiness()`:
+
+| state | condition |
+|---|---|
+| `not_started` | no attempt recorded |
+| `partial` | attempted, and **any** blocking gap is `open` — regardless of the latest classification |
+| `understood` | latest assessment reached the objective **and** no blocking gap remains `open` |
+| `failed` (+ `weak_spot`) | latest classification `confused`; `weak_spot` additionally stays true while any blocking gap is open |
+
+The consequential change is the second row: **a node cannot be `understood` while a blocking
+gap is open, even if the most recent answer was graded `understood`.** That is exactly the
+hole traced in loss point 5.
+
+Direct answer to the state question posed: *verification answer correct for gap A, silent on
+gap B* → A becomes `verified`, B stays `open`, node stays `partial`, and the UI names B as
+what remains. The learner is told what is still outstanding rather than being quietly passed.
+
+Knock-on, and a desirable one: `prune_ahead` reads `understanding_state == "understood"`, so
+it automatically becomes stricter — an area cannot be pruned on the strength of nodes that
+still carry open gaps. No change to `adaptation.prune_ahead` is required.
+
+`off-topic` continues to change nothing (2026-08-14), and an off-topic answer must not open
+gaps — it is evidence of neither understanding nor misunderstanding.
+
+### 18.9 Attempt history — persisted vs inferred
+
+**Persisted**, on each attempt: `kind` (`assessment` | `verification`), the answer,
+classification, rationale, `gaps_opened: [id]`, `gaps_resolved: [id]`, timestamp, and the
+system's response (`action` + `gaps_addressed`).
+
+**Not a separate record.** Hint, follow-up, re-teach and warm-up are *system responses*, each
+caused by exactly one attempt — so they are recorded **on** that attempt rather than as
+peer entries in a list of learner answers. Mixing "what the learner wrote" and "what the
+system did" into one sequence would make `attempts` mean two things.
+
+**Inferred**, not stored: the narrative ordering, the count of remediation rounds, whether a
+node was recovered after failure, and which warm-up preceded which verification — all
+derivable from attempt order plus `gaps_opened` / `gaps_resolved` / `remediates`.
+
+This is additive to the existing attempt dict; every field defaults, so attempts written
+before this design load unchanged.
+
+### 18.10 API and frontend implications
+
+**API.**
+
+- `/respond` returns `gaps` (open list with `id`, `kind`, `claim`, `status`) alongside the
+  existing `classification` / `gap_kind` / `rationale`. Existing keys stay, so nothing breaks.
+- A new `POST /session/{id}/verify` returns the verification prompt; answers post to
+  `/respond` with `kind="verification"`.
+- `/retry` gains the `Diagnosis` (§18.2) and an `origin` marker distinguishing a
+  learner-requested warm-up from a system-selected one.
+
+**Frontend.**
+
+- The result panel gains an **outstanding-gaps list** — the product's most honest surface: it
+  tells the learner what they still do not know, by name. This is a genuine feature, not
+  plumbing, and is the visible payoff of the whole design.
+- "Try again" must stop re-showing the answered question; it becomes "Check my understanding"
+  and fetches a verification prompt.
+- The rail can mark nodes carrying open gaps distinctly from untouched nodes — currently both
+  read as "not done".
+
+### 18.11 Warm-up UX — system-selected vs learner-requested
+
+Traced from `LessonPanel.tsx`. Warm-up availability today:
+
+| result | policy action | warm-up offered? |
+|---|---|---|
+| `understood` | none | no — correct |
+| `partial` + `right_idea_wrong_altitude` | followup | **yes** ("Build warm-up") |
+| `partial` + `wrong_model` | reteach | **yes** |
+| `confused` + `wrong_model` | reteach | **NO** |
+| `confused` + `missing_prerequisite` | prerequisite | yes ("Start warm-up") |
+| `off-topic` + `no_attempt` | hint | **NO** |
+
+The gating is `FAILED.includes(classification) && adaptation?.kind === "prerequisite"`, so on
+a failed answer the button appears **only when the system already decided to insert one**.
+The result is backwards: a `partial` learner can request a warm-up, and a `confused` learner
+whose gap was `wrong_model` cannot. The learner with the weaker grasp has fewer options.
+
+**Design.** Separate the two concepts explicitly:
+
+- **System-selected prerequisite** — the policy found a foundational gap; the graph mutates
+  automatically. Unchanged.
+- **Learner-requested warm-up** — available in **every** non-`understood` result state, and
+  from the rail on any unvisited node. Stepping back is always a legitimate thing to want,
+  and it must not depend on the system having independently reached the same conclusion.
+
+A learner-requested warm-up still inserts a node — that is what a warm-up is, and the
+`insert_before` machinery and the rail both assume one — but it is marked
+`lesson_brief["origin"] = "learner"`. That marking earns it the same protection as
+`user_override`: neither `prune_ahead` nor `scope.shorten()` may demote a warm-up the learner
+asked for (§9.2, user overrides always win). The `{"decision": "none"}` decline stays a legal
+outcome, so requesting a warm-up where no foundation exists says so honestly rather than
+padding the path.
+
+### 18.12 Backwards compatibility, tests, and validation
+
+**Backwards compatibility.** Every change is additive and defaulted:
+
+- `gaps_json` is a new nullable column via the existing swallow-the-error `ALTER TABLE`
+  idiom. `SCHEMA_VERSION` does **not** move — a graph written before this design loads with
+  `gaps = []`, which reads correctly as "no outstanding gaps".
+- `GraderOutput` keeps `classification` and scalar `gap_kind` — the latter derived from the
+  highest-ranked gap — so `/respond`'s existing response shape is unchanged for any consumer
+  that has not been updated.
+- `understanding_state` stays a stored column; deriving it changes who writes it, not the
+  persisted shape. A pre-design node with no gaps derives exactly the state it already has.
+- Attempts gain defaulted keys and load unchanged.
+- A flag (`CODEONBOARD_GAPS`) defaulting to `0` is the safe rollout, matching how
+  `CODEONBOARD_CURRICULUM` was handled — the two planners coexisted rather than one
+  replacing the other mid-phase.
+
+**Tests required** (all but the last runnable without an API key):
+
+1. Two `wrong_model` gaps with different claims stay two gaps — not merged, not deduplicated.
+2. Arbitration order is exactly the §18.5 precedence, independent of detection order.
+3. One structural mutation per graded answer, even with two foundational gaps.
+4. Re-teach receives every open gap of its kind.
+5. A verification answer resolving A and silent on B closes A only; B stays `open`.
+6. A node with an open blocking gap cannot be `understood` **even when the latest
+   classification is `understood`** — the loss-point-5 regression test.
+7. `prune_ahead` does not prune an area containing a node with open gaps.
+8. A graph persisted without `gaps_json` loads, teaches, and grades unchanged.
+9. Round-trip: gaps survive save → load → refresh with statuses intact.
+10. A learner-requested warm-up is never demoted by `shorten()` or `prune_ahead`.
+
+**Live validation required** — these cannot be asserted, only observed:
+
+- The traced case end to end: one answer with two misconceptions → both persisted → re-teach
+  naming both → verification on A → **B still outstanding and visible** → separate
+  remediation → node reaches `understood` only after both close.
+- A verification question that is genuinely a *different application*, not a paraphrase.
+  This is the one quality property no test can assert — the same class of risk as LR3.
+
+### 18.13 Recommendation: phase placement
+
+**Split it.**
+
+**Close the Learning Engine phase with the two small fixes**, both of which repair shipped
+behaviour and neither of which touches the schema:
+
+1. §18.2 — pass the diagnosis into prerequisite generation (~30 lines).
+2. §18.11 — make learner-requested warm-up available in every non-`understood` state
+   (frontend gating, no backend change).
+
+**Open a dedicated phase for §18.3–18.10.** It changes the Grader's output schema, adds a
+column, makes `understanding_state` derived, adds a Teaching entry point, converts the
+adaptation policy from scalar to list, and changes both the API and the frontend. That is
+the surface area of the entire B-series, and calling it "one more step" would misrepresent
+its size and its risk to a phase currently at 802 green tests and a frozen cost baseline.
+
+It also belongs there on the merits. `roadmap.md` describes Phase 3 as the point where the
+learning graph becomes *"the user's understanding graph — the same object, persisted across
+sessions and surfaced to the user as the product's centerpiece artifact."* A per-node record
+of what the learner believes that is false, which survives across sessions and is closed only
+by evidence, **is** that artifact. Building it at the tail of the Learning Engine would put
+Phase 3's centrepiece in the wrong phase.
+
+### 18.14 Open questions needing a product decision
+
+| # | Question | Why it needs you |
+|---|---|---|
+| **LQ6** | May a learner **dismiss** an outstanding gap ("I know this, move on")? §9.2 says user overrides always win, which argues yes — but a dismissable gap weakens the honesty of the understanding graph, which is the whole point of the artifact | Product-values call, not technical |
+| **LQ7** | Do gaps persist **across sessions** on the same repo? Phase 3 says the understanding graph is persistent. If yes, a returning learner meets their old misconceptions — powerful, and possibly discouraging | Determines whether gaps key on session or on (learner, repo, symbol) |
+| **LQ8** | Is there a **cap** on open gaps per node? An answer that is wrong throughout could open six, turning one unit into a remediation queue. A cap risks dropping real gaps; no cap risks a session that cannot end | Affects whether "close all gaps" is a promise we can keep |
+| **LQ9** | Can a node be `understood` with a **non-blocking** gap open, or is every gap blocking? Making every gap blocking is simpler and more honest; allowing non-blocking gaps keeps journeys moving | Decides whether `blocking` exists at all |
+| **LQ10** | How many verification rounds before the system **stops asking**? Unbounded verification on a learner who keeps missing the same gap is a loop, not a lesson | Needs a product answer about when to let someone move on unresolved |
+
+`LQ8` and `LQ10` together decide whether this design can produce a session that never
+terminates. Both should be answered before implementation starts, not during.
 
 ---
 
