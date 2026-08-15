@@ -1184,6 +1184,62 @@ learning "feels better".
     orthogonal (all four combinations load).
 16. Cost per session stays within the `$0.10` target, measured — planning is one Sonnet
     call, teaching one Haiku per unit, grading one Haiku per answer, as today.
+    *Status 2026-08-15: **NOT MET — measured at ~$0.41 for a 12-unit session, 4× the
+    target.** Full breakdown below.*
+
+### Cost — measured 2026-08-15
+
+`psf/requests`, `understand_architecture`, `code_depth: working`, 16 units planned. Raw
+data: [`evidence/cost-measurement.json`](evidence/cost-measurement.json). Costs use the
+repo's existing `PRICING` table with its cache multipliers. **Nothing was changed to chase
+the target — this is the system as it stands.**
+
+**Planning time — paid once per session**
+
+| stage | calls | model | uncached in | cache read | out | cost |
+|---|---|---|---|---|---|---|
+| `repo_survey` | 0 | — | — | — | — | **$0.0000** (cache hit) |
+| `documentation` | 0 | — | — | — | — | $0.0000 (no LLM by design) |
+| `goal_investigation` | 20 | Haiku | 509 | 352,686 | **21,614** | **$0.1832** |
+| `mentor` (flag=0, pre-B3) | 1 | Sonnet | 15,976 | 0 | 2,251 | $0.0817 |
+| `mentor` (flag=1, B3) | 1 | Sonnet | 16,635 | 0 | 4,579 | **$0.1186** |
+| **total (flag=1)** | | | | | | **$0.3018** |
+
+**Session time — per unit / per answer**
+
+| scenario | calls | cost | vs happy path |
+|---|---|---|---|
+| happy path (lesson + grade) | 2 | $0.0086 | baseline |
+| `no_attempt` → hint | 3 | $0.0092 | +$0.0005 |
+| `right_idea_wrong_altitude` → follow-up | 3 | $0.0094 | +$0.0008 |
+| `wrong_model` → re-teach | 4 | $0.0184 | +$0.0098 |
+| `missing_prerequisite` → prerequisite | 3 | $0.0271 | +$0.0185 |
+
+**Projected 12-unit session: $0.4053** — planning $0.3018 + 12 × $0.0086. One of every
+adaptation adds $0.0296, giving $0.4348.
+
+**Where the budget actually goes.** Planning is **74%** of a session and session-time
+teaching only 26%; adaptation is a rounding error. The two line items that matter:
+
+- **`goal_investigation` — $0.1832, 45% of the whole session.** Prompt caching is working
+  almost perfectly (352,686 cache reads against 509 uncached input tokens), so the input
+  side is nearly free. The cost is **output**: 21,614 tokens across 20 turns, ~59% of that
+  stage's bill. This is not a caching problem; it is an amount-written problem.
+- **The planner — $0.1186 on one Sonnet call**, of which output is 4,579 tokens. It runs
+  with **no prompt caching at all** (`cache_read` 0 against 16,635 input tokens).
+
+**What B3 cost.** The objective-first planner is **+$0.037 (+45%)** against the pre-B3
+planner on the same dossier — $0.1186 vs $0.0817, almost entirely output tokens (4,579 vs
+2,251), which is what over-generating objectives with anchors and areas buys. Flipping
+`CODEONBOARD_CURRICULUM` to `1` therefore costs about four cents per session.
+
+**Two caveats that make this a floor, not an average:**
+
+1. **The survey was a cache hit.** A first-ever session on a repository pays for it —
+   ~$0.13 for `psf/requests` from the survey store's own record — putting cold start
+   nearer **$0.53**.
+2. **The projection assumes each unit is answered once.** A hint or re-teach invites
+   another answer, and each re-answer is another grade plus another adaptation.
 
 ---
 
@@ -1369,6 +1425,11 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 
 | 2026-08-15 | **`map` ceiling 14 → 18, derived from the 18-run matrix. `working` and `implementation` untouched** ([LD16](#151-accepted-ld)) | Full derivation in [§6.3](#63-sizing--how-the-journeys-length-is-actually-decided). Unclamped demand is recoverable exactly as `journey + demoted_by_band`, giving 11–15 across the six `map` runs; **max + 2sd = 18.0 and mean + 3sd = 18.2** both land on 18. Smaller values (15, 16, 17) sit inside one standard deviation of the observed maximum and would clamp the next ordinary run — a proposal of 16 was already seen. Larger values would inherit `working`'s and `implementation`'s margins, which are themselves judgement, and 22 would collapse the band into `working` | A wider matrix — more `goal_type` values, or a third repository — showing `map` demand routinely above 15 |
 | 2026-08-15 | **The corrected ceiling was validated by direct observation, and the validation passed** | Every `fastapi × map` run in the matrix was clamped, so its unclamped demand was inferred rather than seen. Two runs at ceiling 18 produced journeys of **11 and 15** with the ceiling firing **0 of 2** — variance restored (sd 0.00 → 2.83), and a maximum of exactly 15, which is what `journey + demoted_by_band` had predicted. That agreement validates the derivation method itself, not just this one number, which matters because any future recalibration will use it | — |
+
+| 2026-08-15 | **Cost measured per path: ~$0.41 for a 12-unit session against a $0.10 target — [§14](#14-done-when) item 16 is NOT met** | Full table in §14. Nothing was changed to chase the target; the instruction was to measure the system as it is, and a measurement taken while tuning the thing measured is worth nothing | — |
+| 2026-08-15 | **The budget is a planning-time problem, not a session-time one** | Planning is **74%** of a session, teaching and grading **26%**, and adaptation a rounding error (+$0.0005 for a hint, +$0.0008 for a follow-up). Any optimisation aimed at lessons or adaptation is aimed at the quarter of the bill that is already cheap. The two real line items are `goal_investigation` at $0.1832 and the single planner call at $0.1186 | — |
+| 2026-08-15 | **The investigation's cost is output tokens, not input** — prompt caching is already near-perfect there | 352,686 cache reads against 509 uncached input tokens, and 21,614 **output** tokens across 20 turns (~59% of that stage's cost). Recorded because the obvious first instinct — "add caching" — is aimed at a problem that does not exist; what would move the number is how much the exploration *writes*. The planner call is the opposite case: 16,635 input tokens with **zero** cache reads | — |
+| 2026-08-15 | **B3's planner costs +$0.037 (+45%) against the pre-B3 planner on the same dossier** | $0.1186 vs $0.0817, almost entirely output (4,579 vs 2,251 tokens) — the price of over-generating objectives with anchors and areas. This is what flipping `CODEONBOARD_CURRICULUM` to `1` costs per session, measured rather than guessed. Whether the curriculum is worth four cents is a product judgement, not a measurement | — |
 
 **Note on scope:** this cleanup is independent of the repository-understanding
 migration in [`repo-understanding.md`](repo-understanding.md). It touches the
