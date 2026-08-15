@@ -857,6 +857,40 @@ form* once §7.2's machinery exists — a prompt and an entry in the form table.
 before the objective contract and the form machinery exist would mean building it twice.
 If only one enhancement ships after the must-have set, it should be this one.
 
+**Shipped 2026-08-15, mapped to `risk` only.** LD5's prediction held exactly: it cost one
+`PromptKind` value, one `_FORM_BY_KIND` entry and one brief — no new lesson path, no
+Teaching redesign.
+
+*Why `risk`.* The unit already names an invariant, so there is a concrete guarantee for a
+plausible change to violate. Every other kind would require the model to invent both the
+flaw *and* the thing it breaks. Confining it to one kind is [LR5](#16-risks) taken
+seriously: a form that must invent a flaw is the hardest generation task here, and reverting
+is the single dict entry — `blast-radius` stays reachable and correct.
+
+*What the brief enforces*, beyond "show a bad change": the flaw must violate something the
+repository actually guarantees; a linter-catchable or style problem is explicitly the wrong
+exercise; the change must **look reasonable**, being the kind of thing an assistant would
+confidently produce; it must be catchable from this unit's anchors plus units already
+understood; and the correct answer must be the objective's claim in applied form.
+
+*Observed on `fastapi/fastapi`* (both `risk` units in a real journey):
+
+> **The change:** wrap `get_db` with `functools.wraps` to add tracing, then register
+> `app.dependency_overrides[original_get_db] = mock_db_session` in a test.
+> **Why it is plausible:** adding tracing to a dependency is ordinary, and `functools.wraps`
+> is *the* idiomatic way to preserve a wrapped function — which makes it look as though
+> identity is preserved too.
+> **What catching it requires:** knowing that `Dependant.cache_key` is built from
+> `self.call` — the function **object** — and that `dependency_overrides` is keyed on that
+> same object. Not inferable from the diff; not reachable by a linter.
+
+The second unit produced a change bypassing FastAPI's middleware to call `route.app`
+directly, whose flaw is that the middleware is what injects `fastapi_middleware_astack`
+into `request.scope` — so generator-dependency cleanup would silently never run. Both
+critiques leaned on units taught **earlier in the same journey** (`dependency_overrides`,
+generator dependencies), which is the "prior learning" half of the principle working
+without being asked for.
+
 ---
 
 ## 8. Assessment model
@@ -1110,7 +1144,7 @@ meaningfully better.
 
 | Item | Note |
 |---|---|
-| **AI-critique lesson form (§7.4)** | The strongest differentiator. One form once B4 exists. **If only one item from this tier ships, it is this one** |
+| **AI-critique lesson form (§7.4)** | ✅ **shipped 2026-08-15**, mapped to `risk` only and live-checked on `fastapi`. See §7.4 |
 | **U4 scope control** | Delivers §5.3's "adjust after seeing the plan" |
 | `boundary` as a distinct kind | Refines §4.2; start folded into `architecture` |
 | Synthesis units at area boundaries | `synthesis` kind exists from B3; using it well is a prompt question |
@@ -1487,6 +1521,10 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 | 2026-08-15 | **The full remediation path is observed end-to-end**, closing §14 item 8 | Real session, real Grader, real Mutator, nothing stubbed: genuine `missing_prerequisite` → prerequisite inserted with a real edge → warm-up taught → advance returns to the original (unvisited) → re-answer recorded and re-graded. F1's fix and B5's policy verified together on live data rather than in isolation | — |
 | 2026-08-15 | **The first real `fastapi` E2E run also observed six criteria that had only been unit-tested** | One planned session (16 units, 4 areas, 197s, zero errors): areas render with every unit assigned; **six distinct prompt forms in one journey** (≥4 required); all 16 lessons carry every B4 element; a 3-anchor flow step opened its own file at its own range; the reveal was absent from the DOM before answering and appeared with the verdict after; "STOP n OF 15" correctly excluded the one `optional` unit. The full table update is deferred to the final validation pass | — |
 | 2026-08-15 | **Prune-ahead remains implemented and tested but NOT live-validated** | Four deliberately strong answers across two runs graded `partial` / `right_idea_wrong_altitude`, so the two-consecutive-`understood` streak never formed. That is the Grader being strict, not a prune-ahead fault. Recorded as unobserved rather than forced: distorting answers or verdicts to make a mechanism fire would produce evidence about the harness, not the product | A journey where a learner genuinely earns two consecutive `understood` in one area |
+
+| 2026-08-15 | **The AI-critique form ships mapped to `risk` alone** | LD5 predicted it would cost "a prompt and an entry in the form table" once B4 existed; it cost exactly that. `risk` is the only kind where the unit already names an invariant, so the model has a concrete guarantee to violate rather than having to invent both the flaw and what it breaks. One kind is LR5 taken seriously — this is the only form that must **invent** something, and reverting is one dict entry with `blast-radius` still reachable | Live evidence that critiques on `risk` units read as generic review, or that another kind generates them as reliably |
+| 2026-08-15 | **The `risk` lesson shape no longer lets `setup` name the failure** | It previously said "lead with WHAT CAN GO WRONG. Name the invariant" — which, under a critique prompt, hands the learner the answer before the question. `setup` now establishes the mechanism and what depends on it, and finding the violation is what the prompt asks | — |
+| 2026-08-15 | **Live-checked on both `fastapi` `risk` units, and the flaws are genuinely repository-specific** | One requires knowing `Dependant.cache_key` is built from the function **object** so a `functools.wraps` wrapper silently breaks `dependency_overrides`; the other requires knowing FastAPI's middleware is what injects `fastapi_middleware_astack`, so bypassing it strands generator-dependency cleanup. Both lean on units taught earlier in the same journey — the "prior learning" half of LP5 working unprompted. Verified in the browser that `reveal`, `takeaway` and `ownership` are absent from the DOM until the answer is submitted | — |
 
 **Note on scope:** this cleanup is independent of the repository-understanding
 migration in [`repo-understanding.md`](repo-understanding.md). It touches the

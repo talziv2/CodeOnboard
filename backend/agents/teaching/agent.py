@@ -46,6 +46,7 @@ PromptKind = Literal[
     "blast-radius",         # what breaks if this changes?
     "locate",               # where would you add X, and what must it provide?
     "explain-back",         # tie these together at system level
+    "critique",             # here is a plausible change — what is wrong with it?
 ]
 
 # kind → form. An unmapped kind falls back to the original form, which is
@@ -54,7 +55,19 @@ _FORM_BY_KIND: dict[str, PromptKind] = {
     "architecture": "compare",
     "flow": "predict-next",
     "component": "predict-then-reveal",
-    "risk": "blast-radius",
+    # The AI-critique form (§7.4). `risk` units are where it fits best and where
+    # it is most reliably generatable: the unit already names an invariant, so
+    # there is a concrete thing for a plausible change to violate. Critiquing a
+    # specific broken change subsumes "what breaks if this changes?" and cannot
+    # be answered from the walkthrough's wording, which `blast-radius` sometimes
+    # could.
+    #
+    # DELIBERATELY ONE KIND. This is the first implementation of a form that has
+    # to invent a flaw, which is a harder generation task than any other form
+    # asks for; widening it before it has been seen on real repositories would be
+    # LR5's "eight forms, each worse than the one good one". Reverting is this
+    # single dict entry.
+    "risk": "critique",
     "extension_point": "locate",
     "synthesis": "explain-back",
     # A test guards against a class of regression; asking which class is a
@@ -81,10 +94,49 @@ _FORM_BRIEF: dict[str, str] = {
         "point in the path, and why. A correct answer names the destination and "
         "the reason it is that one, not merely the next function alphabetically."
     ),
+    # Retained and reachable: it is the one-word revert for `risk`, and remains
+    # correct for any kind later mapped to it.
     "blast-radius": (
         "Ask the developer what BREAKS if the invariant is violated or the code "
         "changes. A correct answer names a consequence somewhere else in the "
         "system, not a restatement of what the code does."
+    ),
+    "critique": (
+        "SHOW THE DEVELOPER A PLAUSIBLE BUT FLAWED CHANGE to this repository, and "
+        "ask what is wrong with it.\n"
+        "\n"
+        "  Write the change as a short concrete diff or replacement snippet "
+        "inside the `prompt`, in a fenced code block, using THIS repository's "
+        "real names — the actual functions, attributes and types visible in the "
+        "code you were shown. Then ask: what is wrong with this change, and what "
+        "would it break?\n"
+        "\n"
+        "  THE FLAW MUST BE REPOSITORY-SPECIFIC. It has to violate something this "
+        "system actually guarantees — an invariant, a contract, an ownership "
+        "boundary, an ordering requirement, a caching or lifecycle rule. A "
+        "developer who has read this code can catch it; a competent stranger who "
+        "has not, cannot.\n"
+        "\n"
+        "  NOT a style, naming, typo, formatting or generic-best-practice "
+        "problem. Not a missing null check or an unused import. If the flaw would "
+        "be caught by a linter, or by anyone reading the diff without knowing "
+        "this codebase, you have written the wrong exercise.\n"
+        "\n"
+        "  THE CHANGE MUST LOOK REASONABLE. It should be the kind of thing an AI "
+        "assistant or a competent newcomer would confidently produce: it reads as "
+        "a sensible simplification, optimisation or feature addition. A change "
+        "that is obviously wrong on its face teaches nothing.\n"
+        "\n"
+        "  ANSWERABLE FROM WHAT THEY HAVE BEEN TAUGHT. The flaw must be "
+        "detectable from the code shown in this unit plus the units they have "
+        "already understood — never from a part of the system they have not met. "
+        "If catching it needs knowledge this lesson has not given them, choose a "
+        "different flaw.\n"
+        "\n"
+        "  A correct answer names WHAT the change breaks and WHY — the guarantee "
+        "it violates — and that answer must be the objective's claim in applied "
+        "form. If a developer could reach the objective and still not spot this "
+        "flaw, the exercise is testing something other than the objective."
     ),
     "locate": (
         "Ask the developer WHERE they would add a specific new capability, and "
@@ -212,8 +264,12 @@ question's shape is governed separately by PROMPT FORM in the user content.
                         describes only the first anchor has failed.
   - `component`       — the abstraction and its contract. This is the one kind
                         where implementation detail IS the objective.
-  - `risk`            — lead with WHAT CAN GO WRONG. Name the invariant or
-                        hidden coupling, then the code that depends on it.
+  - `risk`            — establish the MECHANISM and what depends on it: the
+                        guarantee this code quietly provides, and who relies on
+                        it. Do NOT announce that it is violated or name the
+                        failure — the prompt is what asks the developer to find
+                        it, and a `setup` that states the flaw has answered its
+                        own question.
   - `extension_point` — how this is meant to be EXTENDED. Identify the contract
                         (ABC, protocol, callback shape) and show one concrete
                         extension if visible.

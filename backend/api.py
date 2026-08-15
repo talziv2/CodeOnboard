@@ -51,14 +51,19 @@ load_dotenv(override=True)
 logger = logging.getLogger(__name__)
 app = FastAPI(title="CodeOnboard API")
 
-# The dev frontend's origin. Overridable so a second instance can be run beside
-# an existing one — an isolated copy on another port, for instance — without
-# broadening what a normal run accepts. The default is exactly what it has
-# always been, so nothing changes unless the variable is set.
+# The dev frontend's origins. `localhost` and `127.0.0.1` are the same machine
+# but different *origins* to a browser, so both have to be listed: opening the
+# app on the one that isn't allowed makes every call fail CORS, which the
+# browser reports only as "Failed to fetch".
+#
+# Overridable so a second instance can be run beside an existing one — an
+# isolated copy on another port, for instance — without broadening what a
+# normal run accepts.
 ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get(
-        "CODEONBOARD_ALLOWED_ORIGINS", "http://localhost:3000"
+        "CODEONBOARD_ALLOWED_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000",
     ).split(",")
     if origin.strip()
 ]

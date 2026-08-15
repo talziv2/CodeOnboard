@@ -222,6 +222,9 @@ export const t = {
     file_not_found: "That file isn't in the repository.",
     no_graph: "The learning path couldn't be built for this repository.",
     synthesis_failed: "Couldn't make sense of those answers. Try rephrasing.",
+    server_unreachable:
+      "Couldn't reach the server. Check the backend is running on port 8000, " +
+      "and that this page is open on the same host it allows (localhost).",
   } as Record<string, string>,
 };
 

@@ -56,7 +56,7 @@ def _node_of_kind(kind: str, tags: list[str] | None = None) -> LearningNode:
     ("architecture", "compare"),
     ("flow", "predict-next"),
     ("component", "predict-then-reveal"),
-    ("risk", "blast-radius"),
+    ("risk", "critique"),
     ("extension_point", "locate"),
     ("synthesis", "explain-back"),
     ("test_coverage", "predict-then-reveal"),
@@ -89,7 +89,7 @@ def test_a_pre_b3_node_gets_its_form_from_concept_tags():
         concept_tags=["auth", "risk"],
         lesson_brief={"why": "x", "understand": "y"},
     )
-    assert lesson_form(node) == "blast-radius"
+    assert lesson_form(node) == "critique"
 
 
 def test_only_the_chosen_form_is_shown_to_the_model():
@@ -98,7 +98,7 @@ def test_only_the_chosen_form_is_shown_to_the_model():
         FAKE_GOAL, _node_of_kind("risk"), "src", "no prior context", []
     )
     assert "PROMPT FORM" in content
-    assert "what BREAKS" in content
+    assert "PLAUSIBLE BUT FLAWED CHANGE" in content
     assert "DELINEATE" not in content
 
 
@@ -235,3 +235,70 @@ def test_prior_units_are_carried_as_claims_not_just_titles():
     current = graph.add_node(_make_node())
     context = _build_prior_context(graph, current.id)
     assert "they can now: Explain what Session owns" in context
+
+
+# ── the AI-critique form (§7.4) ───────────────────────────────────────────────
+
+def _critique_brief() -> str:
+    return _build_user_content(
+        FAKE_GOAL, _node_of_kind("risk"), "src", "no prior context", []
+    )
+
+
+def test_a_risk_unit_asks_the_learner_to_critique_a_change():
+    assert lesson_form(_node_of_kind("risk")) == "critique"
+
+
+def test_the_critique_brief_demands_a_repository_specific_flaw():
+    # The whole point: a flaw a competent stranger could catch is not a
+    # supervision exercise, it is code-review trivia.
+    brief = _critique_brief()
+    assert "REPOSITORY-SPECIFIC" in brief
+    assert "invariant" in brief and "contract" in brief
+    assert "caught by a linter" in brief
+
+
+def test_the_critique_brief_rules_out_generic_review_findings():
+    brief = _critique_brief()
+    for banned in ("style", "naming", "typo", "formatting", "unused import"):
+        assert banned in brief, f"the brief should exclude {banned} explicitly"
+
+
+def test_the_critique_brief_requires_the_change_to_look_reasonable():
+    # A change that is obviously wrong teaches nothing — the exercise is
+    # supervision of plausible work, which is what an assistant produces.
+    assert "MUST LOOK REASONABLE" in _critique_brief()
+
+
+def test_the_critique_brief_bounds_it_to_what_has_been_taught():
+    brief = _critique_brief()
+    assert "ANSWERABLE FROM WHAT THEY HAVE BEEN TAUGHT" in brief
+    assert "already understood" in brief
+
+
+def test_the_critique_brief_ties_the_answer_back_to_the_objective():
+    brief = _critique_brief()
+    assert "objective's claim in applied form" in brief
+
+
+def test_a_risk_setup_must_not_announce_the_failure():
+    # Otherwise the setup answers its own prompt and the critique is free.
+    assert "Do NOT announce that it is violated" in _SYSTEM_PROMPT
+
+
+def test_the_critique_form_is_one_dict_entry_away_from_reverting():
+    # Narrow and reversible by construction: `blast-radius` stays reachable and
+    # correct, so restoring it is a single mapping change.
+    from backend.agents.teaching.agent import _FORM_BRIEF
+
+    assert "blast-radius" in _FORM_BRIEF
+    assert "critique" in _FORM_BRIEF
+
+
+def test_only_risk_uses_the_critique_form_for_now():
+    # LR5: a form that has to INVENT a flaw is the hardest generation task here,
+    # so it is deliberately confined to one kind until seen on real repos.
+    using = [k for k in ("architecture", "flow", "component", "extension_point",
+                         "synthesis", "test_coverage", "risk")
+             if lesson_form(_node_of_kind(k)) == "critique"]
+    assert using == ["risk"]

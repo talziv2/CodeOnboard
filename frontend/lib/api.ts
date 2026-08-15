@@ -19,8 +19,20 @@ async function fail(res: Response): Promise<never> {
   throw new Error(message.trim() || `Request failed (${res.status})`);
 }
 
+/** A request that never reached the server — backend down, or the page is on an
+ *  origin its CORS list doesn't allow. The browser collapses both into an
+ *  opaque `TypeError: Failed to fetch`, so translate it into a slug the UI can
+ *  render as something a person can act on. */
+async function send(path: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(`${BASE}${path}`, init);
+  } catch {
+    throw new Error("server_unreachable");
+  }
+}
+
 async function post<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await send(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -30,7 +42,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
 }
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`);
+  const res = await send(path);
   if (!res.ok) await fail(res);
   return res.json();
 }
