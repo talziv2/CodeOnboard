@@ -1409,11 +1409,56 @@ preserved); readiness and stop-count behaviour; `/advance` stepping over optiona
 one-warm-up-per-node guard counted *planned* prerequisite edges, so on any B3 graph it was
 permanently satisfied and remediation could never fire except on units nothing depends on.
 
-**Open, and deliberately not acted on:** the Grader awards `understood` rarely. Across the
-final pass it graded strong, specific, correct answers as `partial` /
-`right_idea_wrong_altitude` more often than not. That starves prune-ahead (#6) and may make
-journeys feel unrewarding. It is a **Grader-calibration question, not an adaptation defect**,
-and tuning it during a closure pass would invalidate the behaviour being validated.
+**Investigated and closed — the Grader is not strict.** The closure pass recorded a concern
+that the Grader awarded `understood` rarely and marked strong answers `partial`. A two-stage
+evaluation (below) refuted it: **18/18 strong answers were graded `understood`**, and the
+apparent strictness was a property of the *answers* in the live corpus, not of grading.
+Prune-ahead (#6) stays **tested-but-unobserved**, but for a different and benign reason — the
+live sessions never contained two consecutive genuinely-complete answers in one area.
+
+#### 14.1 Grader calibration — evaluation (2026-08-15)
+
+Run as an evaluation, not a tuning exercise: no threshold, prompt, label, adaptation rule or
+prune-ahead behaviour was changed. Expected labels were authored **before** any Grader output
+was seen and committed first (`7922190`, `3a0fe2c`) so the ordering is checkable in git.
+
+*Stage 1* — `scripts/grader_eval_cases.py` + `scripts/grader_eval.py`. Six real objectives
+from two real B3 sessions (`a3234f41` requests/`use_library`, `d1e5fc95` fastapi/architecture)
+spanning five lesson kinds, × eight answer qualities = **48 cases**, each graded through the
+real `backend.agents.grader.run` against the real node, real cached lesson and real objective.
+
+| | agreement |
+|---|---|
+| classification | **48/48 (100%)** |
+| `gap_kind` | 45/48 (94%) |
+| both | 45/48 (94%) |
+
+`complete` **6/6** `understood`; `concise` **6/6** `understood` — zero disagreement at the
+boundary that matters, in every kind and both repositories. All three `gap_kind` misses are
+benign: two `missing_prerequisite` answers read as `no_attempt` (both are true of the answer),
+one `wrong_altitude` read as `wrong_model`.
+
+*Stage 2* — `scripts/grader_probe_prompt.py`. Five of the six prompts elicit strictly less
+than their objective states, which predicted that an answer faithful to the *prompt* would be
+incomplete against the *objective* and be marked down. **Refuted: 6/6 `understood`.** The
+Grader credits a correct, complete answer to the question asked even when the objective names
+clauses the prompt never requested. Recorded because the prediction was wrong in the
+product's favour — the objective/prompt gap is real, but it is not costing learners credit.
+
+*What actually explains the observation* — the 37 graded attempts in `data/sessions.db`:
+
+| grade | n | median words |
+|---|---|---|
+| `understood` | 11 | 101 |
+| `partial` | 8 | 50 |
+| `confused` | 8 | 48 |
+| `off-topic` | 10 | 33 |
+
+Of attempts ≥ 80 words, **8 of 9 are `understood`**. The live corpus is dominated by answers
+deliberately degraded to exercise the adaptation branches — `wrong_model` probes, "I don't
+know", missing-prerequisite probes — plus short real answers; on five nodes a degraded first
+attempt is followed by a fuller retry that *does* earn `understood`. The strictness reading
+came from counting those probes as if they were sincere attempts.
 
 ---
 
@@ -1648,7 +1693,7 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 | 2026-08-15 | **A named `gap_kind` outranks the coarse `classification` in adaptation selection** | Found in live `fastapi` validation: a learner wrote "I can't follow this because I don't know what a function signature is", the Grader read it exactly right and reported `missing_prerequisite`, and the policy **discarded the signal** because the same answer was also classified `off-topic` — so the one case a prerequisite exists for got nothing at all. The earlier whitelist of "actions an off-topic answer may earn" was the same mistake in smaller form: it treats the vaguer evidence as the stronger. What the off-topic guard actually protects is the **unclassified** case, and that is preserved exactly — no named gap, no evidence, no change, and `understanding_state` is untouched either way | Evidence that the Grader emits `missing_prerequisite` loosely enough that acting on it grows journeys spuriously |
 | 2026-08-15 | **The full remediation path is observed end-to-end**, closing §14 item 8 | Real session, real Grader, real Mutator, nothing stubbed: genuine `missing_prerequisite` → prerequisite inserted with a real edge → warm-up taught → advance returns to the original (unvisited) → re-answer recorded and re-graded. F1's fix and B5's policy verified together on live data rather than in isolation | — |
 | 2026-08-15 | **The first real `fastapi` E2E run also observed six criteria that had only been unit-tested** | One planned session (16 units, 4 areas, 197s, zero errors): areas render with every unit assigned; **six distinct prompt forms in one journey** (≥4 required); all 16 lessons carry every B4 element; a 3-anchor flow step opened its own file at its own range; the reveal was absent from the DOM before answering and appeared with the verdict after; "STOP n OF 15" correctly excluded the one `optional` unit. The full table update is deferred to the final validation pass | — |
-| 2026-08-15 | **Prune-ahead remains implemented and tested but NOT live-validated** | Four deliberately strong answers across two runs graded `partial` / `right_idea_wrong_altitude`, so the two-consecutive-`understood` streak never formed. That is the Grader being strict, not a prune-ahead fault. Recorded as unobserved rather than forced: distorting answers or verdicts to make a mechanism fire would produce evidence about the harness, not the product | A journey where a learner genuinely earns two consecutive `understood` in one area |
+| 2026-08-15 | **Prune-ahead remains implemented and tested but NOT live-validated** | Four deliberately strong answers across two runs graded `partial` / `right_idea_wrong_altitude`, so the two-consecutive-`understood` streak never formed. That was read at the time as the Grader being strict; the 2026-08-15 evaluation below refutes that — the answers were probes, not full attempts. Recorded as unobserved rather than forced: distorting answers or verdicts to make a mechanism fire would produce evidence about the harness, not the product | A journey where a learner genuinely earns two consecutive `understood` in one area |
 
 | 2026-08-15 | **The AI-critique form ships mapped to `risk` alone** | LD5 predicted it would cost "a prompt and an entry in the form table" once B4 existed; it cost exactly that. `risk` is the only kind where the unit already names an invariant, so the model has a concrete guarantee to violate rather than having to invent both the flaw and what it breaks. One kind is LR5 taken seriously — this is the only form that must **invent** something, and reverting is one dict entry with `blast-radius` still reachable | Live evidence that critiques on `risk` units read as generic review, or that another kind generates them as reliably |
 | 2026-08-15 | **The `risk` lesson shape no longer lets `setup` name the failure** | It previously said "lead with WHAT CAN GO WRONG. Name the invariant" — which, under a critique prompt, hands the learner the answer before the question. `setup` now establishes the mechanism and what depends on it, and finding the violation is what the prompt asks | — |
@@ -1666,8 +1711,8 @@ Append-only. Every entry: date, decision, rationale, what would reverse it.
 
 | 2026-08-15 | **The Mutator's one-warm-up-per-node guard counted PLANNED prerequisite edges, so remediation could never fire on a B3 graph** | Found in the final validation pass. B3 emits one `prerequisite` edge per `depends_on`, so almost every unit carries one before the learner answers anything — the guard was permanently satisfied and every insertion declined with `prerequisite_exists`, on nodes never remediated. It worked on the `fastapi` session only because that target was the journey's first unit, which nothing depends on. Same class as the B6 route-rail defect, third occurrence of the same root cause: **planned and remedial `prerequisite` edges conflated**. Fixed with the documented tell — a spliced warm-up has no outgoing `sequence` edge | — |
 | 2026-08-15 | **Final validation audit recorded**, classifying every Done-when criterion | See the audit above §15. Eight criteria observed end-to-end, three calibrated/measured, four tested-only, one obsolete-and-corrected, one measured-and-not-met. Two behaviours remain unobserved live and are named rather than claimed: prune-ahead (#6) and `wrong_model` → re-teach in this particular pass (#7) | — |
-| 2026-08-15 | **Grader strictness recorded as an open validation concern, deliberately untuned** | Across the final pass the Grader awarded `understood` twice in roughly fifteen graded answers, marking strong specific answers `partial` / `right_idea_wrong_altitude`. That starves prune-ahead and may make journeys feel unrewarding. It is a Grader-calibration question rather than an adaptation defect, and tuning it during a closure pass would invalidate the behaviour under validation | Evidence from real learners that correct answers are being under-credited |
-
+| 2026-08-15 | **Grader strictness investigated and refuted — nothing tuned** | Evaluation in [§14.1](#141-grader-calibration--evaluation-2026-08-15). 48 authored cases across six real objectives, five lesson kinds and both repositories: **classification agreement 48/48**, and every one of the twelve strong answers (`complete` and `concise`) graded `understood`. A second probe answering the *prompt* rather than the *objective* — predicted to be marked down — also returned 6/6 `understood`. The live observation is explained by the corpus: attempts of 80+ words are `understood` 8/9, and most live attempts were deliberately-degraded probes written to exercise the adaptation branches. Expected labels were committed before any output was seen | Evidence from real learners — not authored probes — that full answers are being under-credited |
+| 2026-08-15 | **Prune-ahead stays unobserved, but the reason is no longer a suspected Grader fault** | The earlier entry attributed the missing two-`understood` streak to strictness. That attribution is withdrawn: the Grader awards `understood` to complete answers reliably. The streak never formed because no live session contained two consecutive genuinely-complete answers in one area — the validation answers were probes. #6 is unchanged at **tested-but-unobserved**; the change is to the explanation, not the status | A journey where a learner genuinely earns two consecutive `understood` in one area |
 **Note on scope:** this cleanup is independent of the repository-understanding
 migration in [`repo-understanding.md`](repo-understanding.md). It touches the
 Grader, the session API and the learning graph's tests; it shares no code with

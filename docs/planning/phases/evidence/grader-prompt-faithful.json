@@ -1,0 +1,74 @@
+[
+  {
+    "repo": "requests",
+    "kind": "component",
+    "objective": "auth parameter forms",
+    "node": "b50c4cad",
+    "prompt_elicits_full_objective": false,
+    "predicted": "partial",
+    "actual_classification": "understood",
+    "actual_gap": "none",
+    "matches_prediction": false,
+    "rationale": "The developer correctly identified the tuple promotion logic, traced both code paths, explained what __call__ does, and concluded that both forms produce identical results\u2014demonstrating mastery of the learning objective."
+  },
+  {
+    "repo": "requests",
+    "kind": "risk",
+    "objective": "response.text encoding",
+    "node": "bbae87b9",
+    "prompt_elicits_full_objective": false,
+    "predicted": "partial",
+    "actual_classification": "understood",
+    "actual_gap": "none",
+    "matches_prediction": false,
+    "rationale": "The developer correctly identified the risk: removal of charset_normalizer fallback causes silent corruption of non-UTF-8 responses without charset headers, and articulated why the silence is dangerous and why the premise fails for general-purpose HTTP clients."
+  },
+  {
+    "repo": "requests",
+    "kind": "architecture",
+    "objective": "AuthBase contract",
+    "node": "7ecc5fe3",
+    "prompt_elicits_full_objective": false,
+    "predicted": "partial",
+    "actual_classification": "understood",
+    "actual_gap": "none",
+    "matches_prediction": false,
+    "rationale": "The developer correctly identifies the auth handler's sole responsibility (mutate and return the PreparedRequest), clearly delineates what it must NOT own (credential source selection, request construction, connection handling), and accurately describes the three phases of prepare_auth() including the critical detail that the return value is rebinded and Content-Length must be recalculated afterward."
+  },
+  {
+    "repo": "fastapi",
+    "kind": "architecture",
+    "objective": "app/router two layers",
+    "node": "ed5b84d5",
+    "prompt_elicits_full_objective": true,
+    "predicted": "understood",
+    "actual_classification": "understood",
+    "actual_gap": "none",
+    "matches_prediction": true,
+    "rationale": "The developer correctly identifies the boundary between FastAPI and APIRouter responsibilities, explains the delegation mechanism and its purpose, and demonstrates how this architecture enables prefix/tag composition through router inclusion."
+  },
+  {
+    "repo": "fastapi",
+    "kind": "flow",
+    "objective": "decorator-to-registration chain",
+    "node": "44e85351",
+    "prompt_elicits_full_objective": false,
+    "predicted": "partial",
+    "actual_classification": "understood",
+    "actual_gap": "none",
+    "matches_prediction": false,
+    "rationale": "The developer correctly traces the delegation chain, identifies the architectural responsibility boundary (router owns routes, not app), and explains why the intermediate step exists (method specification, argument transformation, and avoiding duplication of routing knowledge)."
+  },
+  {
+    "repo": "fastapi",
+    "kind": "synthesis",
+    "objective": "declaration vs runtime",
+    "node": "1699bba2",
+    "prompt_elicits_full_objective": false,
+    "predicted": "partial",
+    "actual_classification": "understood",
+    "actual_gap": "none",
+    "matches_prediction": false,
+    "rationale": "The developer clearly articulated the declaration-vs-runtime boundary: introspection happens in __init__ at import time via get_dependant and analyze_param, failures surface at startup not request time, and the performance benefit is that expensive analysis happens once with a cached tree executed per request."
+  }
+]

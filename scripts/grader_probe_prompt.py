@@ -94,7 +94,7 @@ convenience sugar; there is no behavioural difference.
 )
 
 _register(
-    "e57d17b2", "partial",
+    "bbae87b9", "partial",
     """
 The change removes the charset_normalizer fallback, so it silently mis-decodes any
 response whose body is not UTF-8 and whose Content-Type header does not declare a
@@ -121,7 +121,7 @@ and the long tail of the web is not UTF-8.
 )
 
 _register(
-    "a7f2ae02", "partial",
+    "7ecc5fe3", "partial",
     """
 The handler owns exactly one thing: mutating the PreparedRequest it is handed and
 returning it. In practice that means setting the Authorization header (or whatever
@@ -147,7 +147,7 @@ Sequence in prepare_auth():
 )
 
 _register(
-    "84b8f1c9", "understood",
+    "ed5b84d5", "understood",
     """
 FastAPI is the application-level object; APIRouter is the route-collection object.
 FastAPI owns everything that is true of the application as a whole -- the ASGI entry
@@ -175,7 +175,7 @@ same kind of thing, handled by one code path.
 )
 
 _register(
-    "97ad2b4e", "partial",
+    "44e85351", "partial",
     """
 Control goes to APIRouter.get -- the router held on self.router. FastAPI.get's body is
 just return self.router.get(...), forwarding every argument it was given, so the next
@@ -193,7 +193,7 @@ delegating.
 )
 
 _register(
-    "c3d90e17", "partial",
+    "1699bba2", "partial",
     """
 The reason is that all the introspection happens inside APIRoute.__init__, which runs
 while the decorator is being applied -- that is, at import time, when Python evaluates
