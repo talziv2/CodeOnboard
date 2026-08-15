@@ -1196,6 +1196,7 @@ flowchart TB
 | **B4** — lesson forms + reveal split | B1, B3 | ✅ **done** 2026-08-15 | Ends L7, L8. Lesson quality is half the product value of this phase |
 | **B5** — bidirectional adaptation | B3 | ✅ **done** 2026-08-15 | Ends L9, L10. Prune-ahead is nearly free |
 | **B6** — frontend U1–U3 (+U5) | B3, B4 | ✅ **done** 2026-08-15 — U1, U2, U3 and U5 shipped and driven end-to-end in a browser. **L8 is now fully closed.** U4 (scope control) remains in the high-value tier | Without U1 the reveal split does nothing; without U2 a large curriculum is illegible |
+| **G** — the two bounded diagnosis/warm-up fixes | B5, B6 | ✅ **done** 2026-08-15 — shipped and live-validated ([§18.15](#1815-the-two-bounded-fixes--shipped-and-validated)). Prerequisite generation is diagnosis-aware; a learner-requested warm-up no longer depends on the automatic action; `handleRetry` reports a declined warm-up | Both repair behaviour that is wrong today. Neither touches a schema, so neither disturbs the B3 calibration or the cost baseline. The **multi-gap architecture they were split from is a separate phase** ([§18.13](#1813-recommendation-phase-placement)) |
 
 > **Calibration does not gate B4 or B5.** Nothing in this dependency graph depends on the
 > band *numbers*: B4 chooses a lesson form from a unit's `kind`, and B5 branches on
@@ -2122,7 +2123,7 @@ Phase 3's centrepiece in the wrong phase.
 
 | # | Question | Why it needs you |
 |---|---|---|
-| **LQ6** | May a learner **dismiss** an outstanding gap ("I know this, move on")? §9.2 says user overrides always win, which argues yes — but a dismissable gap weakens the honesty of the understanding graph, which is the whole point of the artifact | Product-values call, not technical |
+| **LQ6** *(proposal in [§18.16](#1816-proposed-policy--lq6lq10-awaiting-decision-2026-08-15))* | May a learner **dismiss** an outstanding gap ("I know this, move on")? §9.2 says user overrides always win, which argues yes — but a dismissable gap weakens the honesty of the understanding graph, which is the whole point of the artifact | Product-values call, not technical |
 | **LQ7** | Do gaps persist **across sessions** on the same repo? Phase 3 says the understanding graph is persistent. If yes, a returning learner meets their old misconceptions — powerful, and possibly discouraging | Determines whether gaps key on session or on (learner, repo, symbol) |
 | **LQ8** | Is there a **cap** on open gaps per node? An answer that is wrong throughout could open six, turning one unit into a remediation queue. A cap risks dropping real gaps; no cap risks a session that cannot end | Affects whether "close all gaps" is a promise we can keep |
 | **LQ9** | Can a node be `understood` with a **non-blocking** gap open, or is every gap blocking? Making every gap blocking is simpler and more honest; allowing non-blocking gaps keeps journeys moving | Decides whether `blocking` exists at all |
@@ -2216,6 +2217,66 @@ concept**, not by re-asking the original — is designed in [§18.7](#187-verifi
 and **deliberately not implemented**. "Try again" still re-shows the answered
 question. That is the follow-up phase's first job, and it is recorded here so the
 gap is not mistaken for an oversight.
+
+### 18.16 PROPOSED policy — LQ6–LQ10 (awaiting decision, 2026-08-15)
+
+**Not accepted. Nothing here is implemented.** Recorded so approval is a one-word
+change rather than a re-derivation. Two principles run through all five answers:
+
+> **A gap closes only on positive evidence. Silence never closes one.**
+> **Caps bound the SYSTEM's insistence, never the learner's freedom to continue.**
+
+The second is what makes the design terminate. The learner may move on at any
+point, before any cap; the caps exist so the system stops *asking*, not so the
+learner is released — they were never held.
+
+#### The five decisions
+
+| # | Decision | Resolution |
+|---|---|---|
+| **LQ6** | May a learner dismiss a gap? | **Waive, never delete.** A learner may mark a gap `waived`; it stops blocking and stays visible, permanently distinguishable from `verified`. Same shape as `optional` (demote, never remove) and as `user_override` (§9.2) |
+| **LQ7** | Cross-session gaps? | **Session-scoped now**, but each gap carries a stable `objective_key` (repo, file, symbol, objective hash) so cross-session is later a *query*, not a redesign. Cross-session is blocked on learner identity, which Phases 1–3 defer — building it now would mean "anyone on this machine", which is worse than nothing |
+| **LQ8** | Cap on open gaps per node? | **Record all; at most 3 block.** More than 3 is not 3+ separate problems, it is one signal — the unit did not land — so it **collapses to a single full re-teach** instead of fanning out into warm-ups. Counts are shown, never silently truncated |
+| **LQ9** | Which gaps block? | **`missing_prerequisite` and `wrong_model` block. Nothing else.** `right_idea_wrong_altitude` is recorded non-blocking (§9.1 already calls restructuring over a framing slip an overreaction). `no_attempt` **opens no gap at all** — silence is not a misconception, and a blocking gap from "I don't know" would be unclosable |
+| **LQ10** | How many rounds? | **2 verification attempts per gap, 4 remediation rounds per node.** On reaching either, the system stops proposing remediation and offers to move on. **The gap stays `open`** — the cap releases the learner, it does not close the gap |
+
+`blocking` is a pure function of `kind`: code decides, the model never votes on
+it. That keeps it testable without an API key, and follows the rule that already
+governs `depth` and curriculum size — **models observe, code decides**.
+
+#### Continue-anyway — the learner moves on with gaps open
+
+| Question | Answer |
+|---|---|
+| Does the node stay `partial`? | **Yes.** Choosing to continue is not evidence. No new state value: `partial` **plus open gaps** is already the distinguishable condition |
+| Do gaps stay persisted? | **Yes, as `open`** — deliberately *not* `waived`. "Not now" and "I already know this" are different claims and must not collapse into one status |
+| Does readiness reflect it? | **Yes, with no change to `readiness()`.** It scores `partial` at 0.5; a node with open blocking gaps derives `partial`, so it contributes 0.5 rather than 1.0. This falls out of making `understanding_state` derived (§18.8) |
+| Can gaps be revisited? | **Yes.** The node keeps its gaps and the rail marks it. A deliberate return **resets the round caps** — those bound the system's nagging, and a learner choosing to come back is new intent, not the same loop |
+| Do downstream lessons proceed? | **Yes, always.** Open gaps must never gate the walk, or the design becomes a lock and termination is lost through the back door. Where a later unit has a planned `prerequisite` edge from a node with open gaps, that fact is **passed to Teaching** rather than used to block — using the information without gating on it |
+
+#### Why this terminates
+
+Per node the worst case is bounded and small: at most 3 blocking gaps, at most 4
+remediation rounds, at most 2 verification attempts per gap — and >3 gaps
+collapses to one re-teach rather than multiplying. Every bound is a constant, and
+none depends on learner behaviour. Independently of all of it, the learner can
+continue at any moment, and waive at any moment. There are three exits (continue,
+waive, cap) and no path that requires the learner to satisfy the system.
+
+#### Implementation interactions to settle when this is built
+
+- **`resume_point()`** requires a node's prerequisites to be `understood`. Once
+  `understood` also requires zero open blocking gaps, a prerequisite parked at
+  `partial` makes resume fall through to its fallback. It should relax to
+  *visited* — the method is explicitly a heuristic re-entry point, not a gate.
+- **`prune_ahead()`** counts consecutive `understood`, which becomes strictly
+  harder to earn. That is the correct direction — an area should not be pruned on
+  the strength of nodes carrying open gaps — but it makes an already
+  live-unobserved mechanism rarer still, and should be stated rather than
+  discovered.
+- **`waived` must never read as `verified`** in `readiness()`, in the
+  `understood` derivation, or in any later cross-session view. Otherwise waiving
+  becomes a cheat code and the artifact stops meaning anything.
 
 ---
 
