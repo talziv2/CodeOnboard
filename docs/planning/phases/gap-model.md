@@ -1,13 +1,14 @@
 # Gap model — multi-gap remediation and verification
 
-**Phase status: M1 done 2026-08-16; M2 done and gated 2026-08-17; M3 not
-started.**
+**Phase status: M1 done 2026-08-16; M2 and M3 done 2026-08-17. Detection is
+complete; M4 (response) is next.**
 
 | step | state |
 |---|---|
 | **M1** gap model + persistence, write-only | ✅ **done** — `backend/learning/gaps.py`, `flags.py`, additive `gaps_json` column, 20 tests. All 61 stored sessions load and round-trip byte-identical; 833 tests pass; no observable product behaviour change |
 | **M2** Grader emits a gap list | ✅ **done, gate met.** `GapOut`, `GraderOutput.gaps`, derived scalar `gap_kind`, the §18.5 arbitration order as pure functions in `gaps.py`, a flag-gated prompt addendum, 31 tests (864 total). **Multi-gap detection validated live**: 5–6 of 48 cases carry 2–3 independent false claims — the AC1 shape on real sessions. Gate: classification **47/48, 48/48, 48/48**; `gap_kind` **47, 47, 48** against a baseline of 45. Evidence: [`evidence/m2-grader-gate/`](evidence/m2-grader-gate/README.md) |
-| M3 – M10 | not started |
+| **M3** Gap identity across re-grades | ✅ **done, measured.** Open gaps are supplied with their ids; `GapOut.refers_to` names one or says `new`; an id outside the supplied set is discarded whole rather than guessed at. 15 tests (879 total). §3.2's required measurement, over 18 grades on 6 real nodes ([`evidence/m3-gap-identity/`](evidence/m3-gap-identity/README.md)): **29 matched, 1 `new`, 0 hand-judged duplicates, 0 invented ids** — and **0 duplicates on the verbatim identity floor**. The refusal to fuzzy-match costs nothing measurable |
+| M4 – M10 | not started |
 
 **Two things the gate produced beyond a pass, both of which bind later steps.**
 
@@ -128,6 +129,14 @@ deliberately refuses, so it is a **hand-judged count over a fixed, recorded set*
 — the same standard as the Grader evaluation's authored expectations. If it is
 near zero the strategy holds; if it is not, that is evidence for a *separate*
 design decision, not a licence to add fuzzy merging quietly.
+
+**Recorded 2026-08-17** — `scripts/gap_identity_probe.py`, 18 grades over 6 real
+nodes, [`evidence/m3-gap-identity/`](evidence/m3-gap-identity/README.md):
+**29 matched · 1 `new` · 0 hand-judged duplicates · 0 invented ids.** The probe
+grades each node three times against one accumulating gap list — the answer, the
+*same answer again*, then a full paraphrase. The verbatim pass is the identity
+floor and needs no judgement: any `new` there is a certain duplicate, and there
+were none. **The strategy holds; fuzzy matching stays refused.**
 
 ### 3..3 Persistence and migration
 

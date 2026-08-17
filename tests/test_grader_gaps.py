@@ -95,8 +95,15 @@ def _client(classification: str, *, gaps=None, gap_kind: str | None = None) -> M
 
 
 def _gap(kind: str, claim: str, **kw) -> dict:
-    return {"kind": kind, "claim": claim, "objective_part": kw.get("part", ""),
-            "foundational": kw.get("foundational", False)}
+    out = {"kind": kind, "claim": claim, "objective_part": kw.get("part", ""),
+           "foundational": kw.get("foundational", False)}
+    if "refers_to" in kw:
+        out["refers_to"] = kw["refers_to"]
+    return out
+
+
+def _sent_user_content(client: MagicMock) -> str:
+    return client.messages.create.call_args.kwargs["messages"][0]["content"]
 
 
 # ── arbitration order (§18.5, §18.12 test 2) ─────────────────────────────────
@@ -180,12 +187,19 @@ def test_a_stray_gap_kind_does_not_fail_the_parse():
     assert [g.kind for g in out.gaps] == ["invented_kind", "wrong_model"]
 
 
-def test_gap_out_carries_no_id_and_no_blocking_field():
-    """Identity is ours; `blocking` is derived. Neither is the model's to send."""
+def test_gap_out_can_reference_an_id_but_never_mint_one():
+    """Identity is ours; `blocking` is derived. Neither is the model's to assign.
+
+    `refers_to` is the one id-shaped field, and it is a *pointer at a value we
+    supplied* — validated against the open set in `_record_gaps`, never written
+    through to a gap. There is still no field through which the model can create
+    an identity.
+    """
     fields = set(GapOut.model_fields)
     assert "id" not in fields
     assert "blocking" not in fields
-    assert fields == {"kind", "claim", "objective_part", "foundational"}
+    assert fields == {"kind", "claim", "objective_part", "foundational", "refers_to"}
+    assert GapOut(kind="wrong_model", claim="x").refers_to == "new"
 
 
 # ── the flag: off changes nothing ────────────────────────────────────────────
@@ -397,6 +411,202 @@ def test_a_grading_failure_records_no_gaps(flag_on):
     run(state, "…", client=client)
     assert state.graph.nodes[node_id].gaps == []
     assert state.last_grade["classification"] == "partial"
+
+
+# ── persistence, end to end through the store ────────────────────────────────
+
+
+# ── M3: identity across re-grades ────────────────────────────────────────────
+
+
+def _with_two_open_gaps() -> tuple[OnboardState, str, Gap, Gap]:
+    state, node_id = _state()
+    node = state.graph.nodes[node_id]
+    a = Gap.create("wrong_model", CLAIM_A, objective_part="what a Node holds")
+    b = Gap.create("wrong_model", CLAIM_B, objective_part="what solution() returns")
+    node.gap_state.gaps.extend([a, b])
+    return state, node_id, a, b
+
+
+def test_a_first_detection_shows_no_open_gaps_section(flag_on):
+    """No section, no ids: a first detection is recognisably not a re-grade."""
+    state, _ = _state()
+    client = _client("confused", gaps=[_gap("wrong_model", CLAIM_A)])
+    run(state, "…", client=client)
+    assert "OPEN GAPS" not in _sent_user_content(client)
+
+
+def test_a_re_grade_shows_every_open_gap_with_its_id(flag_on):
+    state, _, a, b = _with_two_open_gaps()
+    client = _client("partial")
+    run(state, "another go", client=client)
+    sent = _sent_user_content(client)
+    assert "OPEN GAPS" in sent
+    for gap in (a, b):
+        assert gap.id in sent
+        assert gap.claim in sent
+
+
+def test_settled_gaps_are_never_offered_for_matching(flag_on):
+    """A verified gap is closed and a waived one is set aside; neither is a
+    candidate for 'the developer said this again'."""
+    state, node_id, a, b = _with_two_open_gaps()
+    a.status = "verified"
+    b.status = "waived"
+    client = _client("partial")
+    run(state, "…", client=client)
+    sent = _sent_user_content(client)
+    assert "OPEN GAPS" not in sent
+    assert a.id not in sent and b.id not in sent
+
+
+def test_flag_off_never_shows_open_gaps(monkeypatch):
+    """The flag contract holds on the user message too, not just the system prompt."""
+    state, node_id, a, _ = _with_two_open_gaps()
+    client = _client("partial")
+    run(state, "…", client=client)
+    assert a.id not in _sent_user_content(client)
+
+
+def test_a_matched_id_does_not_duplicate_the_gap(flag_on):
+    """The point of identity: one misconception stays one gap across attempts."""
+    state, node_id, a, b = _with_two_open_gaps()
+    run(state, "same mistake again", client=_client("confused", gaps=[
+        _gap("wrong_model", "the child's cost is filled in later", refers_to=a.id),
+    ]))
+    gaps = state.graph.nodes[node_id].gaps
+    assert len(gaps) == 2
+    assert state.last_grade["gap_report"] == {"matched": 1, "new": 0, "rejected": 0}
+
+
+def test_a_matched_gap_keeps_its_id_and_its_original_claim(flag_on):
+    """A gap id never changes, and a re-report does not rewrite the record."""
+    state, node_id, a, _ = _with_two_open_gaps()
+    run(state, "…", client=_client("confused", gaps=[
+        _gap("wrong_model", "reworded entirely", refers_to=a.id),
+    ]))
+    same = [g for g in state.graph.nodes[node_id].gaps if g.id == a.id][0]
+    assert same.claim == CLAIM_A
+    assert same.status == "open"
+
+
+def test_a_new_declaration_mints_alongside_the_open_ones(flag_on):
+    state, node_id, a, b = _with_two_open_gaps()
+    run(state, "…", client=_client("confused", gaps=[
+        _gap("wrong_model", "a third, different false claim", refers_to="new"),
+    ]))
+    gaps = state.graph.nodes[node_id].gaps
+    assert len(gaps) == 3
+    assert state.last_grade["gap_report"] == {"matched": 0, "new": 1, "rejected": 0}
+
+
+def test_matched_and_new_in_one_answer(flag_on):
+    state, node_id, a, b = _with_two_open_gaps()
+    run(state, "…", client=_client("confused", gaps=[
+        _gap("wrong_model", "still wrong about the same thing", refers_to=b.id),
+        _gap("missing_prerequisite", "and a fresh foundation gap", refers_to="new"),
+    ]))
+    assert len(state.graph.nodes[node_id].gaps) == 3
+    assert state.last_grade["gap_report"] == {"matched": 1, "new": 1, "rejected": 0}
+
+
+def test_an_invented_id_is_rejected_and_changes_nothing(flag_on):
+    """§18.12 test 12. Not minted as new either: an entry claiming to be an
+    existing gap is a claim we cannot verify, and guessing is worse than losing
+    it."""
+    state, node_id, a, b = _with_two_open_gaps()
+    before = [(g.id, g.claim, g.status) for g in state.graph.nodes[node_id].gaps]
+    run(state, "…", client=_client("confused", gaps=[
+        _gap("wrong_model", "claims to be an existing gap", refers_to="deadbeef00"),
+    ]))
+    after = [(g.id, g.claim, g.status) for g in state.graph.nodes[node_id].gaps]
+    assert after == before
+    assert state.last_grade["gap_report"] == {"matched": 0, "new": 0, "rejected": 1}
+
+
+def test_one_rejected_entry_does_not_cost_the_others(flag_on):
+    state, node_id, a, _ = _with_two_open_gaps()
+    run(state, "…", client=_client("confused", gaps=[
+        _gap("wrong_model", "bogus reference", refers_to="not-an-id"),
+        _gap("wrong_model", "a genuinely new claim", refers_to="new"),
+    ]))
+    assert len(state.graph.nodes[node_id].gaps) == 3
+    assert state.last_grade["gap_report"] == {"matched": 0, "new": 1, "rejected": 1}
+    assert state.last_grade["classification"] == "confused"
+
+
+def test_an_id_is_ignored_when_no_list_was_offered(flag_on):
+    """First detection: we showed no ids, so none can be legitimately named.
+
+    Rejecting here would lose a real first detection over a field the model was
+    never given the data to fill in.
+    """
+    state, node_id = _state()
+    run(state, "…", client=_client("confused", gaps=[
+        _gap("wrong_model", CLAIM_A, refers_to="some-id-we-never-supplied"),
+    ]))
+    assert len(state.graph.nodes[node_id].gaps) == 1
+    assert state.last_grade["gap_report"] == {"matched": 0, "new": 1, "rejected": 0}
+
+
+def test_the_scalar_reflects_a_matched_gap_with_nothing_new(flag_on):
+    """Repeating an old misconception is still why THIS answer fell short."""
+    state, node_id = _state()
+    node = state.graph.nodes[node_id]
+    foundation = Gap.create("missing_prerequisite", "does not know what a frontier is")
+    node.gap_state.gaps.append(foundation)
+    run(state, "…", client=_client("confused", gap_kind="wrong_model", gaps=[
+        _gap("missing_prerequisite", "same foundation missing", refers_to=foundation.id),
+    ]))
+    assert state.last_grade["gap_kind"] == "missing_prerequisite"
+
+
+def test_an_unreported_open_gap_is_left_open_and_untouched(flag_on):
+    """§18.5: 'What happens to the rest. Nothing.' Silence is not resolution."""
+    state, node_id, a, b = _with_two_open_gaps()
+    run(state, "…", client=_client("partial", gaps=[
+        _gap("wrong_model", "only about A", refers_to=a.id),
+    ]))
+    untouched = [g for g in state.graph.nodes[node_id].gaps if g.id == b.id][0]
+    assert untouched.status == "open"
+    assert untouched.resolved_by is None
+
+
+def test_gap_report_is_absent_flag_off():
+    state, _ = _state()
+    run(state, "…", client=_client("confused", gaps=[_gap("wrong_model", CLAIM_A)]))
+    assert "gap_report" not in state.last_grade
+
+
+def test_two_same_kind_gaps_survive_save_load_and_a_re_grade(flag_on, tmp_path):
+    """§18.12 test 11, end to end through the store.
+
+    Two `wrong_model` gaps go in, a round trip happens, the reloaded graph is
+    re-graded, and they are still two gaps with the ids they started with.
+    """
+    from backend.learning import store as learning_store
+
+    db = tmp_path / "sessions.db"
+    state, node_id = _state()
+    run(state, "first", client=_client("confused", gaps=[
+        _gap("wrong_model", CLAIM_A), _gap("wrong_model", CLAIM_B),
+    ]))
+    original = [(g.id, g.claim) for g in state.graph.nodes[node_id].gaps]
+    assert len(original) == 2
+    learning_store.save_graph(state.graph, db)
+
+    reloaded = learning_store.load_graph(state.graph.session_id, db)
+    resumed = OnboardState(repo_url=REPO, goal=GOAL)
+    resumed.graph = reloaded
+    client = _client("confused", gaps=[
+        _gap("wrong_model", "A again, reworded", refers_to=original[0][0]),
+    ])
+    run(resumed, "second", client=client)
+
+    # The reloaded ids were offered for matching, and matching kept the count.
+    assert original[0][0] in _sent_user_content(client)
+    assert [(g.id, g.claim) for g in reloaded.nodes[node_id].gaps] == original
+    assert resumed.last_grade["gap_report"] == {"matched": 1, "new": 0, "rejected": 0}
 
 
 # ── persistence, end to end through the store ────────────────────────────────

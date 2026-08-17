@@ -1,0 +1,439 @@
+[
+  {
+    "repo": "requests",
+    "kind": "component",
+    "objective": "auth parameter forms",
+    "node": "b50c4cad",
+    "opened": [
+      {
+        "id": "fb084922c6d644828809326ac14d77a8",
+        "kind": "wrong_model",
+        "claim": "Tuples passed as auth are sent directly to the server as separate fields in the request body, whereas HTTPBasicAuth encodes them into a header, so the two produce different requests.",
+        "status": "open",
+        "origin_attempt": 0
+      }
+    ],
+    "verbatim": {
+      "grade": {
+        "classification": "confused",
+        "gap_kind": "wrong_model",
+        "rationale": "The developer asserts that tuples are sent directly to the server as separate fields in the request body, which is incorrect; tuples are converted to HTTPBasicAuth internally and produce identical Authorization headers.",
+        "gap_report": {
+          "matched": 1,
+          "new": 0,
+          "rejected": 0
+        }
+      },
+      "report": {
+        "matched": 1,
+        "new": 0,
+        "rejected": 0
+      },
+      "duplicates": []
+    },
+    "paraphrase": {
+      "grade": {
+        "classification": "confused",
+        "gap_kind": "wrong_model",
+        "rationale": "The developer has inverted the core concept: they believe tuples are sent as body fields while HTTPBasicAuth creates headers, when the opposite is true\u2014tuples are promoted to HTTPBasicAuth and both produce identical Authorization headers.",
+        "gap_report": {
+          "matched": 1,
+          "new": 0,
+          "rejected": 0
+        }
+      },
+      "report": {
+        "matched": 1,
+        "new": 0,
+        "rejected": 0
+      },
+      "new_gaps": [],
+      "answer": "When you hand requests a plain (user, pass) pair, those two values travel in the body of the request as ordinary form fields. Going through HTTPBasicAuth is a different route entirely \u2014 that one builds an Authorization header instead. So the request that goes out over the wire differs depending on which of the two you pick."
+    },
+    "final_gaps": [
+      {
+        "id": "fb084922c6d644828809326ac14d77a8",
+        "kind": "wrong_model",
+        "claim": "Tuples passed as auth are sent directly to the server as separate fields in the request body, whereas HTTPBasicAuth encodes them into a header, so the two produce different requests.",
+        "status": "open",
+        "origin_attempt": 0
+      }
+    ]
+  },
+  {
+    "repo": "requests",
+    "kind": "risk",
+    "objective": "response.text encoding",
+    "node": "bbae87b9",
+    "opened": [
+      {
+        "id": "668574e11f374494b13e34c97e0fc97b",
+        "kind": "wrong_model",
+        "claim": "charset_normalizer is called during .text access and causes performance overhead that the proposed change removes.",
+        "status": "open",
+        "origin_attempt": 0
+      },
+      {
+        "id": "e9af4d14e9d446568481b3ee964a0d14",
+        "kind": "wrong_model",
+        "claim": "Removing charset_normalizer means responses are decoded twice instead of once, making the change slower.",
+        "status": "open",
+        "origin_attempt": 0
+      }
+    ],
+    "verbatim": {
+      "grade": {
+        "classification": "confused",
+        "gap_kind": "wrong_model",
+        "rationale": "The developer has inverted the performance argument: they claim removing charset_normalizer makes decoding slower, when the proposed change actually removes the guessing step to improve speed. They misunderstand what charset_normalizer does and when it runs.",
+        "gap_report": {
+          "matched": 1,
+          "new": 0,
+          "rejected": 0
+        }
+      },
+      "report": {
+        "matched": 1,
+        "new": 0,
+        "rejected": 0
+      },
+      "duplicates": []
+    },
+    "paraphrase": {
+      "grade": {
+        "classification": "confused",
+        "gap_kind": "wrong_model",
+        "rationale": "The developer misunderstands the actual risk: they believe removing charset_normalizer causes performance degradation (double decoding), when the real danger is silent data corruption for non-UTF-8 responses without charset headers.",
+        "gap_report": {
+          "matched": 1,
+          "new": 1,
+          "rejected": 0
+        }
+      },
+      "report": {
+        "matched": 1,
+        "new": 1,
+        "rejected": 0
+      },
+      "new_gaps": [
+        {
+          "id": "34be9ec4d8ab42f783045c3282fef913",
+          "kind": "wrong_model",
+          "claim": "Without charset_normalizer, you would still get the right characters, just slower.",
+          "status": "open",
+          "origin_attempt": 2
+        }
+      ],
+      "answer": "This is really a speed question. The library leans on charset_normalizer to keep .text quick, so if you take it out the body ends up being decoded twice over \u2014 once for the guess and once properly. You would still get the right characters out of it; it would just crawl on large payloads."
+    },
+    "final_gaps": [
+      {
+        "id": "668574e11f374494b13e34c97e0fc97b",
+        "kind": "wrong_model",
+        "claim": "charset_normalizer is called during .text access and causes performance overhead that the proposed change removes.",
+        "status": "open",
+        "origin_attempt": 0
+      },
+      {
+        "id": "e9af4d14e9d446568481b3ee964a0d14",
+        "kind": "wrong_model",
+        "claim": "Removing charset_normalizer means responses are decoded twice instead of once, making the change slower.",
+        "status": "open",
+        "origin_attempt": 0
+      },
+      {
+        "id": "34be9ec4d8ab42f783045c3282fef913",
+        "kind": "wrong_model",
+        "claim": "Without charset_normalizer, you would still get the right characters, just slower.",
+        "status": "open",
+        "origin_attempt": 2
+      }
+    ]
+  },
+  {
+    "repo": "requests",
+    "kind": "architecture",
+    "objective": "AuthBase contract",
+    "node": "7ecc5fe3",
+    "opened": [
+      {
+        "id": "a78a48eeb1d24d039cc3f688c948798e",
+        "kind": "wrong_model",
+        "claim": "The auth handler inspects the URL and environment, decides whether credentials are needed, and opens connections to read server challenges.",
+        "status": "open",
+        "origin_attempt": 0
+      },
+      {
+        "id": "cc80a008e78d414c898f5b3f4dd7547c",
+        "kind": "wrong_model",
+        "claim": "The auth handler returns a fresh Request object that replaces the original one.",
+        "status": "open",
+        "origin_attempt": 0
+      }
+    ],
+    "verbatim": {
+      "grade": {
+        "classification": "confused",
+        "gap_kind": "wrong_model",
+        "rationale": "The developer has restated both previously-recorded misconceptions about the auth handler's responsibility, showing no revision of their mental model despite feedback.",
+        "gap_report": {
+          "matched": 2,
+          "new": 0,
+          "rejected": 0
+        }
+      },
+      "report": {
+        "matched": 2,
+        "new": 0,
+        "rejected": 0
+      },
+      "duplicates": []
+    },
+    "paraphrase": {
+      "grade": {
+        "classification": "confused",
+        "gap_kind": "wrong_model",
+        "rationale": "The developer describes the auth handler as making decisions about whether to apply auth, inspecting the environment, establishing connections, and returning a fresh Request object\u2014all responsibilities that belong to `prepare_auth()` or the request itself, not to the handler.",
+        "gap_report": {
+          "matched": 3,
+          "new": 0,
+          "rejected": 0
+        }
+      },
+      "report": {
+        "matched": 3,
+        "new": 0,
+        "rejected": 0
+      },
+      "new_gaps": [],
+      "answer": "Everything about authenticating is the handler's job. It looks at the target URL and the surrounding environment to work out whether any credentials are called for at all, establishes the connection itself so it can see what the server challenges with, and then hands back a brand-new Request that takes the place of the one it was given."
+    },
+    "final_gaps": [
+      {
+        "id": "a78a48eeb1d24d039cc3f688c948798e",
+        "kind": "wrong_model",
+        "claim": "The auth handler inspects the URL and environment, decides whether credentials are needed, and opens connections to read server challenges.",
+        "status": "open",
+        "origin_attempt": 0
+      },
+      {
+        "id": "cc80a008e78d414c898f5b3f4dd7547c",
+        "kind": "wrong_model",
+        "claim": "The auth handler returns a fresh Request object that replaces the original one.",
+        "status": "open",
+        "origin_attempt": 0
+      }
+    ]
+  },
+  {
+    "repo": "fastapi",
+    "kind": "architecture",
+    "objective": "app/router two layers",
+    "node": "ed5b84d5",
+    "opened": [
+      {
+        "id": "1731f4226a2848ee822373e77a6d8a31",
+        "kind": "wrong_model",
+        "claim": "FastAPI registers the route on itself first, then copies it into the router.",
+        "status": "open",
+        "origin_attempt": 0
+      },
+      {
+        "id": "91e55a4f5b814b8ca5c94ff624167112",
+        "kind": "wrong_model",
+        "claim": "At request time FastAPI matches against its own copy and only falls back to the router's list if nothing matches.",
+        "status": "open",
+        "origin_attempt": 0
+      }
+    ],
+    "verbatim": {
+      "grade": {
+        "classification": "confused",
+        "gap_kind": "wrong_model",
+        "rationale": "The developer restates both previously recorded misconceptions verbatim: that FastAPI registers routes on itself first then copies them to the router, and that request matching checks FastAPI's copy before falling back to the router's list. Both are false; FastAPI delegates route registration entirely to self.router and never maintains its own registry.",
+        "gap_report": {
+          "matched": 2,
+          "new": 0,
+          "rejected": 0
+        }
+      },
+      "report": {
+        "matched": 2,
+        "new": 0,
+        "rejected": 0
+      },
+      "duplicates": []
+    },
+    "paraphrase": {
+      "grade": {
+        "classification": "confused",
+        "gap_kind": "wrong_model",
+        "rationale": "The developer has inverted the delegation pattern; they believe FastAPI stores routes itself and copies them to the router, when the opposite is true: FastAPI delegates route registration entirely to APIRouter.",
+        "gap_report": {
+          "matched": 2,
+          "new": 0,
+          "rejected": 0
+        }
+      },
+      "report": {
+        "matched": 2,
+        "new": 0,
+        "rejected": 0
+      },
+      "new_gaps": [],
+      "answer": "Think of them as two separate route tables that are mirrored. The application records the route locally first, which is the fast path, and afterwards duplicates it into the router so that include_router has something to pull in later. When a request arrives the app checks its own table, and only consults the router's if it comes up empty."
+    },
+    "final_gaps": [
+      {
+        "id": "1731f4226a2848ee822373e77a6d8a31",
+        "kind": "wrong_model",
+        "claim": "FastAPI registers the route on itself first, then copies it into the router.",
+        "status": "open",
+        "origin_attempt": 0
+      },
+      {
+        "id": "91e55a4f5b814b8ca5c94ff624167112",
+        "kind": "wrong_model",
+        "claim": "At request time FastAPI matches against its own copy and only falls back to the router's list if nothing matches.",
+        "status": "open",
+        "origin_attempt": 0
+      }
+    ]
+  },
+  {
+    "repo": "fastapi",
+    "kind": "flow",
+    "objective": "decorator-to-registration chain",
+    "node": "44e85351",
+    "opened": [
+      {
+        "id": "c8923bef01e2448697551119d1fe9c2b",
+        "kind": "wrong_model",
+        "claim": "get() is just an alias that calls add_api_route() directly with methods=['GET'], skipping api_route().",
+        "status": "open",
+        "origin_attempt": 0
+      },
+      {
+        "id": "d5995b45f6644e2bb742ae6f667d38c8",
+        "kind": "wrong_model",
+        "claim": "api_route() only exists as an alternative path for cases where you want to pass several methods at once, not as part of the normal @app.get decorator chain.",
+        "status": "open",
+        "origin_attempt": 0
+      }
+    ],
+    "verbatim": {
+      "grade": {
+        "classification": "confused",
+        "gap_kind": "wrong_model",
+        "rationale": "The developer confidently restates both previously recorded misconceptions: that get() bypasses api_route() to call add_api_route() directly, and that api_route() only exists as an alternative path for multiple methods, not as part of the normal decorator chain.",
+        "gap_report": {
+          "matched": 2,
+          "new": 0,
+          "rejected": 0
+        }
+      },
+      "report": {
+        "matched": 2,
+        "new": 0,
+        "rejected": 0
+      },
+      "duplicates": []
+    },
+    "paraphrase": {
+      "grade": {
+        "classification": "confused",
+        "gap_kind": "wrong_model",
+        "rationale": "The developer believes get() skips api_route() and calls add_api_route() directly, and that api_route() is only for multi-method cases\u2014both directly contradict the four-step chain and the decorator pattern at the heart of FastAPI's design.",
+        "gap_report": {
+          "matched": 2,
+          "new": 0,
+          "rejected": 0
+        }
+      },
+      "report": {
+        "matched": 2,
+        "new": 0,
+        "rejected": 0
+      },
+      "new_gaps": [],
+      "answer": "The call lands straight on add_api_route. get() is nothing more than a shorthand that plugs in methods=['GET'] before doing so. api_route is there purely for the case where you want to register several verbs at once, so a plain @app.get never goes near it."
+    },
+    "final_gaps": [
+      {
+        "id": "c8923bef01e2448697551119d1fe9c2b",
+        "kind": "wrong_model",
+        "claim": "get() is just an alias that calls add_api_route() directly with methods=['GET'], skipping api_route().",
+        "status": "open",
+        "origin_attempt": 0
+      },
+      {
+        "id": "d5995b45f6644e2bb742ae6f667d38c8",
+        "kind": "wrong_model",
+        "claim": "api_route() only exists as an alternative path for cases where you want to pass several methods at once, not as part of the normal @app.get decorator chain.",
+        "status": "open",
+        "origin_attempt": 0
+      }
+    ]
+  },
+  {
+    "repo": "fastapi",
+    "kind": "synthesis",
+    "objective": "declaration vs runtime",
+    "node": "1699bba2",
+    "opened": [
+      {
+        "id": "ed43507ebccb47768d79c52cbfb4e6c2",
+        "kind": "wrong_model",
+        "claim": "FastAPI validates endpoint signatures and builds the dependency tree in a separate validation sweep that runs after all modules are imported and the server boots, not during route decoration.",
+        "status": "open",
+        "origin_attempt": 0
+      }
+    ],
+    "verbatim": {
+      "grade": {
+        "classification": "confused",
+        "gap_kind": "wrong_model",
+        "rationale": "The developer states that validation and dependency tree building happen in a post-import startup sweep rather than during route decoration, directly contradicting the invariant that `APIRoute.__init__` builds the tree immediately.",
+        "gap_report": {
+          "matched": 1,
+          "new": 0,
+          "rejected": 0
+        }
+      },
+      "report": {
+        "matched": 1,
+        "new": 0,
+        "rejected": 0
+      },
+      "duplicates": []
+    },
+    "paraphrase": {
+      "grade": {
+        "classification": "confused",
+        "gap_kind": "wrong_model",
+        "rationale": "The developer believes validation and tree-building occur in a separate post-import pass over app.routes, not during route decoration itself; this is the opposite of the actual design.",
+        "gap_report": {
+          "matched": 1,
+          "new": 0,
+          "rejected": 0
+        }
+      },
+      "report": {
+        "matched": 1,
+        "new": 0,
+        "rejected": 0
+      },
+      "new_gaps": [],
+      "answer": "The checking happens at boot. Once every module has been imported FastAPI makes a dedicated pass over app.routes and type-checks each endpoint, and that same pass is where the dependency tree gets assembled. The decorator itself is not doing any of that work."
+    },
+    "final_gaps": [
+      {
+        "id": "ed43507ebccb47768d79c52cbfb4e6c2",
+        "kind": "wrong_model",
+        "claim": "FastAPI validates endpoint signatures and builds the dependency tree in a separate validation sweep that runs after all modules are imported and the server boots, not during route decoration.",
+        "status": "open",
+        "origin_attempt": 0
+      }
+    ]
+  }
+]

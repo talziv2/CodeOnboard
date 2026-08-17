@@ -49,6 +49,18 @@ fixed on its own rather than bundled.
 | **[v6 flag-on r1](v6-flagon-r1.json)** | 47/48 | 47/48 | 6/6 | 6 | 14 | 0 |
 | **[v6 flag-on r2](v6-flagon-r2.json)** | **48/48** | **47/48** | 6/6 | 6 | 16 | 2 |
 | **[v6 flag-on r3](v6-flagon-r3.json)** | **48/48** | **48/48** | 6/6 | 5 | 13 | 0 |
+| *— M3 added the re-grade block —* | | | | | | |
+| [M3 flag-on r1](m3-flagon-r1.json) | 47/48 | 47/48 | 6/6 | 5 | 14 | 0 |
+| [M3 flag-on r2](m3-flagon-r2.json) | 47/48 | 47/48 | 6/6 | 5 | 13 | 0 |
+
+**M3 re-gate.** M3 appends a re-grade block to `_GAPS_ADDENDUM` and adds an
+OPEN GAPS section to the user message, so the gate was re-run rather than
+argued about. Both runs land 47/48 and 47/48 — inside the measured band and
+still above the baseline's 45 on `gap_kind`, with `missing_prereq` holding at
+6/6. All 48 cases are *first* detections (no open gaps, so no OPEN GAPS
+section), which means these two runs isolate the effect of the added **system**
+text; the re-grade path itself is measured separately in
+[`../m3-gap-identity/`](../m3-gap-identity/README.md).
 
 v6 is shipped. v1 and v2 were discarded before their JSON was preserved — their
 figures come from the run reports, and what they got wrong is recorded below

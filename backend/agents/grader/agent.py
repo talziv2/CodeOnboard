@@ -24,6 +24,7 @@ from backend.learning.flags import gaps_enabled
 from backend.learning.gaps import (
     GAP_KINDS,
     Gap,
+    by_precedence as gaps_by_precedence,
     dominant_kind,
     objective_key,
 )
@@ -81,6 +82,13 @@ class GapOut(BaseModel):
     objective_part: str = ""  # the clause of the objective it violates
     # Observed, not decisive: "does a foundation look genuinely absent?"
     foundational: bool = False
+    # M3. On a re-grade the model is SHOWN the node's open gaps with their ids
+    # and must, per entry, either name one of them or say `new`. It still never
+    # mints an id — it can only point at one we gave it.
+    #
+    # Defaulted to `new`, which is what a first detection is, so every M2-shaped
+    # payload keeps its meaning.
+    refers_to: str = "new"
 
 
 class GraderOutput(BaseModel):
@@ -298,8 +306,24 @@ above keep their meanings unchanged — a `missing_prerequisite` answer whose
 developer simply lacks a foundation has made no false statement, and gets
 `gaps: []`.
 
-Do NOT return an id for a gap, and do NOT return whether it is blocking. Those
+Do NOT invent an id for a gap, and do NOT return whether it is blocking. Those
 are not yours to assign.
+
+IF the user message contains an OPEN GAPS section, this node already has
+recorded misconceptions and they are listed there with their ids. This is a
+re-grade, and every entry in `gaps` must then also carry:
+  refers_to: the id of the open gap this entry is the SAME misconception as,
+             or the literal "new" if it is not one of them.
+
+  - Use an id from the list whenever the developer is making the same false
+    claim again, even in completely different words. That is what keeps one
+    misconception one gap across attempts.
+  - Use "new" only for a false statement that is genuinely not in the list.
+  - Never use an id that is not in the list. An unrecognised id makes the entry
+    unusable and it is discarded — you cannot create a gap by naming one.
+  - Only report what THIS answer actually contains. An open gap the answer did
+    not touch is not reported; leaving it out is how you say "they did not
+    repeat that one", and it stays open either way.
 """
 
 
@@ -308,10 +332,38 @@ def _system_prompt() -> str:
     return _SYSTEM_PROMPT + _GAPS_ADDENDUM if gaps_enabled() else _SYSTEM_PROMPT
 
 
+def _open_gaps_section(node: LearningNode) -> str:
+    """The node's open gaps, with their ids, for a re-grade (M3).
+
+    Only OPEN gaps are offered. A `verified` gap is settled, and re-offering it
+    would invite the model to reopen something closure already answered; a
+    `waived` one the learner has chosen to stop working on. Neither is a
+    candidate for "the developer said this again".
+
+    Empty string when there is nothing open, which is what makes a first
+    detection recognisably different from a re-grade: no section, no ids, and
+    `refers_to` is moot.
+    """
+    open_gaps = [g for g in node.gaps if g.is_open]
+    if not open_gaps:
+        return ""
+    lines = [
+        f"  {g.id}  [{g.kind}]  {g.claim}" for g in gaps_by_precedence(open_gaps)
+    ]
+    return (
+        "OPEN GAPS already recorded on this node (this is a re-grade).\n"
+        "For each gap you report, set `refers_to` to one of these ids if it is "
+        "the same misconception, or to \"new\":\n" + "\n".join(lines) + "\n\n"
+    )
+
+
 def _build_user_content(node: LearningNode, user_response: str) -> str:
     lesson = node.cached_lesson or {}
     tags = ", ".join(node.concept_tags) if node.concept_tags else "(none)"
     objective = node.objective() or "(none stated — mark against the question)"
+    # Flag-off this is empty, so the user message is unchanged too — the flag
+    # contract holds on both halves of the call, not just the system prompt.
+    open_gaps = _open_gaps_section(node) if gaps_enabled() else ""
     return (
         f"LEARNING OBJECTIVE (the marking standard):\n{objective}\n\n"
         f"Node title:\n{node.title}\n\n"
@@ -319,6 +371,7 @@ def _build_user_content(node: LearningNode, user_response: str) -> str:
         f"Question:\n{lesson.get('prompt', '')}\n\n"
         f"Calibration reference (one phrasing, NOT the standard):\n"
         f"{lesson.get('expected_answer', '')}\n\n"
+        f"{open_gaps}"
         f"Developer's response:\n{user_response}"
     )
 
@@ -378,8 +431,7 @@ def run(
     # Flag-off, the model was never asked for gaps and anything it volunteered is
     # ignored: the whole path below is skipped, so the pre-M2 behaviour is exact
     # rather than merely equivalent.
-    if gaps_enabled():
-        _record_gaps(node, output)
+    gap_report = _record_gaps(node, output) if gaps_enabled() else None
 
     _apply_grade(state, current_id, output.classification)
     state.last_grade = {
@@ -387,10 +439,15 @@ def run(
         "gap_kind": output.gap_kind,
         "rationale": output.rationale,
     }
+    if gap_report is not None:
+        # Matched / new / rejected for this answer. Nothing reads it — it exists
+        # so the re-grade duplication rate is observable in a harness rather
+        # than a hypothesis (gap-model.md §3.2). Absent entirely flag-off.
+        state.last_grade["gap_report"] = gap_report
     return state
 
 
-def _record_gaps(node: LearningNode, output: GraderOutput) -> None:
+def _record_gaps(node: LearningNode, output: GraderOutput) -> dict:
     """Mint the reported misconceptions onto the node, and derive `gap_kind`.
 
     Two policy rules are enforced here rather than trusted to the prompt, because
@@ -404,19 +461,43 @@ def _record_gaps(node: LearningNode, output: GraderOutput) -> None:
         to guess at.
 
     Everything survivable is survived: one bad entry costs that entry, never the
-    grade. Gaps are appended, and M2 has no re-grade identity yet, so a second
-    answer on the same node can duplicate a gap — bounded, measured and closed
-    by M3, which is where the model is shown the open ids.
+    grade.
+
+    IDENTITY (M3). On a re-grade the model was shown the node's open gaps with
+    their ids and answered `refers_to` per entry. Three outcomes, and the
+    asymmetry between them is the design:
+
+      matched   an id we supplied — the developer made that same false claim
+                again. Nothing is minted and nothing on the gap changes; the
+                point of matching is that one misconception stays ONE gap
+                across attempts. (Closing it is M6's job, and needs a fresh
+                verification question, not a repeat.)
+      new       a misconception not in the list. Minted.
+      rejected  an id we did NOT supply. The entry is discarded whole. We do
+                not fall back to minting it as new, because an entry claiming
+                to be an existing gap is a claim we cannot verify — guessing
+                either way (silently duplicating, or silently editing a gap the
+                model may have meant differently) is worse than losing it.
+
+    There is deliberately NO text-similarity merge. A heuristic that quietly
+    fuses two distinct misconceptions is worse than a duplicate; the known
+    failure mode is the model over-reporting `new`, which is bounded and
+    **measured** rather than assumed away (gap-model.md §3.2).
+
+    Returns the counts, so the duplication rate is observable rather than a
+    hypothesis.
     """
+    report = {"matched": 0, "new": 0, "rejected": 0}
     if output.classification == "off-topic":
-        return
+        return report
 
     reported = [g for g in output.gaps if g.kind in GAP_KINDS]
     if not reported:
         # Leave the model's scalar alone. This is the pre-M2 shape — including
         # `no_attempt`, which has no gap to derive from and must not be erased.
-        return
+        return report
 
+    open_by_id = {g.id: g for g in node.gaps if g.is_open}
     key = objective_key(node.objective())
     # The caller records the attempt for this answer immediately after grading,
     # so the index it will take is the current length. Recorded rather than
@@ -426,25 +507,46 @@ def _record_gaps(node: LearningNode, output: GraderOutput) -> None:
     origin = len(node.attempts)
 
     minted: list[Gap] = []
+    # Every gap THIS answer contained, matched and new alike. What the scalar is
+    # derived from: an answer that repeats an old misconception fell short for
+    # that reason, whether or not the gap object is newly created.
+    in_this_answer: list[Gap] = []
+
     for reported_gap in reported:
+        ref = (reported_gap.refers_to or "new").strip()
+        # With nothing open we showed no list, so there is no id the model could
+        # legitimately name. Treat the whole answer as first detection rather
+        # than rejecting entries for referencing a list that was never offered.
+        if open_by_id and ref and ref != "new":
+            existing = open_by_id.get(ref)
+            if existing is None:
+                report["rejected"] += 1
+                continue
+            report["matched"] += 1
+            in_this_answer.append(existing)
+            continue
+
         try:
-            minted.append(Gap.create(
+            gap = Gap.create(
                 reported_gap.kind,
                 reported_gap.claim,
                 objective_part=reported_gap.objective_part,
                 foundational=reported_gap.foundational,
                 objective_key=key,
                 origin_attempt=origin,
-            ))
+            )
         except ValueError:
             # A claim we cannot open a gap for (empty text, refused kind). One
             # gap lost; the classification and the others stand.
             continue
-
-    if not minted:
-        return
+        report["new"] += 1
+        minted.append(gap)
+        in_this_answer.append(gap)
 
     node.gap_state.gaps.extend(minted)
+
+    if not in_this_answer:
+        return report
 
     # DERIVED, not taken from the model: the highest-precedence gap decides the
     # scalar. With exactly one gap this equals what the single-gap Grader
@@ -456,7 +558,8 @@ def _record_gaps(node: LearningNode, output: GraderOutput) -> None:
     # earlier attempt decide it would make the history say something the answer
     # did not. Arbitrating over the full open set is M4's `decide_all`, which is
     # a different question asked at a different moment.
-    output.gap_kind = dominant_kind(minted)
+    output.gap_kind = dominant_kind(in_this_answer)
+    return report
 
 
 def _apply_grade(state: OnboardState, node_id: str, classification: str) -> None:
