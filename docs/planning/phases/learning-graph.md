@@ -836,7 +836,53 @@ gaps on the wire. The drawer says so plainly rather than inventing a reason.
 **OQ-5 remains open** and is revisited when M3a.2 introduces cards worth
 reacting to.
 
-### M3a.2 — deterministic patterns (not started)
+### M3a.2 — deterministic patterns ✅ (2026-08-18)
+
+`backend/learning/patterns.py`, three templates, thresholds as named constants.
+**No prose in the backend**: templates return numbers and the sentence is
+composed in `strings.ts`, so every phrasing decision — the part that can
+over-claim — is reviewed in one file.
+
+| template | fires when | evidence |
+|---|---|---|
+| `kind_contrast` | two canonical kinds each have **≥2 assessed** units; the leading kind has **≥2** units that did not land on the first answer; and its rate strictly exceeds the other's | the units that needed a second answer, each pointing at the first answer that fell short |
+| `recurring_shortfall` | one `gap_kind` accounts for **≥3** shortfall attempts across **≥2 distinct objectives** | those exact attempts |
+| `area_evidence` | an area has **≥2 assessed** units and **none** demonstrated | the assessed units in that area |
+
+**Three definitional corrections, reported before implementing rather than made
+silently.** None was caused by M9 — the templates read `classify`, `kind`,
+`area_id`, `first_answer` and `attempts[].gap_kind`, none of which M9 touched.
+They were imprecision in the definitions recorded in §7.4:
+
+1. **`kind_contrast`'s "shortfall rate" was undefined**, and "≥3 total
+   observations" was redundant (two denominators of ≥2 already implies ≥4). The
+   recorded example — *"taken more attempts"* — settles the reading: it counts
+   units that **did not land on the first answer**, so a `recovered` unit counts.
+   Added an explicit **≥2 supporting units** floor so one rough unit cannot
+   become a claim about a whole kind of understanding.
+2. **`area_thin` implied an obligation the M8 disposition model forbids.**
+   Renamed `area_evidence`; threshold unchanged. A waived unit still counts as
+   not demonstrated — evidence truth survives the decision — but the sentence
+   reports the aggregate ("0 of 3 assessed objectives demonstrated in *X*")
+   and never "you still need to work on this". Where units were set aside, the
+   card says so, so the count is not misread as outstanding work.
+3. **`recurring_gap_kind` needed an explicit exclusion list.** Only the three
+   misconception kinds count. `none`, `no_attempt` (engagement, not
+   understanding) and absent (9 of the 40 stored attempts predate the field) are
+   excluded.
+
+**Not a shared-cause claim.** Three `wrong_model` shortfalls are three answers
+of the same category. Whether they share one misconception needs cross-node
+concept identity, which does not exist — so the wording says "fell short the
+same way", never "share the same misconception".
+
+**Tests:** `tests/test_patterns.py`, 31 — every template at its threshold and one
+observation below it, single-objective repetition rejected, off-topic and
+ungraded answers unable to manufacture anything, waived units truthful without
+becoming tasks, unknown instrumentation inert, and every rendered pattern
+resolving to a real attempt.
+
+### M3b — gap-derived insight (not started)
 
 **Unlocks:** vision questions 2 and 3 at L1/L2.
 
@@ -928,7 +974,7 @@ restated as an open question below, not as a decision.
 | **OQ-2** | Does a remedial warm-up move the progress bar? | **No.** Completing a warm-up does not raise Goal Readiness; remedial detours are represented separately | ✅ decided |
 | **OQ-3** | May Goal Readiness fall? | **Yes — on evidence only.** It may decrease when new evidence about the learner's understanding justifies it, and **never** because the system mutated or expanded the plan | ✅ decided |
 | **OQ-4** | `CODEONBOARD_GAPS` | **Enable now in the development environment only; code default stays `0`.** Collect the data; expose no gap in the Learning Graph or UI until gap-model **M6** provides verification and closure | ✅ decided |
-| **OQ-5** | Pattern-card interaction | **Deferred, deliberately.** See below | ⏸ **open** |
+| **OQ-5** | Pattern-card interaction | **No learner action in V1** — no dismiss, no "doesn't apply", no "not useful". Revisit when L3 interpretations arrive | ✅ decided 2026-08-18 |
 | **OQ-6** | `weak_spot` presentation | **Distinguish recovered historical difficulty from currently unresolved weakness. Do not destroy the historical flag** | ✅ decided |
 | **OQ-7** | Map as automatic default view | **No.** Opening the map stays learner-initiated; no stop-count trigger | ✅ decided |
 | **OQ-8** | Cross-session aggregation | **No.** The Learning Graph and understanding profile stay session-scoped; multiple sessions on one repository remain independent journeys | ✅ decided |
@@ -963,15 +1009,21 @@ the flag, so the decision is reversible.
 so stored gap lists grow monotonically. That is why **display is gated on M6**
 (R7b) — the data is research-grade from today, learner-facing only later.
 
-### OQ-5 — still open
+### OQ-5 — decided 2026-08-18: no learner action in V1
 
-Do pattern cards need an interaction at all, and if so, is "Dismiss" the right
-one? Alternatives worth weighing before learning-graph M3: learner feedback
-("this doesn't apply" / "not useful") which is more informative than dismissal
-and makes bad templates measurable; or no interaction in V1, on the grounds that
-a card gated at §7.2's thresholds and carrying its own evidence may not need an
-escape hatch. **To be decided before M3 begins.** Until then M3 plans no
-dismissal persistence and no extra column.
+**Decision.** M3a.2 pattern cards carry **no dismiss, no "this doesn't apply",
+no "not useful"** control. The learner can inspect the evidence behind a
+pattern; there is nothing else to do with it.
+
+**Why.** These are deterministic, evidence-backed *observations*, not
+diagnoses — "3 of 4 flow objectives needed a second answer" is a count the
+learner can audit. Offering a rebuttal would imply the card is an opinion,
+which is the over-claiming the whole hierarchy exists to prevent. It would
+also cost a persistence column to answer a question we cannot yet inform.
+
+**When to revisit.** With **L3 interpretations or learner-trait statements** —
+where the system genuinely infers rather than counts, and disagreement becomes
+meaningful. Recorded there rather than closed for good.
 
 ---
 

@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type {
-  Area, GraphNode, GraphEdge, Progress, UnderstandingClass, UnderstandingProfile,
+  Area, GraphNode, GraphEdge, Pattern, Progress, UnderstandingClass, UnderstandingProfile,
   UnderstandingRow, UnderstandingState,
 } from "@/lib/api";
 import {
@@ -169,6 +169,72 @@ function UnitList({
         </li>
       ))}
     </ul>
+  );
+}
+
+/** The sentence for one pattern, composed here so all wording stays in `strings`. */
+function patternSentence(pattern: Pattern): string {
+  const d = pattern.detail;
+  switch (pattern.template) {
+    case "kind_contrast":
+      return t.map.pattern.kind_contrast(
+        tagLabel(String(d.lead_kind)), Number(d.lead_extra), Number(d.lead_total),
+        tagLabel(String(d.base_kind)), Number(d.base_extra), Number(d.base_total)
+      );
+    case "recurring_shortfall":
+      return t.map.pattern.recurring_shortfall(
+        Number(d.attempts), Number(d.nodes),
+        t.map.shortfall[String(d.gap_kind)] ?? String(d.gap_kind)
+      );
+    case "area_evidence":
+      return t.map.pattern.area_evidence(
+        Number(d.demonstrated), Number(d.assessed), String(d.area_title)
+      );
+    default:
+      return "";
+  }
+}
+
+/**
+ * One observation, with its evidence one click away.
+ *
+ * No dismiss, no "not useful", no feedback control — OQ-5, decided 2026-08-18.
+ * These are deterministic aggregates over evidence the learner can inspect, not
+ * diagnoses of them, so there is nothing to contest; offering a rebuttal would
+ * imply the card is an opinion. Feedback arrives with L3 interpretations, where
+ * the system genuinely infers rather than counts.
+ */
+function PatternCard({
+  pattern, onOpen,
+}: { pattern: Pattern; onOpen: (nodeId: string) => void }) {
+  const setAside = Number(pattern.detail.set_aside ?? 0);
+  return (
+    <li className="flex flex-col gap-2 rounded border border-rule bg-slab px-3.5 py-3">
+      <p className="text-[calc(12.5rem/16)] leading-relaxed text-paper">
+        {patternSentence(pattern)}
+        {/* Keeps the aggregate from reading as outstanding work when part of it
+            is something the learner already declined to pursue. */}
+        {setAside > 0 && (
+          <span className="text-graphite"> {t.map.pattern.setAsideNote(setAside)}</span>
+        )}
+      </p>
+      <span className="flex flex-wrap items-center gap-2">
+        <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.13em] text-graphite">
+          {t.map.patternEvidence(pattern.evidence.length)}
+        </span>
+        {/* Reuses the evidence drawer rather than inventing a second
+            explanation surface: one unit, one place its story is told. */}
+        {pattern.evidence.map((ref, i) => (
+          <button
+            key={`${ref.node_id}-${ref.attempt_index}`}
+            onClick={() => onOpen(ref.node_id)}
+            className="rounded-[2px] border border-rule px-1.5 py-px font-mono text-[calc(9.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
+          >
+            {i + 1}
+          </button>
+        ))}
+      </span>
+    </li>
   );
 }
 
@@ -395,6 +461,29 @@ export default function MapView({
             )}
           </div>
         )}
+
+        {/* ── PATTERNS ────────────────────────────────────────────────────────
+            A deeper interpretation layer, so it sits BELOW the outcome bands
+            and never competes with them. Renders only when a threshold is met;
+            otherwise one restrained line, because at the measured session size
+            most sessions will legitimately have no pattern at all. */}
+        <Panel title={t.map.patterns}>
+          {understanding.patterns.length === 0 ? (
+            <p className="text-[calc(12rem/16)] leading-relaxed text-graphite">
+              {t.map.patternsEmpty}
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2.5">
+              {understanding.patterns.map((pattern) => (
+                <PatternCard
+                  key={pattern.template}
+                  pattern={pattern}
+                  onOpen={onOpenEvidence}
+                />
+              ))}
+            </ul>
+          )}
+        </Panel>
 
         {/* the two breakdowns that make this a reflection view rather than a list */}
         <div className="grid gap-4 md:grid-cols-2">

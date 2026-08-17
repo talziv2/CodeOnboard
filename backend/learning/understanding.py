@@ -245,7 +245,14 @@ def profile(graph: "LearningGraph") -> dict:
     order = {n.id: i for i, n in enumerate(walk)}
     rows.sort(key=lambda r: order[r["node_id"]])
 
+    # Deferred import: `patterns` reads the classification this module owns, so
+    # the dependency runs one way only.
+    from backend.learning import patterns as pattern_model
+
     return {
+        # L2 observations over the same evidence. Usually empty — the thresholds
+        # are set so a handful of answers produces nothing (M3a.2).
+        "patterns": pattern_model.detect(graph),
         "totals": {
             state: sum(1 for r in rows if r["understanding"] == state)
             for state in (STRENGTH, RECOVERED, UNRESOLVED, INSUFFICIENT)

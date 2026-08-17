@@ -226,7 +226,25 @@ export interface UnderstandingRow {
   verification_pending?: boolean;
 }
 
+/**
+ * One L2 pattern — a repeated observation over the evidence (M3a.2).
+ *
+ * `detail` carries NUMBERS ONLY; the sentence is composed in `strings.ts`. That
+ * split is deliberate: the wording is the part that can over-claim, so it lives
+ * in one reviewable place rather than in aggregation code.
+ *
+ * `evidence` is never empty — a template that cannot enumerate its support does
+ * not fire.
+ */
+export interface Pattern {
+  template: "kind_contrast" | "recurring_shortfall" | "area_evidence";
+  detail: Record<string, string | number>;
+  evidence: { node_id: string; attempt_index: number }[];
+}
+
 export interface UnderstandingProfile {
+  /** Usually empty: thresholds are set so a handful of answers produces none. */
+  patterns: Pattern[];
   totals: StateTally;
   /** Units carrying real evidence — the honest denominator for the profile. */
   assessed: number;

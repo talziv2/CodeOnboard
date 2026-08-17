@@ -351,6 +351,49 @@ export const t = {
       skipped: "skipped",
       asserted: "you marked this understood",
     } as Record<string, string>,
+    // --- patterns (M3a.2) ---
+    //
+    // WORDING RULE, and the reason the backend returns numbers rather than
+    // prose: a pattern describes ANSWERS, never the learner. "Flow objectives
+    // needed a second answer more often" is a count. "You struggle with flows"
+    // is a claim about a person that this evidence cannot carry, and belongs to
+    // an L3 layer that does not exist.
+    //
+    // The area sentence in particular reports the aggregate and stops there. It
+    // must not say "you still need to work on this": a waived objective counts
+    // as not demonstrated — that is the truth about evidence — but the learner
+    // has already declined to pursue it, and the pattern layer does not overrule
+    // that decision.
+    patterns: "What the evidence shows",
+    patternsEmpty: "Not enough evidence to identify a pattern yet.",
+    patternEvidence: (count: number) =>
+      `${count} answer${count === 1 ? "" : "s"} behind this`,
+    pattern: {
+      kind_contrast: (
+        lead: string, leadExtra: number, leadTotal: number,
+        base: string, baseExtra: number, baseTotal: number
+      ) =>
+        `${lead} objectives needed more than one answer more often than ${base} ` +
+        `objectives (${leadExtra} of ${leadTotal} vs ${baseExtra} of ${baseTotal}).`,
+      recurring_shortfall: (attempts: number, nodes: number, kind: string) =>
+        `${attempts} answers across ${nodes} objectives fell short the same ` +
+        `way: ${kind}.`,
+      // Deliberately an aggregate, not an instruction.
+      area_evidence: (demonstrated: number, assessed: number, area: string) =>
+        `${demonstrated} of ${assessed} assessed objectives demonstrated in ${area}.`,
+      // Appended only when some of them were set aside, so the sentence above
+      // is not read as outstanding work.
+      setAsideNote: (count: number) =>
+        count === 1
+          ? "One of these you chose not to pursue."
+          : `${count} of these you chose not to pursue.`,
+    },
+    // The Grader's shortfall vocabulary, in words a learner can read.
+    shortfall: {
+      missing_prerequisite: "a missing foundation",
+      wrong_model: "a confident but incorrect model",
+      right_idea_wrong_altitude: "the right idea at the wrong level",
+    } as Record<string, string>,
     profileTitle: "What you understand",
     needsWork: "Needs work",
     workedThrough: "Worked through",
