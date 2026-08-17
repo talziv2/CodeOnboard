@@ -146,6 +146,45 @@ class LearningNode:
         return (brief.get("objective") or brief.get("understand") or "").strip()
 
 
+# Overrides that mean "the learner has dealt with this stop", and therefore
+# settle it for JOURNEY COMPLETION (§18.16.3). Each is an explicit act:
+#
+#   continue         they read the gaps and chose to move on anyway
+#   waive_remaining  they chose to stop remediating this node
+#   skip             they never engaged with it, deliberately
+#
+# `mark_weak` is absent on purpose: "I don't get this" is the opposite of having
+# dealt with it. `mark_understood` is absent because it is migration debt that M8
+# routes elsewhere (see `LearningGraph.override`).
+SETTLING_OVERRIDES: frozenset[str] = frozenset({"continue", "waive_remaining", "skip"})
+
+
+def is_settled(node: LearningNode) -> bool:
+    """Has the learner DEALT WITH this stop? The input to `is_complete()`.
+
+    §18.16.3: `understood`, or carrying an explicit learner override. **Plain
+    `visited` is deliberately not enough** — intent must be recorded, never
+    inferred, so scrolling past a stop does not settle it.
+
+    Not to be confused with `progress.is_settled`, which is the *weaker*
+    coverage-shaped question ("visited, answered, or acted on") used by the
+    progress measures. That module's docstring already points here for the strict
+    one; the two answer different questions and both are needed.
+    """
+    if understanding_of(node) == "understood":
+        return True
+    return node.user_override in SETTLING_OVERRIDES
+
+
+def has_open_blocking_gaps(node: LearningNode) -> bool:
+    """Is there unfinished remediation here — work the system would still offer?
+
+    `open` specifically, not "unverified": a `waived` gap is unverified forever
+    and is precisely what the learner asked to stop being asked about.
+    """
+    return any(g.is_blocking and g.is_open for g in node.gaps)
+
+
 def understanding_of(node: LearningNode) -> UnderstandingState:
     """The node's understanding state. **The single owner of this question.**
 
@@ -274,7 +313,19 @@ class LearningGraph:
             "rationale": rationale,
             "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
-        self.nodes[node_id].attempts.append(attempt)
+        node = self.nodes[node_id]
+        node.attempts.append(attempt)
+        # A new answer WITHDRAWS a prior `continue` (M8, §3.6). "I chose to move
+        # on" and "I am working on this again" are contradictory, and the later
+        # act wins. Left standing, the override would keep this node settled for
+        # completion and keep `resume_point` walking past the work the learner has
+        # just come back to.
+        #
+        # Only `continue` is withdrawn. `waive_remaining` and `skip` are decisions
+        # about whether to engage at all, and answering does not retract them —
+        # a waived gap stays waived until the learner asks to verify it.
+        if node.user_override == "continue":
+            node.user_override = None
         return attempt
 
     def mark_understanding(self, node_id: str, state: UnderstandingState) -> None:
@@ -296,11 +347,109 @@ class LearningGraph:
             # Mark as weak spot — prerequisite nodes get cleared later in insert_before
             node.weak_spot = True
 
+    # --- learner intents over gaps (M8) ---
+
+    def continue_past(self, node_id: str) -> bool:
+        """Record that the learner chose to move on with gaps still open.
+
+        Returns whether anything was recorded. **Only fires when the node
+        actually has open blocking gaps** — otherwise there is nothing to
+        continue past, and stamping every ordinary advance with an override
+        would make the record meaningless and settle stops nobody decided about.
+
+        This is what makes journey completion reachable (§18.16.3): walking to
+        the end settles every stop by construction, because leaving unfinished
+        work behind is an explicit button press. A refresh does not advance, so a
+        refresh records nothing.
+        """
+        node = self.nodes[node_id]
+        if not has_open_blocking_gaps(node):
+            return False
+        node.user_override = "continue"
+        return True
+
+    def waive_gap(self, node_id: str, gap_id: str) -> bool:
+        """The learner chooses to stop working on ONE gap.
+
+        Never evidence: `waived` does not permit `understood`, so the node stays
+        `partial` and `readiness()` legitimately stays below 100%. What it buys is
+        that the system stops asking.
+
+        If this clears the LAST open blocking gap, the node is also recorded as
+        `waive_remaining`. That is not an inference — waiving is itself an
+        explicit act — and without it a learner who waived their gaps one at a
+        time could never complete the journey, because `/advance` records
+        `continue` only where gaps are still *open* and there would be none left
+        to trigger it. §18.16.3 requires waived gaps not to prevent completion,
+        and this is what makes that true however the learner got there.
+        """
+        node = self.nodes[node_id]
+        target = next((g for g in node.gaps if g.id == gap_id and g.is_open), None)
+        if target is None:
+            return False
+        target.waive()
+        if not has_open_blocking_gaps(node):
+            node.user_override = "waive_remaining"
+        return True
+
+    def waive_remaining(self, node_id: str) -> list[str]:
+        """Stop remediating this node. Waives every OPEN blocking gap.
+
+        Returns the ids waived, so the caller can name them — "what you chose not
+        to check" is the most useful thing the completion screen can say, and a
+        bare count is not it (§18.16.3).
+
+        Non-blocking gaps are left alone: they never held the node back, so
+        waiving them would be recording a decision the learner did not make. The
+        override is recorded even when nothing was open, because the learner
+        still expressed the intent.
+        """
+        node = self.nodes[node_id]
+        waived = [g.id for g in node.gaps if g.is_blocking and g.is_open]
+        for gap in node.gaps:
+            if gap.is_blocking and gap.is_open:
+                gap.waive()
+        node.user_override = "waive_remaining"
+        return waived
+
+    def is_complete(self) -> bool:
+        """Has the learner dealt with the whole promised journey? (§18.16.3)
+
+        **Journey completion, not mastery** — the two are separate measures and
+        neither gates the other. This can be `true` while `readiness()` sits below
+        100%, and that is the intended final state: *"Journey complete — verified
+        understanding 92%, 1 gap waived."* Better than pretending to mastery, and
+        better than leaving the product permanently unfinished because one thing
+        was deliberately not remediated.
+
+        Counted over `walk_nodes` — planned, non-optional units — so `optional`
+        stops and remedial detours do not gate completion. Both are already
+        excluded from the stop counter and from `readiness()`; a third opinion
+        about which nodes count is exactly what this reuse avoids.
+        """
+        from backend.learning.progress import walk_nodes
+
+        walk = walk_nodes(self)
+        return bool(walk) and all(is_settled(n) for n in walk)
+
     def override(self, node_id: str, action: str) -> None:
         # User-driven graph edit ("mark understood" / "mark weak" / "skip").
         # We record the override and reflect it in understanding_state so the
         # rest of the system doesn't need a special code path for overrides.
         node = self.nodes[node_id]
+        # MIGRATION (§18.16.2): `mark_understood` predates the gap model and sets
+        # `understanding_state` directly, which would let a learner claim mastery
+        # over unverified gaps by a different door. On a gap-bearing node it is
+        # therefore READ AS `waive_remaining` — the honest version of the same
+        # intent, since the learner is saying "stop asking me", not "I have
+        # demonstrated this".
+        #
+        # On a node with no gap records it keeps working exactly as it always has:
+        # vacuously nothing is bypassed. That is the whole compatibility rule, and
+        # it is why every session written before this phase is unaffected.
+        if action == "mark_understood" and node.gaps:
+            self.waive_remaining(node_id)
+            return
         node.user_override = action
         if action == "mark_understood":
             node.understanding_state = "understood"
@@ -403,6 +552,25 @@ class LearningGraph:
         # them: they are not part of the journey the learner was promised, so
         # dropping someone back into one on their return would resume a path
         # they did not leave. They stay reachable from the rail.
+        # UNFINISHED REMEDIATION FIRST (M8). A node still carrying open blocking
+        # gaps is where the learner actually left off, even if they had visited it
+        # — otherwise a refresh drops them past the work and the remediation is
+        # silently abandoned.
+        #
+        # **Unless they chose to move past it.** A node they explicitly
+        # `continue`d or waived is skipped here, and that exception is the whole
+        # anti-stranding guarantee: without it, deciding "I'll come back to this"
+        # would send them straight back on every return, forever, with no way out
+        # except answering something they had just declined to answer.
+        for node_id in self.path_order():
+            node = self.nodes[node_id]
+            if self.is_optional(node):
+                continue
+            if node.user_override in SETTLING_OVERRIDES:
+                continue
+            if has_open_blocking_gaps(node):
+                return node_id
+
         for node_id in self.path_order():
             node = self.nodes[node_id]
             if node.visited or self.is_optional(node):
@@ -412,8 +580,14 @@ class LearningGraph:
                 for e in self.edges
                 if e.kind == "prerequisite" and e.to_node_id == node_id
             ]
+            # SETTLED, not `understood`. A prerequisite the learner deliberately
+            # continued past or waived can never become `understood` — a waived
+            # gap is unverified forever — so requiring mastery here would leave
+            # every node behind it permanently unreachable, and resume would fall
+            # through to the saved position for the rest of the session. Honouring
+            # the decision is what keeps the walk moving.
             if all(
-                understanding_of(self.nodes[p]) == "understood"
+                is_settled(self.nodes[p])
                 for p in prereqs
                 if p in self.nodes
             ):

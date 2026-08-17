@@ -435,6 +435,15 @@ def session_advance(session_id: str, body: AdvanceRequest) -> dict:
 
     # signal == "next"
     graph.mark_visited(current)
+    # Leaving unfinished remediation behind is an EXPLICIT DECISION, so it is
+    # recorded as one (§18.16.3). `continue_past` fires only where the node
+    # actually has open blocking gaps, so an ordinary advance stamps nothing.
+    #
+    # This is what makes journey completion reachable at all: walking to the end
+    # settles every stop by construction. A refresh does not advance, so a refresh
+    # never settles anything — which is the property that keeps "the learner dealt
+    # with this" from being inferred from mere presence.
+    graph.continue_past(current)
     # A prerequisite edge points at the node it unlocks, so next_in_path already
     # walks a warm-up back to the objective the user failed. That return is the
     # point of the remediation: they get another attempt at the thing they got

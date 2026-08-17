@@ -1,10 +1,11 @@
 # Gap model — multi-gap remediation and verification
 
 **Phase status: M1 done 2026-08-16; M2–M5 done 2026-08-17; M6 (AC2 validated
-live) and M7 done 2026-08-18. Gaps now have teeth: a node cannot be
-`understood` while a blocking gap is unverified, on a closure mechanism that
-was demonstrated to work first. M8 (learner intents, resume, completion) is
-next.**
+live), M7 and M8 done 2026-08-18. The engine is complete end to end: gaps are
+detected, arbitrated, remediated, verified, they gate `understood`, and the
+learner can decide to move past them without being sent back. **M9 (API +
+frontend) is next — the first step that changes what a learner sees**, and the
+one whose build row says a browser pass is required rather than optional.**
 
 | step | state |
 |---|---|
@@ -15,7 +16,47 @@ next.**
 | **M5** Remediation becomes gap-scoped | ✅ **done, live-evaluated.** `/respond` runs `decide_all` and the `Plan` is the single source of truth: `reteach`/`followup` receive **every** target, the Mutator's `Diagnosis` carries the one `Gap` a structural mutation may address, and the warm-up records `lesson_brief["remediates"] = [gap_id]`. Nothing downstream re-derives targets from `gap_kind`. 24 tests (981 total). **The live evaluation found a real defect and it was fixed** — see [`evidence/m5-multi-gap-reteach/`](evidence/m5-multi-gap-reteach/README.md) |
 | **M6** Verification | ✅ **done, AC2 validated live 2026-08-18.** `teaching/verify.py` (`verify` → `VerificationPrompt`, no `reveal`, stored on `gap_state.pending_verification`), `grader/verification.py` (per-gap `resolved` + new gaps; the only producer of `verified`), caps enforced in `decide_all`. 33 tests (1014 total). **AC2 passes**: double dissociation on 2 real nodes (`holding` fails, `corrected` passes, overlap 0.11/0.15 with the original question), and with two gaps open an answer correct about one and silent about the other closed **only** the one it addressed. Evidence: [`evidence/m6-verification/`](evidence/m6-verification/README.md) |
 | **M7** Derived `understanding_state` | ✅ **done, compatibility gate passed.** `understanding_of(node)` in `graph.py` is the single owner; `mark_understanding` now records the latest *assessment* rather than concluding. **Blocking is live**: a node cannot be `understood` while a blocking gap is unverified. Gate: **0 mismatches over 629 nodes in 68 stored sessions**. Every production reader repointed, enforced by an AST-based structural test. 23 tests + one M1 test inverted (1077 total) |
-| M8 – M10 | not started |
+| **M8** Learner intents + resume + completion | ✅ **done, stranding validated.** `continue_past` / `waive_gap` / `waive_remaining` on the graph; `/advance` records `continue` **only** where open blocking gaps exist; `is_settled` (the strict §18.16.3 one) and `is_complete()` over `walk_nodes`; `mark_understood` migrated. `resume_point()` returns to unfinished remediation **unless the learner chose to move past it**. 35 tests (1112 total), including an end-to-end walk through `/session/start`'s real resume path — and the guard is mutation-checked: removing it fails 3 tests |
+| M9 – M10 | not started |
+
+**Stranding was validated as a flow, not as a function call, and the guard was
+proven to bite.** `resume_point()` reaches production in exactly one place —
+`_try_resume`, off `/session/start` when a session for the same repo and goal
+exists — so a learner who closes the tab and returns hits that path and nothing
+else. A unit test of the function proves the rule but not the wiring, so the
+validation drives the real endpoint: gaps on stop A → continue past it → come
+back three times → lands on B every time, with A's gap still open and still not
+`understood`. **Both directions are asserted**, because "does not strand" would
+otherwise be satisfied by "never returns", which loses the remediation instead:
+without an explicit decision, resume *does* go back to A.
+
+Then the guard was **deliberately removed** to confirm the tests fail without it
+— 3 do, including the end-to-end one. A guard nobody has seen fail is a guess.
+
+**A second stranding shape, subtler and fixed here too.** `resume_point`'s
+prerequisite check required `understood`; a waived or continued prerequisite can
+**never** reach it, since a waived gap is unverified forever. Left alone, every
+node behind such a prerequisite would have been permanently unreachable and
+resume would have fallen through to the saved pointer for the rest of the
+session. The check now asks for **settled**, which honours the decision instead
+of demanding mastery the learner declined to demonstrate.
+
+**One contradiction in §18.16.3, resolved.** It requires settled to mean
+"`understood` or an explicit override", *and* that waived gaps "do not prevent
+completion". Those conflict for a learner who waives gaps **one at a time**:
+per-gap `waive` records no override, and `/advance` records `continue` only where
+a gap is still *open* — so by the time they advanced there would be nothing left
+to trigger it, and the journey could never complete. Resolution: **waiving the
+last open blocking gap records `waive_remaining` on the node.** That is not an
+inference from presence — waiving is itself an explicit act — so the "intent must
+be recorded, never inferred" rule holds.
+
+**Not built, and not in M8's scope:** §3.5's "a deliberate return to the node
+resets both counters". It belongs to the cap machinery rather than to intents,
+and no build row asks for it, so it is recorded here as outstanding rather than
+quietly implemented. A new attempt withdraws `continue` (which M8 does require)
+but does **not** reset `verification_attempts` — deliberately, since resetting on
+every answer would stop the cap ever binding.
 
 **Two design points where the plan's own documents disagreed, resolved toward
 the stricter reading.** (a) §18.8 says `understood` requires "no blocking gap
@@ -191,7 +232,7 @@ replacing the other mid-phase.
 | **M5** ✅ | **Remediation becomes gap-scoped.** Re-teach receives *every* open gap of its kind and is instructed in the plural; the Mutator's `Diagnosis` (step G) gains the specific `Gap` it must unblock, recorded as `lesson_brief["remediates"]` | With one gap, both produce the same shape as today. The warm-up decline path stays reachable | Re-teach quality with 3 gaps at once — a prompt property no test asserts (LR3-class risk) |
 | **M6** ✅ | **Verification.** `teaching.verify(node, gaps, source) → VerificationPrompt` stored on `node.pending_verification`, **separate from `cached_lesson`**, carrying **no `reveal`**. Grader verification mode returns per-gap `resolved` + any new gaps. Per-gap and per-node counters persisted | A gap moves to `verified` **only** here. Silence about a gap leaves it `open`. Caps stop the system proposing without closing anything | Cost: this adds calls per gap. The Baseline-1 cost record must be re-measured (§19.7) |
 | **M7** ✅ | **Derived `understanding_state`.** `understood` ⟺ latest assessment reaches the objective **and** every blocking gap is `verified`. **Blocking takes effect here — after M6 made closure possible** | On any graph with `gaps == []`, every derived value **equals the stored value**. This is the compatibility gate, run over all 61 stored sessions | `prune_ahead` (reads `understood`), `resume_point` (reads `understood`), `readiness()` (reads state), `mark_understanding` (currently assigns) |
-| **M8** | **Learner intents + resume + completion.** `continue`, `waive`, `waive_remaining`; `/advance` records `continue` when leaving a node with open blocking gaps; `resume_point()` per §18.16.3; `is_complete()`; `mark_understood` migration | A refresh **never** records `continue`. Resume returns to unfinished remediation. `is_complete()` is reachable by walking the journey | `resume_point` stranding a learner; `/advance` recording `continue` on nodes without blocking gaps |
+| **M8** ✅ | **Learner intents + resume + completion.** `continue`, `waive`, `waive_remaining`; `/advance` records `continue` when leaving a node with open blocking gaps; `resume_point()` per §18.16.3; `is_complete()`; `mark_understood` migration | A refresh **never** records `continue`. Resume returns to unfinished remediation. `is_complete()` is reachable by walking the journey | `resume_point` stranding a learner; `/advance` recording `continue` on nodes without blocking gaps |
 | **M9** | **API + frontend.** `/respond` returns `gaps`; `POST /session/{id}/verify`; waive endpoints; the gauge relabelled *Verified understanding*; completion screen shows both measures with waived gaps **named** | Existing response keys unchanged; an un-updated client keeps working | The B6 route rail; the stop counter; the completion screen's `understood` count drops legitimately and needs its "N waived" context |
 | **M10** | **Acceptance + live E2E** (§19.5). Both named acceptance cases, on real repositories | AC1 and AC2 both observed live, not simulated | — |
 

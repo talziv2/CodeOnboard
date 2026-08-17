@@ -160,13 +160,20 @@ def test_mark_understanding_records_an_assessment_rather_than_a_conclusion():
 
 
 def test_mark_understood_override_cannot_confer_mastery_over_a_gap():
-    """§18.16.2: a learner choosing to move on is not claiming mastery. M8 turns
-    this action into `waive_remaining`; M7 already stops it lying."""
+    """§18.16.2: a learner choosing to move on is not claiming mastery.
+
+    M7 stopped this action from lying by demoting the result; M8 stopped it being
+    taken at all on a gap-bearing node, routing it to `waive_remaining` instead.
+    Both layers are asserted here because the guarantee is the conjunction: the
+    stored assessment is never written, AND the derived value is not `understood`.
+    """
     graph = LearningGraph(repo_url=REPO, goal=GOAL)
-    node = graph.add_node(_node())
+    node = graph.add_node(_node("partial"))
     node.gap_state.gaps.append(_blocking("open"))
     graph.override(node.id, "mark_understood")
-    assert understanding_of(node) == "partial"
+    assert node.understanding_state == "partial"      # never overwritten
+    assert understanding_of(node) != "understood"
+    assert node.user_override == "waive_remaining"    # M8 migration
 
 
 def test_mark_understood_override_still_works_on_a_gap_free_node():
