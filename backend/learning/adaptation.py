@@ -15,8 +15,10 @@
 # Everything here is pure: no IO, no LLM, no mutation of anything but the graph
 # passed in. That is what makes the policy testable without an API key.
 
+from dataclasses import dataclass, field
 from typing import Literal
 
+from backend.learning.gaps import Gap, by_precedence
 from backend.learning.graph import LearningGraph
 
 
@@ -86,6 +88,123 @@ def decide(classification: str, gap_kind: str | None) -> Action:
     # No gap named — now, and only now, the classification decides. `off-topic`
     # earns nothing: with no gap to point at, an unrelated answer says nothing.
     return "prerequisite" if classification == "confused" else "none"
+
+
+# ── the plan: one answer, several gaps (M4) ───────────────────────────────────
+
+# The operational bound on how many gaps are worked at once. NOT a bound on how
+# many may be open, and NOT a bound on how many block `understood` — those are
+# uncapped by §18.16.1, deliberately, so that a gap's meaning never depends on a
+# queue limit. This number only decides how much is attempted in one cycle.
+ACTIVE_SET_MAX = 3
+
+
+@dataclass(frozen=True)
+class Plan:
+    """The whole response to one graded answer.
+
+    **`action` is singular, where gap-model.md M4 sketched `actions`.** That is a
+    deliberate narrowing, and §18.5 is the reason: it permits *one structural
+    mutation* per graded answer, and the remaining actions are each a piece of
+    writing the learner reads — a hint, a correction, a follow-up question.
+    Issuing two of those at once is not twice the teaching, it is two lessons
+    competing for the same attention, and the precedence order exists precisely
+    because the foundational one has to land first. So one answer earns one
+    response, and the plural lives where it belongs: in `targets`.
+
+    Fields:
+      action      what the system does now. `none` means "recorded, nothing owed".
+      targets     the gaps this action must address. Plural for `reteach` and
+                  `followup` — "one mutation, many corrections" (§18.5).
+      active_set  the open BLOCKING gaps being worked this cycle, ≤ 3, in
+                  precedence order. Membership changes nothing about a gap:
+                  one outside the set is still `open` and still blocking.
+      deferred    open blocking gaps outside the active set. Exists so the count
+                  can be shown rather than the gaps silently disappearing.
+      collapsed   more blocking gaps are open than the queue holds, so the
+                  response is one full re-teach instead of a fan-out of warm-ups.
+    """
+
+    action: Action
+    targets: tuple[Gap, ...] = ()
+    active_set: tuple[Gap, ...] = ()
+    deferred: tuple[Gap, ...] = field(default=())
+    collapsed: bool = False
+
+
+def decide_all(classification: str, gaps: list[Gap] | None) -> Plan:
+    """What to do about an answer that may contain several misconceptions.
+
+    The generalisation of `decide`, and it agrees with it exactly wherever
+    `decide` has an opinion — with zero or one gap the two return the same
+    action, which is asserted directly against the table in
+    `tests/test_gap_adaptation.py`. What is genuinely new is only what happens
+    when there is more than one.
+
+    Three rules from §18.5, in the order they apply:
+
+    1. **Precedence decides the response.** The highest-ranked open gap picks the
+       action; foundational first, because remediating a higher-altitude gap
+       while a foundation is missing lands on nothing.
+    2. **One mutation, many corrections.** A `prerequisite` targets exactly one
+       gap — the structural change is capped at one per answer. A `reteach` or
+       `followup` targets *every* active gap of that kind, because a lesson can
+       name several misconceptions and must, or the ones it omits are silently
+       abandoned. Gaps of DIFFERENT kinds are never merged: a hint and a
+       correction are not the same act.
+    3. **Overflow collapses.** More than `ACTIVE_SET_MAX` blocking gaps open is
+       itself one signal — the unit did not land — so the answer is a single
+       full re-teach over all of them rather than a queue of warm-ups
+       (§18.16.1).
+
+    Everything not addressed stays `open`. Nothing here decays, resolves or
+    reclassifies a gap; this function reads and returns, and mutates nothing.
+    """
+    open_gaps = by_precedence([g for g in (gaps or []) if g.is_open])
+    blocking = [g for g in open_gaps if g.is_blocking]
+    active = tuple(blocking[:ACTIVE_SET_MAX])
+    deferred = tuple(blocking[ACTIVE_SET_MAX:])
+    collapsed = len(blocking) > ACTIVE_SET_MAX
+
+    # `understood` earns no response, exactly as in `decide`. An answer that
+    # reaches the objective while leaving a blocking gap open is not re-taught —
+    # it is VERIFIED (M6), which is a different act with a different producer
+    # (§18.16.2). Re-teaching here would answer a question the learner just
+    # showed they could answer.
+    if classification == "understood":
+        return Plan("none", (), active, deferred, collapsed)
+
+    if not open_gaps:
+        # No gap to point at: fall back to the coarse signal, which is the whole
+        # of `decide`'s remaining behaviour, including `off-topic` earning
+        # nothing. Delegated rather than restated so the two cannot drift.
+        return Plan(decide(classification, None), (), active, deferred, collapsed)
+
+    if collapsed:
+        # A full re-teach of the unit, naming every blocking gap. Not the active
+        # set: the lesson is being given again in full, so scoping it to three of
+        # five would leave two corrections unmade with nothing queued to make them.
+        return Plan("reteach", tuple(blocking), active, deferred, True)
+
+    lead = open_gaps[0]
+    action = _ACTION_BY_GAP.get(lead.kind)
+    if action is None:
+        # An unknown kind, from a store written by a future or foreign version.
+        # Same conservative direction as `is_blocking` and `precedence_rank`:
+        # what we cannot interpret earns nothing rather than a guessed response.
+        return Plan(decide(classification, None), (), active, deferred, collapsed)
+
+    if action == "prerequisite":
+        # ONE structural mutation per graded answer (§18.5). The others stay open
+        # and are picked up on a later cycle — after the foundation has landed,
+        # which is the entire reason precedence puts this first.
+        return Plan(action, (lead,), active, deferred, collapsed)
+
+    # A lesson may carry several corrections at once, but only of the lead's own
+    # kind. Merging a `followup` into a `reteach` would answer two different
+    # difficulties with one act.
+    return Plan(action, tuple(g for g in open_gaps if g.kind == lead.kind),
+                active, deferred, collapsed)
 
 
 # ── prune-ahead ────────────────────────────────────────────────────────────────
