@@ -275,10 +275,17 @@ Each entry has:
                   wrong_model               — they stated confidently how
                                               something works, and it does not
                                               work that way.
-                  right_idea_wrong_altitude — what they said is true of the
+                  right_idea_wrong_altitude — what they said is TRUE of the
                                               implementation but false as a
                                               statement about responsibility,
-                                              or the reverse.
+                                              or the reverse. IT HAS TO BE TRUE
+                                              AT SOME LEVEL. Before choosing it,
+                                              find the reading that makes the
+                                              statement correct; if there is
+                                              none — if the claim is wrong about
+                                              the code however you look at it —
+                                              it is `wrong_model`, no matter how
+                                              close to the right area it sounds.
   claim:          the false statement, in ONE sentence, as a paraphrase of what
                   the developer actually asserted. "child path_cost and depth
                   are filled in later by the search algorithm" is a claim: it is

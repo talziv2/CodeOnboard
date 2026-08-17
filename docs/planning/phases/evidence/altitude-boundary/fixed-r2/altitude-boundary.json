@@ -1,0 +1,134 @@
+[
+  {
+    "id": "F1-aima-solution",
+    "expect": "wrong_model",
+    "why": "solution() returns actions only; 'states too' is false at any level",
+    "classification": "partial",
+    "scalar_gap_kind": "wrong_model",
+    "gap_kinds": [
+      "wrong_model"
+    ],
+    "gaps": [
+      {
+        "kind": "wrong_model",
+        "claim": "solution() returns both the states and the actions it collected"
+      }
+    ],
+    "got": "wrong_model"
+  },
+  {
+    "id": "F2-aima-parent",
+    "expect": "wrong_model",
+    "why": "the parent pointer is set by the constructor, not the frontier",
+    "classification": "partial",
+    "scalar_gap_kind": "wrong_model",
+    "gap_kinds": [
+      "wrong_model"
+    ],
+    "gaps": [
+      {
+        "kind": "wrong_model",
+        "claim": "The parent pointer is attached by the frontier when the node is queued."
+      }
+    ],
+    "got": "wrong_model"
+  },
+  {
+    "id": "F3-auth-replaces",
+    "expect": "wrong_model",
+    "why": "prepare_auth mutates and syncs; it does not swap in a new object",
+    "classification": "off-topic",
+    "scalar_gap_kind": "no_attempt",
+    "gap_kinds": [],
+    "gaps": [],
+    "got": null
+  },
+  {
+    "id": "F4-auth-body",
+    "expect": "wrong_model",
+    "why": "a tuple becomes HTTPBasicAuth and an Authorization header, never body fields",
+    "classification": "confused",
+    "scalar_gap_kind": "wrong_model",
+    "gap_kinds": [
+      "wrong_model"
+    ],
+    "gaps": [
+      {
+        "kind": "wrong_model",
+        "claim": "Passing auth=('user','pass') writes the username and password into the request body as two separate form fields."
+      }
+    ],
+    "got": "wrong_model"
+  },
+  {
+    "id": "F5-auth-socket",
+    "expect": "wrong_model",
+    "why": "nothing is sent during preparation; the handler cannot read a challenge",
+    "classification": "confused",
+    "scalar_gap_kind": "wrong_model",
+    "gap_kinds": [
+      "wrong_model"
+    ],
+    "gaps": [
+      {
+        "kind": "wrong_model",
+        "claim": "The auth handler opens the connection first so it can read the server's challenge, and only then decides which credentials to attach."
+      }
+    ],
+    "got": "wrong_model"
+  },
+  {
+    "id": "T1-auth-basicauth",
+    "expect": "right_idea_wrong_altitude",
+    "why": "true of HTTPBasicAuth specifically; offered as the general contract",
+    "classification": "partial",
+    "scalar_gap_kind": "right_idea_wrong_altitude",
+    "gap_kinds": [
+      "right_idea_wrong_altitude"
+    ],
+    "gaps": [
+      {
+        "kind": "right_idea_wrong_altitude",
+        "claim": "The auth parameter directly sets the Authorization header via _basic_auth_str()."
+      }
+    ],
+    "got": "right_idea_wrong_altitude"
+  },
+  {
+    "id": "T2-auth-contentlength",
+    "expect": "right_idea_wrong_altitude",
+    "why": "prepare_auth really does end there; it is not what the auth parameter means",
+    "classification": "off-topic",
+    "scalar_gap_kind": "no_attempt",
+    "gap_kinds": [],
+    "gaps": [],
+    "got": null
+  },
+  {
+    "id": "T3-aima-depthline",
+    "expect": "right_idea_wrong_altitude",
+    "why": "the line is real; it is not what a Node holds beyond a bare state",
+    "classification": "confused",
+    "scalar_gap_kind": "wrong_model",
+    "gap_kinds": [
+      "wrong_model"
+    ],
+    "gaps": [
+      {
+        "kind": "wrong_model",
+        "claim": "The distinguishing feature of a Node compared to a bare state is the depth field computation."
+      }
+    ],
+    "got": "wrong_model"
+  },
+  {
+    "id": "T4-aima-listcomp",
+    "expect": "right_idea_wrong_altitude",
+    "why": "an accurate quote of the body, offered instead of what solution() gives you",
+    "classification": "partial",
+    "scalar_gap_kind": "right_idea_wrong_altitude",
+    "gap_kinds": [],
+    "gaps": [],
+    "got": null
+  }
+]

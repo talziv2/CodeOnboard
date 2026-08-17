@@ -1,0 +1,223 @@
+{
+  "ac1": [
+    {
+      "case": "aimacode/aima-python \u2014 the original trace",
+      "node": "435e4fc4",
+      "objective": "Explain what a Node holds that a bare state does not \u2014 the parent pointer chain, the action that produced this node, the accumulated path_cost, and the depth \u2014 and how node.solution() uses the parent chain to reconstruct the ordered action sequence from root to goal. Explain also that node.path_cost holds the total cost, so you do not need to recompute it after search returns.",
+      "original_prompt": "A search function hands you a goal Node. Describe what that Node carries beyond the raw state, when each of those values is set, and what you get back when you call solution() on it.",
+      "step1": {
+        "classification": "partial",
+        "gap_kind": "wrong_model",
+        "gaps": [
+          {
+            "id": "880bef21",
+            "kind": "wrong_model",
+            "claim": "path_cost and depth are recalculated later by the search algorithm rather than during expansion."
+          },
+          {
+            "id": "c30e7c7b",
+            "kind": "wrong_model",
+            "claim": "solution() collects both the states and actions stored in each Node and returns these in reverse order."
+          }
+        ],
+        "distinct_ids": 2,
+        "distinct_claims": 2
+      },
+      "step2": {
+        "action": "reteach",
+        "targets": [
+          "880bef21",
+          "c30e7c7b"
+        ],
+        "collapsed": false,
+        "lesson": {
+          "setup": "You said that `path_cost` and `depth` are 'recalculated later by the search algorithm rather than during expansion.' This is plausible: the search algorithm does call `expand()`, so it feels like the algorithm is doing all the heavy lifting. But look at `child_node()`: it receives `next_state` and an `action`, then immediately computes `path_cost` by calling `problem.path_cost(self.path_cost, self.state, action, next_state)`. That computation happens *right then*, during the creation of the child Node \u2014 before the search algorithm gets it back. The new Node is constructed with `path_cost` as a parameter, not as a field filled in later. Similarly, `depth` is set in `__init__` as `parent.depth + 1` if there's a parent. Both are set the moment the Node is born.\n\nYou also said `solution()` 'collects both the states and actions' and 'returns these in reverse order.' Look at the actual code: `solution()` returns `[node.action for node in self.path()[1:]]`. It extracts only `node.action` from each node \u2014 no state. And `path()[1:]` skips the root (which has `action=None`) and returns nodes in forward order (root to goal), not reversed. The reversal in `path()` puts the list in the right order; `solution()` then takes a slice of that.",
+          "prompt": "Look at the `child_node` method and the `__init__` method. When is `path_cost` assigned a value, and what assigns it? Look at `solution()`. What does the list comprehension extract from each node, and in what order does `path()[1:]` give them to you?",
+          "reveal": "**When values are set:** `path_cost` and `depth` are both assigned during Node construction, *not* recalculated later. In `child_node()`, line 4 shows the new Node being created with `path_cost` computed immediately from the problem's cost function. In `__init__`, `depth` is set to `0` if there is no parent, or to `parent.depth + 1` if there is one \u2014 both happen at birth. The search algorithm receives a fully-formed Node; it does not fill in these fields afterward.\n\n**What solution() returns:** `solution()` returns *only actions*, not states. The list comprehension `[node.action for node in self.path()[1:]]` pulls out the `action` field of each node, and `[1:]` skips the root node (whose `action` is `None`). The `path()` method already reverses the backward chain into forward order, so `solution()` gets them root-to-goal without reversing again.",
+          "why_now": "You reasoned through the Node class carefully \u2014 you traced the parent chain and understood how solution() works backward \u2014 but two details about timing and output got inverted. Both stem from conflating 'what gets stored' with 'when it gets stored' and 'what path() returns' with 'what solution() returns'.",
+          "takeaway": "A Node is immutable once created: all four fields (`state`, `parent`, `action`, `path_cost`, and `depth`) are set in `__init__` or computed from the parent immediately. When you expand a node, you get back a fully-realized child with no deferred setup. When you ask for a solution, you get the ordered sequence of *actions* that the search took, reconstructed by walking the parent chain.",
+          "ownership": "You did the hard part \u2014 following the parent pointers and understanding why `solution()` works backward from the goal. These two details are the implementation overhead that makes that logic possible; catching them now means you own the whole Node contract.",
+          "expected_answer": "A goal Node carries the parent pointer chain (set during creation and immutable), the action that produced it (set in `__init__`), the path_cost computed from the problem's cost function (set in `child_node()` during expansion), and the depth calculated from the parent's depth (set in `__init__`). When you call `solution()` on it, it walks the parent chain from goal to root via `path()`, which reverses the chain into forward order, then extracts only the actions (skipping the root, which has no action), and returns them as an ordered list from root to goal.",
+          "prompt_kind": "predict-then-reveal",
+          "walkthrough": "You said that `path_cost` and `depth` are 'recalculated later by the search algorithm rather than during expansion.' This is plausible: the search algorithm does call `expand()`, so it feels like the algorithm is doing all the heavy lifting. But look at `child_node()`: it receives `next_state` and an `action`, then immediately computes `path_cost` by calling `problem.path_cost(self.path_cost, self.state, action, next_state)`. That computation happens *right then*, during the creation of the child Node \u2014 before the search algorithm gets it back. The new Node is constructed with `path_cost` as a parameter, not as a field filled in later. Similarly, `depth` is set in `__init__` as `parent.depth + 1` if there's a parent. Both are set the moment the Node is born.\n\nYou also said `solution()` 'collects both the states and actions' and 'returns these in reverse order.' Look at the actual code: `solution()` returns `[node.action for node in self.path()[1:]]`. It extracts only `node.action` from each node \u2014 no state. And `path()[1:]` skips the root (which has `action=None`) and returns nodes in forward order (root to goal), not reversed. The reversal in `path()` puts the list in the right order; `solution()` then takes a slice of that.\n\n**When values are set:** `path_cost` and `depth` are both assigned during Node construction, *not* recalculated later. In `child_node()`, line 4 shows the new Node being created with `path_cost` computed immediately from the problem's cost function. In `__init__`, `depth` is set to `0` if there is no parent, or to `parent.depth + 1` if there is one \u2014 both happen at birth. The search algorithm receives a fully-formed Node; it does not fill in these fields afterward.\n\n**What solution() returns:** `solution()` returns *only actions*, not states. The list comprehension `[node.action for node in self.path()[1:]]` pulls out the `action` field of each node, and `[1:]` skips the root node (whose `action` is `None`). The `path()` method already reverses the backward chain into forward order, so `solution()` gets them root-to-goal without reversing again."
+        }
+      },
+      "step3": {
+        "question": "Suppose a search algorithm calls `expand()` on a node with `path_cost=10` and `depth=2`, creating a child node via `child_node()` with an action that costs 3. What will that child node's `path_cost` and `depth` be immediately after `child_node()` returns, before any other code runs?",
+        "targets": [
+          "880bef21"
+        ],
+        "identical_to_original": false
+      },
+      "step4": {
+        "resolved": [
+          "880bef21"
+        ],
+        "unresolved": [
+          "c30e7c7b"
+        ],
+        "rationale": "The answer decisively resolves the first belief but completely omits any discussion of the second.",
+        "statuses": {
+          "880bef21": "verified",
+          "c30e7c7b": "open"
+        },
+        "survivors": [
+          {
+            "id": "c30e7c7b",
+            "claim": "solution() collects both the states and actions stored in each Node and returns these in reverse order.",
+            "blocking": true
+          }
+        ]
+      },
+      "step5": {
+        "understanding_state": "partial",
+        "understanding": "unresolved",
+        "gaps_blocking": 1,
+        "gaps_verified": 1,
+        "state_matches_latest_answer": true
+      },
+      "checks": {
+        "two_distinct_gaps": true,
+        "remediation_addressed_targets": true,
+        "verification_is_fresh": true,
+        "exactly_one_closed": true,
+        "a_survivor_remains_open": true,
+        "survivor_is_nameable": true,
+        "node_not_understood": true,
+        "reason_available": true
+      },
+      "verdict": "PASS"
+    },
+    {
+      "case": "psf/requests \u2014 the auth parameter forms",
+      "node": "b50c4cad",
+      "objective": "I can explain the three forms the auth parameter accepts \u2014 a (user, pass) tuple, an AuthBase subclass instance (e.g. HTTPBasicAuth, HTTPDigestAuth), or any callable with the same signature \u2014 and I know that a tuple is automatically promoted to HTTPBasicAuth internally, so passing a tuple and passing HTTPBasicAuth('u','p') produce exactly the same Authorization header.",
+      "original_prompt": "Look at the `prepare_auth()` method. If a developer passes `auth=('alice', 'secret')` to `requests.get()`, what code path does that tuple take in `prepare_auth()`, and what does the final `auth_handler(self)` call actually invoke? How would it differ if they passed `auth=HTTPBasicAuth('alice', 'secret')` instead?",
+      "step1": {
+        "classification": "confused",
+        "gap_kind": "wrong_model",
+        "gaps": [
+          {
+            "id": "e9afcf18",
+            "kind": "wrong_model",
+            "claim": "When a tuple is passed as auth, requests sends the username and password as separate fields in the request body."
+          },
+          {
+            "id": "d9a610a1",
+            "kind": "wrong_model",
+            "claim": "HTTPBasicAuth encodes credentials into a header, while tuples use a different mechanism (request body fields), so the two produce different requests."
+          },
+          {
+            "id": "6a50485f",
+            "kind": "wrong_model",
+            "claim": "The auth handler opens the connection itself so it can read the server's challenge before deciding what to send."
+          }
+        ],
+        "distinct_ids": 3,
+        "distinct_claims": 3
+      },
+      "step2": {
+        "action": "reteach",
+        "targets": [
+          "e9afcf18",
+          "d9a610a1",
+          "6a50485f"
+        ],
+        "collapsed": false,
+        "lesson": {
+          "setup": "You believed that when a tuple like `('alice', 'secret')` is passed as auth, requests sends those credentials as separate fields in the request body \u2014 a different path than HTTPBasicAuth takes. This is plausible: many HTTP clients have multiple authentication mechanisms, and it's reasonable to think a tuple might be a shorthand for one of them. But look at lines 5\u20136 of `prepare_auth()`: the moment a 2-tuple arrives, it is immediately converted into an HTTPBasicAuth object. There is no separate code path for tuples. And when `auth_handler(self)` is called on line 12, whether it started as a tuple or was passed directly as HTTPBasicAuth, it invokes the same `__call__` method \u2014 the one defined at line 28 of the HTTPBasicAuth class \u2014 which sets a single Authorization header. No body fields, no connection opening, no server challenge reading. One path, one outcome.",
+          "prompt": "Trace the exact code path for `auth=('alice', 'secret')` through `prepare_auth()` down to the moment the Authorization header is written. Then trace it again for `auth=HTTPBasicAuth('alice', 'secret')`. What is the first difference you encounter?",
+          "reveal": "There is no difference. Both paths converge at line 6: the tuple is unpacked into HTTPBasicAuth, so both branches assign the same type of object to `auth_handler`. Then both call `auth_handler(self)` on line 12, which invokes HTTPBasicAuth's `__call__` method. That method \u2014 the only code that actually modifies the request \u2014 calls `_basic_auth_str()` and assigns the result to `r.headers['Authorization']`. It modifies headers, not the body. It does not open a connection or await a challenge. This is what 'tuples are automatically promoted to HTTPBasicAuth internally' means: the library normalizes tuples to their equivalent AuthBase instance before doing anything else, guaranteeing identical Authorization headers in both cases.",
+          "why_now": "You reasoned carefully about what you saw, but your mental model of how tuple auth works in requests differs from the implementation. The code shows something different from what you concluded, and pinpointing that gap will fix all three of your answers at once.",
+          "takeaway": "When you see a conditional that branches on the type of input (line 5), always follow both branches to see if they converge. If they do \u2014 if both lead to the same object type or the same method call \u2014 then the difference you're predicting is not there. The code is your source of truth for what actually happens, not what seems like it should happen based on the different input forms.",
+          "ownership": "You read the code and formed a clear hypothesis. That's the right instinct. The gap is that you didn't trace what the code does after the branch \u2014 you stopped at 'tuple gets handled differently' without checking whether it really does or whether that difference matters downstream.",
+          "expected_answer": "Both `('alice', 'secret')` and `HTTPBasicAuth('alice', 'secret')` follow the same code path: the tuple is converted to HTTPBasicAuth on line 6, then both invoke HTTPBasicAuth's `__call__` method on line 12, which sets the Authorization header in a single line (line 29). They produce identical Authorization headers and identical requests.",
+          "prompt_kind": "predict-then-reveal",
+          "walkthrough": "You believed that when a tuple like `('alice', 'secret')` is passed as auth, requests sends those credentials as separate fields in the request body \u2014 a different path than HTTPBasicAuth takes. This is plausible: many HTTP clients have multiple authentication mechanisms, and it's reasonable to think a tuple might be a shorthand for one of them. But look at lines 5\u20136 of `prepare_auth()`: the moment a 2-tuple arrives, it is immediately converted into an HTTPBasicAuth object. There is no separate code path for tuples. And when `auth_handler(self)` is called on line 12, whether it started as a tuple or was passed directly as HTTPBasicAuth, it invokes the same `__call__` method \u2014 the one defined at line 28 of the HTTPBasicAuth class \u2014 which sets a single Authorization header. No body fields, no connection opening, no server challenge reading. One path, one outcome.\n\nThere is no difference. Both paths converge at line 6: the tuple is unpacked into HTTPBasicAuth, so both branches assign the same type of object to `auth_handler`. Then both call `auth_handler(self)` on line 12, which invokes HTTPBasicAuth's `__call__` method. That method \u2014 the only code that actually modifies the request \u2014 calls `_basic_auth_str()` and assigns the result to `r.headers['Authorization']`. It modifies headers, not the body. It does not open a connection or await a challenge. This is what 'tuples are automatically promoted to HTTPBasicAuth internally' means: the library normalizes tuples to their equivalent AuthBase instance before doing anything else, guaranteeing identical Authorization headers in both cases."
+        }
+      },
+      "step3": {
+        "question": "You call `requests.post('http://example.com', auth=('bob', 'pass123'))` and inspect the resulting request. Where would you expect to find 'bob' and 'pass123' \u2014 in the Authorization header, in the request body, or both? Explain what happens to the tuple before the header is set.",
+        "targets": [
+          "e9afcf18"
+        ],
+        "identical_to_original": false
+      },
+      "step4": {
+        "resolved": [
+          "e9afcf18",
+          "d9a610a1"
+        ],
+        "unresolved": [
+          "6a50485f"
+        ],
+        "rationale": "The answer decisively resolves the two beliefs about tuple versus header encoding, but does not touch on how the auth handler is actually invoked during the request process.",
+        "statuses": {
+          "e9afcf18": "verified",
+          "d9a610a1": "verified",
+          "6a50485f": "open"
+        },
+        "survivors": [
+          {
+            "id": "6a50485f",
+            "claim": "The auth handler opens the connection itself so it can read the server's challenge before deciding what to send.",
+            "blocking": true
+          }
+        ]
+      },
+      "step5": {
+        "understanding_state": "failed",
+        "understanding": "unresolved",
+        "gaps_blocking": 1,
+        "gaps_verified": 2,
+        "state_matches_latest_answer": true
+      },
+      "checks": {
+        "two_distinct_gaps": true,
+        "remediation_addressed_targets": true,
+        "verification_is_fresh": true,
+        "exactly_one_closed": true,
+        "a_survivor_remains_open": true,
+        "survivor_is_nameable": true,
+        "node_not_understood": true,
+        "reason_available": true
+      },
+      "verdict": "PASS"
+    }
+  ],
+  "ac2": [
+    {
+      "case": "aimacode/aima-python \u2014 the original trace",
+      "identical_to_original": false,
+      "still_holding_caught": true,
+      "rationale": "The answer directly contradicts the learning objective by restating the false belief that was being corrected, showing no understanding that child_node() itself computes these values immediately.",
+      "verdict": "PASS"
+    },
+    {
+      "case": "psf/requests \u2014 the auth parameter forms",
+      "identical_to_original": false,
+      "still_holding_caught": true,
+      "rationale": "The answer demonstrates the developer still holds the original false belief about how tuple auth is handled.",
+      "verdict": "PASS"
+    }
+  ],
+  "collapsed": {
+    "claims": 5,
+    "action": "reteach",
+    "collapsed": true,
+    "targets": 5,
+    "words": 442,
+    "lesson": {
+      "setup": "The confusion centers on *when and how* a Node gets its fields. You may have reasoned that because search algorithms score and rank nodes, the heuristic values must come from expand() \u2014 but expand() only creates the bare Node objects. You may have thought path_cost and depth are 'finalized' by the algorithm after creation \u2014 but look at `__init__`: they are set *right then*, not patched in later. And you may have thought the parent pointer is assigned by the frontier (the queue) \u2014 but it's passed directly into Node's constructor by `child_node()`, which receives it as an argument and hands it straight to `__init__` as `parent=self`. The `child_node()` method does *not* mutate anything; it creates a fresh Node object for the next state.",
+      "prompt": "Trace through what happens when `child_node()` is called on a parent Node. Explain: (1) What four pieces of information does the *new* Node receive in its constructor, and which one comes from the parent Node's reference (not from the problem)? (2) Why can you call `node.path_cost` on a goal Node without recomputing anything? (3) Demonstrate with a concrete example (like moving from state A to state B with cost 5, where A has path_cost=10) what path_cost value the child node receives, and show that it was decided at construction time, not later.",
+      "reveal": "The root insight: a Node is *immutable once created*. Its parent pointer, path_cost, and depth are all set inside `__init__` \u2014 they do not change afterward. When `child_node()` runs, it calls `Node(next_state, self, action, problem.path_cost(...))`. That `self` is passed as the `parent` argument \u2014 the parent pointer is set by the constructor, not by the frontier. The `path_cost` argument is computed *once* by `problem.path_cost(self.path_cost, ...)`, which adds the step cost to the cumulative cost the parent already holds. The `depth` is computed as `parent.depth + 1`, also at construction time. No search algorithm rescores or fills in these fields later. `solution()` works because `path()` follows the parent chain backward from goal to root, then reverses it \u2014 the chain exists and is correct because every Node was built with the right parent reference. The path_cost on the goal Node is already the total cost; you do not need to sum anything.",
+      "why_now": "You built a mental model of Node construction and expansion, but several parts of it were backward or inverted \u2014 the parent pointer flows from child to parent (not the other way), path_cost and depth are *set at creation* (not filled in later), and child_node() *creates new objects* (it doesn't mutate). These are plausible because search trees *do* have phases, and it's easy to confuse when data flows into or out of a Node.",
+      "takeaway": "A Node is self-contained at birth. The constructor receives the parent Node (not a parent index or marker), and immediately chains itself into the tree. The path_cost and depth are not placeholders \u2014 they are the true values, inherited from the parent and incremented once. The frontier and search algorithm never reach into a Node to recompute these fields. Extraction of the solution is just following the chain and reading what was set long ago.",
+      "ownership": "This is about the flow of information through a search: data moves *down* the tree at construction time (parent to child), and the solution is extracted by moving *up* the chain at the end. You reasoned as if some fields were assigned *after* the tree was built, or that the frontier assigns the parent \u2014 but the code shows the opposite: parentage and cost are locked in the moment child_node() calls the constructor.",
+      "expected_answer": "The child node receives (1) next_state (computed by problem.result), (2) self (the parent Node reference, passed directly), (3) action (the action taken), and (4) the *cumulative* path_cost (computed as problem.path_cost(self.path_cost, ...), which adds the step cost to what the parent already had). Because path_cost is set at construction, the goal Node holds the total cost from root to goal, and solution() can simply walk the parent chain and collect the action from each node (skipping the root, which has action=None).",
+      "prompt_kind": "predict-then-reveal",
+      "walkthrough": "The confusion centers on *when and how* a Node gets its fields. You may have reasoned that because search algorithms score and rank nodes, the heuristic values must come from expand() \u2014 but expand() only creates the bare Node objects. You may have thought path_cost and depth are 'finalized' by the algorithm after creation \u2014 but look at `__init__`: they are set *right then*, not patched in later. And you may have thought the parent pointer is assigned by the frontier (the queue) \u2014 but it's passed directly into Node's constructor by `child_node()`, which receives it as an argument and hands it straight to `__init__` as `parent=self`. The `child_node()` method does *not* mutate anything; it creates a fresh Node object for the next state.\n\nThe root insight: a Node is *immutable once created*. Its parent pointer, path_cost, and depth are all set inside `__init__` \u2014 they do not change afterward. When `child_node()` runs, it calls `Node(next_state, self, action, problem.path_cost(...))`. That `self` is passed as the `parent` argument \u2014 the parent pointer is set by the constructor, not by the frontier. The `path_cost` argument is computed *once* by `problem.path_cost(self.path_cost, ...)`, which adds the step cost to the cumulative cost the parent already holds. The `depth` is computed as `parent.depth + 1`, also at construction time. No search algorithm rescores or fills in these fields later. `solution()` works because `path()` follows the parent chain backward from goal to root, then reverses it \u2014 the chain exists and is correct because every Node was built with the right parent reference. The path_cost on the goal Node is already the total cost; you do not need to sum anything."
+    },
+    "claims_touched": 5
+  }
+}

@@ -25,6 +25,35 @@ make it pass. See [`evidence/m10-acceptance/`](evidence/m10-acceptance/README.md
 | **M10** Acceptance + live E2E | ✅ **done, with one honest qualification.** AC2 passes **live on both repositories**; AC1 passes reproducibly on `psf/requests` (2/2) and on **1 of 4 samples** on `aimacode/aima-python`. The shortfall is detection variance on one subtle claim (3/4) plus its classification as *non-blocking* (2 of 3 detections) — **not** a loss of gap data: in every run, failures included, every detected gap was persisted, named, and survived. Deferred limitations probed: the >3 collapsed re-teach works; the M5 sectioning residue persists and was judged, not tuned. M2 gate: 46/48 classification (bottom of the measured band), 46/48 `gap_kind` (**above** baseline 45), `missing_prereq` 6/6. Evidence: [`evidence/m10-acceptance/`](evidence/m10-acceptance/README.md) |
 
 
+**A Grader follow-up after M10, and it was not an AC1 fix.** The question asked
+was general: *should a claim that is false regardless of abstraction level ever
+be `right_idea_wrong_altitude`?* Both definitions already said no ("the substance
+is right"; "true of the implementation but false as a statement about
+responsibility") — neither said what to do when **neither reading is true**, and
+that silence was the defect.
+
+Measured two ways. The 28 altitude gaps recorded across the whole phase are
+**27 legitimate, 1 outlier** — the FastAPI `api_route` family is a granularity
+error whose coarse claim is true, the `prepare_content_length` family is
+true-of-the-implementation and wrong in scope. That is a borderline judgement,
+not a measurement, so a controlled probe of nine authored claims with fixed
+ground truth was run: **3 of 10 false-at-every-level claims leaked into the
+altitude kind, reproducibly.** It matters because altitude is **non-blocking** —
+such a belief never blocks `understood` and is never verified.
+
+Corrected with one clause that adds no new concept ("IT HAS TO BE TRUE AT SOME
+LEVEL … if there is none it is `wrong_model`"), in the addendum only, so
+flag-off is untouched. **Leakage 3/10 → 0/10. Gate 47/48 classification and
+47/48 `gap_kind`** — the best `gap_kind` recorded, against a baseline of 45 —
+with **all six `wrong_altitude` calibration cases still classified as altitude**,
+which was the side-effect that mattered: the kind was sharpened, not collapsed.
+
+AC1 on AIMA moved 1/4 → 2/3 **as a side-effect, and the M10 record above
+stands.** The classification half of that shortfall is now fixed (when the second
+claim is detected it is `wrong_model` 3/3); what remains is detection variance,
+which is a different limitation and still open.
+Evidence: [`evidence/altitude-boundary/`](evidence/altitude-boundary/README.md).
+
 **M10: what the acceptance run actually proved, and what it did not.**
 AC2 passes live on both repositories, both halves — including the half no
 assertion can carry: an authored answer that still holds the misconception was
