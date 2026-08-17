@@ -206,3 +206,85 @@ stages that are still changing.
 ---
 
 <!-- Append the next entry below this line. Do not edit entries above it. -->
+
+## Baseline 2 — after the gap model (M1–M6)
+
+**Date:** 2026-08-18 · **Harness:** `scripts/measure_cost.py` ·
+`CODEONBOARD_CURRICULUM=1`, **`CODEONBOARD_GAPS=1`** · `psf/requests`,
+`understand_architecture`, `code_depth: working`, 12-unit projection.
+Raw: [`m6-verification/cost-measurement.json`](m6-verification/cost-measurement.json)
+and [`m6-verification/cost-verification.json`](m6-verification/cost-verification.json).
+
+Required by [`gap-model.md` §7](../gap-model.md#7-cost--this-phase-increases-it):
+verification adds calls per gap, so Baseline 1 could not survive M6 unchanged.
+
+| | Baseline 1 | Baseline 2 | Δ |
+|---|---|---|---|
+| planning (B3) | $0.3018 | **$0.3170** | +5.0% |
+| happy-path unit | $0.008619 | **$0.011942** | **+38.6%** |
+| 12-unit warm session | $0.4053 | **$0.4603** | **+13.6%** |
+| verification, per gap closed | — | **$0.0042** | new |
+
+**Per stage:**
+
+| stage | in | out | cache write | cache read | cost |
+|---|---|---|---|---|---|
+| `goal_investigation` | 595 | 15,136 | **60,054** | 336,396 | $0.1850 |
+| `mentor` (B3) | 22,173 | 4,368 | 0 | 0 | $0.1320 |
+| lesson (per unit) | 4,752 | 718 | 0 | 0 | $0.008342 |
+| grade (per answer) | 2,770 | 166 | 0 | 0 | $0.003600 |
+| verification question | 2,226 | 67 | 0 | 0 | $0.002561 |
+| verification grading (1 gap open) | 858 | 151 | 0 | 0 | $0.001613 |
+| verification grading (3 gaps open) | 957 | 289 | 0 | 0 | $0.002402 |
+
+### What the gap model is actually responsible for
+
+**Grading, and only grading: +$0.00186 per answer (+107%).** Input went
+1,367 → 2,770 tokens. That +1,403 is `_GAPS_ADDENDUM` plus M3's open-gap
+section, measured rather than estimated; output rose 74 → 166 because the call
+now emits a `gaps` array. Over 12 units that is **+$0.022**, and it is the
+honest price of detecting several misconceptions instead of one.
+
+**Verification: $0.0042 per gap closed** — and the shape matters more than the
+number. A cycle is one question ($0.00256) plus one grading ($0.00161), aimed at
+**one** gap (§18.7), so a node with k open gaps costs k cycles. **Verification
+scales with gaps detected, not with units taught.** Grading grows with how many
+gaps are *open* (+49% from 1 to 3, because all of them are listed so silence
+about any is visible); the question is flat.
+
+Realistic additions to a 12-unit journey: 1 gap **+$0.004**, 3 gaps
+**+$0.013**, 6 gaps **+$0.025**.
+
+### What it is NOT responsible for — stated so it is not blamed later
+
+**The lesson grew +1,460 input tokens (+21% cost) and no gap-model change
+touches it.** Teaching's main prompt is untouched by M2–M6; output was 718 both
+runs. Unattributed, and it is the larger of the two per-unit rises. Candidates:
+the concurrent two-measure progress work, a different `render`/source slice, or
+run variance. **This needs attributing before any per-unit optimisation, because
+it is currently being carried in a total that looks like the gap model's.**
+
+**Planning rose +5%** on a +33% planner input (16,635 → 22,173) against a
+*smaller* output. Different dossier, not a gap-model change.
+
+### One measurement defect fixed, with a consequence
+
+`summarise()` now records `cache_write`, which `cost_of()` always billed. Baseline
+1's figure had to be **reconstructed by arithmetic** as ~31,512; measured
+directly here it is **60,054** — nearly double. Both baselines still reconcile to
+their recorded totals, so neither number is wrong, but the reconstruction was a
+coincidence of one run and must not be used as a comparison point. Cache write is
+the **largest input line in the investigation**, so this mattered.
+
+### Verdict against the target
+
+$0.46 warm against a $0.10 target — **4.6× over**, up from 4.1×. The gap model
+made the system more expensive on purpose: it detects several misconceptions,
+remediates each, and verifies closure, and none of that was in Baseline 1.
+[`cost-optimization.md`](../cost-optimization.md) §1.4's arithmetic is unchanged
+by this and its conclusion is reinforced: ≤$0.10 is unreachable without at least
+one Tier C decision.
+
+**Not established:** one run, one goal, one repository, no repeats — the same
+limitation Baseline 1 records. The Reviewer is still unmeasured, and it runs for
+this goal type.

@@ -1,0 +1,286 @@
+{
+  "curriculum_flag": "1",
+  "repo": "https://github.com/psf/requests",
+  "goal": {
+    "primary_goal": "understand how a request travels from the public API to the wire",
+    "goal_type": "understand_architecture",
+    "focus_area": "the request lifecycle",
+    "code_depth": "working",
+    "depth": "moderate",
+    "target_repo": "https://github.com/psf/requests",
+    "familiarity": "Skimmed the README or docs",
+    "background": "5 years of Python, some Django"
+  },
+  "units_planned": 16,
+  "pricing_usd_per_mtok": {
+    "claude-haiku-4-5": [
+      1.0,
+      5.0
+    ],
+    "claude-sonnet-4-6": [
+      3.0,
+      15.0
+    ]
+  },
+  "planning": {
+    "repo_survey": {
+      "calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_read": 0,
+      "cache_write": 0,
+      "cost_usd": 0,
+      "seconds": 0,
+      "wall_seconds": 0.1,
+      "models": []
+    },
+    "documentation": {
+      "calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_read": 0,
+      "cache_write": 0,
+      "cost_usd": 0,
+      "seconds": 0,
+      "wall_seconds": 0.1,
+      "models": []
+    },
+    "goal_investigation": {
+      "calls": 21,
+      "input_tokens": 595,
+      "output_tokens": 15136,
+      "cache_read": 336396,
+      "cache_write": 60054,
+      "cost_usd": 0.184982,
+      "seconds": 135.0,
+      "wall_seconds": 135.0,
+      "models": [
+        "claude-haiku-4-5"
+      ]
+    },
+    "mentor (flag=0, pre-B3)": {
+      "calls": 1,
+      "input_tokens": 21264,
+      "output_tokens": 2698,
+      "cache_read": 0,
+      "cache_write": 0,
+      "cost_usd": 0.104262,
+      "seconds": 48.4,
+      "wall_seconds": 48.4,
+      "models": [
+        "claude-sonnet-4-6"
+      ]
+    },
+    "mentor (flag=1, B3)": {
+      "calls": 1,
+      "input_tokens": 22173,
+      "output_tokens": 4368,
+      "cache_read": 0,
+      "cache_write": 0,
+      "cost_usd": 0.132039,
+      "seconds": 72.0,
+      "wall_seconds": 72.0,
+      "models": [
+        "claude-sonnet-4-6"
+      ]
+    }
+  },
+  "scenarios": [
+    {
+      "scenario": "happy_path",
+      "gap_kind": "none",
+      "parts": {
+        "lesson": {
+          "calls": 1,
+          "input_tokens": 4752,
+          "output_tokens": 718,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0.008342,
+          "seconds": 8.7
+        },
+        "grade": {
+          "calls": 1,
+          "input_tokens": 2770,
+          "output_tokens": 166,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0.0036,
+          "seconds": 2.2
+        },
+        "adaptation": {
+          "calls": 0,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0,
+          "seconds": 0
+        }
+      },
+      "total": {
+        "calls": 2,
+        "input_tokens": 7522,
+        "output_tokens": 884,
+        "cost_usd": 0.011942
+      }
+    },
+    {
+      "scenario": "no_attempt_hint",
+      "gap_kind": "no_attempt",
+      "parts": {
+        "lesson": {
+          "calls": 1,
+          "input_tokens": 4752,
+          "output_tokens": 645,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0.007977,
+          "seconds": 8.8
+        },
+        "grade": {
+          "calls": 1,
+          "input_tokens": 2762,
+          "output_tokens": 76,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0.003142,
+          "seconds": 1.3
+        },
+        "adaptation": {
+          "calls": 1,
+          "input_tokens": 485,
+          "output_tokens": 68,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0.000825,
+          "seconds": 1.9
+        }
+      },
+      "total": {
+        "calls": 3,
+        "input_tokens": 7999,
+        "output_tokens": 789,
+        "cost_usd": 0.011944
+      }
+    },
+    {
+      "scenario": "wrong_altitude_followup",
+      "gap_kind": "right_idea_wrong_altitude",
+      "parts": {
+        "lesson": {
+          "calls": 1,
+          "input_tokens": 4752,
+          "output_tokens": 634,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0.007922,
+          "seconds": 8.4
+        },
+        "grade": {
+          "calls": 1,
+          "input_tokens": 2762,
+          "output_tokens": 74,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0.003132,
+          "seconds": 1.6
+        },
+        "adaptation": {
+          "calls": 1,
+          "input_tokens": 441,
+          "output_tokens": 70,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0.000791,
+          "seconds": 1.5
+        }
+      },
+      "total": {
+        "calls": 3,
+        "input_tokens": 7955,
+        "output_tokens": 778,
+        "cost_usd": 0.011845
+      }
+    },
+    {
+      "scenario": "wrong_model_reteach",
+      "gap_kind": "wrong_model",
+      "parts": {
+        "lesson": {
+          "calls": 1,
+          "input_tokens": 4752,
+          "output_tokens": 627,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0.007887,
+          "seconds": 7.9
+        },
+        "grade": {
+          "calls": 1,
+          "input_tokens": 2772,
+          "output_tokens": 178,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0.003662,
+          "seconds": 2.6
+        },
+        "adaptation": {
+          "calls": 1,
+          "input_tokens": 2873,
+          "output_tokens": 708,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0.006413,
+          "seconds": 10.1
+        }
+      },
+      "total": {
+        "calls": 3,
+        "input_tokens": 10397,
+        "output_tokens": 1513,
+        "cost_usd": 0.017962
+      }
+    },
+    {
+      "scenario": "missing_prerequisite",
+      "gap_kind": "missing_prerequisite",
+      "parts": {
+        "lesson": {
+          "calls": 1,
+          "input_tokens": 4752,
+          "output_tokens": 710,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0.008302,
+          "seconds": 8.9
+        },
+        "grade": {
+          "calls": 1,
+          "input_tokens": 2759,
+          "output_tokens": 163,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0.003574,
+          "seconds": 2.2
+        },
+        "adaptation": {
+          "calls": 1,
+          "input_tokens": 6529,
+          "output_tokens": 79,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0.020772,
+          "seconds": 3.4
+        }
+      },
+      "total": {
+        "calls": 3,
+        "input_tokens": 14040,
+        "output_tokens": 952,
+        "cost_usd": 0.032648
+      }
+    }
+  ],
+  "projected_journey_units": 12
+}

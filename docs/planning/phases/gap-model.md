@@ -15,6 +15,21 @@ teeth on a mechanism that has been shown to close them.**
 | **M6** Verification | ✅ **done, AC2 validated live 2026-08-18.** `teaching/verify.py` (`verify` → `VerificationPrompt`, no `reveal`, stored on `gap_state.pending_verification`), `grader/verification.py` (per-gap `resolved` + new gaps; the only producer of `verified`), caps enforced in `decide_all`. 33 tests (1014 total). **AC2 passes**: double dissociation on 2 real nodes (`holding` fails, `corrected` passes, overlap 0.11/0.15 with the original question), and with two gaps open an answer correct about one and silent about the other closed **only** the one it addressed. Evidence: [`evidence/m6-verification/`](evidence/m6-verification/README.md) |
 | M7 – M10 | not started |
 
+**Cost re-measured 2026-08-18 — Baseline 2, the §7 obligation discharged.**
+Recorded in [`evidence/learning-engine-cost.md`](evidence/learning-engine-cost.md).
+Warm 12-unit session **$0.4053 → $0.4603 (+13.6%)**, plus **$0.0042 per gap
+closed**. The gap model owns exactly one line of that: **grading +107%**
+(1,367 → 2,770 input tokens, the M2 addendum plus M3's open-gap section, measured
+not estimated) = +$0.022 over 12 units. Verification's shape is the thing to
+remember — a cycle is aimed at **one** gap, so cost scales with **gaps detected,
+not units taught**: +$0.004 for 1 gap, +$0.013 for 3, +$0.025 for 6.
+
+Two findings recorded against the gap model's name that do **not** belong to it:
+the **lesson** grew +1,460 input tokens (+21%) although no M2–M6 change touches
+Teaching's prompt, and planning rose 5% on a +33% planner input. Both are
+unattributed and flagged — the lesson rise is the larger per-unit movement and is
+currently being carried inside a total that looks like this phase's.
+
 **AC2 is met, and the way it was tested is the part worth keeping.** The property
 §18.7 says no assertion can carry — that a learner still holding the
 misconception cannot answer the question — was tested as a **double

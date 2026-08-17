@@ -1,0 +1,80 @@
+{
+  "session": "a3234f413b024fbfb4242917fa34c173",
+  "gaps_flag": "1",
+  "pricing_usd_per_mtok": {
+    "claude-haiku-4-5": [
+      1.0,
+      5.0
+    ],
+    "claude-sonnet-4-6": [
+      3.0,
+      15.0
+    ]
+  },
+  "verifications": [
+    {
+      "scenario": "verification_1gap",
+      "open_gaps": 1,
+      "parts": {
+        "question": {
+          "calls": 1,
+          "input_tokens": 2226,
+          "output_tokens": 67,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0.002561,
+          "seconds": 4.2
+        },
+        "grade": {
+          "calls": 1,
+          "input_tokens": 858,
+          "output_tokens": 151,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0.001613,
+          "seconds": 2.2
+        }
+      },
+      "total": {
+        "calls": 2,
+        "input_tokens": 3084,
+        "output_tokens": 218,
+        "cost_usd": 0.004174
+      },
+      "resolved": 1,
+      "unresolved": 0
+    },
+    {
+      "scenario": "verification_3gaps",
+      "open_gaps": 3,
+      "parts": {
+        "question": {
+          "calls": 1,
+          "input_tokens": 2226,
+          "output_tokens": 63,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0.002541,
+          "seconds": 1.6
+        },
+        "grade": {
+          "calls": 1,
+          "input_tokens": 957,
+          "output_tokens": 289,
+          "cache_read": 0,
+          "cache_write": 0,
+          "cost_usd": 0.002402,
+          "seconds": 2.6
+        }
+      },
+      "total": {
+        "calls": 2,
+        "input_tokens": 3183,
+        "output_tokens": 352,
+        "cost_usd": 0.004943
+      },
+      "resolved": 2,
+      "unresolved": 1
+    }
+  ]
+}

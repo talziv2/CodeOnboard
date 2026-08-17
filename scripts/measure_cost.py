@@ -63,6 +63,7 @@ from backend.agents.teaching import respond as teaching_respond  # noqa: E402
 from backend.agents.teaching import run as run_teaching  # noqa: E402
 from backend.agents.teaching import verify as teaching_verify  # noqa: E402
 from backend.agents.teaching.agent import _read_node_source  # noqa: E402
+from backend.learning import store as learning_store  # noqa: E402
 from backend.learning.flags import gaps_enabled  # noqa: E402
 from backend.learning.gaps import Gap  # noqa: E402
 from backend.pipeline.runner import (  # noqa: E402
@@ -480,6 +481,7 @@ def report(planning: dict, scenarios: list[dict], journey: int,
     worst = all_happy + sum(d for n, d in adaptations.items() if n != "happy_path")
     print(f"  one of EVERY adaptation             {worst:>9.4f}")
     print(f"\n  target: $0.10/session")
+    report_verification(verifications or [], journey)
 
 
 def main() -> int:
@@ -488,6 +490,13 @@ def main() -> int:
                         help="units in the projected session (calibration mean ~14)")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--out", default="docs/planning/phases/evidence")
+    parser.add_argument(
+        "--verification-only", metavar="SESSION_ID",
+        help="measure ONLY the M6 verification cycles, against a stored session's "
+             "graph instead of planning a fresh one. Planning costs ~$0.32 and "
+             "verification does not depend on it, so re-measuring one should not "
+             "require re-paying for the other.",
+    )
     args = parser.parse_args()
 
     if args.dry_run:
@@ -511,6 +520,38 @@ def main() -> int:
     recorder = RecordingClient(
         anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"], timeout=300.0)
     )
+
+    if args.verification_only:
+        if not gaps_enabled():
+            print("CODEONBOARD_GAPS=1 required", file=sys.stderr)
+            return 2
+        graph = learning_store.load_graph(args.verification_only, learning_store.DEFAULT_DB_PATH)
+        if graph is None:
+            print(f"session {args.verification_only} not found", file=sys.stderr)
+            return 2
+        # A stand-in for a planned state. Verification reads the node, its lesson
+        # and its source — none of which come from the planning run — so a stored
+        # graph serves exactly as well and costs nothing.
+        stub = OnboardState(repo_url=graph.repo_url, goal=dict(graph.goal or GOAL))
+        stub.graph = graph
+        repo_path = clone_repo(graph.repo_url)
+        verifications = []
+        for open_gaps in (1, 3):
+            print(f"verification {open_gaps} open gap(s) ...", flush=True)
+            verifications.append(
+                measure_verification(open_gaps, stub, recorder, repo_path)
+            )
+        report_verification(verifications, args.journey)
+        out = Path(args.out)
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "cost-verification.json").write_text(
+            json.dumps({"session": args.verification_only,
+                        "gaps_flag": "1",
+                        "pricing_usd_per_mtok": PRICING,
+                        "verifications": verifications}, indent=2),
+            encoding="utf-8")
+        print(f"\nwritten: {out / 'cost-verification.json'}")
+        return 0
 
     print("planning ...", flush=True)
     planned, planning = measure_planning(recorder)
@@ -550,6 +591,8 @@ def main() -> int:
         "pricing_usd_per_mtok": PRICING,
         "planning": planning,
         "scenarios": scenarios,
+        "verifications": verifications,
+        "gaps_flag": os.environ.get("CODEONBOARD_GAPS", "0"),
         "projected_journey_units": args.journey,
     }
     (out / "cost-measurement.json").write_text(
