@@ -1,70 +1,136 @@
-# M6 — verification: live validation **NOT YET RUN**
+# M6 / AC2 — verification validated live
 
-**Status: BLOCKED, 2026-08-17.** The probe exists, is wired, and was executed —
-it could not reach the API:
+**Date:** 2026-08-18 · **Probe:** `scripts/verification_probe.py` ·
+**Raw data:** [`verification-cases.json`](verification-cases.json) ·
+8 calls, ≈$0.02, `CODEONBOARD_GAPS=1`.
 
-```
-verification: question generation failed: Error code: 400 —
-'Your credit balance is too low to access the Anthropic API.'
-```
+**Verdict: AC2 PASSES.** Both double dissociations pass, and silence did not
+close a gap.
 
-**No live evidence for M6 exists yet. Nothing in this directory should be read as
-validation, and M6's acceptance criterion is unmet until this probe runs.**
+| case | dissociation | overlap with original |
+|---|---|---|
+| `requests/architecture` — AuthBase contract | **PASS** | 0.11 |
+| `requests/component` — auth parameter forms | **PASS** | 0.15 |
+| silence never closes a gap | **PASS** | — |
 
-The deterministic half of M6 *is* done: 33 tests in
-`tests/test_gap_verification.py`, 1014 passing overall. What those tests cannot
-reach is exactly what this probe is for.
+## What AC2 demanded
 
-## What is owed
-
-**AC2** ([`gap-model.md` §4](../../gap-model.md#4-acceptance-cases--carried-from-the-original-defect))
+[`gap-model.md` §4](../../gap-model.md#4-acceptance-cases--carried-from-the-original-defect)
 requires two things and states plainly that the second cannot be asserted:
 
 > the verification prompt is **not** the original prompt (asserted mechanically),
 > and a learner still holding the misconception **cannot answer it correctly**
 > (judged live — the one property no assertion can carry).
 
-`scripts/verification_probe.py` tests the second as a **double dissociation**,
-with both answers authored before any question was generated:
+The second is tested as a **double dissociation**, with both answers authored
+before any question was generated:
 
-| answer | must be |
+| answer | required | got |
+|---|---|---|
+| `holding` — expresses the false belief | `resolved: false` | false, both cases |
+| `corrected` — the true model, in different words from the lesson | `resolved: true` | true, both cases |
+
+Both halves matter: a question everything fails is impossible, not good. Both
+directions held on both nodes.
+
+## Case 1 — `requests/architecture`, the AuthBase contract
+
+False belief: *"The auth handler opens the connection so it can read the
+server's challenge."*
+
+| | |
 |---|---|
-| `holding` — expresses the false belief | `resolved: false` |
-| `corrected` — states the true model, in different words from the lesson | `resolved: true` |
+| **original** | "The auth handler is given a `PreparedRequest` and must return a `PreparedRequest`. Looking at `prepare_auth()`, describe the line between what the auth handler owns and what it must NOT own…" |
+| **verification** | "Suppose an auth handler needs to add a custom header, but first wants to check what `Content-Length` the request currently has. Should it read `self.headers` and `self.body` from the PreparedRequest it receives, use them to decide what header to add, then return the modified request? Why or why not?" |
 
-Both halves matter. A question that fails everything is not a good question, it
-is an impossible one — so `corrected` failing is as much a defect as `holding`
-passing. Pre-authoring is what makes this evidence rather than a demo: the
-answers cannot be tuned to a question that did not exist when they were written.
+A different situation, not a restatement — content-word overlap **0.11**.
 
-A third case probes the rule §18.7 calls the most important in the whole design:
-with **two** gaps pending, an answer correct about the first and silent about the
-second must close only the first.
+- `holding` → **unresolved.** *"reiterates the original false belief rather than
+  correcting it."*
+- `corrected` → **resolved.** *"auth handlers operate during request
+  preparation, before transmission, and cannot access server responses."*
 
-Known limitation to read for, once it runs: a `holding` answer can be judged
-unresolved for the *wrong reason* — "did not address the question" rather than
-"asserted something false". The probe prints the rationale for every case so the
-two can be told apart, and the distinction must be made by reading rather than
-from the verdict alone.
+## Case 2 — `requests/component`, auth parameter forms
 
-**Also owed and also blocked:** the cost re-measurement M6's build row requires.
-Verification adds model calls per gap, so Baseline 1 does not survive this step
-([`gap-model.md` §7](../../gap-model.md#7-cost--this-phase-increases-it)).
+False belief: *"Tuples passed as auth are sent directly to the server as
+separate fields in the request body."*
 
-## To run it
+| | |
+|---|---|
+| **original** | "If a developer passes `auth=('alice', 'secret')`… what code path does that tuple take in `prepare_auth()`, and what does the final `auth_handler(self)` call actually invoke?" |
+| **verification** | "Suppose a developer modifies `prepare_auth()` to skip the tuple check and just does `auth_handler = auth` directly for all auth values. They then call `requests.get(url, auth=('user', 'pass'))`. What would happen to the request, and why?" |
 
-```bash
-CODEONBOARD_GAPS=1 uv run python scripts/verification_probe.py
-```
+**The strongest question of the three.** It is a counterfactual change to the
+code rather than a question about it, and it cannot be answered without knowing
+that a tuple is *promoted* to `HTTPBasicAuth` — which is precisely the belief
+under test. Overlap **0.15**.
 
-8 calls, ≈$0.02. `--dry-run` lists the cases without spending anything.
+- `holding` → **unresolved.** *"the false belief about tuple handling remains
+  firmly held; the developer has not grasped that tuples are internally promoted
+  to HTTPBasicAuth."*
+- `corrected` → **resolved.** *"tuples are promotional shorthand for
+  HTTPBasicAuth and result in an Authorization header, not request body fields."*
 
-## One thing the blocked run did establish
+## The rationales fail for the RIGHT reason
 
-Incidental, and not a substitute for the above: the failure path behaved
-correctly. `teaching_verify.verify` returned `None`, appended the reason to
-`state.errors`, and left every gap `open` with `verification_attempts` at 0 — so
-an API outage during verification costs the learner nothing and closes nothing.
-That is the behaviour
-`test_a_generation_failure_returns_none_and_never_raises` asserts, observed
-against a real failure rather than a mocked one.
+This was the pre-registered risk: a `holding` answer could be marked unresolved
+because it *did not address the question* rather than because it *asserted
+something false*. Silence and error both produce `resolved: false`, so the
+verdict alone cannot tell them apart, and a pass earned by the first would be
+hollow.
+
+Read: **both are error, not silence.** "Reiterates the original false belief"
+and "the false belief remains firmly held" are both statements about what the
+answer *claimed*. Neither rationale says the answer was off-topic or absent. The
+questions are catching the misconception, not merely failing to be answered.
+
+## Silence never closes a gap
+
+The rule §18.7 calls the most important in the whole design, with **two** gaps
+open and the question aimed at the first:
+
+> "Suppose a custom auth handler calls `requests.post(url, auth=my_handler)`.
+> Inside `my_handler`, you receive a `PreparedRequest` object. At that moment,
+> has the HTTP connection to the server been opened yet, and why does that
+> matter for what your handler can and cannot do?"
+
+The answer addressed connection timing correctly and said **nothing** about what
+the handler returns.
+
+| gap | status | attempts |
+|---|---|---|
+| 1 — "the handler opens the connection…" | **`verified`** | 0 |
+| 2 — "returns a fresh Request object that replaces the original" | **`open`** | 0 |
+
+The Grader named the silence itself: *"correctly resolves the connection-timing
+misconception but **leaves the return-value question unaddressed**."* It did not
+credit gap 2 for an answer that was strong about gap 1 — which is exactly the
+failure the "No evidence is not evidence" instruction exists to prevent.
+
+**The counters are right, including the subtle one.** Gap 2 is at `attempts=0`
+because the question never targeted it: charging it would have burned a budget
+for someone else's question. Gap 1 is also at 0 because it was resolved, and a
+resolved gap is not charged. In the two dissociation cases the `holding` gaps sit
+at `attempts=1` — targeted, unresolved, charged once.
+
+## Observations recorded, not corrected
+
+**Case 1's question is a yes/no with a "why" appended.** `verify.py`'s prompt
+asks for reasoning rather than a yes/no, on the grounds that the second can be
+guessed. Case 1 half-complies: "Should it read `self.headers`…? Why or why not?"
+The trailing *why* is what saved it, and the `holding` answer was caught — but a
+learner could have opened with a correct "yes" and only then revealed the belief.
+Case 2's counterfactual is the shape the prompt is actually asking for.
+
+Recorded rather than fixed. It is one case out of three, the dissociation held,
+and re-wording the prompt to eliminate a shape that *did* work here would be
+tuning against two known nodes — the mistake
+[M5's evidence](../m5-multi-gap-reteach/README.md) exists to warn about. Worth
+watching if yes/no questions recur.
+
+**Not established:** 2 nodes, 1 repository, 1 gap kind (`wrong_model`), one run
+each and no repeats. The `holding` answers are authored, and a real learner's
+restatement would be vaguer — which is the direction that could land in
+"did not address" rather than "asserted false". `missing_prerequisite` and
+`right_idea_wrong_altitude` gaps are unprobed, as is a question generated when a
+gap has already failed verification once.

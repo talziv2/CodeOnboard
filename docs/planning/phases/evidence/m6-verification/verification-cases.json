@@ -1,0 +1,65 @@
+{
+  "cases": [
+    {
+      "node": "7ecc5fe3",
+      "label": "requests/architecture \u2014 AuthBase contract",
+      "claim": "The auth handler opens the connection so it can read the server's challenge.",
+      "original_question": "The auth handler is given a `PreparedRequest` and must return a `PreparedRequest`. Looking at `prepare_auth()`, describe the line between what the auth handler owns (what it must do) and what it must NOT own (what requests itself handles). What does `prepare_auth()` do before calling the handler, during the call, and after?",
+      "verification_question": "Suppose an auth handler needs to add a custom header, but first wants to check what `Content-Length` the request currently has. Should it read `self.headers` and `self.body` from the PreparedRequest it receives, use them to decide what header to add, then return the modified request? Why or why not?",
+      "overlap": 0.111,
+      "verdicts": {
+        "holding": {
+          "resolved": false,
+          "status": "open",
+          "attempts": 1,
+          "rationale": "The answer completely misses the objective and reiterates the original false belief rather than correcting it."
+        },
+        "corrected": {
+          "resolved": true,
+          "status": "verified",
+          "attempts": 0,
+          "rationale": "The developer demonstrates clear understanding that auth handlers operate during request preparation, before transmission, and cannot access server responses\u2014fully resolving the identified misconception about connection management."
+        }
+      },
+      "dissociation_ok": true
+    },
+    {
+      "node": "b50c4cad",
+      "label": "requests/component \u2014 auth parameter forms",
+      "claim": "Tuples passed as auth are sent directly to the server as separate fields in the request body.",
+      "original_question": "Look at the `prepare_auth()` method. If a developer passes `auth=('alice', 'secret')` to `requests.get()`, what code path does that tuple take in `prepare_auth()`, and what does the final `auth_handler(self)` call actually invoke? How would it differ if they passed `auth=HTTPBasicAuth('alice', 'secret')` instead?",
+      "verification_question": "Suppose a developer modifies `prepare_auth()` to skip the tuple check and just does `auth_handler = auth` directly for all auth values. They then call `requests.get(url, auth=('user', 'pass'))`. What would happen to the request, and why?",
+      "overlap": 0.146,
+      "verdicts": {
+        "holding": {
+          "resolved": false,
+          "status": "open",
+          "attempts": 1,
+          "rationale": "The answer demonstrates that the false belief about tuple handling remains firmly held; the developer has not grasped that tuples are internally promoted to HTTPBasicAuth and produce identical Authorization headers."
+        },
+        "corrected": {
+          "resolved": true,
+          "status": "verified",
+          "attempts": 0,
+          "rationale": "The answer demonstrates a correct understanding that tuples are promotional shorthand for HTTPBasicAuth and result in an Authorization header, not request body fields."
+        }
+      },
+      "dissociation_ok": true
+    }
+  ],
+  "silence": {
+    "question": "Suppose a custom auth handler calls `requests.post(url, auth=my_handler)`. Inside `my_handler`, you receive a `PreparedRequest` object. At that moment, has the HTTP connection to the server been opened yet, and why does that matter for what your handler can and cannot do?",
+    "gap_1": {
+      "claim": "The auth handler opens the connection so it can read the server's challenge.",
+      "status": "verified",
+      "attempts": 0
+    },
+    "gap_2": {
+      "claim": "The auth handler returns a fresh Request object that replaces the original one.",
+      "status": "open",
+      "attempts": 0
+    },
+    "ok": true,
+    "rationale": "The answer correctly resolves the connection-timing misconception but leaves the return-value question unaddressed."
+  }
+}
