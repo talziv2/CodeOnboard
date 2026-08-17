@@ -82,7 +82,8 @@ export default function EvidenceDrawer({
               <span
                 aria-hidden
                 className="h-[calc(9rem/16)] w-[calc(9rem/16)] shrink-0 rounded-full border-[1.5px]"
-                style={{ borderColor: style!.stroke, background: style!.fill }}
+                style={{ borderColor: style!.stroke, background: style!.fill,
+                         borderStyle: style!.borderStyle }}
               />
               <span className="text-chalk">{understandingLabel(chain.understanding)}</span>
               {/* The second dimension, stated separately — never folded into
@@ -96,7 +97,24 @@ export default function EvidenceDrawer({
             {/* M7 can hold a unit back although the last answer reached the
                 objective. M9 put gaps on the wire, so the drawer now says WHY
                 rather than only THAT — the reason is named below. */}
-            {!chain.state_matches_latest_answer && (
+            {/* WHY this unit is not demonstrated, in one sentence, from M9's
+                counters (AC12). The drawer already lists the gap claims below;
+                what was missing was the summary line that explains the STATE —
+                "still open" and "you chose not to pursue this" produce the same
+                classification for completely different reasons. */}
+            {chain.understanding === "unresolved" && (
+              <p className="text-[calc(11.5rem/16)] leading-snug text-brass">
+                {chain.verification_pending
+                  ? t.map.whyPendingVerification
+                  : (chain.gaps_waived ?? 0) > 0 && (chain.gaps_open ?? 0) === 0
+                    ? t.map.whyWaived(chain.gaps_waived!)
+                    : (chain.gaps_open ?? 0) > 0
+                      ? t.map.whyOpenGaps(chain.gaps_open!)
+                      : t.map.whyNotYetDemonstrated}
+              </p>
+            )}
+            {chain.understanding !== "unresolved"
+              && !chain.state_matches_latest_answer && (
               <p className="text-[calc(11.5rem/16)] leading-snug text-brass">
                 {t.map.pendingVerification}
               </p>

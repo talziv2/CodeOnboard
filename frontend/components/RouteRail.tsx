@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { GraphNode } from "@/lib/api";
 import type { RouteStop } from "@/lib/graph-layout";
 import { isComplete, isSettled, type RouteSection } from "@/lib/route-sections";
-import { stateStyle, stateLabel } from "@/lib/tags";
+import { understandingStyle, understandingLabel } from "@/lib/tags";
 import { t } from "@/lib/strings";
 
 interface Props {
@@ -63,13 +63,17 @@ function Check() {
 
 /** Pin shape encodes state so the rail stays readable without colour. */
 function Pin({ node, isCurrent }: { node: GraphNode; isCurrent: boolean }) {
-  const style = stateStyle(node.understanding_state);
+  // ONE encoding, shared with the map (M3a.3 AC2). The pin used to be coloured
+  // by raw `understanding_state` while the map coloured the same unit by its
+  // understanding class, so a stop could be amber here and "Needs work" there.
+  const style = understandingStyle(node.understanding ?? "insufficient");
   return (
     <span
       aria-hidden
       className="relative z-10 mt-0.5 block h-[calc(17rem/16)] w-[calc(17rem/16)] shrink-0 rounded-full border-[1.5px] bg-ink"
       style={{
         borderColor: isCurrent ? "var(--color-signal)" : style.stroke,
+        borderStyle: style.borderStyle,
         background: isCurrent ? "var(--color-ink)" : style.fill,
         boxShadow: isCurrent ? "0 0 0 3px var(--color-signal-halo)" : undefined,
       }}
@@ -104,7 +108,10 @@ function Stop({
   onJump: (node: GraphNode) => void;
 }) {
   const { node } = stop;
-  const state = stateLabel(node.understanding_state);
+  // ONE vocabulary. The rail spoke the model's raw words — "partial",
+  // "not started", "needs another pass" — while the map spoke the learner's.
+  // Same unit, two names (M3a.3 AC3).
+  const state = understandingLabel(node.understanding ?? "insufficient");
   return (
     <button
       onClick={() => onJump(node)}
@@ -172,7 +179,7 @@ function Stop({
                 ? t.rail.unresolvedHint
                 : node.disposition === "waived"
                   ? t.rail.setAsideHint
-                  : t.rail.weak
+                  : state
             }
           >
             {/* Three reasons a stop can be unresolved, and they are not the
@@ -184,7 +191,7 @@ function Stop({
               ? t.rail.unresolvedCount(node.gaps!.length)
               : node.disposition === "waived"
                 ? t.rail.setAside
-                : t.rail.markedWeak}
+                : state}
           </span>
         )}
       </span>

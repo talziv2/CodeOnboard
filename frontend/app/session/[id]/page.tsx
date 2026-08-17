@@ -222,7 +222,7 @@ export default function SessionPage() {
             demonstrated. */}
         <span className="flex shrink-0 items-center gap-2.5">
           <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.13em] text-graphite">
-            {t.session.goalReadiness}
+            {t.session.demonstrated}
           </span>
           <span className="h-1 w-20 overflow-hidden rounded-full bg-raise">
             <span
@@ -230,14 +230,19 @@ export default function SessionPage() {
               style={{ width: `${pct}%` }}
             />
           </span>
+          {/* The FRACTION is the number; the percentage is a gloss on it. "47%
+              readiness" sounds like a calibrated prediction, where "7 / 15
+              required objectives demonstrated" is a claim the learner can check
+              against the journey below (M3a.3). */}
           <span
             className="font-mono text-xs tabular-nums text-chalk"
             title={t.map.coreDemonstrated(
-              graph.progress.core_understood,
+              graph.progress.core_demonstrated,
               graph.progress.core_total
             )}
           >
-            {pct}%
+            {graph.progress.core_demonstrated}/{graph.progress.core_total}
+            <span className="text-graphite"> ({pct}%)</span>
           </span>
         </span>
 

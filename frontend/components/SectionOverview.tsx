@@ -3,7 +3,7 @@
 import type { GraphNode } from "@/lib/api";
 import { isStation } from "@/lib/graph-layout";
 import { isSettled, type RouteSection } from "@/lib/route-sections";
-import { stateStyle, stateLabel, tagStyle, tagLabel } from "@/lib/tags";
+import { understandingStyle, understandingLabel, tagStyle, tagLabel } from "@/lib/tags";
 import { t } from "@/lib/strings";
 
 interface Props {
@@ -131,7 +131,7 @@ export default function SectionOverview({
           {section.stops.map((stop) => {
             const { node } = stop;
             const isCurrent = node.id === currentNodeId;
-            const style = stateStyle(node.understanding_state);
+            const style = understandingStyle(node.understanding ?? "insufficient");
             return (
               <li key={node.id}>
                 <button
@@ -144,6 +144,7 @@ export default function SectionOverview({
                     className="mt-[calc(4rem/16)] h-[calc(13rem/16)] w-[calc(13rem/16)] shrink-0 rounded-full border-[1.5px] bg-ink"
                     style={{
                       borderColor: isCurrent ? "var(--color-signal)" : style.stroke,
+                      borderStyle: style.borderStyle,
                       background: isCurrent ? "var(--color-ink)" : style.fill,
                       boxShadow: isCurrent
                         ? "0 0 0 3px var(--color-signal-halo)"
@@ -162,20 +163,16 @@ export default function SectionOverview({
                         {node.title}
                       </span>
                       <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.13em] text-graphite">
-                        {stateLabel(node.understanding_state)}
+                        {understandingLabel(node.understanding ?? "insufficient")}
                       </span>
                       {stop.isPrerequisite && (
                         <span className="font-mono text-[calc(9.5rem/16)] tracking-[0.05em] text-signal">
                           {t.rail.addedAfterConfusion}
                         </span>
                       )}
-                      {/* Current difficulty, not the sticky historical flag —
-                          see RouteRail for the full reasoning. */}
-                      {node.understanding === "unresolved" && (
-                        <span className="font-mono text-[calc(9.5rem/16)] tracking-[0.05em] text-rust">
-                          {t.rail.markedWeak}
-                        </span>
-                      )}
+                      {/* The unit's class, in the one vocabulary. Never
+                          "marked weak": that word came from a sticky flag and
+                          survived recovery (M3a.3 AC3). */}
                     </span>
 
                     <span className="truncate font-mono text-[calc(10.5rem/16)] text-graphite">

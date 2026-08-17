@@ -168,15 +168,22 @@ def test_readiness_empty_graph_is_zero():
     assert g.readiness() == 0.0
 
 
-def test_readiness_counts_partial_as_half_understood():
-    """`partial` is real progress, so readiness scores it at 0.5."""
+def test_readiness_counts_demonstrated_units_only():
+    """RE-POINTED for Model A' (was `..._counts_partial_as_half_understood`).
+
+    `readiness()` is demonstrated coverage: an assessed unit that fell short
+    contributes nothing, because the Understanding Profile calls it *Needs
+    work* and one word cannot mean two things on one screen.
+    """
     g = _make_graph()
     a = g.add_node(_make_node("A"))
     b = g.add_node(_make_node("B"))
     g.add_node(_make_node("C"))
+    g.record_attempt(a.id, "an answer", "understood", "because")
     g.mark_understanding(a.id, "understood")
+    g.record_attempt(b.id, "an answer", "partial", "because")
     g.mark_understanding(b.id, "partial")
-    assert g.readiness() == pytest.approx((1 + 0.5) / 3)
+    assert g.readiness() == pytest.approx(1 / 3)
 
 
 # --- traversal ---
@@ -307,6 +314,7 @@ def test_to_dict_shape():
     b = g.add_node(_make_node("B"))
     g.add_edge(a.id, b.id, kind="sequence")
     g.set_current(a.id)
+    g.record_attempt(a.id, "an answer", "understood", "because")
     g.mark_understanding(a.id, "understood")
     d = g.to_dict()
     assert d["session_id"] == g.session_id

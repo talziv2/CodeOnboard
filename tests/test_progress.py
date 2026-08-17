@@ -32,8 +32,20 @@ def _graph(units: list[tuple[str, str, str]]) -> LearningGraph:
             code_anchor=CodeAnchor(file="a.py", line_start=1, line_end=2),
             lesson_brief={"area_id": area, "priority": priority, "objective": "x"},
         ))
-        node.understanding_state = state
+        # EVIDENCE, not just a state flag. Under Model A′ demonstrated coverage
+        # is defined over `understanding.classify`, which requires an
+        # evidence-bearing assessment — so a fixture that only stamps
+        # `understanding_state` describes a node the profile calls "not yet
+        # assessed", and asserting mastery over it would be asserting exactly
+        # the contradiction this milestone removes.
         if state != "not_started":
+            graph.record_attempt(
+                node.id, "an answer",
+                {"understood": "understood", "partial": "partial",
+                 "failed": "confused"}[state],
+                "because",
+            )
+            node.understanding_state = state
             node.visited = True
         if previous:
             graph.add_edge(previous.id, node.id, kind="sequence")
@@ -100,6 +112,7 @@ class TestPlanMutationNeverLowersGoalReadiness:
         _warm_up(graph, blocked)
         before = progress.goal_readiness(graph)
 
+        graph.record_attempt(blocked, "now I see it", "understood", "because")
         graph.mark_understanding(blocked, "understood")
 
         assert progress.goal_readiness(graph) > before
@@ -169,10 +182,19 @@ class TestEvidenceMayLowerGoalReadiness:
 
         assert progress.goal_readiness(graph) < before
 
-    def test_understanding_withdrawn_to_partial_scores_half(self):
+    def test_understanding_withdrawn_to_partial_loses_the_credit(self):
+        """Model A′: `partial` is not half-demonstrated, it is not demonstrated.
+
+        RE-POINTED from `..._scores_half`. The 0.5 weight credited a unit the
+        Understanding Profile was simultaneously calling *Needs work* — two
+        definitions of "demonstrated" in one view, which is the contradiction
+        M3a.3 removes.
+        """
         graph = _graph([("a1", "required", "understood")])
-        graph.mark_understanding(graph.path_order()[0], "partial")
-        assert progress.goal_readiness(graph) == pytest.approx(0.5)
+        node_id = graph.path_order()[0]
+        graph.record_attempt(node_id, "hmm", "partial", "because")
+        graph.mark_understanding(node_id, "partial")
+        assert progress.goal_readiness(graph) == 0.0
 
 
 # ── goal readiness ────────────────────────────────────────────────────────────
@@ -189,12 +211,21 @@ class TestGoalReadiness:
         ])
         assert progress.goal_readiness(graph) == 1.0
 
-    def test_partial_scores_half(self):
+    def test_partial_earns_nothing(self):
+        """RE-POINTED for Model A′ (was `test_partial_scores_half`, 0.75).
+
+        The unit is assessed and not demonstrated, so it contributes nothing to
+        demonstrated coverage. It is not invisible — it shows as *Needs work* in
+        the profile and in `core_in_progress` beside the headline.
+        """
         graph = _graph([
             ("a1", "required", "understood"),
             ("a1", "required", "partial"),
         ])
-        assert progress.goal_readiness(graph) == 0.75
+        assert progress.goal_readiness(graph) == 0.5
+        summary = progress.summary(graph)
+        assert summary["core_demonstrated"] == 1
+        assert summary["core_in_progress"] == 1
 
     def test_failed_and_not_started_score_nothing(self):
         graph = _graph([
@@ -359,15 +390,22 @@ class TestGraphsWithoutPriority:
                 title=f"n{i}",
                 code_anchor=CodeAnchor(file="a.py", line_start=1, line_end=2),
             ))
-            node.understanding_state = state
+            if state != "not_started":
+                graph.record_attempt(
+                    node.id, "an answer",
+                    {"understood": "understood", "partial": "partial"}[state],
+                    "because")
+                node.understanding_state = state
             if previous:
                 graph.add_edge(previous.id, node.id, kind="sequence")
             previous = node
         return graph
 
     def test_a_missing_priority_counts_as_required(self):
+        # One demonstrated of three required. `partial` earns nothing under
+        # Model A' (was (1 + 0.5) / 3 while it scored half).
         graph = self._bare(["understood", "partial", "not_started"])
-        assert progress.goal_readiness(graph) == pytest.approx((1 + 0.5) / 3)
+        assert progress.goal_readiness(graph) == pytest.approx(1 / 3)
 
     def test_every_unit_is_a_stop(self):
         graph = self._bare(["understood", "not_started"])

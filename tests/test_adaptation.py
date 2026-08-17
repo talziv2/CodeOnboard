@@ -106,8 +106,14 @@ def _graph_with(units: list[tuple[str, str, str]]) -> LearningGraph:
             code_anchor=CodeAnchor(file="a.py", line_start=1, line_end=2),
             lesson_brief={"area_id": area, "priority": priority, "objective": "x"},
         ))
-        node.understanding_state = state
+        # Evidence, not a bare flag: Model A' defines demonstrated coverage
+        # over `understanding.classify`, which needs an assessed answer.
         if state in ("understood", "partial", "failed"):
+            graph.record_attempt(
+                node.id, "an answer",
+                {"understood": "understood", "partial": "partial",
+                 "failed": "confused"}[state], "because")
+            node.understanding_state = state
             node.visited = True
         if previous:
             graph.add_edge(previous.id, node.id, kind="sequence")
@@ -275,12 +281,17 @@ def test_pruning_ahead_never_lowers_progress():
     assert progress.journey_progress(graph) > journey_before
 
 
-def test_partial_still_scores_half():
+def test_partial_earns_no_demonstrated_credit():
+    """RE-POINTED for Model A' (was `test_partial_still_scores_half`, 0.75).
+
+    An assessed unit that fell short is not half-demonstrated; it is not
+    demonstrated. It stays visible as *Needs work* in the profile.
+    """
     graph = _graph_with([
         ("a1", "required", "understood"),
         ("a1", "required", "partial"),
     ])
-    assert graph.readiness() == 0.75
+    assert graph.readiness() == 0.5
 
 
 def test_a_graph_of_only_optional_units_does_not_divide_by_zero():

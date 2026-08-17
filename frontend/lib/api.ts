@@ -152,14 +152,16 @@ export interface Detour {
 export interface Progress {
   goal_readiness: number; // 0.0 – 1.0
   core_total: number;
-  core_understood: number;
-  core_partial: number;
+  /** Demonstrated coverage of the required set — the headline (Model A′). */
+  core_demonstrated: number;
+  /** Assessed and not yet demonstrated. Shown beside the headline, never in it. */
+  core_in_progress: number;
+  core_unassessed: number;
   journey_progress: number; // 0.0 – 1.0
   stops_settled: number;
   stops_total: number;
   assessed_coverage: number;
   assessed: number;
-  state_mix: Record<UnderstandingState, number>;
   detours: Detour[];
   skipped: number;
   optional_total: number;

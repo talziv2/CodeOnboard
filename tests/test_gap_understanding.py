@@ -224,16 +224,27 @@ def test_to_dict_reports_the_derived_state():
 
 
 def test_goal_readiness_does_not_credit_an_unverified_node():
-    """`readiness()` stays node-weighted and ungapped (§3.4) — but it reads the
-    derived state, so a node with an open blocking gap earns 0.5, not 1.0."""
+    """An open blocking gap removes the unit's demonstrated credit entirely.
+
+    UPDATED for learning-graph M3a.3 (Model A'): `readiness()` is now
+    demonstrated coverage rather than a weighted fold, so an unverified node
+    drops from 1.0 to 0.0 rather than to 0.5. The property under test is
+    unchanged and strictly stronger — M7's blocking still costs the credit.
+
+    The node carries a real answer because demonstrated coverage is defined over
+    assessed evidence; a bare `understanding_state` is "not yet assessed".
+    """
     graph = LearningGraph(repo_url=REPO, goal=GOAL)
     node = graph.add_node(_node("understood", area_id="a1", priority="required"))
     graph.set_current(node.id)
+    graph.record_attempt(node.id, "an answer", "understood", "because")
     clean = progress.goal_readiness(graph)
+    assert clean == 1.0
 
     node.gap_state.gaps.append(_blocking("open"))
     gapped = progress.goal_readiness(graph)
     assert gapped < clean
+    assert gapped == 0.0
 
 
 def test_resume_point_will_not_pass_an_unverified_prerequisite():

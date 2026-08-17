@@ -100,14 +100,19 @@ class TestGradingFailures:
         node.attempts.append(_pre_m2_attempt(classification="partial", graded=False))
         assert progress.assessed_coverage(graph) == 0.0
 
-    def test_a_failed_grade_does_not_change_the_progress_measures(self):
-        # M1 semantics are untouched: readiness reads `understanding_state`,
-        # which the Grader still sets. Only the evidence metric moved.
+    def test_a_failed_grade_earns_no_demonstrated_credit(self):
+        """RE-POINTED for Model A' (was `..._does_not_change_the_progress_measures`).
+
+        Under the old weighted gauge this scored 0.5 — half credit for a unit
+        whose only "evidence" was our own grading outage. Demonstrated coverage
+        requires evidence, and a failed grade is not evidence, so it earns
+        nothing and the unit reads *not yet assessed*.
+        """
         graph = _graph()
         node = graph.nodes[graph.path_order()[0]]
         node.understanding_state = "partial"
         node.attempts.append(_pre_m2_attempt(classification="partial", graded=False))
-        assert progress.goal_readiness(graph) == 0.5
+        assert progress.goal_readiness(graph) == 0.0
 
 
 # ── attempt kinds ─────────────────────────────────────────────────────────────

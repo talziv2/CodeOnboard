@@ -106,18 +106,34 @@ export function stateLabel(state: UnderstandingState): string {
 
 import type { UnderstandingClass } from "@/lib/api";
 
-export const UNDERSTANDING_STYLES: Record<UnderstandingClass, StateStyle> = {
-  strength: { stroke: "var(--color-jade)", fill: "var(--color-jade)" },
+export interface UnderstandingStyle extends StateStyle {
+  /** Border style, so the four classes differ by SHAPE and not only by hue. */
+  borderStyle: "solid" | "dashed";
+}
+
+export const UNDERSTANDING_STYLES: Record<UnderstandingClass, UnderstandingStyle> = {
+  strength: {
+    stroke: "var(--color-jade)", fill: "var(--color-jade)", borderStyle: "solid",
+  },
   recovered: {
     stroke: "var(--color-jade)",
     // Half-filled: demonstrated, and it took more than one pass to get there.
     fill: "linear-gradient(90deg,var(--color-jade) 50%,transparent 50%)",
+    borderStyle: "solid",
   },
-  unresolved: { stroke: "var(--color-rust)", fill: "transparent" },
-  insufficient: { stroke: "var(--color-graphite)", fill: "transparent" },
+  unresolved: {
+    stroke: "var(--color-rust)", fill: "transparent", borderStyle: "solid",
+  },
+  // DASHED, and that is an accessibility fix rather than decoration (M3a.3
+  // AC10). `unresolved` and `insufficient` were both an empty circle differing
+  // only in hue, so without colour the two most consequential states — "you are
+  // stuck here" and "we have no evidence either way" — were identical.
+  insufficient: {
+    stroke: "var(--color-graphite)", fill: "transparent", borderStyle: "dashed",
+  },
 };
 
-export function understandingStyle(state: UnderstandingClass): StateStyle {
+export function understandingStyle(state: UnderstandingClass): UnderstandingStyle {
   return UNDERSTANDING_STYLES[state] ?? UNDERSTANDING_STYLES.insufficient;
 }
 

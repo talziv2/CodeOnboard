@@ -91,6 +91,10 @@ export const t = {
   session: {
     // Two measures, never one (learning-graph.md §5.4). "Readiness" alone read
     // 0% for someone who walked the whole journey without answering anything.
+    // "Goal readiness" is retired as a learner-facing label: it sounds like a
+    // calibrated prediction of readiness, and this measure is demonstrated
+    // coverage of the required set (M3a.3, Model A′).
+    demonstrated: "Demonstrated",
     goalReadiness: "Goal readiness",
     // "Stops taken", not "Journey": the number is a COUNT of stops settled, and
     // the lesson header beside it shows a POSITION ("Stop 9 of 13"). Labelled
@@ -142,14 +146,14 @@ export const t = {
     title: "Your route",
     openMap: "Open map",
     addedAfterConfusion: "added after confusion",
-    markedWeak: "⚑ marked weak",
     optionalStops: (count: number) =>
       count === 1 ? "1 optional stop" : `${count} optional stops`,
     hideOptional: "Hide optional",
     // The rail carries no permanent legend any more: a pin's meaning is on the
-    // pin, as its accessible name, and the map keeps the full key.
+    // pin, as its accessible name, and the map keeps the full key. The word
+    // itself is the shared understanding vocabulary — never the model's raw
+    // `partial` / `not_started`, and never the retired "marked weak".
     stopState: (state: string) => `— ${state}`,
-    weak: "marked weak",
     // Both live on the section heading row, which is two controls rather than
     // one: the chevron collapses, the title opens the chapter overview.
     collapseSection: (title: string) => `Collapse ${title}`,
@@ -321,7 +325,6 @@ export const t = {
       `${understood} of ${total} concepts understood`,
     filesTouched: (count: number) =>
       `${count} file${count === 1 ? "" : "s"} touched`,
-    markedWeak: (count: number) => `${count} marked weak`,
     readiness: "goal readiness",
     // The headline is a claim about the GOAL, so it is stated over the required
     // set rather than over every node on screen.
@@ -366,6 +369,8 @@ export const t = {
     // that decision.
     patterns: "What the evidence shows",
     patternsEmpty: "Not enough evidence to identify a pattern yet.",
+    evidenceRef: (index: number, total: number) =>
+      `Open the evidence for answer ${index} of ${total} behind this observation`,
     patternEvidence: (count: number) =>
       `${count} answer${count === 1 ? "" : "s"} behind this`,
     pattern: {
@@ -395,6 +400,13 @@ export const t = {
       right_idea_wrong_altitude: "the right idea at the wrong level",
     } as Record<string, string>,
     profileTitle: "What you understand",
+    // The journey IS the understanding view now, so it gets the plain name.
+    journeyTitle: "Your journey",
+    demonstratedLabel: "Demonstrated",
+    journeyLabel: (settled: number, total: number) =>
+      `Journey · ${settled} of ${total} stops`,
+    inProgress: (count: number) => `${count} in progress`,
+    moreBreakdowns: "More detail",
     needsWork: "Needs work",
     workedThrough: "Worked through",
     workedThroughHint: "Fell short at first, then demonstrated.",
@@ -413,6 +425,21 @@ export const t = {
     gapWaived: "Set aside by you",
     gapVerified: "Checked and cleared",
     gapExhausted: "No more checks offered",
+    // One sentence explaining an `unresolved` state. Each names a different
+    // cause: a check not yet taken, a decision the learner made, misconceptions
+    // still open, or simply an answer that fell short.
+    whyPendingVerification:
+      "Not counted as demonstrated yet — there is a check waiting to be taken.",
+    whyWaived: (count: number) =>
+      count === 1
+        ? "One point here you chose not to pursue, so this stays undemonstrated."
+        : `${count} points here you chose not to pursue, so this stays undemonstrated.`,
+    whyOpenGaps: (count: number) =>
+      count === 1
+        ? "One misconception is still open here."
+        : `${count} misconceptions are still open here.`,
+    whyNotYetDemonstrated:
+      "Your last answer did not yet reach the objective.",
     pendingVerification: "Not yet counted as demonstrated — verification pending.",
     // --- evidence drawer ---
     evidence: "Evidence",

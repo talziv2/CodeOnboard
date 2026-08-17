@@ -882,6 +882,71 @@ ungraded answers unable to manufacture anything, waived units truthful without
 becoming tasks, unknown instrumentation inert, and every rendered pattern
 resolving to a real attempt.
 
+### M3a.3 — one journey, one vocabulary (acceptance criteria)
+
+Driven by the product review of 2026-08-18, which found the screen had become a
+dashboard: six stacked card sections, the route sixth, **three state
+vocabularies visible at once**, two competing tallies, and 1875px of scroll for a
+session with no evidence — the state 60 of 69 stored sessions are in.
+
+#### The semantic decision that comes first (approved 2026-08-18)
+
+**Demonstrated understanding is evidence-based coverage — Model A′.**
+
+```
+demonstrated = |{required units where classify ∈ {strength, recovered}}|
+               ────────────────────────────────────────────────────────
+               |{required units}|          ← ALL required, assessed or not
+```
+
+- `recovered` earns **full** credit. The measure is what the learner can
+  demonstrate **now**, not whether they managed it first time.
+- `partial` earns **nothing**. The 0.5 weight was an unjustified constant — no
+  one measured that a `partial` verdict means half an objective is grasped —
+  and it credited units the profile simultaneously called *Needs work*.
+- The denominator keeps unassessed units. An assessed-only denominator would
+  report "1 of 1 → 100%" for a learner who has demonstrated 1 of 15.
+
+**Three questions, three measures, never collapsed into one score:**
+
+| measure | question |
+|---|---|
+| **Journey** | how far through the planned path have I gone? |
+| **Evidence coverage** | how much of the required understanding has been assessed? |
+| **Demonstrated understanding** | how much have I demonstrated? |
+
+**Naming:** "Goal readiness" is retired as the learner-facing label — it sounds
+like a calibrated prediction, which this is not. The concrete statement is
+primary (`7 / 15 required objectives demonstrated`), the percentage secondary.
+
+#### Acceptance criteria
+
+| # | criterion | kind |
+|---|---|---|
+| **AC1** | `goal_readiness` equals demonstrated-coverage per A′; `partial` contributes 0, `recovered` contributes 1 | model |
+| **AC2** | **The same objective never carries contradictory learner-facing labels anywhere on screen.** One vocabulary, asserted by test over every surface | correctness |
+| **AC3** | `marked weak` and the raw model words (`understood`/`partial`/`not started`/`needs another pass`) do not appear in learner-facing UI | vocabulary |
+| **AC4** | The duplicate state legend and tally are gone; exactly one place reports the state mix | duplication |
+| **AC5** | `mark_understood` and `mark_weak` no longer write understanding state. A learner assertion never confers demonstrated mastery | model |
+| **AC6** | Understanding state is rendered **on the journey**, not in a disconnected profile; the journey is the second section, not the sixth | structure |
+| **AC7** | Needs Work / Worked Through / Set Aside survive as a compact digest, and a recovered or set-aside unit never appears under Needs Work | structure |
+| **AC8** | A session with no evidence renders a **compact** screen — no empty analytics panels, no zero-filled breakdowns | UX |
+| **AC9** | Demonstrated coverage and journey progress are visually distinguishable at a glance (different visual grammar, not two percentages) | visual |
+| **AC10** | `unresolved` and `insufficient` are distinguishable **without colour**; every interactive element has an accessible name | a11y |
+| **AC11** | Secondary breakdowns (by kind, by repository, topics) are collapsed by default; route tags capped | density |
+| **AC12** | The Evidence Drawer uses M9's gap counters to say **why** a unit is not demonstrated | explanation |
+| **AC13** | Historical sessions with state but no persisted evidence report **insufficient evidence** — never failure or weakness — and their coverage legitimately drops | migration |
+| **AC14** | Plan mutations still cannot lower demonstrated coverage (the M1 invariant, re-asserted under the new formula) | invariant |
+
+#### Measured consequence, accepted in advance
+
+8 of 69 stored sessions report lower coverage after this change; `140696eb`
+goes **80% → 0%**. Those sessions carry `understanding_state` with no persisted
+attempts — 21 of the 22 such nodes predate attempt persistence entirely. The new
+reading is the honest one, and the screen states it coherently ("0 of 5
+demonstrated · 5 of 5 stops taken · no answers recorded") where the old one said
+80% **and** "nothing to show" on the same screen.
+
 ### M3b — gap-derived insight (not started)
 
 **Unlocks:** vision questions 2 and 3 at L1/L2.

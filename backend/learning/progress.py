@@ -2,10 +2,15 @@
 #
 # Two measures, deliberately not one (learning-graph.md §5.4, decision OQ-1):
 #
-#   GOAL READINESS    mastery over the units the goal actually requires.
-#                     Evidence-weighted. Answers "how ready am I for the goal".
+#   DEMONSTRATED      of the units the goal REQUIRES, how many has the learner
+#   COVERAGE          shown they can make the claim for? Model A' — evidence
+#                     only, `recovered` counts in full, `partial` counts for
+#                     nothing. Shares ONE definition with the Understanding
+#                     Profile, so the two can never disagree about a unit.
 #   JOURNEY PROGRESS  how much of the planned walk has been dealt with.
-#                     Coverage, not mastery. Answers "how far along am I".
+#                     Coverage of the path, not of understanding.
+#   EVIDENCE COVERAGE how much of the required understanding is even measured.
+#                     Reported beside the headline, never folded into it.
 #
 # One number cannot be both. A single mastery gauge reads 0% for a learner who
 # walked the whole journey without answering anything — `/advance` marks a node
@@ -60,15 +65,6 @@ DEFAULT_PRIORITY = "required"
 
 REQUIRED = "required"
 OPTIONAL = "optional"
-
-# `partial` scores half. Honest for a genuinely partial answer, and wrong for a
-# grading failure, which also defaults to `partial` — the Grader cannot yet tell
-# us which it was. Recorded as a known limitation (§10 R3) rather than papered
-# over here; the fix is an `attempt["graded"]` marker in M2.
-_WEIGHT = {"understood": 1.0, "partial": 0.5}
-
-_STATES = ("understood", "partial", "failed", "not_started")
-
 
 # ── provenance ────────────────────────────────────────────────────────────────
 
@@ -206,18 +202,53 @@ def is_assessed(node: "LearningNode") -> bool:
 # ── the measures ──────────────────────────────────────────────────────────────
 
 
-def goal_readiness(graph: "LearningGraph") -> float:
-    """Evidence-weighted mastery of the required set. 0.0 when nothing is required.
+def is_demonstrated(node: "LearningNode") -> bool:
+    """Has the learner shown they can make this unit's claim?
 
-    Cannot exceed 1.0 by construction — the numerator ranges over exactly the
-    nodes in the denominator, so the old `min(..., 1.0)` clamp (which existed to
-    contain optional-unit credit) is gone rather than merely unused.
+    ONE definition, shared with the Understanding Profile — `strength` and
+    `recovered` are exactly the profile's two demonstrated classes. That sharing
+    is the point: before Model A′ this module had its own idea of "demonstrated"
+    (a weighted fold over `understanding_state`) and the profile had another,
+    so the same screen could report "4 of 5 demonstrated" beside "nothing to
+    show about your understanding". Two definitions of one word is the defect;
+    deleting one of them is the fix.
+
+    `recovered` counts in full. The measure is what the learner can demonstrate
+    NOW, not whether they managed it on the first attempt.
+    """
+    from backend.learning import understanding
+
+    return understanding.classify(node) in (
+        understanding.STRENGTH, understanding.RECOVERED,
+    )
+
+
+def goal_readiness(graph: "LearningGraph") -> float:
+    """Demonstrated coverage of the required set (Model A′, approved 2026-08-18).
+
+        demonstrated required units / ALL required units
+
+    **`partial` earns nothing.** It previously earned 0.5, which was an
+    unjustified constant — nobody measured that a `partial` verdict means half
+    an objective is grasped — and it credited units the profile was calling
+    *Needs work* in the same view. Partial understanding is not lost: it appears
+    as `unresolved` in the profile and as an "in progress" count beside this
+    number. It simply does not buy fractional mastery.
+
+    **The denominator keeps unassessed units.** An assessed-only denominator
+    would report "1 of 1 → 100%" for a learner who has demonstrated one of
+    fifteen required objectives. Evidence coverage answers "how much is even
+    measured", and is reported separately rather than folded in here.
+
+    The invariant is unchanged and still holds: no plan mutation can lower this.
+    Remedial units are excluded by origin, and `prune_ahead` / `scope` only ever
+    move units between `recommended` and `optional`, never into or out of
+    `required`.
     """
     core = core_nodes(graph)
     if not core:
         return 0.0
-    earned = sum(_WEIGHT.get(understanding_of(n), 0.0) for n in core)
-    return earned / len(core)
+    return sum(1 for n in core if is_demonstrated(n)) / len(core)
 
 
 def journey_progress(graph: "LearningGraph") -> float:
@@ -238,16 +269,6 @@ def assessed_coverage(graph: "LearningGraph") -> float:
     if not walk:
         return 0.0
     return sum(1 for n in walk if is_assessed(n)) / len(walk)
-
-
-def state_mix(graph: "LearningGraph") -> dict[str, int]:
-    """Understanding states across the promised journey."""
-    mix = {state: 0 for state in _STATES}
-    for node in walk_nodes(graph):
-        state = understanding_of(node)
-        if state in mix:
-            mix[state] += 1
-    return mix
 
 
 def detours(graph: "LearningGraph") -> list[dict]:
@@ -290,6 +311,8 @@ def summary(graph: "LearningGraph") -> dict:
     how the header and the map came to disagree — and because a later report or
     export is then a rendering job over an existing payload (OQ-9).
     """
+    from backend.learning import understanding
+
     core = core_nodes(graph)
     walk = walk_nodes(graph)
     remedial = remedial_ids(graph)
@@ -298,20 +321,34 @@ def summary(graph: "LearningGraph") -> dict:
         if n.id not in remedial and priority_of(n) == OPTIONAL
     ]
     return {
+        # THE headline: demonstrated coverage of the required set.
         "goal_readiness": goal_readiness(graph),
         "core_total": len(core),
-        "core_understood": sum(1 for n in core if understanding_of(n) == "understood"),
-        "core_partial": sum(1 for n in core if understanding_of(n) == "partial"),
+        "core_demonstrated": sum(1 for n in core if is_demonstrated(n)),
+        # Assessed, and not yet demonstrated — what "in progress" means. Named
+        # from the profile's vocabulary rather than from `understanding_state`,
+        # so it can never disagree with what the same unit is called elsewhere.
+        "core_in_progress": sum(
+            1 for n in core
+            if understanding.classify(n) == understanding.UNRESOLVED
+        ),
+        "core_unassessed": sum(
+            1 for n in core
+            if understanding.classify(n) == understanding.INSUFFICIENT
+        ),
         "journey_progress": journey_progress(graph),
         "stops_settled": sum(1 for n in walk if is_settled(n)),
         "stops_total": len(walk),
         "assessed_coverage": assessed_coverage(graph),
         "assessed": sum(1 for n in walk if is_assessed(n)),
-        "state_mix": state_mix(graph),
+        # `state_mix` is GONE: it was a second tally of the same units keyed on
+        # raw `understanding_state`, and rendering it beside the profile's
+        # four-state totals put two different counts of one thing side by side
+        # (M3a.3 AC4). `understanding.profile()["totals"]` is the one tally.
         "detours": detours(graph),
         "skipped": skipped(graph),
         "optional_total": len(optional),
         "optional_completed": sum(
-            1 for n in optional if understanding_of(n) == "understood"
+            1 for n in optional if is_demonstrated(n)
         ),
     }

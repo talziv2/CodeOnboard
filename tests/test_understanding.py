@@ -13,7 +13,7 @@
 
 import pytest
 
-from backend.learning import history, understanding
+from backend.learning import history, progress, understanding
 from backend.learning.gaps import Gap
 from backend.learning.graph import (
     CodeAnchor, LearningGraph, LearningNode, understanding_of,
@@ -477,3 +477,97 @@ def test_existing_sessions_without_history_still_profile(p, t, c, client):
     assert prof["assessed"] == 0
     assert prof["needs_work"] == []
     assert prof["totals"][understanding.INSUFFICIENT] == prof["total"]
+
+
+# ── M3a.3: one vocabulary, one definition ─────────────────────────────────────
+
+
+class TestOneVocabularyOneDefinition:
+    """AC1/AC2/AC14 — the contradictions the product review found.
+
+    The review saw a screen reporting "4 of 5 required objectives demonstrated"
+    directly above "0 of 5 units have evidence", because two modules had two
+    definitions of the word. These pin the single definition.
+    """
+
+    def test_demonstrated_coverage_and_the_profile_never_disagree(self):
+        # AC2, at the source: both surfaces read ONE classifier.
+        graph = _graph(4)
+        ids = graph.path_order()
+        _answer(graph, ids[0], "understood")          # strength
+        _answer(graph, ids[1], "confused")
+        _answer(graph, ids[1], "understood")          # recovered
+        _answer(graph, ids[2], "partial")             # unresolved
+        # ids[3] left unassessed
+
+        summary = progress.summary(graph)
+        prof = graph.to_dict()["understanding"]
+
+        assert summary["core_demonstrated"] == 2
+        assert prof["totals"][understanding.STRENGTH] == 1
+        assert prof["totals"][understanding.RECOVERED] == 1
+        assert summary["core_demonstrated"] == (
+            prof["totals"][understanding.STRENGTH]
+            + prof["totals"][understanding.RECOVERED]
+        )
+        assert summary["goal_readiness"] == 0.5
+
+    def test_state_without_evidence_is_never_demonstrated(self):
+        """AC13 — the 80%-with-no-answers session, which is 8 of 69 stored.
+
+        `understanding_state` set with no persisted attempt is what 21 of the 22
+        divergent nodes look like: real sessions from before attempts were
+        stored. They now read as *insufficient evidence* — never as failure, and
+        never as mastery.
+        """
+        graph = _graph(2)
+        for node_id in graph.path_order():
+            graph.nodes[node_id].understanding_state = "understood"
+            graph.nodes[node_id].visited = True
+
+        assert progress.goal_readiness(graph) == 0.0
+        prof = graph.to_dict()["understanding"]
+        assert prof["totals"][understanding.INSUFFICIENT] == 2
+        assert prof["totals"][understanding.UNRESOLVED] == 0   # not a weakness
+        assert prof["needs_work"] == []
+
+    def test_partial_earns_nothing_but_is_reported(self):
+        graph = _graph(2)
+        ids = graph.path_order()
+        _answer(graph, ids[0], "understood")
+        _answer(graph, ids[1], "partial")
+
+        summary = progress.summary(graph)
+        assert summary["core_demonstrated"] == 1
+        assert summary["core_in_progress"] == 1        # visible, not credited
+        assert summary["goal_readiness"] == 0.5
+
+    def test_recovered_earns_full_credit(self):
+        # "What the learner can demonstrate NOW", not "first time".
+        graph = _graph(1)
+        node_id = graph.path_order()[0]
+        _answer(graph, node_id, "confused")
+        _answer(graph, node_id, "understood")
+        assert progress.goal_readiness(graph) == 1.0
+
+    def test_a_learner_assertion_cannot_confer_demonstrated_mastery(self):
+        """AC5. `mark_understood` writes state directly on a gap-free node."""
+        graph = _graph(1)
+        graph.override(graph.path_order()[0], "mark_understood")
+        assert progress.goal_readiness(graph) == 0.0
+
+    def test_no_plan_mutation_lowers_demonstrated_coverage(self):
+        """AC14 — the M1 invariant, re-asserted under the new formula."""
+        graph = _graph(3)
+        ids = graph.path_order()
+        _answer(graph, ids[0], "understood")
+        before = progress.goal_readiness(graph)
+
+        warm_up = LearningNode(
+            title="warm-up", code_anchor=CodeAnchor("w.py", 1, 2),
+            lesson_brief={"priority": "required", "origin": "system_remediation"})
+        graph.insert_before(ids[1], warm_up, kind="prerequisite")
+        assert progress.goal_readiness(graph) == before
+
+        graph.nodes[ids[2]].lesson_brief["priority"] = "recommended"
+        assert progress.goal_readiness(graph) >= before

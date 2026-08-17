@@ -349,5 +349,6 @@ class TestNoRegression:
 
         patterns.detect(graph)          # pure: reading must change nothing
 
-        assert progress.goal_readiness(graph) == before_goal == 0.75
+        # Model A': one demonstrated of two required. `partial` earns nothing.
+        assert progress.goal_readiness(graph) == before_goal == 0.5
         assert progress.journey_progress(graph) == before_journey

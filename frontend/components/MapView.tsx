@@ -129,7 +129,8 @@ function Pip({ row, onOpen }: { row: UnderstandingRow; onOpen: () => void }) {
       title={`${row.title} — ${understandingLabel(row.understanding)}`}
       aria-label={`${row.title} — ${understandingLabel(row.understanding)}`}
       className="h-[calc(13rem/16)] w-[calc(13rem/16)] shrink-0 rounded-full border-[1.5px] transition hover:scale-125"
-      style={{ borderColor: style.stroke, background: style.fill }}
+      style={{ borderColor: style.stroke, background: style.fill,
+               borderStyle: style.borderStyle }}
     />
   );
 }
@@ -228,6 +229,9 @@ function PatternCard({
           <button
             key={`${ref.node_id}-${ref.attempt_index}`}
             onClick={() => onOpen(ref.node_id)}
+            // A bare "1" is the whole accessible name otherwise — a screen
+            // reader hears "button 1, button 2" with no idea what opens (AC10).
+            aria-label={t.map.evidenceRef(i + 1, pattern.evidence.length)}
             className="rounded-[2px] border border-rule px-1.5 py-px font-mono text-[calc(9.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
           >
             {i + 1}
@@ -294,6 +298,10 @@ export default function MapView({
   );
   const pick = (ids: string[]) =>
     ids.map((id) => byId.get(id)).filter((r): r is UnderstandingRow => Boolean(r));
+  // AC8: with no evidence there is nothing to profile, and rendering empty
+  // analytics panels made the commonest state (60 of 69 stored sessions) the
+  // worst served — 1875px of scroll to reach the only useful thing.
+  const hasEvidence = understanding.assessed > 0;
   const needsWork = pick(understanding.needs_work);
   const setAside = pick(understanding.set_aside);
   const recovered = pick(understanding.recovered);
@@ -314,118 +322,191 @@ export default function MapView({
             <h2 className="font-display text-[calc(25rem/16)] font-medium leading-tight tracking-tight text-chalk">
               {repo ?? t.map.thisCodebase}
             </h2>
-            {/* The headline sentence states the GOAL measure over the required
-                set, then the journey beside it — the two answer different
-                questions and neither stands alone (§5.4). Detours and skips are
-                named rather than folded into a percentage, so a low number is
-                explainable instead of arbitrary (OQ-2). */}
+            {/* THE headline is a FRACTION, not a percentage: "7 of 15 required
+                objectives demonstrated" is a sentence the learner can check
+                against the list below, where "47% readiness" sounds like a
+                calibrated prediction the model never made (M3a.3). */}
             <p className="text-[calc(12.5rem/16)] text-graphite">
-              {t.map.coreDemonstrated(progress.core_understood, progress.core_total)}
-              {" · "}
-              {t.map.stopsTaken(progress.stops_settled, progress.stops_total)}
+              {t.map.assessedOf(understanding.assessed, understanding.total)}
+              {progress.core_in_progress > 0 && (
+                <> · {t.map.inProgress(progress.core_in_progress)}</>
+              )}
               {progress.detours.length > 0 && (
                 <> · {t.map.detoursTaken(progress.detours.length)}</>
               )}
               {progress.skipped > 0 && <> · {t.map.skippedStops(progress.skipped)}</>}
             </p>
-            {/* The honest denominator for everything below: a profile over 16
-                units where 3 carry evidence is a profile of 3. */}
-            <p className="font-mono text-[calc(10.5rem/16)] text-graphite">
-              {t.map.assessedOf(understanding.assessed, understanding.total)}
-            </p>
           </div>
-          <div className="flex items-baseline gap-2">
-            <span className="font-display text-[calc(34rem/16)] leading-none tabular-nums text-signal">
-              {pct}%
-            </span>
-            <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.14em] text-graphite">
-              {t.map.readiness}
-            </span>
+
+          {/* Two measures, two GRAMMARS (AC9). Demonstrated understanding is a
+              fraction of mastery; the journey is a discrete track of stops. Two
+              percentages side by side read as competing scores — which is what
+              the review found. */}
+          <div className="flex items-end gap-7">
+            <div className="flex flex-col gap-1">
+              <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.14em] text-graphite">
+                {t.map.demonstratedLabel}
+              </span>
+              <span className="flex items-baseline gap-1.5">
+                <span className="font-display text-[calc(30rem/16)] leading-none tabular-nums text-signal">
+                  {progress.core_demonstrated}
+                </span>
+                <span className="font-display text-[calc(17rem/16)] leading-none tabular-nums text-graphite">
+                  / {progress.core_total}
+                </span>
+                <span className="font-mono text-[calc(10rem/16)] text-graphite">
+                  ({pct}%)
+                </span>
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.14em] text-graphite">
+                {t.map.journeyLabel(progress.stops_settled, progress.stops_total)}
+              </span>
+              {/* A track of stops, not a bar: the journey is discrete. */}
+              <span aria-hidden className="flex flex-wrap gap-[3px]">
+                {Array.from({ length: progress.stops_total }, (_, i) => (
+                  <span
+                    key={i}
+                    className="h-[calc(10rem/16)] w-[calc(5rem/16)] rounded-[1px]"
+                    style={{
+                      background: i < progress.stops_settled
+                        ? "var(--color-signal-dim)" : "var(--color-rule)",
+                    }}
+                  />
+                ))}
+              </span>
+            </div>
           </div>
         </header>
 
-        {/* overall state mix */}
-        <div className="flex flex-col gap-2.5">
-          <StateStrip tally={summary.overall} total={Math.max(nodes.length, 1)} />
-          <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-            {STATE_ORDER.map((state) => (
-              <span
-                key={state}
-                className="flex items-center gap-2 font-mono text-[calc(10.5rem/16)] text-graphite"
-              >
-                <span
-                  aria-hidden
-                  className="h-[calc(9rem/16)] w-[calc(9rem/16)] shrink-0 rounded-full border-[1.5px]"
-                  style={{ borderColor: stateStyle(state).stroke, background: stateStyle(state).fill }}
-                />
-                <span className="tabular-nums text-chalk">{summary.overall[state]}</span>
-                {stateLabel(state)}
-              </span>
-            ))}
-          </div>
-        </div>
+        {/* ── THE JOURNEY ────────────────────────────────────────────────────
+            The route IS the visualization. Understanding is rendered ON it
+            rather than in a separate profile panel, because a pip strip and a
+            route list describing the same units in two places is what made this
+            screen a dashboard (M3a.3 AC6). Second section, not sixth. */}
+        <section className="flex flex-col gap-4">
+          <h3 className="flex items-center gap-2.5 font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
+            {t.map.journeyTitle}
+            <span aria-hidden className="h-px flex-1 bg-rule" />
+          </h3>
 
-        {/* ── UNDERSTANDING PROFILE ──────────────────────────────────────────
-            What the evidence demonstrates, grouped by AREA — the curriculum's
-            own grouping, which the rail already uses. A file is where code
-            happens to live; an area is what the journey is about. */}
-        <Panel title={t.map.profileTitle}>
-          {understanding.assessed === 0 ? (
-            <p className="text-[calc(12.5rem/16)] leading-relaxed text-graphite">
-              {t.map.noEvidenceYet}
-            </p>
-          ) : (
-            <>
-              <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-                {UNDERSTANDING_ORDER.map((state) => {
-                  const style = understandingStyle(state);
-                  return (
+          <ol className="flex flex-col">
+            {stops.map((stop, i) => {
+              const { node } = stop;
+              const isCurrent = node.id === currentNodeId;
+              // The unit's understanding class — the SAME encoding the rail
+              // and the drawer use (AC2).
+              const s = understandingStyle(node.understanding ?? "insufficient");
+              const isLast = i === stops.length - 1;
+              // A prerequisite connects to the node it unlocks, so the segment
+              // below it is the adaptive one.
+              const nextIsUnlock = stop.isPrerequisite;
+
+              return (
+                <li
+                  key={node.id}
+                  className={`relative grid grid-cols-[calc(34rem/16)_1fr] gap-4 pb-5 ${
+                    stop.isPrerequisite ? "ms-10" : ""
+                  }`}
+                >
+                  {!isLast && (
                     <span
-                      key={state}
-                      className="flex items-center gap-2 font-mono text-[calc(10.5rem/16)] text-graphite"
-                    >
-                      <span
-                        aria-hidden
-                        className="h-[calc(9rem/16)] w-[calc(9rem/16)] shrink-0 rounded-full border-[1.5px]"
-                        style={{ borderColor: style.stroke, background: style.fill }}
-                      />
-                      <span className="tabular-nums text-chalk">
-                        {understanding.totals[state]}
-                      </span>
-                      {understandingLabel(state)}
-                    </span>
-                  );
-                })}
-              </div>
+                      aria-hidden
+                      className="absolute start-[calc(16rem/16)] top-[calc(26rem/16)] bottom-[calc(-6rem/16)] w-px"
+                      style={
+                        nextIsUnlock
+                          ? {
+                              backgroundImage:
+                                "repeating-linear-gradient(to bottom, var(--color-signal) 0 5px, transparent 5px 10px)",
+                            }
+                          : { background: "var(--color-rule)" }
+                      }
+                    />
+                  )}
 
-              <ul className="flex flex-col gap-3 border-t border-rule pt-3">
-                {Object.entries(groupRows(understanding.nodes)).map(([areaId, rows]) => (
-                  <li key={areaId} className="flex flex-col gap-1.5">
-                    <span className="flex items-baseline justify-between gap-3">
-                      <span className="min-w-0 truncate font-mono text-[calc(11rem/16)] text-paper">
-                        {areaTitle(areas, areaId)}
-                      </span>
-                      <span className="shrink-0 font-mono text-[calc(10.5rem/16)] tabular-nums text-graphite">
-                        {t.map.ofAssessed(
-                          rows.filter((r) => r.understanding === "strength"
-                            || r.understanding === "recovered").length,
-                          rows.length
+                  <span className="flex justify-center pt-2.5">
+                    <span
+                      aria-hidden
+                      className="relative z-10 h-[calc(15rem/16)] w-[calc(15rem/16)] rounded-full border-2 bg-ink"
+                      style={{
+                        borderColor: isCurrent ? "var(--color-signal)" : s.stroke,
+                        background: isCurrent ? "var(--color-ink)" : s.fill,
+                        borderStyle: s.borderStyle,
+                        boxShadow: isCurrent ? "0 0 0 4px var(--color-signal-halo)" : undefined,
+                      }}
+                    >
+                      {isCurrent && <span className="absolute inset-[calc(3rem/16)] rounded-full bg-signal" />}
+                    </span>
+                  </span>
+
+                  <button
+                    onClick={() => onNodeClick(node)}
+                    className="flex flex-col gap-2 rounded-md border-2 px-4 py-3.5 text-start transition hover:border-signal-dim"
+                    style={{
+                      background: isCurrent ? "var(--color-signal-wash)" : "var(--color-slab)",
+                      borderColor: isCurrent ? "var(--color-signal)" : "var(--color-rule)",
+                    }}
+                  >
+                    {stop.isPrerequisite && (
+                      <span className="flex flex-wrap items-center gap-2 font-mono text-[calc(10rem/16)] tracking-[0.06em] text-signal">
+                        <span aria-hidden className="h-px w-4 bg-signal" />
+                        {t.rail.addedAfterConfusion}
+                        {stop.unlocksTitle && (
+                          <span className="text-graphite">{t.map.unlocks(stop.unlocksTitle)}</span>
                         )}
                       </span>
+                    )}
+
+                    <span
+                      className="font-display text-[calc(17rem/16)] font-medium leading-[1.3] tracking-tight"
+                      style={{ color: isCurrent ? "var(--color-signal)" : "var(--color-chalk)" }}
+                    >
+                      {node.title}
                     </span>
-                    {/* Every pip is one unit, and clicking it shows the evidence
-                        that produced its colour. */}
-                    <span className="flex flex-wrap gap-1.5">
-                      {rows.map((row) => (
-                        <Pip key={row.node_id} row={row} onOpen={() => onOpenEvidence(row.node_id)} />
-                      ))}
+
+                    <span className="font-mono text-[calc(11rem/16)] text-graphite">
+                      {node.file}
+                      {" · "}
+                      {t.lesson.lines(node.line_start, node.line_end)}
                     </span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </Panel>
+
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      {node.concept_tags.slice(0, 2).map((tag) => {
+                        const style = tagStyle(tag);
+                        return (
+                          <span
+                            key={tag}
+                            className="rounded-[2px] border px-1.5 py-px font-mono text-[calc(9.5rem/16)] tracking-[0.05em]"
+                            style={{
+                              color: style.text,
+                              borderColor: style.border,
+                              background: style.background,
+                            }}
+                          >
+                            {tagLabel(tag)}
+                          </span>
+                        );
+                      })}
+                      {/* CURRENT state, not the sticky flag. `weak_spot` stays
+                          true forever once set, so rendering it captioned a unit
+                          the learner has since mastered as a weakness. */}
+                      {node.understanding && node.understanding !== "insufficient" && (
+                        <span
+                          className="font-mono text-[calc(9.5rem/16)] tracking-[0.05em]"
+                          style={{ color: understandingStyle(node.understanding).stroke }}
+                        >
+                          {understandingLabel(node.understanding)}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
 
         {/* ── NEEDS WORK / WORKED THROUGH / SET ASIDE ─────────────────────────
             Three bands, adjacent on purpose. Separating "still open" from
@@ -462,6 +543,8 @@ export default function MapView({
           </div>
         )}
 
+        {hasEvidence && (
+        <>
         {/* ── PATTERNS ────────────────────────────────────────────────────────
             A deeper interpretation layer, so it sits BELOW the outcome bands
             and never competes with them. Renders only when a threshold is met;
@@ -485,8 +568,13 @@ export default function MapView({
           )}
         </Panel>
 
-        {/* the two breakdowns that make this a reflection view rather than a list */}
-        <div className="grid gap-4 md:grid-cols-2">
+        {/* SECONDARY. Collapsed by default: useful on reflection, noise at a
+            glance, and all-zero on the sessions that need the screen most. */}
+        <details className="group">
+          <summary className="cursor-pointer list-none font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite transition hover:text-signal">
+            {t.map.moreBreakdowns}
+          </summary>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
           <Panel title={t.map.byKind}>
             <ul className="flex flex-col gap-3">
               {summary.kinds.map(([tag, tally, total]) => (
@@ -538,127 +626,11 @@ export default function MapView({
               ))}
             </ul>
           </Panel>
-        </div>
+          </div>
+        </details>
+        </>
+        )}
 
-        {/* the route itself */}
-        <section className="flex flex-col gap-4">
-          <h3 className="flex items-center gap-2.5 font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
-            {t.map.theRoute}
-            <span aria-hidden className="h-px flex-1 bg-rule" />
-          </h3>
-
-          <ol className="flex flex-col">
-            {stops.map((stop, i) => {
-              const { node } = stop;
-              const isCurrent = node.id === currentNodeId;
-              const s = stateStyle(node.understanding_state);
-              const isLast = i === stops.length - 1;
-              // A prerequisite connects to the node it unlocks, so the segment
-              // below it is the adaptive one.
-              const nextIsUnlock = stop.isPrerequisite;
-
-              return (
-                <li
-                  key={node.id}
-                  className={`relative grid grid-cols-[calc(34rem/16)_1fr] gap-4 pb-5 ${
-                    stop.isPrerequisite ? "ms-10" : ""
-                  }`}
-                >
-                  {!isLast && (
-                    <span
-                      aria-hidden
-                      className="absolute start-[calc(16rem/16)] top-[calc(26rem/16)] bottom-[calc(-6rem/16)] w-px"
-                      style={
-                        nextIsUnlock
-                          ? {
-                              backgroundImage:
-                                "repeating-linear-gradient(to bottom, var(--color-signal) 0 5px, transparent 5px 10px)",
-                            }
-                          : { background: "var(--color-rule)" }
-                      }
-                    />
-                  )}
-
-                  <span className="flex justify-center pt-2.5">
-                    <span
-                      aria-hidden
-                      className="relative z-10 h-[calc(15rem/16)] w-[calc(15rem/16)] rounded-full border-2 bg-ink"
-                      style={{
-                        borderColor: isCurrent ? "var(--color-signal)" : s.stroke,
-                        background: isCurrent ? "var(--color-ink)" : s.fill,
-                        boxShadow: isCurrent ? "0 0 0 4px var(--color-signal-halo)" : undefined,
-                      }}
-                    >
-                      {isCurrent && <span className="absolute inset-[calc(3rem/16)] rounded-full bg-signal" />}
-                    </span>
-                  </span>
-
-                  <button
-                    onClick={() => onNodeClick(node)}
-                    className="flex flex-col gap-2 rounded-md border-2 px-4 py-3.5 text-start transition hover:border-signal-dim"
-                    style={{
-                      background: isCurrent ? "var(--color-signal-wash)" : "var(--color-slab)",
-                      borderColor: isCurrent ? "var(--color-signal)" : "var(--color-rule)",
-                    }}
-                  >
-                    {stop.isPrerequisite && (
-                      <span className="flex flex-wrap items-center gap-2 font-mono text-[calc(10rem/16)] tracking-[0.06em] text-signal">
-                        <span aria-hidden className="h-px w-4 bg-signal" />
-                        {t.rail.addedAfterConfusion}
-                        {stop.unlocksTitle && (
-                          <span className="text-graphite">{t.map.unlocks(stop.unlocksTitle)}</span>
-                        )}
-                      </span>
-                    )}
-
-                    <span
-                      className="font-display text-[calc(17rem/16)] font-medium leading-[1.3] tracking-tight"
-                      style={{ color: isCurrent ? "var(--color-signal)" : "var(--color-chalk)" }}
-                    >
-                      {node.title}
-                    </span>
-
-                    <span className="font-mono text-[calc(11rem/16)] text-graphite">
-                      {node.file}
-                      {" · "}
-                      {t.lesson.lines(node.line_start, node.line_end)}
-                    </span>
-
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      {node.concept_tags.map((tag) => {
-                        const style = tagStyle(tag);
-                        return (
-                          <span
-                            key={tag}
-                            className="rounded-[2px] border px-1.5 py-px font-mono text-[calc(9.5rem/16)] tracking-[0.05em]"
-                            style={{
-                              color: style.text,
-                              borderColor: style.border,
-                              background: style.background,
-                            }}
-                          >
-                            {tagLabel(tag)}
-                          </span>
-                        );
-                      })}
-                      {/* CURRENT state, not the sticky flag. `weak_spot` stays
-                          true forever once set, so rendering it captioned a unit
-                          the learner has since mastered as a weakness. */}
-                      {node.understanding && node.understanding !== "insufficient" && (
-                        <span
-                          className="font-mono text-[calc(9.5rem/16)] tracking-[0.05em]"
-                          style={{ color: understandingStyle(node.understanding).stroke }}
-                        >
-                          {understandingLabel(node.understanding)}
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
-        </section>
       </div>
     </div>
   );
