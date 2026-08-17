@@ -247,12 +247,18 @@ def profile(graph: "LearningGraph") -> dict:
 
     # Deferred import: `patterns` reads the classification this module owns, so
     # the dependency runs one way only.
+    from backend.learning import gap_insight as gap_model
     from backend.learning import patterns as pattern_model
 
     return {
         # L2 observations over the same evidence. Usually empty — the thresholds
         # are set so a handful of answers produces nothing (M3a.2).
         "patterns": pattern_model.detect(graph),
+        # Gap-derived observations (M3b). A SEPARATE list, not merged: these read
+        # the misconceptions themselves rather than the answers, so a consumer
+        # that has no gap data can ignore them wholesale — and the two evidence
+        # bases stay distinguishable in reporting.
+        "gap_patterns": gap_model.detect(graph),
         "totals": {
             state: sum(1 for r in rows if r["understanding"] == state)
             for state in (STRENGTH, RECOVERED, UNRESOLVED, INSUFFICIENT)

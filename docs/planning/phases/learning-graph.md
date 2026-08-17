@@ -1,9 +1,8 @@
 # Learning Graph — from route tracker to understanding model
 
 **Status: M1 (`2973b69`), M2 (`6f57398`), M3a.1 (`b093012`), M3a.2 (`b6d5c38`)
-and M3a.3 (`651b82e`) are done. The phase has reached the end of its approved,
-unblocked work: M3b waits on gap EVIDENCE (not code), M4 on OQ-8, M5 on learner
-identity. Manual E2E validation is scheduled for the end of the phase and has
+M3a.3 (`651b82e`) and M3b are done. The phase has reached the end of its
+approved, unblocked work: M4 waits on OQ-8, M5 on learner identity. Manual E2E validation is scheduled for the end of the phase and has
 not been run.**
 
 > **Gap-model cross-reference is current as of gap-model M8 (done 2026-08-18).**
@@ -949,7 +948,43 @@ reading is the honest one, and the screen states it coherently ("0 of 5
 demonstrated · 5 of 5 stops taken · no answers recorded") where the old one said
 80% **and** "nothing to show" on the same screen.
 
-### M3b — gap-derived insight: **BLOCKED ON EVIDENCE, not on code** (2026-08-18)
+### M3b — gap-derived insight ✅ implemented, empirically unvalidated (2026-08-18)
+
+**Two dependencies, and only one of them was ever a blocker.** The
+*implementation* dependency — the contracts M3b reads — was satisfied when the
+Gap Model phase closed: identity, status, blocking, verification counters and
+resolution are all persisted and on the wire. The *validation* dependency — real
+sessions exercising them — is not, and that is a limit on what we can claim,
+not on what we can build. An earlier draft of this section conflated the two.
+
+| template | fires when | reads |
+|---|---|---|
+| `gap_outcomes` | **≥3** gaps on the journey | `status` across the lifecycle |
+| `blocking_backlog` | **≥2** open blocking gaps across **≥2** objectives | `is_open`, `is_blocking`, `is_exhausted` |
+| `verification_outcomes` | **≥3** gaps actually tested | `verification_attempts`, `status` |
+| `remediation_closure` | **≥3** warm-ups carrying `remediates` | `lesson_brief["remediates"]` → gap `status` |
+
+**Two deliberate non-uses, both recorded because the fields are right there.**
+`Gap.foundational` is never read — the Grader records it as an observation and
+gap-model M1 is explicit that it is "observed, not decisive", so an insight
+built on it would give a model's aside the weight of policy; `is_blocking` is
+used instead, because it is a pure function of `kind` decided in code. And
+**verification answers are never pooled with assessments** — every population
+is built from gap objects or explicitly-filtered attempt kinds. Both are
+asserted structurally.
+
+Waived is always reported apart from verified. Only verification closes a gap; a
+waiver stops the asking, and merging them would let a decision read as mastery.
+
+**Empirical status — the honest half.** Across every database that exists there
+are **2 gaps (both open), 0 verified, 0 waived, 0 verification attempts and 0
+`remediates` links**. So: most sessions today render no M3b card, real-world
+firing frequency is unknown, and **the thresholds above are unvalidated**. The
+27 tests are contract tests over fixtures; they show the definitions behave as
+specified, not that they are well-calibrated. First real data comes from the
+manual E2E round, which may lead to tuning.
+
+### M3b — original scope, superseded by the table above
 
 The code dependency is satisfied — the Gap Model phase closed complete
 (M1–M10), and gap identity, status, blocking, verification and resolution are

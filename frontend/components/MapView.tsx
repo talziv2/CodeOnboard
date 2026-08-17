@@ -191,6 +191,21 @@ function patternSentence(pattern: Pattern): string {
       return t.map.pattern.area_evidence(
         Number(d.demonstrated), Number(d.assessed), String(d.area_title)
       );
+    // ── M3b: the misconceptions themselves ─────────────────────────────────
+    case "gap_outcomes":
+      return t.map.pattern.gap_outcomes(
+        Number(d.total), Number(d.verified), Number(d.waived), Number(d.open)
+      );
+    case "blocking_backlog":
+      return t.map.pattern.blocking_backlog(Number(d.gaps), Number(d.nodes));
+    case "verification_outcomes":
+      return t.map.pattern.verification_outcomes(
+        Number(d.tested), Number(d.closed)
+      );
+    case "remediation_closure":
+      return t.map.pattern.remediation_closure(
+        Number(d.warmups), Number(d.closed)
+      );
     default:
       return "";
   }
@@ -209,6 +224,11 @@ function PatternCard({
   pattern, onOpen,
 }: { pattern: Pattern; onOpen: (nodeId: string) => void }) {
   const setAside = Number(pattern.detail.set_aside ?? 0);
+  // Qualifiers that change what the sentence means and must not be dropped:
+  // a backlog the system has stopped offering work on, and checks that took
+  // more than one go.
+  const exhausted = Number(pattern.detail.exhausted ?? 0);
+  const retried = Number(pattern.detail.retried ?? 0);
   return (
     <li className="flex flex-col gap-2 rounded border border-rule bg-slab px-3.5 py-3">
       <p className="text-[calc(12.5rem/16)] leading-relaxed text-paper">
@@ -217,6 +237,12 @@ function PatternCard({
             is something the learner already declined to pursue. */}
         {setAside > 0 && (
           <span className="text-graphite"> {t.map.pattern.setAsideNote(setAside)}</span>
+        )}
+        {exhausted > 0 && (
+          <span className="text-graphite"> {t.map.pattern.blockingExhausted(exhausted)}</span>
+        )}
+        {retried > 0 && (
+          <span className="text-graphite"> {t.map.pattern.verificationRetried(retried)}</span>
         )}
       </p>
       <span className="flex flex-wrap items-center gap-2">
@@ -551,13 +577,13 @@ export default function MapView({
             otherwise one restrained line, because at the measured session size
             most sessions will legitimately have no pattern at all. */}
         <Panel title={t.map.patterns}>
-          {understanding.patterns.length === 0 ? (
+          {[...understanding.patterns, ...understanding.gap_patterns].length === 0 ? (
             <p className="text-[calc(12rem/16)] leading-relaxed text-graphite">
               {t.map.patternsEmpty}
             </p>
           ) : (
             <ul className="flex flex-col gap-2.5">
-              {understanding.patterns.map((pattern) => (
+              {[...understanding.patterns, ...understanding.gap_patterns].map((pattern) => (
                 <PatternCard
                   key={pattern.template}
                   pattern={pattern}

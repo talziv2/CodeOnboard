@@ -386,6 +386,28 @@ export const t = {
       // Deliberately an aggregate, not an instruction.
       area_evidence: (demonstrated: number, assessed: number, area: string) =>
         `${demonstrated} of ${assessed} assessed objectives demonstrated in ${area}.`,
+      // ── M3b: gap-derived. These describe what happened to named
+      // misconceptions, never what the learner is like. "waived" is always
+      // reported separately from "verified" — a decision to stop is not
+      // evidence of mastery, and merging them would let one read as the other.
+      gap_outcomes: (total: number, verified: number, waived: number, open: number) =>
+        `${total} specific misconceptions came up: ${verified} checked and ` +
+        `cleared, ${waived} you chose not to pursue, ${open} still open.`,
+      blocking_backlog: (gaps: number, nodes: number) =>
+        `${gaps} misconceptions across ${nodes} objectives are still holding ` +
+        `those objectives back.`,
+      blockingExhausted: (count: number) =>
+        count === 1
+          ? "One of these has run out of check attempts, so it is no longer offered."
+          : `${count} of these have run out of check attempts, so they are no longer offered.`,
+      verification_outcomes: (tested: number, closed: number) =>
+        `Of ${tested} misconceptions you were re-checked on, ${closed} cleared.`,
+      verificationRetried: (count: number) =>
+        count === 1
+          ? "One needed more than one check."
+          : `${count} needed more than one check.`,
+      remediation_closure: (warmups: number, closed: number) =>
+        `${closed} of ${warmups} warm-ups closed the misconception they were built for.`,
       // Appended only when some of them were set aside, so the sentence above
       // is not read as outstanding work.
       setAsideNote: (count: number) =>

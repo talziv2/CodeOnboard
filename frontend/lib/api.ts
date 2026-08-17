@@ -239,7 +239,13 @@ export interface UnderstandingRow {
  * not fire.
  */
 export interface Pattern {
-  template: "kind_contrast" | "recurring_shortfall" | "area_evidence";
+  template:
+    // M3a.2 — read ANSWERS (classification, the scalar gap_kind)
+    | "kind_contrast" | "recurring_shortfall" | "area_evidence"
+    // M3b — read the GAP OBJECTS themselves: named misconceptions with a
+    // lifecycle. A different evidence base answering a different question.
+    | "gap_outcomes" | "blocking_backlog" | "verification_outcomes"
+    | "remediation_closure";
   detail: Record<string, string | number>;
   evidence: { node_id: string; attempt_index: number }[];
 }
@@ -247,6 +253,12 @@ export interface Pattern {
 export interface UnderstandingProfile {
   /** Usually empty: thresholds are set so a handful of answers produces none. */
   patterns: Pattern[];
+  /**
+   * Gap-derived observations (M3b). A separate list so a consumer with no gap
+   * data can ignore them wholesale, and so the two evidence bases stay
+   * distinguishable. Empty on every session written before the gap model.
+   */
+  gap_patterns: Pattern[];
   totals: StateTally;
   /** Units carrying real evidence — the honest denominator for the profile. */
   assessed: number;
