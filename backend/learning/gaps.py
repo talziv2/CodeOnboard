@@ -27,6 +27,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -60,9 +61,71 @@ BLOCKING_KINDS: frozenset[str] = frozenset({"missing_prerequisite", "wrong_model
 # Kinds a Grader verdict may name that must NOT produce a gap.
 NON_GAP_KINDS: frozenset[str] = frozenset({"none", "no_attempt"})
 
+# The arbitration order (§18.5). Foundational first, because remediating a
+# higher-altitude gap while a foundation is missing lands on nothing. Within a
+# rank, detection order breaks ties — which is why every sort below is stable.
+#
+# `no_attempt` is listed last and is deliberately NOT a gap kind: it can be the
+# Grader's scalar verdict, so it needs a rank for the derivation in the Grader,
+# but `Gap.create` refuses it. Ranking it without admitting it is the point.
+#
+# This replaces an accidental "first gap wins" with a stated rule, and it is a
+# pure function of the vocabulary — testable without an API key.
+GAP_PRECEDENCE: tuple[str, ...] = (
+    "missing_prerequisite",
+    "wrong_model",
+    "right_idea_wrong_altitude",
+    "no_attempt",
+)
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def precedence_rank(kind: str) -> int:
+    """Where `kind` sits in the arbitration order; unknown kinds sort last.
+
+    Unknown last for the same reason `is_blocking` is false for them: a kind we
+    cannot interpret must never outrank one we can.
+    """
+    try:
+        return GAP_PRECEDENCE.index(kind)
+    except ValueError:
+        return len(GAP_PRECEDENCE)
+
+
+def by_precedence(gaps: list["Gap"]) -> list["Gap"]:
+    """`gaps` in arbitration order. Stable, so detection order breaks ties."""
+    return sorted(gaps, key=lambda g: precedence_rank(g.kind))
+
+
+def dominant_kind(gaps: list["Gap"]) -> str:
+    """The kind of the highest-precedence gap, or `none` when there are none.
+
+    This is what keeps the scalar `gap_kind` truthful once a node can carry
+    several gaps: with exactly one gap it returns that gap's kind, which is
+    precisely what the single-gap Grader used to report.
+    """
+    ordered = by_precedence(gaps)
+    return ordered[0].kind if ordered else "none"
+
+
+def objective_key(objective: str) -> str:
+    """A stable key for the objective a gap was opened against.
+
+    Cross-session interpretation of gaps is deferred until learner identity
+    exists (LQ7). This is what keeps that a *query* rather than a redesign: the
+    same objective text, in a different session on the same repository, yields
+    the same key. Nothing reads it yet.
+
+    Whitespace-normalised and case-folded so trivial re-wording of the same
+    objective does not fork the key; a genuine re-wording legitimately does.
+    """
+    normalised = " ".join(objective.split()).casefold()
+    if not normalised:
+        return ""
+    return hashlib.sha1(normalised.encode("utf-8")).hexdigest()[:16]
 
 
 @dataclass

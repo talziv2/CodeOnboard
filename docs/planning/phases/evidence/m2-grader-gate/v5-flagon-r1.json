@@ -1,0 +1,976 @@
+[
+  {
+    "repo": "requests",
+    "kind": "component",
+    "objective": "auth parameter forms",
+    "node": "b50c4cad",
+    "quality": "complete",
+    "expected_classification": [
+      "understood"
+    ],
+    "expected_gap": "none",
+    "actual_classification": "understood",
+    "actual_gap": "none",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identifies all three accepted forms of the auth parameter, accurately describes the tuple-to-HTTPBasicAuth promotion in prepare_auth(), explains that both paths converge on the same __call__() invocation, and concludes they produce identical headers. The core claim of the learning objective is fully demonstrated.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "component",
+    "objective": "auth parameter forms",
+    "node": "b50c4cad",
+    "quality": "concise",
+    "expected_classification": [
+      "understood"
+    ],
+    "expected_gap": "none",
+    "actual_classification": "understood",
+    "actual_gap": "none",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identified that a tuple is transparently promoted to HTTPBasicAuth internally, both end up calling the same handler, and produce identical results; they also correctly noted the other accepted forms (AuthBase subclass or callable).",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "component",
+    "objective": "auth parameter forms",
+    "node": "b50c4cad",
+    "quality": "wrong_altitude",
+    "expected_classification": [
+      "confused",
+      "partial"
+    ],
+    "expected_gap": "right_idea_wrong_altitude",
+    "actual_classification": "partial",
+    "actual_gap": "right_idea_wrong_altitude",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identified the tuple promotion to HTTPBasicAuth and the subsequent `__call__()` invocation, but conflated the internal implementation details of `prepare_auth()` (body preparation, dict updates) with the auth-specific code path, missing the key insight that the tuple and HTTPBasicAuth paths converge to invoke identical Authorization header logic.",
+    "gap_count": 1,
+    "gaps": [
+      {
+        "kind": "right_idea_wrong_altitude",
+        "claim": "The final step after auth(self) is to call prepare_content_length(self.body) and update __dict__.",
+        "objective_part": "understanding what the final auth_handler(self) call actually invokes and how the tuple and HTTPBasicAuth forms produce the same Authorization header",
+        "foundational": false
+      }
+    ]
+  },
+  {
+    "repo": "requests",
+    "kind": "component",
+    "objective": "auth parameter forms",
+    "node": "b50c4cad",
+    "quality": "partial",
+    "expected_classification": [
+      "partial"
+    ],
+    "expected_gap": null,
+    "actual_classification": "partial",
+    "actual_gap": "right_idea_wrong_altitude",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identifies that both forms end up setting the Authorization header, but does not trace the actual code path through `prepare_auth()` or explain the transparent conversion mechanism \u2014 the key implementation detail the objective requires.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "component",
+    "objective": "auth parameter forms",
+    "node": "b50c4cad",
+    "quality": "wrong_model",
+    "expected_classification": [
+      "confused"
+    ],
+    "expected_gap": "wrong_model",
+    "actual_classification": "confused",
+    "actual_gap": "wrong_model",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer has a fundamentally incorrect mental model of how tuple auth works: they believe tuples are sent as separate fields in the request body, when in fact tuples are converted to HTTPBasicAuth internally and both paths produce identical Authorization headers.",
+    "gap_count": 2,
+    "gaps": [
+      {
+        "kind": "wrong_model",
+        "claim": "A tuple passed as auth is sent straight through to the server as separate fields in the request body.",
+        "objective_part": "what code path the tuple takes and what the final auth_handler invocation actually does",
+        "foundational": true
+      },
+      {
+        "kind": "wrong_model",
+        "claim": "HTTPBasicAuth and tuple auth produce different requests because they use different mechanisms (header vs body).",
+        "objective_part": "that a tuple and HTTPBasicAuth('u','p') produce exactly the same Authorization header",
+        "foundational": true
+      }
+    ]
+  },
+  {
+    "repo": "requests",
+    "kind": "component",
+    "objective": "auth parameter forms",
+    "node": "b50c4cad",
+    "quality": "no_attempt",
+    "expected_classification": [
+      "confused",
+      "off-topic"
+    ],
+    "expected_gap": "no_attempt",
+    "actual_classification": "off-topic",
+    "actual_gap": "no_attempt",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer declined to attempt the question and provided no substantive response to work with.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "component",
+    "objective": "auth parameter forms",
+    "node": "b50c4cad",
+    "quality": "off_topic",
+    "expected_classification": [
+      "off-topic"
+    ],
+    "expected_gap": null,
+    "actual_classification": "off-topic",
+    "actual_gap": "no_attempt",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer did not attempt to answer the question about prepare_auth(), auth parameter forms, or code paths; instead they offered unrelated opinions about project tooling.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "component",
+    "objective": "auth parameter forms",
+    "node": "b50c4cad",
+    "quality": "missing_prereq",
+    "expected_classification": [
+      "confused",
+      "off-topic"
+    ],
+    "expected_gap": "missing_prerequisite",
+    "actual_classification": "off-topic",
+    "actual_gap": "missing_prerequisite",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer explicitly declined to answer while naming HTTP headers and base64 encoding as missing foundations, which must be taught before this node can land.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "risk",
+    "objective": "response.text encoding",
+    "node": "bbae87b9",
+    "quality": "complete",
+    "expected_classification": [
+      "understood"
+    ],
+    "expected_gap": "none",
+    "actual_classification": "understood",
+    "actual_gap": "none",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identified the risk: removing charset_normalizer's fallback (apparent_encoding) causes silent mojibake when servers send non-UTF-8 without a charset header, and named the vulnerable encodings and the fix.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "risk",
+    "objective": "response.text encoding",
+    "node": "bbae87b9",
+    "quality": "concise",
+    "expected_classification": [
+      "understood"
+    ],
+    "expected_gap": "none",
+    "actual_classification": "understood",
+    "actual_gap": "none",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identified the core risk: removal of the charset_normalizer fallback means non-UTF-8 responses without a charset header will be silently decoded as UTF-8, producing corrupted text. They named the invariant at stake (correct decoding of non-UTF-8 APIs) and what can break (APIs that don't declare charset).",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "risk",
+    "objective": "response.text encoding",
+    "node": "bbae87b9",
+    "quality": "wrong_altitude",
+    "expected_classification": [
+      "confused",
+      "partial"
+    ],
+    "expected_gap": "right_idea_wrong_altitude",
+    "actual_classification": "partial",
+    "actual_gap": "right_idea_wrong_altitude",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identified what code changed but did not explain what risk that change creates or which responses would break.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "risk",
+    "objective": "response.text encoding",
+    "node": "bbae87b9",
+    "quality": "partial",
+    "expected_classification": [
+      "partial"
+    ],
+    "expected_gap": null,
+    "actual_classification": "partial",
+    "actual_gap": "right_idea_wrong_altitude",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer identified that hardcoding UTF-8 breaks non-UTF-8 responses, but did not explain the specific mechanism: that charset_normalizer's guessing is the safety net being removed, or that the risk emerges when servers omit the charset header entirely.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "risk",
+    "objective": "response.text encoding",
+    "node": "bbae87b9",
+    "quality": "wrong_model",
+    "expected_classification": [
+      "confused"
+    ],
+    "expected_gap": "wrong_model",
+    "actual_classification": "confused",
+    "actual_gap": "wrong_model",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer has inverted the actual risk: they identify performance as the problem with the proposed change, when the real risk is silent data corruption for non-UTF-8 responses without charset headers. They also misunderstand what charset_normalizer does (it guesses encoding, not accelerates it).",
+    "gap_count": 2,
+    "gaps": [
+      {
+        "kind": "wrong_model",
+        "claim": "charset_normalizer makes .text fast; removing it means decoding twice and causes slowness.",
+        "objective_part": "understand the encoding risk and what can break \u2014 non-UTF-8 responses would silently decode as UTF-8, producing garbled text",
+        "foundational": true
+      },
+      {
+        "kind": "wrong_model",
+        "claim": "The decoded characters will come out correct even when charset_normalizer is removed.",
+        "objective_part": "understand that without charset detection, non-UTF-8 responses from servers that omit charset headers will be decoded incorrectly",
+        "foundational": true
+      }
+    ]
+  },
+  {
+    "repo": "requests",
+    "kind": "risk",
+    "objective": "response.text encoding",
+    "node": "bbae87b9",
+    "quality": "no_attempt",
+    "expected_classification": [
+      "confused",
+      "off-topic"
+    ],
+    "expected_gap": "no_attempt",
+    "actual_classification": "off-topic",
+    "actual_gap": "no_attempt",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer declined to answer without providing any substantive response or identifying what foundation they lack.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "risk",
+    "objective": "response.text encoding",
+    "node": "bbae87b9",
+    "quality": "off_topic",
+    "expected_classification": [
+      "off-topic"
+    ],
+    "expected_gap": null,
+    "actual_classification": "off-topic",
+    "actual_gap": "no_attempt",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer did not engage with the question about the encoding risk at all; they pivoted to unrelated concerns about immutability and memory optimization.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "risk",
+    "objective": "response.text encoding",
+    "node": "bbae87b9",
+    "quality": "missing_prereq",
+    "expected_classification": [
+      "confused",
+      "off-topic"
+    ],
+    "expected_gap": "missing_prerequisite",
+    "actual_classification": "off-topic",
+    "actual_gap": "missing_prerequisite",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer has identified and named a genuine foundational gap (character encoding and bytes vs. strings) that must be taught before this node can land; they have not attempted to answer the question itself.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "architecture",
+    "objective": "AuthBase contract",
+    "node": "7ecc5fe3",
+    "quality": "complete",
+    "expected_classification": [
+      "understood"
+    ],
+    "expected_gap": "none",
+    "actual_classification": "understood",
+    "actual_gap": "none",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identifies the AuthBase contract boundary: the handler owns mutation of the request (adding headers), while prepare_auth() owns selection, invocation, and reconciliation; correctly names the three prepare_auth() phases; and correctly explains why callables satisfy the contract.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "architecture",
+    "objective": "AuthBase contract",
+    "node": "7ecc5fe3",
+    "quality": "concise",
+    "expected_classification": [
+      "understood"
+    ],
+    "expected_gap": "none",
+    "actual_classification": "understood",
+    "actual_gap": "none",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identifies the contract boundary: the handler mutates and returns the request, while prepare_auth() owns selection, syncing, and content-length management. They grasp why any callable satisfies the contract and why AuthBase is optional.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "architecture",
+    "objective": "AuthBase contract",
+    "node": "7ecc5fe3",
+    "quality": "wrong_altitude",
+    "expected_classification": [
+      "confused",
+      "partial"
+    ],
+    "expected_gap": "right_idea_wrong_altitude",
+    "actual_classification": "off-topic",
+    "actual_gap": "no_attempt",
+    "class_agrees": false,
+    "gap_agrees": false,
+    "rationale": "The developer described specific auth handler implementations rather than answering the question about the contract, the boundary between handler and prepare_auth() responsibilities, or the sequence of operations.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "architecture",
+    "objective": "AuthBase contract",
+    "node": "7ecc5fe3",
+    "quality": "partial",
+    "expected_classification": [
+      "partial"
+    ],
+    "expected_gap": null,
+    "actual_classification": "partial",
+    "actual_gap": "right_idea_wrong_altitude",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identifies that the auth handler adds headers (specifically Authorization), but does not articulate the contract boundary or the division of responsibility that the question asks for \u2014 what the handler owns versus what it must NOT own, and the three phases of prepare_auth().",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "architecture",
+    "objective": "AuthBase contract",
+    "node": "7ecc5fe3",
+    "quality": "wrong_model",
+    "expected_classification": [
+      "confused"
+    ],
+    "expected_gap": "wrong_model",
+    "actual_classification": "confused",
+    "actual_gap": "wrong_model",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer has inverted the contract: they believe the handler owns the decision logic and connection management when it actually owns only header modification, while prepare_auth() owns the orchestration and whether to apply auth at all.",
+    "gap_count": 3,
+    "gaps": [
+      {
+        "kind": "wrong_model",
+        "claim": "The auth handler inspects the URL and environment to decide whether credentials are needed at all.",
+        "objective_part": "any auth handler must be a callable that accepts a PreparedRequest and returns a modified PreparedRequest \u2014 it is the handler's sole job to add headers (or other mutations) to the request, nothing else",
+        "foundational": true
+      },
+      {
+        "kind": "wrong_model",
+        "claim": "The auth handler opens the connection so it can read the server's challenge.",
+        "objective_part": "it is the handler's sole job to add headers (or other mutations) to the request, nothing else",
+        "foundational": true
+      },
+      {
+        "kind": "wrong_model",
+        "claim": "The auth handler returns a fresh Request object that replaces the original one.",
+        "objective_part": "any auth handler must be a callable that accepts a PreparedRequest and returns a modified PreparedRequest",
+        "foundational": true
+      }
+    ]
+  },
+  {
+    "repo": "requests",
+    "kind": "architecture",
+    "objective": "AuthBase contract",
+    "node": "7ecc5fe3",
+    "quality": "no_attempt",
+    "expected_classification": [
+      "confused",
+      "off-topic"
+    ],
+    "expected_gap": "no_attempt",
+    "actual_classification": "off-topic",
+    "actual_gap": "no_attempt",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer gave no attempt to answer the question; a bare 'I don't know' provides nothing to work with.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "architecture",
+    "objective": "AuthBase contract",
+    "node": "7ecc5fe3",
+    "quality": "off_topic",
+    "expected_classification": [
+      "off-topic"
+    ],
+    "expected_gap": null,
+    "actual_classification": "off-topic",
+    "actual_gap": "no_attempt",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer did not attempt to answer the question about the AuthBase contract, responsibilities, or the flow through `prepare_auth()`, instead offering a meta-comment about naming.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "requests",
+    "kind": "architecture",
+    "objective": "AuthBase contract",
+    "node": "7ecc5fe3",
+    "quality": "missing_prereq",
+    "expected_classification": [
+      "confused",
+      "off-topic"
+    ],
+    "expected_gap": "missing_prerequisite",
+    "actual_classification": "off-topic",
+    "actual_gap": "missing_prerequisite",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identified that they lack understanding of Python callables and __call__, which is foundational to grasping why any callable satisfies the auth parameter, and thus cannot engage with the contract question.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "architecture",
+    "objective": "app/router two layers",
+    "node": "ed5b84d5",
+    "quality": "complete",
+    "expected_classification": [
+      "understood"
+    ],
+    "expected_gap": "none",
+    "actual_classification": "understood",
+    "actual_gap": "none",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identifies the split of responsibilities (FastAPI owns the decorator interface but not registration; APIRouter owns registration and composition), explains the delegation mechanism (decorators hand to self.router), names the concrete owned behaviors (prefix prepending, tag merging, route storage), and connects this architecture to the consequence for include_router\u2014all at the right level of abstraction.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "architecture",
+    "objective": "app/router two layers",
+    "node": "ed5b84d5",
+    "quality": "concise",
+    "expected_classification": [
+      "understood"
+    ],
+    "expected_gap": "none",
+    "actual_classification": "understood",
+    "actual_gap": "none",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identifies the delegation boundary (FastAPI owns the decorator API, APIRouter owns registration and merging logic), names the responsibility split (route storage, prefix/tag composition), and explains why the separation enables include_router's prefix and tag inheritance to work\u2014the core objective.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "architecture",
+    "objective": "app/router two layers",
+    "node": "ed5b84d5",
+    "quality": "wrong_altitude",
+    "expected_classification": [
+      "confused",
+      "partial"
+    ],
+    "expected_gap": "right_idea_wrong_altitude",
+    "actual_classification": "partial",
+    "actual_gap": "right_idea_wrong_altitude",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identified that FastAPI delegates to self.router and noted the parameter forwarding, but described only the implementation detail (what the code does) rather than the architectural responsibility boundary (what each layer owns and why the separation matters).",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "architecture",
+    "objective": "app/router two layers",
+    "node": "ed5b84d5",
+    "quality": "partial",
+    "expected_classification": [
+      "partial"
+    ],
+    "expected_gap": null,
+    "actual_classification": "partial",
+    "actual_gap": "right_idea_wrong_altitude",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identifies the delegation and that routes are stored in the router, but answers at implementation level (what code does) rather than architectural level (what responsibility each owns and why that separation matters).",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "architecture",
+    "objective": "app/router two layers",
+    "node": "ed5b84d5",
+    "quality": "wrong_model",
+    "expected_classification": [
+      "confused"
+    ],
+    "expected_gap": "wrong_model",
+    "actual_classification": "confused",
+    "actual_gap": "wrong_model",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer has inverted the delegation pattern: they believe FastAPI registers routes on itself first and copies to the router, when the actual design is that FastAPI delegates TO the router and stores nothing directly.",
+    "gap_count": 2,
+    "gaps": [
+      {
+        "kind": "wrong_model",
+        "claim": "FastAPI registers the route on itself first for speed, then copies it into the router.",
+        "objective_part": "what each owns, and why @app.get('/path') does not register the route directly on the FastAPI object but delegates through self.router",
+        "foundational": true
+      },
+      {
+        "kind": "wrong_model",
+        "claim": "At request time FastAPI matches against its own copy and only falls back to the router's list if nothing matches.",
+        "objective_part": "what each owns",
+        "foundational": true
+      }
+    ]
+  },
+  {
+    "repo": "fastapi",
+    "kind": "architecture",
+    "objective": "app/router two layers",
+    "node": "ed5b84d5",
+    "quality": "no_attempt",
+    "expected_classification": [
+      "confused",
+      "off-topic"
+    ],
+    "expected_gap": "no_attempt",
+    "actual_classification": "off-topic",
+    "actual_gap": "no_attempt",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer declined to attempt the question and provided no substantive response to work with.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "architecture",
+    "objective": "app/router two layers",
+    "node": "ed5b84d5",
+    "quality": "off_topic",
+    "expected_classification": [
+      "off-topic"
+    ],
+    "expected_gap": null,
+    "actual_classification": "off-topic",
+    "actual_gap": "no_attempt",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer did not address the question about the separation of concerns between FastAPI and APIRouter, or the delegation pattern, or prefix/tag inheritance; instead they asked an unrelated comparative question about Django.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "architecture",
+    "objective": "app/router two layers",
+    "node": "ed5b84d5",
+    "quality": "missing_prereq",
+    "expected_classification": [
+      "confused",
+      "off-topic"
+    ],
+    "expected_gap": "missing_prerequisite",
+    "actual_classification": "off-topic",
+    "actual_gap": "missing_prerequisite",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer explicitly names a foundational gap (Python decorators) that blocks them from engaging with this node at all; they cannot reason about the delegation pattern without understanding what @app.get() does syntactically and semantically.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "flow",
+    "objective": "decorator-to-registration chain",
+    "node": "44e85351",
+    "quality": "complete",
+    "expected_classification": [
+      "understood"
+    ],
+    "expected_gap": "none",
+    "actual_classification": "understood",
+    "actual_gap": "none",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly traces the four-step chain, identifies the delegation pattern that determines control flow, and explains what each step contributes: get() names the HTTP method, api_route() returns a decorator, add_api_route() merges defaults and registers the route, and explains why the chain cannot shortcut.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "flow",
+    "objective": "decorator-to-registration chain",
+    "node": "44e85351",
+    "quality": "concise",
+    "expected_classification": [
+      "understood"
+    ],
+    "expected_gap": "none",
+    "actual_classification": "understood",
+    "actual_gap": "none",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identifies the delegation pattern (FastAPI.get \u2192 APIRouter.get), explains why the intermediate steps cannot be skipped (losing router defaults, missing decorator wrapping), and traces the contribution of each step in the chain.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "flow",
+    "objective": "decorator-to-registration chain",
+    "node": "44e85351",
+    "quality": "wrong_altitude",
+    "expected_classification": [
+      "confused",
+      "partial"
+    ],
+    "expected_gap": "right_idea_wrong_altitude",
+    "actual_classification": "partial",
+    "actual_gap": "right_idea_wrong_altitude",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identifies the delegation mechanism and the forwarding of arguments, but does not explain the flow chain or why this architecture matters\u2014they describe the implementation detail rather than the responsibility boundaries.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "flow",
+    "objective": "decorator-to-registration chain",
+    "node": "44e85351",
+    "quality": "partial",
+    "expected_classification": [
+      "partial"
+    ],
+    "expected_gap": null,
+    "actual_classification": "partial",
+    "actual_gap": "right_idea_wrong_altitude",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identifies the delegation chain but omits the intermediate steps and the reasoning for why each step exists, conflating the flow into a simplified version.",
+    "gap_count": 1,
+    "gaps": [
+      {
+        "kind": "right_idea_wrong_altitude",
+        "claim": "APIRouter.get() directly leads to add_api_route, skipping api_route()",
+        "objective_part": "what each step contributes \u2014 specifically, that api_route() returns a decorator that wraps the call to add_api_route()",
+        "foundational": true
+      }
+    ]
+  },
+  {
+    "repo": "fastapi",
+    "kind": "flow",
+    "objective": "decorator-to-registration chain",
+    "node": "44e85351",
+    "quality": "wrong_model",
+    "expected_classification": [
+      "confused"
+    ],
+    "expected_gap": "wrong_model",
+    "actual_classification": "confused",
+    "actual_gap": "wrong_model",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer has inverted the call chain: they claim get() calls add_api_route() directly and that api_route() is optional, when in fact get() \u2192 api_route() \u2192 add_api_route() is the required path for all routes.",
+    "gap_count": 2,
+    "gaps": [
+      {
+        "kind": "wrong_model",
+        "claim": "get() is an alias that calls add_api_route() directly, bypassing api_route().",
+        "objective_part": "the four-step chain and what each step contributes",
+        "foundational": true
+      },
+      {
+        "kind": "wrong_model",
+        "claim": "api_route() only exists for cases where you want to pass several methods at once, not for plain @app.get().",
+        "objective_part": "the four-step chain and what each step contributes",
+        "foundational": true
+      }
+    ]
+  },
+  {
+    "repo": "fastapi",
+    "kind": "flow",
+    "objective": "decorator-to-registration chain",
+    "node": "44e85351",
+    "quality": "no_attempt",
+    "expected_classification": [
+      "confused",
+      "off-topic"
+    ],
+    "expected_gap": "no_attempt",
+    "actual_classification": "off-topic",
+    "actual_gap": "no_attempt",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer did not engage with the question; a bare 'Not sure' provides no reasoning to diagnose.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "flow",
+    "objective": "decorator-to-registration chain",
+    "node": "44e85351",
+    "quality": "off_topic",
+    "expected_classification": [
+      "off-topic"
+    ],
+    "expected_gap": null,
+    "actual_classification": "off-topic",
+    "actual_gap": "no_attempt",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer did not engage with the question at all, instead offering an unrelated code style observation about type hints.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "flow",
+    "objective": "decorator-to-registration chain",
+    "node": "44e85351",
+    "quality": "missing_prereq",
+    "expected_classification": [
+      "confused",
+      "off-topic"
+    ],
+    "expected_gap": "missing_prerequisite",
+    "actual_classification": "off-topic",
+    "actual_gap": "missing_prerequisite",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identifies that they lack understanding of decorator mechanics\u2014a foundational concept required to trace this chain\u2014and declines to answer on that basis.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "synthesis",
+    "objective": "declaration vs runtime",
+    "node": "1699bba2",
+    "quality": "complete",
+    "expected_classification": [
+      "understood"
+    ],
+    "expected_gap": "none",
+    "actual_classification": "understood",
+    "actual_gap": "none",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identifies the declaration-vs-runtime boundary: type errors fail at startup because `APIRoute.__init__` calls `get_dependant` immediately during decoration, not at request time; the dependency tree is built once and cached, so introspection cost is paid once; and runtime parameter changes require re-registration. All three consequences named in the objective are addressed.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "synthesis",
+    "objective": "declaration vs runtime",
+    "node": "1699bba2",
+    "quality": "concise",
+    "expected_classification": [
+      "understood"
+    ],
+    "expected_gap": "none",
+    "actual_classification": "understood",
+    "actual_gap": "none",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly identifies all three key points: errors surface at decoration time (not first request), introspection cost is paid once (not per request), and parameters are frozen after registration (cannot change at runtime).",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "synthesis",
+    "objective": "declaration vs runtime",
+    "node": "1699bba2",
+    "quality": "wrong_altitude",
+    "expected_classification": [
+      "confused",
+      "partial"
+    ],
+    "expected_gap": "right_idea_wrong_altitude",
+    "actual_classification": "partial",
+    "actual_gap": "right_idea_wrong_altitude",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer correctly describes the mechanics of how parameters are analyzed and categorized, but does not connect this to the invariant about when this analysis happens (at decoration time) or explain the consequences for error discovery, performance, and runtime flexibility.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "synthesis",
+    "objective": "declaration vs runtime",
+    "node": "1699bba2",
+    "quality": "partial",
+    "expected_classification": [
+      "partial"
+    ],
+    "expected_gap": null,
+    "actual_classification": "partial",
+    "actual_gap": "right_idea_wrong_altitude",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer grasps the core concept\u2014errors surface at registration time because the tree is built then\u2014but stops at the mechanism without addressing the system-level consequences for error discovery, performance, or runtime constraints that the objective demands.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "synthesis",
+    "objective": "declaration vs runtime",
+    "node": "1699bba2",
+    "quality": "wrong_model",
+    "expected_classification": [
+      "confused"
+    ],
+    "expected_gap": "wrong_model",
+    "actual_classification": "confused",
+    "actual_gap": "wrong_model",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer has reversed the timing: they believe validation happens in a separate sweep after startup, not during decoration. The decorator itself (APIRoute.__init__) does perform the analysis immediately, not defer it.",
+    "gap_count": 1,
+    "gaps": [
+      {
+        "kind": "wrong_model",
+        "claim": "The decorator itself does no analysis; instead, a separate validation sweep runs after all modules are imported when the server boots.",
+        "objective_part": "the Dependant tree is built once at decoration time inside APIRoute.__init__",
+        "foundational": true
+      }
+    ]
+  },
+  {
+    "repo": "fastapi",
+    "kind": "synthesis",
+    "objective": "declaration vs runtime",
+    "node": "1699bba2",
+    "quality": "no_attempt",
+    "expected_classification": [
+      "confused",
+      "off-topic"
+    ],
+    "expected_gap": "no_attempt",
+    "actual_classification": "off-topic",
+    "actual_gap": "no_attempt",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer declined to answer without naming any missing foundation or providing any substantive attempt to engage with the question.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "synthesis",
+    "objective": "declaration vs runtime",
+    "node": "1699bba2",
+    "quality": "off_topic",
+    "expected_classification": [
+      "off-topic"
+    ],
+    "expected_gap": null,
+    "actual_classification": "off-topic",
+    "actual_gap": "no_attempt",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer did not attempt to answer the question about the declaration-vs-runtime boundary, error discovery timing, or performance implications; instead they asked an unrelated question about WebSocket support.",
+    "gap_count": 0,
+    "gaps": []
+  },
+  {
+    "repo": "fastapi",
+    "kind": "synthesis",
+    "objective": "declaration vs runtime",
+    "node": "1699bba2",
+    "quality": "missing_prereq",
+    "expected_classification": [
+      "confused",
+      "off-topic"
+    ],
+    "expected_gap": "missing_prerequisite",
+    "actual_classification": "off-topic",
+    "actual_gap": "missing_prerequisite",
+    "class_agrees": true,
+    "gap_agrees": true,
+    "rationale": "The developer explicitly names foundational concepts they lack (type annotations, introspection) that are prerequisites to understanding this node; they cannot reason about signature analysis without them.",
+    "gap_count": 0,
+    "gaps": []
+  }
+]

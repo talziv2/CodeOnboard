@@ -1,11 +1,31 @@
 # Gap model — multi-gap remediation and verification
 
-**Phase status: M1 done 2026-08-16; M2 not started.**
+**Phase status: M1 done 2026-08-16; M2 done and gated 2026-08-17; M3 not
+started.**
 
 | step | state |
 |---|---|
 | **M1** gap model + persistence, write-only | ✅ **done** — `backend/learning/gaps.py`, `flags.py`, additive `gaps_json` column, 20 tests. All 61 stored sessions load and round-trip byte-identical; 833 tests pass; no observable product behaviour change |
-| M2 – M10 | not started |
+| **M2** Grader emits a gap list | ✅ **done, gate met.** `GapOut`, `GraderOutput.gaps`, derived scalar `gap_kind`, the §18.5 arbitration order as pure functions in `gaps.py`, a flag-gated prompt addendum, 31 tests (864 total). **Multi-gap detection validated live**: 5–6 of 48 cases carry 2–3 independent false claims — the AC1 shape on real sessions. Gate: classification **47/48, 48/48, 48/48**; `gap_kind` **47, 47, 48** against a baseline of 45. Evidence: [`evidence/m2-grader-gate/`](evidence/m2-grader-gate/README.md) |
+| M3 – M10 | not started |
+
+**Two things the gate produced beyond a pass, both of which bind later steps.**
+
+*The `no_attempt` / `missing_prerequisite` boundary was a real defect, and it is
+fixed.* The two categories were described so that *"I can't answer, I don't know
+what a decorator is"* matched **both verbatim**, and the baseline scored 4/6
+there — i.e. production got it wrong a third of the time, costing prerequisite
+insertion its clearest trigger. The discriminator is now stated (**does the
+learner name the foundation they lack?**), which is exactly what separates a
+hint from a warm-up. **6/6 in every run since, flag-on and flag-off.** This edits
+`_SYSTEM_PROMPT`, so it changes the flag-off production path: it is a standalone
+defect fix in the F1–F4 sense, gated on its own, not an M2 change.
+
+*Classification agreement is noisy at ±2, and the baseline was a single run.*
+Across sixteen runs it lands 46–48, mean ≈ 47, with different cases failing each
+time. **M2's gate criterion — "no worse than the recorded 48/48" — was written
+without that information.** Later steps that re-run this gate should read 47/48
+as parity, not regression, and should not treat a 48 as evidence of improvement.
 
 The *design* this builds lives in
 [`learning-engine.md` §18](learning-engine.md#18-outstanding-gaps--multi-gap-remediation-and-verification),

@@ -54,20 +54,34 @@ def load_node(session_id: str, prefix: str):
 
 
 def grade(graph: LearningGraph, node, answer: str, client) -> dict:
-    """One real grading call against a one-node copy of the real graph."""
+    """One real grading call against a one-node copy of the real graph.
+
+    Returns `last_grade` plus the gaps the call opened on the isolated node.
+    Under `CODEONBOARD_GAPS=1` that list is the only place multiplicity is
+    visible: the scalar `gap_kind` reports the highest-precedence gap and says
+    nothing about how many there were, which is precisely the loss the gap model
+    exists to end. Measurement only — the isolated node is discarded.
+    """
     import copy
 
     isolated = LearningGraph(repo_url=graph.repo_url, goal=graph.goal)
     fresh = copy.deepcopy(node)
     fresh.attempts = []
     fresh.understanding_state = "not_started"
+    fresh.gap_state.gaps = []
     isolated.add_node(fresh)
     isolated.set_current(fresh.id)
 
     state = OnboardState(repo_url=graph.repo_url, goal=graph.goal, client=client)
     state.graph = isolated
     run_grader(state, answer, client=client)
-    return state.last_grade or {}
+    result = dict(state.last_grade or {})
+    result["gaps"] = [
+        {"kind": g.kind, "claim": g.claim, "objective_part": g.objective_part,
+         "foundational": g.foundational}
+        for g in fresh.gaps
+    ]
+    return result
 
 
 def main() -> int:
@@ -105,6 +119,7 @@ def main() -> int:
             got = grade(graph, node, answer, client)
             actual_class = got.get("classification")
             actual_gap = got.get("gap_kind")
+            gaps = got.get("gaps") or []
             class_ok = actual_class in expected_class
             gap_ok = expected_gap is None or actual_gap == expected_gap
             rows.append({
@@ -116,10 +131,12 @@ def main() -> int:
                 "actual_gap": actual_gap,
                 "class_agrees": class_ok, "gap_agrees": gap_ok,
                 "rationale": got.get("rationale"),
+                "gap_count": len(gaps),
+                "gaps": gaps,
             })
             mark = "OK " if (class_ok and gap_ok) else "XX "
             print(f"  {mark}{quality:<15} expected {'/'.join(sorted(expected_class)):<20}"
-                  f"got {str(actual_class):<11} gap={str(actual_gap)}")
+                  f"got {str(actual_class):<11} gap={str(actual_gap)} n={len(gaps)}")
 
     # ── report ────────────────────────────────────────────────────────────────
     line = "=" * 78
@@ -155,6 +172,26 @@ def main() -> int:
             print(f"    {r['repo']}/{r['kind']:<14} {r['quality']:<9} -> "
                   f"{r['actual_classification']}/{r['actual_gap']}")
             print(f"       {str(r['rationale'])[:150]}")
+
+    # Inert flag-off (no gaps are recorded), so this section reports nothing
+    # rather than being conditional on the environment.
+    print(f"\n{line}\nGAP MULTIPLICITY (CODEONBOARD_GAPS)\n{line}")
+    with_gaps = [r for r in rows if r["gap_count"] > 0]
+    multi = [r for r in rows if r["gap_count"] > 1]
+    print(f"  cases with >=1 gap    {len(with_gaps)}/{total}")
+    print(f"  cases with >=2 gaps   {len(multi)}/{total}")
+    print(f"  distribution          {dict(sorted(Counter(r['gap_count'] for r in rows).items()))}")
+    print("  by answer quality:")
+    for quality, group in by_quality.items():
+        counts = sorted(r["gap_count"] for r in group)
+        print(f"    {quality:<15} {counts}")
+    if multi:
+        print("  multi-gap cases (the claim the phase rests on):")
+        for r in multi:
+            print(f"    {r['repo']}/{r['kind']:<14} {r['quality']:<15} "
+                  f"{r['gap_count']} gaps, kinds={[g['kind'] for g in r['gaps']]}")
+            for g in r["gaps"]:
+                print(f"       - {g['kind']:<26} {g['claim'][:90]}")
 
     print(f"\n{line}\nBY LESSON KIND (is strictness concentrated?)\n{line}")
     by_kind = defaultdict(list)
