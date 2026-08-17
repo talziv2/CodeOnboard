@@ -1,8 +1,10 @@
 # Learning Graph — from route tracker to understanding model
 
-**Status: written 2026-08-17. Product decisions taken 2026-08-17 (§11) — eight
-resolved, OQ-5 deliberately still open. M1 done; M2 done (`6f57398`); M3 split
-and M3a.1 done 2026-08-18. M3a.2 and M3b planned only.**
+**Status: M1 (`2973b69`), M2 (`6f57398`), M3a.1 (`b093012`), M3a.2 (`b6d5c38`)
+and M3a.3 (`651b82e`) are done. The phase has reached the end of its approved,
+unblocked work: M3b waits on gap EVIDENCE (not code), M4 on OQ-8, M5 on learner
+identity. Manual E2E validation is scheduled for the end of the phase and has
+not been run.**
 
 > **Gap-model cross-reference is current as of gap-model M8 (done 2026-08-18).**
 > The phase moved fast while this document was being written: §2.4, §6.3 metric
@@ -882,7 +884,7 @@ ungraded answers unable to manufacture anything, waived units truthful without
 becoming tasks, unknown instrumentation inert, and every rendered pattern
 resolving to a real attempt.
 
-### M3a.3 — one journey, one vocabulary (acceptance criteria)
+### M3a.3 — one journey, one vocabulary ✅ (`651b82e`, 2026-08-18)
 
 Driven by the product review of 2026-08-18, which found the screen had become a
 dashboard: six stacked card sections, the route sixth, **three state
@@ -947,7 +949,53 @@ reading is the honest one, and the screen states it coherently ("0 of 5
 demonstrated · 5 of 5 stops taken · no answers recorded") where the old one said
 80% **and** "nothing to show" on the same screen.
 
-### M3b — gap-derived insight (not started)
+### M3b — gap-derived insight: **BLOCKED ON EVIDENCE, not on code** (2026-08-18)
+
+The code dependency is satisfied — the Gap Model phase closed complete
+(M1–M10), and gap identity, status, blocking, verification and resolution are
+all on the wire. The **evidence** dependency is not, and that is a different
+thing.
+
+**Measured across every database that exists, 2026-08-18:**
+
+| | historical corpus (69 sessions) | live session (1) | total |
+|---|---|---|---|
+| gaps recorded | 0 | 2 (both `open`) | **2** |
+| gaps `verified` | 0 | 0 | **0** |
+| gaps `waived` | 0 | 0 | **0** |
+| verification attempts | 0 | 0 | **0** |
+| warm-ups carrying `remediates` | 0 | 0 | **0** |
+
+Every M3b insight is therefore uncomputable or inert:
+
+| planned insight | why it cannot ship |
+|---|---|
+| repeated detailed gaps | needs ≥3 gaps across ≥2 objectives; **2 exist** |
+| foundational vs non-foundational | needs a population of gaps to compare |
+| assessment vs verification performance | **zero verification attempts exist** — not thin, absent |
+| remediation effectiveness via closure | **zero `remediates` links, zero resolutions** |
+
+This is not the M3a.2 situation. There, the inputs existed in volume and the
+thresholds correctly filtered them to 2 of 69 sessions. Here the input fields
+have never been populated, so the templates could only be tested against
+fixtures — inventing shapes for data nobody has produced.
+
+**What unblocks it:** real sessions exercising the verify and waive flows. That
+is manual E2E, which is scheduled for the end of the phase. **M3b therefore
+belongs after the manual test round, not before it** — the sequencing follows
+from the evidence rather than from preference.
+
+### M4 / M5 — blocked on decisions already taken
+
+**M4 (objective identity, cross-node aggregation)** — its value is cross-session
+(`objective_key` is per-unit text, so it never recurs inside one session).
+**OQ-8 decided the profile stays session-scoped**, so M4 is inert until that is
+revisited.
+
+**M5 (concept identity and relationships)** — blocked on learner identity
+(gap-model LQ7), deferred through Phase 3. Unscheduled.
+
+### M3b — original scope, retained for when evidence exists
 
 **Unlocks:** vision questions 2 and 3 at L1/L2.
 
