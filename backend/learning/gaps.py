@@ -61,6 +61,17 @@ BLOCKING_KINDS: frozenset[str] = frozenset({"missing_prerequisite", "wrong_model
 # Kinds a Grader verdict may name that must NOT produce a gap.
 NON_GAP_KINDS: frozenset[str] = frozenset({"none", "no_attempt"})
 
+# How many verification questions one gap may be asked before the system stops
+# proposing for it, and how many remediation cycles one node may run (§18.16 LQ10).
+#
+# Reaching either cap writes NOTHING to a gap — not `verified`, not `waived`. It
+# only removes the gap from the active set, so the system stops offering. The gap
+# stays `open` and stays blocking, which is the honest state: nobody has shown
+# they understand it and nobody has chosen to stop. A cap that silently closed a
+# gap would be the system marking its own homework because it ran out of ideas.
+VERIFICATION_ATTEMPT_CAP = 2
+REMEDIATION_ROUND_CAP = 4
+
 # The arbitration order (§18.5). Foundational first, because remediating a
 # higher-altitude gap while a foundation is missing lands on nothing. Within a
 # rank, detection order breaks ties — which is why every sort below is stable.
@@ -170,6 +181,46 @@ class Gap:
     def is_open(self) -> bool:
         return self.status == "open"
 
+    @property
+    def is_exhausted(self) -> bool:
+        """Has this gap used up its verification budget?
+
+        An exhausted gap is still `open` and still blocking — the system has
+        simply stopped proposing for it (§18.16.1). It leaves the active set;
+        it does not leave the graph.
+        """
+        return self.verification_attempts >= VERIFICATION_ATTEMPT_CAP
+
+    def mark_verified(self, attempt_index: int) -> None:
+        """Close this gap on positive evidence. The ONLY producer of `verified`.
+
+        Called from exactly one place — grading a fresh verification answer that
+        demonstrated the correct model (§18.16.2). No learner action, override or
+        UI path reaches here, which is what keeps the artifact meaningful.
+        """
+        self.status = "verified"
+        self.resolved_by = attempt_index
+        self.closed_at = _now()
+
+    def record_failed_verification(self) -> None:
+        """A verification question was asked about this gap and not answered.
+
+        Covers both halves of the lifecycle's return arrow: the answer was wrong
+        about it, or the answer was SILENT about it. Neither closes it, and both
+        cost an attempt — because both mean a question was spent.
+
+        The gap is left `open` deliberately: there is no "failed" status. A gap
+        the learner has not yet shown they understand is in exactly the same
+        state as one just detected, and inventing a distinction would imply a
+        verdict nobody reached.
+        """
+        self.verification_attempts += 1
+
+    def waive(self) -> None:
+        """The learner chose to stop working on this. Never evidence (M8)."""
+        self.status = "waived"
+        self.closed_at = _now()
+
     @classmethod
     def create(
         cls,
@@ -238,14 +289,30 @@ class GapState:
     gaps: list[Gap] = field(default_factory=list)
     # Bounded at 4 (§18.16 LQ10). Reset by a deliberate return to the node.
     remediation_rounds: int = 0
+    # The outstanding verification question: {question, targets: [gap_id], at}.
+    # None when nothing is awaiting an answer.
+    #
+    # It lives HERE, not in `cached_lesson` (§3.3). The two artifacts have
+    # different lifetimes and different owners: a re-teach overwrites
+    # `cached_lesson` wholesale, so a verification question stored there would be
+    # destroyed by the very remediation that precedes it — or would destroy the
+    # corrected lesson the learner is meant to be able to re-read.
+    #
+    # It carries no `reveal` and no model answer, by construction. Revealing the
+    # answer beside the question is what made re-asking meaningless in the first
+    # place (§18.7).
+    pending_verification: dict | None = None
 
     def __bool__(self) -> bool:
-        return bool(self.gaps) or self.remediation_rounds > 0
+        return bool(
+            self.gaps or self.remediation_rounds > 0 or self.pending_verification
+        )
 
     def to_dict(self) -> dict:
         return {
             "gaps": [g.to_dict() for g in self.gaps],
             "remediation_rounds": self.remediation_rounds,
+            "pending_verification": self.pending_verification,
         }
 
     @classmethod
@@ -263,4 +330,5 @@ class GapState:
         return cls(
             gaps=[Gap.from_dict(g) for g in payload.get("gaps", [])],
             remediation_rounds=int(payload.get("remediation_rounds", 0) or 0),
+            pending_verification=payload.get("pending_verification") or None,
         )

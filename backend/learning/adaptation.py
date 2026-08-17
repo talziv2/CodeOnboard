@@ -18,7 +18,11 @@
 from dataclasses import dataclass, field
 from typing import Literal
 
-from backend.learning.gaps import Gap, by_precedence
+from backend.learning.gaps import (
+    REMEDIATION_ROUND_CAP,
+    Gap,
+    by_precedence,
+)
 from backend.learning.graph import LearningGraph
 
 
@@ -136,6 +140,7 @@ def decide_all(
     classification: str,
     gaps: list[Gap] | None,
     gap_kind: str | None = None,
+    remediation_rounds: int = 0,
 ) -> Plan:
     """What to do about an answer that may contain several misconceptions.
 
@@ -179,9 +184,25 @@ def decide_all(
     seen: set[str] = set()
     unique = [g for g in (gaps or []) if not (g.id in seen or seen.add(g.id))]
     open_gaps = by_precedence([g for g in unique if g.is_open])
-    blocking = [g for g in open_gaps if g.is_blocking]
+
+    # A gap that has used its verification budget leaves the ACTIVE SET but keeps
+    # every other property: still open, still blocking, still counted as
+    # outstanding work (§18.16.1). The system stops proposing for it; it does not
+    # stop mattering. Same for a node that has run its remediation rounds — the
+    # cap ends the offering, never the obligation.
+    exhausted = [g for g in open_gaps if g.is_exhausted]
+    eligible = [g for g in open_gaps if not g.is_exhausted]
+    if remediation_rounds >= REMEDIATION_ROUND_CAP:
+        eligible = []
+
+    blocking = [g for g in eligible if g.is_blocking]
     active = tuple(blocking[:ACTIVE_SET_MAX])
-    deferred = tuple(blocking[ACTIVE_SET_MAX:])
+    # Everything blocking and outstanding that is not being worked on now,
+    # whichever reason it is waiting for. A capped gap belongs here rather than
+    # nowhere, so the count the learner is shown stays truthful.
+    deferred = tuple(blocking[ACTIVE_SET_MAX:]) + tuple(
+        g for g in exhausted if g.is_blocking
+    )
     collapsed = len(blocking) > ACTIVE_SET_MAX
 
     # `understood` earns no response, exactly as in `decide`. An answer that
@@ -199,13 +220,23 @@ def decide_all(
         # cannot drift. `targets` stays empty — a scalar names no gap to remediate.
         return Plan(decide(classification, gap_kind), (), active, deferred, collapsed)
 
+    if not eligible:
+        # Gaps are open, but every one has spent its verification budget — or the
+        # node has spent its rounds. The system stops proposing, which is the
+        # entire purpose of the caps: they end the offering, not the obligation.
+        #
+        # Explicitly NOT the scalar fallback above: falling through to `decide`
+        # here would hand back a `reteach` or a `prerequisite` with no target and
+        # start the cycle again, which is exactly what the cap exists to stop.
+        return Plan("none", (), active, deferred, collapsed)
+
     if collapsed:
         # A full re-teach of the unit, naming every blocking gap. Not the active
         # set: the lesson is being given again in full, so scoping it to three of
         # five would leave two corrections unmade with nothing queued to make them.
         return Plan("reteach", tuple(blocking), active, deferred, True)
 
-    lead = open_gaps[0]
+    lead = eligible[0]
     action = _ACTION_BY_GAP.get(lead.kind)
     if action is None:
         # An unknown kind, from a store written by a future or foreign version.
@@ -226,7 +257,7 @@ def decide_all(
     # A lesson may carry several corrections at once, but only of the lead's own
     # kind. Merging a `followup` into a `reteach` would answer two different
     # difficulties with one act.
-    return Plan(action, tuple(g for g in open_gaps if g.kind == lead.kind),
+    return Plan(action, tuple(g for g in eligible if g.kind == lead.kind),
                 active, deferred, collapsed)
 
 
