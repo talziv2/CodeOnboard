@@ -231,18 +231,36 @@ class TestRoundTrip:
         db = tmp_path / "s.db"
         graph = _graph()
         node_id = graph.path_order()[0]
-        graph.record_attempt(node_id, "a", "confused", "r", graded=False,
-                             kind=history.VERIFICATION)
+        graph.record_attempt(node_id, "a", "confused", "r", graded=False)
         graph.record_response(node_id, history.new_response("hint", text="t"))
         graph.record_journey_event(history.PRUNE_AHEAD, nodes=["z"])
         save_graph(graph, db)
 
         reloaded = load_graph(graph.session_id, db)
         attempt = reloaded.nodes[node_id].attempts[-1]
-        assert attempt["kind"] == history.VERIFICATION
+        assert attempt["kind"] == history.ASSESSMENT
         assert attempt["graded"] is False
         assert history.intervention_of(attempt) == "hint"
         assert reloaded.journey_events[0]["nodes"] == ["z"]
+
+    def test_a_verification_attempt_round_trips_and_takes_no_response(self, tmp_path):
+        """A response belongs to an answer about the OBJECTIVE.
+
+        A verification answer is evidence about one gap, so it earns no
+        assessment response — `record_response` files against the latest
+        assessment, which is what keeps the two questions apart in the record.
+        """
+        db = tmp_path / "s.db"
+        graph = _graph()
+        node_id = graph.path_order()[0]
+        graph.record_attempt(node_id, "v", "understood", "r",
+                             kind=history.VERIFICATION)
+        graph.record_response(node_id, history.new_response("hint"))
+        save_graph(graph, db)
+
+        attempt = load_graph(graph.session_id, db).nodes[node_id].attempts[-1]
+        assert attempt["kind"] == history.VERIFICATION
+        assert history.is_instrumented(attempt) is False
 
     def test_a_graph_with_no_events_stores_null_not_an_empty_blob(self, tmp_path):
         db = tmp_path / "s.db"

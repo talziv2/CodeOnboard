@@ -37,9 +37,11 @@ from backend.agents.goal import (
     start_session,
 )
 from backend.agents.grader import run as run_grader
+from backend.agents.grader.verification import grade_verification
 from backend.agents.mentor.mutator import Diagnosis, mutate as mutate_graph
 from backend.agents.teaching import run as run_teaching
 from backend.agents.teaching import respond as teaching_respond
+from backend.agents.teaching import verify as teaching_verify
 from backend.learning import adaptation
 from backend.learning import history
 from backend.learning import progress
@@ -238,6 +240,45 @@ class AdvanceRequest(BaseModel):
 class RespondRequest(BaseModel):
     response: str
     node_id: str | None = None  # if provided, grade this node instead of current
+    # "assessment" (the lesson's own question) or "verification" (a fresh question
+    # about one gap, from POST /verify). Defaulted, so every existing client keeps
+    # working without knowing verification exists (§18.10).
+    kind: str = history.ASSESSMENT
+
+
+class WaiveRequest(BaseModel):
+    # Omit to waive every open blocking gap on the node; supply one to waive it
+    # alone. Two shapes rather than two endpoints, because "stop asking me about
+    # this" is one intent at two scopes (§18.16.2).
+    gap_id: str | None = None
+    node_id: str | None = None
+
+
+def _gaps_payload(node) -> list[dict]:
+    """The node's OPEN gaps, for the learner to see.
+
+    §18.10 calls this "the product's most honest surface: it tells the learner
+    what they still do not know, by name". Open only — a `verified` gap is closed
+    and a `waived` one is what they asked to stop hearing about.
+
+    `blocking` is included even though it is derivable from `kind`, because the
+    frontend needs to distinguish "this is holding the node back" from "this is
+    worth knowing" without shipping a copy of the policy.
+    """
+    return [
+        {
+            "id": gap.id,
+            "kind": gap.kind,
+            "claim": gap.claim,
+            "objective_part": gap.objective_part,
+            "status": gap.status,
+            "blocking": gap.is_blocking,
+            "verification_attempts": gap.verification_attempts,
+            "exhausted": gap.is_exhausted,
+        }
+        for gap in node.gaps
+        if gap.is_open
+    ]
 
 
 class OverrideRequest(BaseModel):
@@ -479,6 +520,163 @@ def session_advance(session_id: str, body: AdvanceRequest) -> dict:
     return {"done": False, "node_id": nxt, "lesson": lesson}
 
 
+def _respond_to_verification(
+    graph, state: OnboardState, current: str, body: RespondRequest, client
+) -> dict:
+    """Grade an answer to a verification question (gap-model M6, §18.10).
+
+    A separate act with a separate shape, and the differences are the design:
+
+      - No `classification`. A verification answer is evidence about specific
+        false beliefs, not a re-assessment of the objective, so it does not
+        re-grade the node. `understanding_state` still moves, but only because
+        gaps closing changes what `understanding_of` derives.
+      - No adaptation. `decide_all` is not consulted and no hint, re-teach or
+        warm-up is produced — the outcome of a verification is a gap closing or
+        not closing.
+      - The attempt is recorded with `kind="verification"`, which keeps it out of
+        `history.assessments()` and therefore out of every assessment-only
+        consumer.
+
+    The existing response keys are still present, so an un-updated client that
+    somehow posts here reads something coherent rather than a `KeyError`.
+    """
+    node = graph.nodes[current]
+    if not node.gap_state.pending_verification:
+        raise HTTPException(status_code=409, detail="no_pending_verification")
+
+    result = grade_verification(state, node, body.response, client=client)
+    if result.get("failed"):
+        # Nothing resolved, no attempt charged, the question still pending. The
+        # learner may answer again without having spent anything.
+        raise HTTPException(status_code=503, detail="verification_grading_failed")
+
+    graph.record_attempt(
+        current,
+        body.response,
+        # Deliberately not a verdict about the objective: `understanding_of` is
+        # what answers that, from the latest ASSESSMENT plus the gap list.
+        classification="",
+        rationale=result.get("rationale") or "",
+        kind=history.VERIFICATION,
+    )
+    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+
+    return {
+        "kind": history.VERIFICATION,
+        "resolved": result.get("resolved", []),
+        "unresolved": result.get("unresolved", []),
+        "rationale": result.get("rationale"),
+        "gaps": _gaps_payload(node),
+        "understanding_state": understanding_of(node),
+        "current_node_id": graph.current_node_id,
+        # Present so the shape overlaps the assessment reply rather than being a
+        # disjoint union the client has to switch on before it can read anything.
+        "classification": None,
+        "gap_kind": None,
+        "mutation": {"kind": "none"},
+        "adaptation": {"kind": "none"},
+        "errors": state.errors,
+    }
+
+
+@app.post("/session/{session_id}/verify")
+def session_verify(session_id: str, body: dict | None = None) -> dict:
+    """Generate a FRESH question testing whether a gap has actually closed.
+
+    Replaces "Try again", which re-showed the answered question after `reveal`
+    had already given away the reasoning — a memory check (§18.7).
+
+    Aimed at ONE gap: the highest-precedence open blocking gap that still has
+    verification budget. Asking about three at once would let an answer address
+    one and appear to have addressed all three, which is the partial answer that
+    looks like completion.
+    """
+    node_id = (body or {}).get("node_id")
+    graph = _load_session_or_404(session_id)
+    current = node_id or graph.current_node_id
+    if current is None or current not in graph.nodes:
+        raise HTTPException(status_code=404, detail="node_not_found")
+    node = graph.nodes[current]
+
+    plan = adaptation.decide_all(
+        "partial", list(node.gaps),
+        remediation_rounds=node.gap_state.remediation_rounds,
+    )
+    # The active set is already precedence-ordered and cap-filtered, so an
+    # exhausted gap is not offered — the system has stopped proposing for it.
+    target = plan.active_set[0] if plan.active_set else None
+    if target is None:
+        raise HTTPException(status_code=409, detail="nothing_to_verify")
+
+    client = _new_client()
+    state = OnboardState(repo_url=graph.repo_url, goal=graph.goal, client=client)
+    state.graph = graph
+    try:
+        source = _node_source(graph, node)
+    except Exception as exc:
+        # §4.1.2 applied here: with no source the model would invent the scenario,
+        # and failing an imaginary question would record real evidence about it.
+        raise HTTPException(status_code=409, detail="source_unavailable") from exc
+
+    prompt = teaching_verify.verify(state, node, [target], source, client=client)
+    if prompt is None:
+        raise HTTPException(status_code=503, detail="verification_unavailable")
+
+    stored = teaching_verify.store(node, prompt)
+    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    return {
+        "node_id": current,
+        # No `reveal` and no expected answer — excluded by design, not omitted for
+        # brevity. Shipping the answer beside the question is what made re-asking
+        # meaningless in the first place.
+        "question": stored["question"],
+        "targets": stored["targets"],
+        "gaps": _gaps_payload(node),
+        "errors": state.errors,
+    }
+
+
+@app.post("/session/{session_id}/waive")
+def session_waive(session_id: str, body: WaiveRequest) -> dict:
+    """Stop remediating — one gap, or every open blocking gap on the node.
+
+    **Never evidence** (§18.16.2): waiving does not produce `verified`, so the
+    node stays short of `understood` and `readiness()` stays honest. What it buys
+    is that the system stops asking, and that the journey can still complete.
+
+    Reversible by construction: the gaps are still on the node, and
+    `POST /verify` will offer them again once they are re-opened, which is what
+    "an offer to verify it now" on the completion screen rests on.
+    """
+    graph = _load_session_or_404(session_id)
+    current = body.node_id or graph.current_node_id
+    if current is None or current not in graph.nodes:
+        raise HTTPException(status_code=404, detail="node_not_found")
+    node = graph.nodes[current]
+
+    if body.gap_id:
+        if not graph.waive_gap(current, body.gap_id):
+            # Unknown, or already settled. A 404 rather than a silent success, so
+            # a stale UI cannot report a waiver that did not happen.
+            raise HTTPException(status_code=404, detail="gap_not_open")
+        waived = [body.gap_id]
+    else:
+        waived = graph.waive_remaining(current)
+
+    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    return {
+        "node_id": current,
+        # NAMED, never a bare count: "what you chose not to check" is the most
+        # useful thing the artifact can say (§18.16.3).
+        "waived": waived,
+        "gaps": _gaps_payload(node),
+        "understanding_state": understanding_of(node),
+        "readiness": graph.readiness(),
+        "complete": graph.is_complete(),
+    }
+
+
 @app.post("/session/{session_id}/respond")
 def session_respond(session_id: str, body: RespondRequest) -> dict:
     graph = _load_session_or_404(session_id)
@@ -495,6 +693,10 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
     client = _new_client()
     state = OnboardState(repo_url=graph.repo_url, goal=graph.goal, client=client)
     state.graph = graph
+
+    if body.kind == history.VERIFICATION:
+        return _respond_to_verification(graph, state, current, body, client)
+
     run_grader(state, body.response, client=client)
     # The Grader updated the node's understanding_state / weak_spot in place.
 
@@ -651,6 +853,11 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
         "mutation": mutation,
         "adaptation": adapted,
         "current_node_id": graph.current_node_id,  # may now point at a new prerequisite
+        # The outstanding-gaps list (§18.10). Additive: every key above is
+        # unchanged, so an un-updated client keeps working and simply does not
+        # render it.
+        "gaps": _gaps_payload(graph.nodes[current]),
+        "complete": graph.is_complete(),
     }
 
 

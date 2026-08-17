@@ -31,7 +31,7 @@ from dataclasses import dataclass
 import anthropic
 from pydantic import BaseModel
 
-from backend.learning import progress
+from backend.learning import history, progress
 from backend.learning.adaptation import decide_all
 from backend.learning.gaps import Gap
 from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
@@ -111,7 +111,12 @@ class Diagnosis:
         Falls back to the attempt alone when the node has no gaps, which is
         every flag-off session and every session written before the gap model.
         """
-        attempt = node.attempts[-1] if node.attempts else None
+        # The latest ASSESSMENT. `attempts[-1]` would hand the Mutator a
+        # verification answer whenever one was graded most recently — a reply
+        # to a different question — and the warm-up would be chosen for it.
+        # That is precisely the diagnosis-blindness §18.2 exists to end.
+        assessed = history.assessments(node.attempts)
+        attempt = assessed[-1] if assessed else None
         base = cls.from_attempt(attempt)
         if not node.gaps:
             return base

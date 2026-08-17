@@ -197,7 +197,10 @@ def is_assessed(node: "LearningNode") -> bool:
     able to tell the two apart. It moves `assessed_coverage` only; the two
     progress measures read `understanding_state` and are untouched.
     """
-    return any(history.is_evidence(a) for a in node.attempts)
+    # ASSESSMENTS only. A verification answer is evidence about one gap, not
+    # about the objective, so pooling it here would inflate the very measure
+    # whose job is to be the honesty check on goal readiness.
+    return any(history.is_evidence(a) for a in history.assessments(node.attempts))
 
 
 # ── the measures ──────────────────────────────────────────────────────────────

@@ -501,11 +501,19 @@ def test_respond_with_no_gaps_still_uses_the_scalar(client):
     assert respond.reteach.call_args.kwargs["gaps"] == ()
 
 
-def test_respond_response_keys_are_unchanged(client):
-    """M9 owns the API surface; M5 must not move it."""
+def test_respond_keeps_every_pre_existing_response_key(client):
+    """M9's compatibility invariant: "existing response keys unchanged; an
+    un-updated client keeps working".
+
+    Asserted as a SUPERSET rather than an exact set. M9 adds `gaps` and
+    `complete` deliberately, and an exact-set assertion would have to be edited
+    every time the surface grows — which turns the guard into a chore and teaches
+    people to update it without thinking. What must never happen is a key
+    *disappearing*, and that is what this pins.
+    """
     graph = _graph_with_gaps(Gap.create("wrong_model", CLAIM_A))
     result, _, _ = _run_respond(client, graph, "confused", "wrong_model")
-    assert set(result) == {
+    assert {
         "classification", "gap_kind", "rationale", "understanding_state",
         "mutation", "adaptation", "current_node_id",
-    }
+    } <= set(result)

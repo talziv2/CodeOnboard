@@ -234,7 +234,18 @@ export default function LessonPanel({
   // stays readable, which leaves node.attempts one behind. Show the answer that
   // was just graded anyway — it can't double up, because in that branch the
   // refresh that would have carried it never ran.
-  const recorded = node.attempts ?? [];
+  // ASSESSMENTS only. "Your answers" is the record of attempts at the lesson's
+  // own question; a verification answer replies to a different, gap-specific
+  // question (gap-model M6) and carries no `classification`, so leaving it in
+  // would render a blank row, inflate the count, and — worse — make `latest`
+  // below refer to an answer about something else entirely.
+  //
+  // Filtered rather than labelled: showing verification answers in their own
+  // right needs copy, and `strings.ts` is mid-change in another branch. That is
+  // the frontend half of M9, not this.
+  const recorded = (node.attempts ?? []).filter(
+    (a) => (a.kind ?? "assessment") !== "verification"
+  );
   const pending: Attempt | null =
     result && result.mutation?.kind === "prerequisite"
       ? {

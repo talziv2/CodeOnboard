@@ -356,11 +356,17 @@ class LearningGraph:
         The presence of this key is what distinguishes "the system did nothing"
         from "we have no record" for every attempt written before M2.
         """
-        attempts = self.nodes[node_id].attempts
-        if not attempts:
+        # The latest ASSESSMENT, not the latest attempt. A response is what the
+        # system did about an answer to the OBJECTIVE; a verification answer is
+        # evidence about one gap and earns no such response. Filing one against a
+        # verification would attribute the intervention to the wrong question, and
+        # since verification answers are appended like any other attempt, `[-1]`
+        # is that wrong question exactly whenever one was graded most recently.
+        assessments = history.assessments(self.nodes[node_id].attempts)
+        if not assessments:
             return None
-        attempts[-1][history.RESPONSE] = response
-        return attempts[-1]
+        assessments[-1][history.RESPONSE] = response
+        return assessments[-1]
 
     def record_journey_event(self, kind: str, **payload) -> dict:
         """Record a change to the SHAPE of the journey.

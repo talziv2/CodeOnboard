@@ -111,6 +111,17 @@ export interface Attempt {
    * not declare it.
    */
   gap_kind?: string;
+  /**
+   * "assessment" (an answer to the lesson's own question) or "verification" (an
+   * answer to a fresh question about ONE gap — gap-model M6).
+   *
+   * The two must never be pooled: a verification answer is evidence about a gap,
+   * not a second attempt at the objective, so averaging or counting them together
+   * misreports both. Optional because every attempt written before verification
+   * existed is an assessment, which makes the absent case a fact rather than a
+   * guess.
+   */
+  kind?: string;
   /** ISO-8601, UTC. */
   at: string;
 }

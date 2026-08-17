@@ -1,0 +1,504 @@
+"""M9 (backend half) — the gap surface over HTTP.
+
+gap-model.md M9, §18.10. Three endpoints' worth of contract:
+
+  /respond   gains `gaps` — "the product's most honest surface: it tells the
+             learner what they still do not know, by name" — and accepts
+             `kind="verification"` to grade an answer to a verification question.
+  /verify    returns a FRESH question aimed at ONE gap. Replaces "Try again",
+             which re-showed the answered question after `reveal` had already
+             given the reasoning away.
+  /waive     stops the system asking, per gap or per node. Never evidence.
+
+The invariant M9 is held to is **compatibility**: every pre-existing response key
+survives, so a client that has not been updated keeps working. That is asserted
+as a superset, not an exact set — a key vanishing is the failure, a key being
+added is the point.
+
+The frontend half (RouteRail, strings) is deliberately not touched here; it waits
+on the concurrent frontend work.
+
+Run with: uv run pytest tests/test_gap_api.py -v
+"""
+import json
+from unittest.mock import MagicMock, patch
+
+import pytest
+from fastapi.testclient import TestClient
+
+import backend.api as api
+from backend.learning import history
+from backend.learning import store as learning_store
+from backend.learning.gaps import VERIFICATION_ATTEMPT_CAP, Gap
+from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
+
+from tests.test_session_api import (
+    FAKE_GOAL,
+    FAKE_REPO_URL,
+    _teaching_side_effect,
+)
+
+
+CLAIM = "the handler opens the connection to read the server's challenge"
+
+
+@pytest.fixture(autouse=True)
+def _env_and_db(tmp_path, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("CODEONBOARD_GAPS", "1")
+    monkeypatch.setattr(api, "SESSIONS_DB_PATH", tmp_path / "sessions.db")
+    monkeypatch.setattr(api.anthropic, "Anthropic", lambda **kw: MagicMock())
+
+
+@pytest.fixture
+def client():
+    return TestClient(api.app)
+
+
+def _node(title: str, state: str = "partial") -> LearningNode:
+    node = LearningNode(
+        title=title,
+        code_anchor=CodeAnchor(file="requests/sessions.py", line_start=1, line_end=20),
+        lesson_brief={"objective": f"Explain {title}", "priority": "required"},
+    )
+    node.understanding_state = state
+    node.cached_lesson = {"prompt": "the original question", "setup": "…"}
+    return node
+
+
+def _graph(*nodes: LearningNode) -> LearningGraph:
+    graph = LearningGraph(repo_url=FAKE_REPO_URL, goal=FAKE_GOAL)
+    for node in nodes:
+        graph.add_node(node)
+    for a, b in zip(nodes, nodes[1:]):
+        graph.add_edge(a.id, b.id, kind="sequence")
+    graph.set_current(nodes[0].id)
+    return graph
+
+
+def _start(client, graph) -> str:
+    def _pipeline(repo_url, goal, client=None):
+        state = MagicMock()
+        state.graph = graph
+        state.errors = []
+        return state
+
+    with patch("backend.api.run_pipeline", side_effect=_pipeline), \
+         patch("backend.api.run_teaching", side_effect=_teaching_side_effect):
+        return client.post(
+            "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+        ).json()["session_id"]
+
+
+def _stored(session_id):
+    return learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+
+
+# ── /respond: the gaps list ──────────────────────────────────────────────────
+
+
+def _respond(client, session_id, classification="confused", gap_kind="wrong_model",
+             **body):
+    def _grader(state, user_response, client=None):
+        state.last_grade = {"classification": classification,
+                            "gap_kind": gap_kind, "rationale": "because"}
+        return state
+
+    with patch("backend.api.run_grader", side_effect=_grader), \
+         patch("backend.api._node_source", return_value="source"), \
+         patch("backend.api.teaching_respond") as respond, \
+         patch("backend.api.mutate_graph"):
+        respond.reteach.return_value = MagicMock()
+        respond.hint.return_value = "h"
+        respond.followup.return_value = "f"
+        return client.post(
+            f"/session/{session_id}/respond",
+            json={"response": "my answer", **body},
+        )
+
+
+def test_respond_returns_the_open_gaps_by_name(client):
+    node = _node("A")
+    gap = Gap.create("wrong_model", CLAIM, objective_part="what the handler owns")
+    node.gap_state.gaps.append(gap)
+    session_id = _start(client, _graph(node, _node("B")))
+
+    body = _respond(client, session_id).json()
+
+    assert len(body["gaps"]) == 1
+    shown = body["gaps"][0]
+    assert shown["id"] == gap.id
+    assert shown["claim"] == CLAIM
+    assert shown["kind"] == "wrong_model"
+    assert shown["status"] == "open"
+    assert shown["blocking"] is True
+    assert shown["objective_part"] == "what the handler owns"
+
+
+def test_respond_omits_settled_gaps(client):
+    """A verified gap is closed; a waived one is what they asked to stop hearing
+    about. Neither is outstanding work."""
+    node = _node("A")
+    verified, waived, open_ = (
+        Gap.create("wrong_model", "v"), Gap.create("wrong_model", "w"),
+        Gap.create("wrong_model", CLAIM),
+    )
+    verified.mark_verified(0)
+    waived.waive()
+    node.gap_state.gaps.extend([verified, waived, open_])
+    session_id = _start(client, _graph(node, _node("B")))
+
+    body = _respond(client, session_id).json()
+    assert [g["claim"] for g in body["gaps"]] == [CLAIM]
+
+
+def test_respond_reports_a_non_blocking_gap_as_not_blocking(client):
+    node = _node("A")
+    node.gap_state.gaps.append(Gap.create("right_idea_wrong_altitude", "too low"))
+    session_id = _start(client, _graph(node, _node("B")))
+    body = _respond(client, session_id, gap_kind="right_idea_wrong_altitude").json()
+    assert body["gaps"][0]["blocking"] is False
+
+
+def test_respond_exposes_the_verification_budget(client):
+    """So the UI can stop offering a check the system has stopped proposing."""
+    node = _node("A")
+    gap = Gap.create("wrong_model", CLAIM)
+    gap.verification_attempts = VERIFICATION_ATTEMPT_CAP
+    node.gap_state.gaps.append(gap)
+    session_id = _start(client, _graph(node, _node("B")))
+    shown = _respond(client, session_id).json()["gaps"][0]
+    assert shown["verification_attempts"] == VERIFICATION_ATTEMPT_CAP
+    assert shown["exhausted"] is True
+
+
+def test_respond_reports_journey_completion(client):
+    node = _node("A", "understood")
+    session_id = _start(client, _graph(node))
+    body = _respond(client, session_id, "understood", "none").json()
+    assert body["complete"] is True
+
+
+def test_a_client_that_sends_no_kind_gets_the_assessment_path(client):
+    """The compatibility default: verification is opt-in per request."""
+    node = _node("A")
+    node.gap_state.gaps.append(Gap.create("wrong_model", CLAIM))
+    session_id = _start(client, _graph(node, _node("B")))
+    body = _respond(client, session_id).json()
+    assert body["classification"] == "confused"
+    assert body["gap_kind"] == "wrong_model"
+
+
+# ── POST /verify ─────────────────────────────────────────────────────────────
+
+
+def _verify(client, session_id, question="a fresh question about a new case"):
+    def _make(state, node, gaps, source, client=None):
+        from backend.agents.teaching.verify import VerificationPrompt
+        return VerificationPrompt(question=question, targets=[g.id for g in gaps])
+
+    with patch("backend.api.teaching_verify.verify", side_effect=_make), \
+         patch("backend.api._node_source", return_value="source"):
+        return client.post(f"/session/{session_id}/verify", json={})
+
+
+def test_verify_returns_a_question_and_no_answer(client):
+    """No `reveal`, no expected answer — shipping the answer beside the question
+    is what made re-asking meaningless (§18.7)."""
+    node = _node("A")
+    gap = Gap.create("wrong_model", CLAIM)
+    node.gap_state.gaps.append(gap)
+    session_id = _start(client, _graph(node))
+
+    body = _verify(client, session_id).json()
+
+    assert body["question"] == "a fresh question about a new case"
+    assert body["targets"] == [gap.id]
+    assert "reveal" not in body
+    assert "expected_answer" not in body
+
+
+def test_verify_aims_at_one_gap_even_when_several_are_open(client):
+    """Asking about three at once lets an answer address one and appear to have
+    addressed all three."""
+    node = _node("A")
+    for i in range(3):
+        node.gap_state.gaps.append(Gap.create("wrong_model", f"claim {i}"))
+    session_id = _start(client, _graph(node))
+    assert len(_verify(client, session_id).json()["targets"]) == 1
+
+
+def test_verify_targets_the_highest_precedence_gap(client):
+    node = _node("A")
+    altitude = Gap.create("right_idea_wrong_altitude", "too low")
+    foundation = Gap.create("missing_prerequisite", "no idea what a socket is")
+    node.gap_state.gaps.extend([altitude, foundation])
+    session_id = _start(client, _graph(node))
+    assert _verify(client, session_id).json()["targets"] == [foundation.id]
+
+
+def test_verify_stores_the_question_on_the_node(client):
+    node = _node("A")
+    node.gap_state.gaps.append(Gap.create("wrong_model", CLAIM))
+    session_id = _start(client, _graph(node))
+    _verify(client, session_id)
+    pending = _stored(session_id).nodes[node.id].gap_state.pending_verification
+    assert pending["question"] == "a fresh question about a new case"
+
+
+def test_verify_refuses_when_there_is_nothing_to_verify(client):
+    node = _node("A")
+    session_id = _start(client, _graph(node))
+    got = _verify(client, session_id)
+    assert got.status_code == 409
+    assert got.json()["detail"] == "nothing_to_verify"
+
+
+def test_verify_refuses_an_exhausted_gap(client):
+    """The cap stops the system PROPOSING. The gap stays open and blocking."""
+    node = _node("A")
+    gap = Gap.create("wrong_model", CLAIM)
+    gap.verification_attempts = VERIFICATION_ATTEMPT_CAP
+    node.gap_state.gaps.append(gap)
+    session_id = _start(client, _graph(node))
+    assert _verify(client, session_id).status_code == 409
+    assert _stored(session_id).nodes[node.id].gaps[0].status == "open"
+
+
+def test_verify_reports_generation_failure_rather_than_inventing_a_question(client):
+    node = _node("A")
+    node.gap_state.gaps.append(Gap.create("wrong_model", CLAIM))
+    session_id = _start(client, _graph(node))
+    with patch("backend.api.teaching_verify.verify", return_value=None), \
+         patch("backend.api._node_source", return_value="source"):
+        got = client.post(f"/session/{session_id}/verify", json={})
+    assert got.status_code == 503
+
+
+def test_verify_refuses_without_readable_source(client):
+    """§4.1.2: with no source the model invents the scenario, and failing an
+    imaginary question would record real evidence about it."""
+    node = _node("A")
+    node.gap_state.gaps.append(Gap.create("wrong_model", CLAIM))
+    session_id = _start(client, _graph(node))
+    with patch("backend.api._node_source", side_effect=RuntimeError("gone")):
+        got = client.post(f"/session/{session_id}/verify", json={})
+    assert got.status_code == 409
+    assert got.json()["detail"] == "source_unavailable"
+
+
+# ── /respond with kind="verification" ────────────────────────────────────────
+
+
+def _grade_verification(resolved_ids, rationale="r", new_gaps=None):
+    def _fake(state, node, answer, client=None):
+        for gap in node.gaps:
+            if gap.id in resolved_ids:
+                gap.mark_verified(len(node.attempts))
+        node.gap_state.pending_verification = None
+        return {
+            "resolved": list(resolved_ids),
+            "unresolved": [g.id for g in node.gaps if g.is_open],
+            "new_gaps": len(new_gaps or []),
+            "rationale": rationale,
+        }
+    return _fake
+
+
+def test_a_verification_answer_closes_the_gap_it_demonstrated(client):
+    node = _node("A")
+    gap = Gap.create("wrong_model", CLAIM)
+    node.gap_state.gaps.append(gap)
+    session_id = _start(client, _graph(node))
+    _verify(client, session_id)
+
+    with patch("backend.api.grade_verification",
+               side_effect=_grade_verification([gap.id])):
+        body = client.post(
+            f"/session/{session_id}/respond",
+            json={"response": "the right answer", "kind": "verification"},
+        ).json()
+
+    assert body["kind"] == "verification"
+    assert body["resolved"] == [gap.id]
+    assert body["gaps"] == []            # nothing open left
+    assert _stored(session_id).nodes[node.id].gaps[0].status == "verified"
+
+
+def test_a_verification_answer_is_recorded_with_its_own_kind(client):
+    """So it can never be pooled with answers to the objective."""
+    node = _node("A")
+    gap = Gap.create("wrong_model", CLAIM)
+    node.gap_state.gaps.append(gap)
+    session_id = _start(client, _graph(node))
+    _verify(client, session_id)
+
+    with patch("backend.api.grade_verification",
+               side_effect=_grade_verification([gap.id])):
+        client.post(f"/session/{session_id}/respond",
+                    json={"response": "answer", "kind": "verification"})
+
+    attempts = _stored(session_id).nodes[node.id].attempts
+    assert attempts[-1]["kind"] == history.VERIFICATION
+    assert history.assessments(attempts) == []   # excluded from assessment views
+
+
+def test_a_verification_answer_runs_no_adaptation(client):
+    """The outcome of a verification is a gap closing or not closing — not a
+    hint, a re-teach or a warm-up."""
+    node = _node("A")
+    gap = Gap.create("wrong_model", CLAIM)
+    node.gap_state.gaps.append(gap)
+    session_id = _start(client, _graph(node))
+    _verify(client, session_id)
+
+    with patch("backend.api.grade_verification",
+               side_effect=_grade_verification([])), \
+         patch("backend.api.teaching_respond") as respond, \
+         patch("backend.api.mutate_graph") as mutate:
+        body = client.post(f"/session/{session_id}/respond",
+                           json={"response": "wrong", "kind": "verification"}).json()
+
+    respond.reteach.assert_not_called()
+    respond.hint.assert_not_called()
+    mutate.assert_not_called()
+    assert body["adaptation"] == {"kind": "none"}
+    assert body["classification"] is None
+
+
+def test_a_verification_answer_does_not_re_grade_the_objective(client):
+    node = _node("A", "partial")
+    gap = Gap.create("wrong_model", CLAIM)
+    node.gap_state.gaps.append(gap)
+    session_id = _start(client, _graph(node))
+    _verify(client, session_id)
+
+    with patch("backend.api.grade_verification",
+               side_effect=_grade_verification([gap.id])):
+        client.post(f"/session/{session_id}/respond",
+                    json={"response": "answer", "kind": "verification"})
+
+    stored = _stored(session_id).nodes[node.id]
+    # The stored assessment is untouched; only the gap moved.
+    assert stored.understanding_state == "partial"
+
+
+def test_verification_without_a_pending_question_is_refused(client):
+    node = _node("A")
+    node.gap_state.gaps.append(Gap.create("wrong_model", CLAIM))
+    session_id = _start(client, _graph(node))
+    got = client.post(f"/session/{session_id}/respond",
+                      json={"response": "answer", "kind": "verification"})
+    assert got.status_code == 409
+    assert got.json()["detail"] == "no_pending_verification"
+
+
+def test_a_verification_grading_failure_costs_the_learner_nothing(client):
+    node = _node("A")
+    gap = Gap.create("wrong_model", CLAIM)
+    node.gap_state.gaps.append(gap)
+    session_id = _start(client, _graph(node))
+    _verify(client, session_id)
+
+    def _failed(state, node, answer, client=None):
+        return {"resolved": [], "unresolved": [gap.id], "new_gaps": 0,
+                "rationale": "", "failed": True}
+
+    with patch("backend.api.grade_verification", side_effect=_failed):
+        got = client.post(f"/session/{session_id}/respond",
+                          json={"response": "answer", "kind": "verification"})
+
+    assert got.status_code == 503
+    stored = _stored(session_id).nodes[node.id]
+    assert stored.gaps[0].status == "open"
+    assert stored.gaps[0].verification_attempts == 0
+    # The question survives, so they can answer again.
+    assert stored.gap_state.pending_verification is not None
+
+
+# ── /waive ───────────────────────────────────────────────────────────────────
+
+
+def test_waive_a_single_gap_by_id(client):
+    node = _node("A")
+    a, b = Gap.create("wrong_model", "A"), Gap.create("wrong_model", "B")
+    node.gap_state.gaps.extend([a, b])
+    session_id = _start(client, _graph(node))
+
+    body = client.post(f"/session/{session_id}/waive",
+                       json={"gap_id": a.id}).json()
+
+    assert body["waived"] == [a.id]
+    assert [g["id"] for g in body["gaps"]] == [b.id]
+    stored = _stored(session_id).nodes[node.id]
+    assert {g.id: g.status for g in stored.gaps} == {a.id: "waived", b.id: "open"}
+
+
+def test_waive_the_node_waives_every_open_blocking_gap_and_names_them(client):
+    node = _node("A")
+    a, b = Gap.create("wrong_model", "A"), Gap.create("missing_prerequisite", "B")
+    node.gap_state.gaps.extend([a, b])
+    session_id = _start(client, _graph(node))
+
+    body = client.post(f"/session/{session_id}/waive", json={}).json()
+
+    assert set(body["waived"]) == {a.id, b.id}
+    assert body["gaps"] == []
+    assert _stored(session_id).nodes[node.id].user_override == "waive_remaining"
+
+
+def test_waiving_never_produces_understood(client):
+    """Waiving is a decision, not evidence (§18.16.2)."""
+    node = _node("A", "understood")
+    node.gap_state.gaps.append(Gap.create("wrong_model", CLAIM))
+    session_id = _start(client, _graph(node))
+    body = client.post(f"/session/{session_id}/waive", json={}).json()
+    assert body["understanding_state"] != "understood"
+    assert body["readiness"] < 1.0
+
+
+def test_waiving_makes_the_journey_completable(client):
+    """The §18.16.3 target state, over HTTP: complete, but not 100% verified."""
+    node = _node("A", "understood")
+    node.gap_state.gaps.append(Gap.create("wrong_model", CLAIM))
+    session_id = _start(client, _graph(node))
+    body = client.post(f"/session/{session_id}/waive", json={}).json()
+    assert body["complete"] is True
+    assert body["readiness"] < 1.0
+
+
+def test_waiving_an_unknown_gap_is_a_404_not_a_silent_success(client):
+    """So a stale UI cannot report a waiver that did not happen."""
+    node = _node("A")
+    node.gap_state.gaps.append(Gap.create("wrong_model", CLAIM))
+    session_id = _start(client, _graph(node))
+    got = client.post(f"/session/{session_id}/waive", json={"gap_id": "nope"})
+    assert got.status_code == 404
+    assert got.json()["detail"] == "gap_not_open"
+
+
+def test_waive_leaves_a_non_blocking_gap_alone(client):
+    node = _node("A")
+    blocking = Gap.create("wrong_model", CLAIM)
+    altitude = Gap.create("right_idea_wrong_altitude", "too low")
+    node.gap_state.gaps.extend([blocking, altitude])
+    session_id = _start(client, _graph(node))
+
+    body = client.post(f"/session/{session_id}/waive", json={}).json()
+
+    assert body["waived"] == [blocking.id]
+    assert [g["id"] for g in body["gaps"]] == [altitude.id]
+
+
+def test_a_waived_gap_can_be_verified_later(client):
+    """"An offer to verify it now" on the completion screen rests on this: the
+    gap is still on the node, so re-opening it is possible."""
+    node = _node("A")
+    gap = Gap.create("wrong_model", CLAIM)
+    node.gap_state.gaps.append(gap)
+    session_id = _start(client, _graph(node))
+    client.post(f"/session/{session_id}/waive", json={})
+
+    stored = _stored(session_id).nodes[node.id]
+    assert stored.gaps[0].status == "waived"
+    assert stored.gaps[0].claim == CLAIM      # still nameable, still recoverable
