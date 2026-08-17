@@ -1,11 +1,15 @@
 # Gap model — multi-gap remediation and verification
 
-**Phase status: M1 done 2026-08-16; M2–M5 done 2026-08-17; M6 (AC2 validated
-live), M7 and M8 done 2026-08-18. The engine is complete end to end: gaps are
-detected, arbitrated, remediated, verified, they gate `understood`, and the
-learner can decide to move past them without being sent back. **M9 (API +
-frontend) is next — the first step that changes what a learner sees**, and the
-one whose build row says a browser pass is required rather than optional.**
+**Phase status: COMPLETE. M1 done 2026-08-16; M2–M5 done 2026-08-17;
+M6–M10 done 2026-08-18.** Gaps are detected as a list, kept distinct across
+re-grades, arbitrated into one plan, remediated by name, closed only by a fresh
+question, and they gate `understood` — and the learner can move past them
+without being sent back or granted mastery they did not earn.
+
+**One acceptance criterion is qualified rather than clean, and it is stated in
+the table below rather than buried:** AC1 is reproducible on `psf/requests` and
+intermittent on `aimacode/aima-python` (1 of 4 samples). Nothing was tuned to
+make it pass. See [`evidence/m10-acceptance/`](evidence/m10-acceptance/README.md).
 
 | step | state |
 |---|---|
@@ -17,7 +21,46 @@ one whose build row says a browser pass is required rather than optional.**
 | **M6** Verification | ✅ **done, AC2 validated live 2026-08-18.** `teaching/verify.py` (`verify` → `VerificationPrompt`, no `reveal`, stored on `gap_state.pending_verification`), `grader/verification.py` (per-gap `resolved` + new gaps; the only producer of `verified`), caps enforced in `decide_all`. 33 tests (1014 total). **AC2 passes**: double dissociation on 2 real nodes (`holding` fails, `corrected` passes, overlap 0.11/0.15 with the original question), and with two gaps open an answer correct about one and silent about the other closed **only** the one it addressed. Evidence: [`evidence/m6-verification/`](evidence/m6-verification/README.md) |
 | **M7** Derived `understanding_state` | ✅ **done, compatibility gate passed.** `understanding_of(node)` in `graph.py` is the single owner; `mark_understanding` now records the latest *assessment* rather than concluding. **Blocking is live**: a node cannot be `understood` while a blocking gap is unverified. Gate: **0 mismatches over 629 nodes in 68 stored sessions**. Every production reader repointed, enforced by an AST-based structural test. 23 tests + one M1 test inverted (1077 total) |
 | **M8** Learner intents + resume + completion | ✅ **done, stranding validated.** `continue_past` / `waive_gap` / `waive_remaining` on the graph; `/advance` records `continue` **only** where open blocking gaps exist; `is_settled` (the strict §18.16.3 one) and `is_complete()` over `walk_nodes`; `mark_understood` migrated. `resume_point()` returns to unfinished remediation **unless the learner chose to move past it**. 35 tests (1112 total), including an end-to-end walk through `/session/start`'s real resume path — and the guard is mutation-checked: removing it fails 3 tests |
-| M9 – M10 | not started |
+| **M9** API + frontend | ✅ **done, browser-validated.** `/respond` returns `gaps` + `complete` and accepts `kind="verification"`; `POST /verify`; `POST /waive`; gap content on `to_dict`, `node_summary` and `evidence`; `gaps_opened` / `gaps_addressed` / `gaps_resolved` in M2's existing envelope. Frontend: outstanding-gaps list, "Check my understanding" replacing "Try again", per-gap waive, drawer explanation, gap-aware rail. Browser pass on an isolated stack closed a real defect: `unresolved` was still captioned "⚑ marked weak" for nodes whose latest answer *reached* the objective |
+| **M10** Acceptance + live E2E | ✅ **done, with one honest qualification.** AC2 passes **live on both repositories**; AC1 passes reproducibly on `psf/requests` (2/2) and on **1 of 4 samples** on `aimacode/aima-python`. The shortfall is detection variance on one subtle claim (3/4) plus its classification as *non-blocking* (2 of 3 detections) — **not** a loss of gap data: in every run, failures included, every detected gap was persisted, named, and survived. Deferred limitations probed: the >3 collapsed re-teach works; the M5 sectioning residue persists and was judged, not tuned. M2 gate: 46/48 classification (bottom of the measured band), 46/48 `gap_kind` (**above** baseline 45), `missing_prereq` 6/6. Evidence: [`evidence/m10-acceptance/`](evidence/m10-acceptance/README.md) |
+
+
+**M10: what the acceptance run actually proved, and what it did not.**
+AC2 passes live on both repositories, both halves — including the half no
+assertion can carry: an authored answer that still holds the misconception was
+graded against the generated question and was **not** resolved, on either repo.
+
+AC1 is the qualified one. On `psf/requests` it passes reproducibly. On
+`aimacode/aima-python` it passes **1 of 4 samples**, for two reasons that are
+worth separating: the second misconception is detected 3/4 (it is subtler — the
+learner describes the parent-chain walk correctly and is wrong only about the
+return value), and when detected it is classified `right_idea_wrong_altitude` in
+2 of 3, which is **non-blocking** and so cannot satisfy AC1's requirement that
+the survivor be *blocking*. That kind is arguably wrong — `solution()` returns no
+states at any altitude — but it sits inside the Grader's own definitions, and
+**forcing it would be tuning the thing the acceptance case exists to test.**
+
+**The clause that never failed, in any run:** no gap disappeared. Every gap
+detected was persisted, named, survived the verification of its neighbour, and
+stayed visible. "Must not be silently dropped" held 4/4.
+
+One harness finding, recorded because it nearly produced a false negative: the
+node the phase came from (`9d432157`/`63644c89`) yields ONE gap, because its
+stored lesson is the re-teach it later received and its prompt resolves the
+second misconception inside the question. Two misconceptions cannot be measured
+through a question that has already corrected one of them, so the acceptance run
+neutralises the prompt — repository, source, objective and answer all real and
+unchanged.
+
+**Both deferred limitations were probed and neither was tuned.** The >3
+blocking-gap collapsed path, never exercised before, behaves correctly at five
+gaps: one full re-teach over all five, `collapsed=True`, 471 words inside the
+600 budget, zero "Misconception N" labels. The M5 sectioning residue **persists
+and is stronger** — the `reveal` is four bolded topic sections. Judged
+acceptable rather than fixed: every claim is corrected, the sections are
+organised by what the code does rather than by the input list, and at five
+corrections signposting is plausibly the better shape. Changing it would be
+tuning without evidence of harm.
 
 **Stranding was validated as a flow, not as a function call, and the guard was
 proven to bite.** `resume_point()` reaches production in exactly one place —
@@ -233,8 +276,8 @@ replacing the other mid-phase.
 | **M6** ✅ | **Verification.** `teaching.verify(node, gaps, source) → VerificationPrompt` stored on `node.pending_verification`, **separate from `cached_lesson`**, carrying **no `reveal`**. Grader verification mode returns per-gap `resolved` + any new gaps. Per-gap and per-node counters persisted | A gap moves to `verified` **only** here. Silence about a gap leaves it `open`. Caps stop the system proposing without closing anything | Cost: this adds calls per gap. The Baseline-1 cost record must be re-measured (§19.7) |
 | **M7** ✅ | **Derived `understanding_state`.** `understood` ⟺ latest assessment reaches the objective **and** every blocking gap is `verified`. **Blocking takes effect here — after M6 made closure possible** | On any graph with `gaps == []`, every derived value **equals the stored value**. This is the compatibility gate, run over all 61 stored sessions | `prune_ahead` (reads `understood`), `resume_point` (reads `understood`), `readiness()` (reads state), `mark_understanding` (currently assigns) |
 | **M8** ✅ | **Learner intents + resume + completion.** `continue`, `waive`, `waive_remaining`; `/advance` records `continue` when leaving a node with open blocking gaps; `resume_point()` per §18.16.3; `is_complete()`; `mark_understood` migration | A refresh **never** records `continue`. Resume returns to unfinished remediation. `is_complete()` is reachable by walking the journey | `resume_point` stranding a learner; `/advance` recording `continue` on nodes without blocking gaps |
-| **M9** | **API + frontend.** `/respond` returns `gaps`; `POST /session/{id}/verify`; waive endpoints; the gauge relabelled *Verified understanding*; completion screen shows both measures with waived gaps **named** | Existing response keys unchanged; an un-updated client keeps working | The B6 route rail; the stop counter; the completion screen's `understood` count drops legitimately and needs its "N waived" context |
-| **M10** | **Acceptance + live E2E** (§19.5). Both named acceptance cases, on real repositories | AC1 and AC2 both observed live, not simulated | — |
+| **M9** ✅ | **API + frontend.** `/respond` returns `gaps`; `POST /session/{id}/verify`; waive endpoints; the gauge relabelled *Verified understanding*; completion screen shows both measures with waived gaps **named** | Existing response keys unchanged; an un-updated client keeps working | The B6 route rail; the stop counter; the completion screen's `understood` count drops legitimately and needs its "N waived" context |
+| **M10** ✅ | **Acceptance + live E2E** (§19.5). Both named acceptance cases, on real repositories | AC1 and AC2 both observed live, not simulated | — |
 
 M1–M3 are detection; M4–M6 are response; M7 gives it teeth; M8–M9 are agency and
 surface. Each step is independently revertable.

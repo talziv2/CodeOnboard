@@ -1,0 +1,31 @@
+{
+  "ac1": [
+    {
+      "case": "aimacode/aima-python \u2014 the original trace",
+      "node": "435e4fc4",
+      "objective": "Explain what a Node holds that a bare state does not \u2014 the parent pointer chain, the action that produced this node, the accumulated path_cost, and the depth \u2014 and how node.solution() uses the parent chain to reconstruct the ordered action sequence from root to goal. Explain also that node.path_cost holds the total cost, so you do not need to recompute it after search returns.",
+      "original_prompt": "A search function hands you a goal Node. Describe what that Node carries beyond the raw state, when each of those values is set, and what you get back when you call solution() on it.",
+      "step1": {
+        "classification": "partial",
+        "gap_kind": "wrong_model",
+        "gaps": [
+          {
+            "id": "9ac1278b",
+            "kind": "wrong_model",
+            "claim": "path_cost and depth are recalculated later by the search algorithm rather than during expansion when the child Node is created."
+          }
+        ],
+        "distinct_ids": 1,
+        "distinct_claims": 1
+      },
+      "verdict": "FAIL: fewer than two gaps detected"
+    }
+  ],
+  "ac2": [
+    {
+      "case": "aimacode/aima-python \u2014 the original trace",
+      "error": "no_question"
+    }
+  ],
+  "collapsed": null
+}
