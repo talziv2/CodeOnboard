@@ -26,6 +26,28 @@ longer longer than at 2. One weakness is recorded and deliberately **not** tuned
 away: the 3-gap `reveal` still reads as three well-ordered sections rather than
 one continuous argument.
 
+> **⚠️ M5 IS NOT INDEPENDENTLY REVERTABLE — the one documented exception to
+> §2's "each step is independently revertable".** M5 landed in `2973b69`
+> ("feat: multi-gap remediation (M5) and the two-measure progress model"),
+> bundled with concurrent work that was in flight in the same tree: the
+> two-measure progress model (`backend/learning/progress.py`, `learning-graph.md`,
+> `tests/test_progress.py`), the `origin` threading through the Mutator, and
+> `cost-optimization.md`. Both changes touched `backend/api.py` and
+> `backend/agents/mentor/mutator.py`, so the two sets of hunks were interleaved
+> in the same files.
+>
+> **Consequence, stated so nobody discovers it during an incident:** reverting
+> M5 would also revert the progress model, and vice versa. A `git revert
+> 2973b69` is therefore *not* the way to back out multi-gap remediation — use
+> `CODEONBOARD_GAPS=0`, which is exactly what the flag exists for and which
+> disables every M5 behaviour without touching a line of code.
+>
+> The commit is **already pushed, and is deliberately left as it is.** No
+> history rewrite, no retroactive split: rewriting shared history to recover a
+> revert path that the feature flag already provides would trade a real risk for
+> a hypothetical convenience. M1–M4 remain individually revertable
+> (`b9387ef`, `26f8104`, `d629346`).
+
 **Two conflicts between the plan and the real wiring, resolved rather than
 forced.** (a) `decide_all` could not simply replace `decide` at the call site:
 flag-off there are no gap *objects* but the base Grader prompt still returns a
