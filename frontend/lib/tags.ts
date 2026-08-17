@@ -9,6 +9,11 @@ import { t } from "@/lib/strings";
  * Tags and understanding states travel the wire as fixed keys — those values
  * are what the UI switches on, and `tagLabel` / `stateLabel` map them to the
  * wording shown.
+ *
+ * The hues themselves live in `app/globals.css`, not here: a chip is drawn with
+ * an inline style rather than a class, and a literal hex in this module would be
+ * the one thing on the page a theme could not re-tune. These functions return
+ * variable references, so light and dark are a CSS concern throughout.
  */
 export interface TagStyle {
   text: string;
@@ -16,24 +21,30 @@ export interface TagStyle {
   background: string;
 }
 
-const TAG_STYLES: Record<string, TagStyle> = {
-  architecture: { text: "#8fb6d9", border: "#33506b", background: "rgba(143,182,217,0.09)" },
-  flow: { text: "#7fcbb8", border: "#2e5f55", background: "rgba(127,203,184,0.09)" },
-  extension_point: { text: "#c7a0dc", border: "#543e63", background: "rgba(199,160,220,0.09)" },
-  risk: { text: "#d4634f", border: "#6b2f26", background: "rgba(212,99,79,0.10)" },
-  test_coverage: { text: "#d9a441", border: "#6b5220", background: "rgba(217,164,65,0.09)" },
-  component: { text: "#7b8d99", border: "#24333d", background: "rgba(123,141,153,0.08)" },
+const cssTag = (name: string): TagStyle => ({
+  text: `var(--tag-${name}-text)`,
+  border: `var(--tag-${name}-border)`,
+  background: `var(--tag-${name}-bg)`,
+});
+
+const CANONICAL_TAGS = [
+  "architecture",
+  "flow",
+  "extension_point",
+  "risk",
+  "test_coverage",
+  "component",
   // A unit that connects several earlier ones and introduces no new code —
   // where the mental model consolidates rather than grows. Warm and distinct
   // from the six "here is a new thing" kinds, because it is the opposite.
-  synthesis: { text: "#e0b088", border: "#6b4a2e", background: "rgba(224,176,136,0.09)" },
-};
+  "synthesis",
+] as const;
 
-const FREEFORM: TagStyle = {
-  text: "#7b8d99",
-  border: "#24333d",
-  background: "rgba(123,141,153,0.06)",
-};
+const TAG_STYLES: Record<string, TagStyle> = Object.fromEntries(
+  CANONICAL_TAGS.map((tag) => [tag, cssTag(tag)])
+);
+
+const FREEFORM: TagStyle = cssTag("freeform");
 
 /** Domain tags the Mentor invents (auth, retries, …) fall back to a neutral chip. */
 export function tagStyle(tag: string): TagStyle {
@@ -68,10 +79,13 @@ export interface StateStyle {
 }
 
 export const STATE_STYLES: Record<UnderstandingState, StateStyle> = {
-  understood: { stroke: "#4fb286", fill: "#4fb286" },
-  partial: { stroke: "#d9a441", fill: "linear-gradient(90deg,#d9a441 50%,transparent 50%)" },
-  failed: { stroke: "#d4634f", fill: "transparent" },
-  not_started: { stroke: "#7b8d99", fill: "transparent" },
+  understood: { stroke: "var(--color-jade)", fill: "var(--color-jade)" },
+  partial: {
+    stroke: "var(--color-brass)",
+    fill: "linear-gradient(90deg,var(--color-brass) 50%,transparent 50%)",
+  },
+  failed: { stroke: "var(--color-rust)", fill: "transparent" },
+  not_started: { stroke: "var(--color-graphite)", fill: "transparent" },
 };
 
 export function stateStyle(state: UnderstandingState): StateStyle {

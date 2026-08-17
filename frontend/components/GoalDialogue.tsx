@@ -75,12 +75,12 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
             />
           ))}
         </div>
-        <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-graphite">
+        <span className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.14em] text-graphite">
           {t.goal.progress(question.index, ticks)}
         </span>
       </div>
 
-      <h2 className="font-display text-[22px] font-medium leading-[1.25] tracking-tight text-chalk text-balance">
+      <h2 className="font-display text-[calc(22rem/16)] font-medium leading-[1.25] tracking-tight text-chalk text-balance">
         {question.text}
       </h2>
 
@@ -90,7 +90,7 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
             <button
               key={opt}
               onClick={() => setAnswer(opt)}
-              className={`rounded border px-3 py-1.5 text-[13px] transition ${
+              className={`rounded border px-3 py-1.5 text-[calc(13rem/16)] transition ${
                 answer === opt
                   ? "border-signal-dim bg-signal/15 text-signal"
                   : "border-rule text-graphite hover:border-signal-dim hover:text-chalk"
@@ -103,7 +103,7 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
       )}
 
       <textarea
-        className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[13.5px] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
+        className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[calc(13.5rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
         rows={3}
         placeholder={t.goal.answerPlaceholder}
         value={answer}
@@ -123,11 +123,11 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
         <button
           onClick={submit}
           disabled={loading || !answer.trim()}
-          className="rounded border border-signal-dim bg-signal/15 px-5 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+          className="rounded border border-signal-dim bg-signal/15 px-5 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
         >
           {loading ? t.goal.thinking : t.goal.continue}
         </button>
-        <span className="font-mono text-[10.5px] text-graphite">{t.goal.enterHint}</span>
+        <span className="font-mono text-[calc(10.5rem/16)] text-graphite">{t.goal.enterHint}</span>
       </div>
     </div>
   );

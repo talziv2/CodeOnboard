@@ -14,6 +14,9 @@ export interface RouteStop {
   node: GraphNode;
   /** True when the Mutator spliced this node in after a wrong answer. */
   isPrerequisite: boolean;
+  /** Id of the node this prerequisite unlocks — a warm-up carries no `area_id`
+   *  of its own, so this is what places it in the section it belongs to. */
+  unlocksId: string | null;
   /** Title of the node this prerequisite unlocks, for the rail's caption. */
   unlocksTitle: string | null;
   /**
@@ -78,6 +81,7 @@ export function buildRoute(nodes: GraphNode[], edges: GraphEdge[]): RouteStop[] 
     walked.push({
       node: cursor,
       isPrerequisite: unlocks !== null,
+      unlocksId: unlocks,
       unlocksTitle: unlocks ? byId.get(unlocks)?.title ?? null : null,
     });
 
@@ -88,7 +92,7 @@ export function buildRoute(nodes: GraphNode[], edges: GraphEdge[]): RouteStop[] 
 
   for (const node of nodes) {
     if (seen.has(node.id)) continue;
-    walked.push({ node, isPrerequisite: false, unlocksTitle: null });
+    walked.push({ node, isPrerequisite: false, unlocksId: null, unlocksTitle: null });
   }
 
   let spineSeen = 0;
@@ -108,6 +112,12 @@ export function buildRoute(nodes: GraphNode[], edges: GraphEdge[]): RouteStop[] 
  */
 function countsAsStation(stop: Omit<RouteStop, "position">): boolean {
   return !stop.isPrerequisite && stop.node.priority !== "optional";
+}
+
+/** `countsAsStation` for callers holding finished stops — section tallies count
+ *  the same population the stop counter does, so they cannot disagree with it. */
+export function isStation(stop: RouteStop): boolean {
+  return countsAsStation(stop);
 }
 
 /** Stops that count toward "stop N of M". */

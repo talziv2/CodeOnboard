@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import type { GraphNode, GraphEdge, UnderstandingState } from "@/lib/api";
+import type { GraphNode, GraphEdge, Progress, UnderstandingState } from "@/lib/api";
 import { buildRoute } from "@/lib/graph-layout";
 import {
   tagStyle, tagLabel, stateStyle, stateLabel, isCanonicalTag, STATE_ORDER,
@@ -12,7 +12,13 @@ interface Props {
   nodes: GraphNode[];
   edges: GraphEdge[];
   currentNodeId: string | null;
-  readiness: number;
+  /**
+   * Computed server-side. The headline numbers are NOT derived from `nodes`
+   * here: the definitions live in `backend/learning/progress.py`, and a second
+   * implementation in the client is how the header and this view came to
+   * disagree (learning-graph.md §5.6).
+   */
+  progress: Progress;
   repoUrl?: string;
   onNodeClick: (node: GraphNode) => void;
 }
@@ -65,7 +71,7 @@ function BreakdownRow({
         <span className="min-w-0 truncate" style={accent ? { color: accent } : undefined}>
           {label}
         </span>
-        <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-graphite">
+        <span className="shrink-0 font-mono text-[calc(10.5rem/16)] tabular-nums text-graphite">
           {sublabel ?? `${tally.understood}/${total}`}
         </span>
       </span>
@@ -77,14 +83,14 @@ function BreakdownRow({
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-3.5 rounded-md border border-rule bg-slab p-4">
-      <h3 className="font-mono text-[10px] uppercase tracking-[0.16em] text-graphite">{title}</h3>
+      <h3 className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">{title}</h3>
       {children}
     </section>
   );
 }
 
 export default function MapView({
-  nodes, edges, currentNodeId, readiness, repoUrl, onNodeClick,
+  nodes, edges, currentNodeId, progress, repoUrl, onNodeClick,
 }: Props) {
   const stops = useMemo(() => buildRoute(nodes, edges), [nodes, edges]);
 
@@ -130,7 +136,7 @@ export default function MapView({
     };
   }, [nodes]);
 
-  const pct = Math.round(readiness * 100);
+  const pct = Math.round(progress.goal_readiness * 100);
   const repo = repoUrl?.replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "");
 
   return (
@@ -140,26 +146,35 @@ export default function MapView({
         {/* headline */}
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-col gap-1">
-            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-graphite">
+            <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
               {t.map.label}
             </span>
-            <h2 className="font-display text-[25px] font-medium leading-tight tracking-tight text-chalk">
+            <h2 className="font-display text-[calc(25rem/16)] font-medium leading-tight tracking-tight text-chalk">
               {repo ?? t.map.thisCodebase}
             </h2>
-            <p className="text-[12.5px] text-graphite">
-              {t.map.conceptsUnderstood(summary.overall.understood, nodes.length)}
+            {/* The headline sentence states the GOAL measure over the required
+                set, then the journey beside it — the two answer different
+                questions and neither stands alone (§5.4). Detours and skips are
+                named rather than folded into a percentage, so a low number is
+                explainable instead of arbitrary (OQ-2). */}
+            <p className="text-[calc(12.5rem/16)] text-graphite">
+              {t.map.coreDemonstrated(progress.core_understood, progress.core_total)}
               {" · "}
-              {t.map.filesTouched(summary.files.length)}
+              {t.map.stopsTaken(progress.stops_settled, progress.stops_total)}
+              {progress.detours.length > 0 && (
+                <> · {t.map.detoursTaken(progress.detours.length)}</>
+              )}
+              {progress.skipped > 0 && <> · {t.map.skippedStops(progress.skipped)}</>}
               {summary.weak > 0 && (
                 <> · <span className="text-rust">{t.map.markedWeak(summary.weak)}</span></>
               )}
             </p>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="font-display text-[34px] leading-none tabular-nums text-signal">
+            <span className="font-display text-[calc(34rem/16)] leading-none tabular-nums text-signal">
               {pct}%
             </span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-graphite">
+            <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.14em] text-graphite">
               {t.map.readiness}
             </span>
           </div>
@@ -172,11 +187,11 @@ export default function MapView({
             {STATE_ORDER.map((state) => (
               <span
                 key={state}
-                className="flex items-center gap-2 font-mono text-[10.5px] text-graphite"
+                className="flex items-center gap-2 font-mono text-[calc(10.5rem/16)] text-graphite"
               >
                 <span
                   aria-hidden
-                  className="h-[9px] w-[9px] shrink-0 rounded-full border-[1.5px]"
+                  className="h-[calc(9rem/16)] w-[calc(9rem/16)] shrink-0 rounded-full border-[1.5px]"
                   style={{ borderColor: stateStyle(state).stroke, background: stateStyle(state).fill }}
                 />
                 <span className="tabular-nums text-chalk">{summary.overall[state]}</span>
@@ -193,7 +208,7 @@ export default function MapView({
               {summary.kinds.map(([tag, tally, total]) => (
                 <BreakdownRow
                   key={tag}
-                  label={<span className="font-mono text-[11px]">{tagLabel(tag)}</span>}
+                  label={<span className="font-mono text-[calc(11rem/16)]">{tagLabel(tag)}</span>}
                   accent={tagStyle(tag).text}
                   tally={tally}
                   total={total}
@@ -203,7 +218,7 @@ export default function MapView({
 
             {summary.topics.length > 0 && (
               <div className="flex flex-col gap-2 border-t border-rule pt-3">
-                <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-graphite">
+                <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
                   {t.map.topicsTouched}
                 </span>
                 <div className="flex flex-wrap gap-1.5">
@@ -211,7 +226,7 @@ export default function MapView({
                     <span
                       key={tag}
                       title={t.map.understoodOfTotal(tally.understood, total)}
-                      className="rounded-[2px] border border-rule px-1.5 py-px font-mono text-[9.5px] tracking-[0.05em] text-graphite"
+                      className="rounded-[2px] border border-rule px-1.5 py-px font-mono text-[calc(9.5rem/16)] tracking-[0.05em] text-graphite"
                     >
                       {tagLabel(tag)}
                       {total > 1 && <span className="text-paper"> ×{total}</span>}
@@ -228,7 +243,7 @@ export default function MapView({
                 <BreakdownRow
                   key={file}
                   label={
-                    <span className="block truncate text-start font-mono text-[11px] text-paper">
+                    <span className="block truncate text-start font-mono text-[calc(11rem/16)] text-paper">
                       {file}
                     </span>
                   }
@@ -243,7 +258,7 @@ export default function MapView({
 
         {/* the route itself */}
         <section className="flex flex-col gap-4">
-          <h3 className="flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-graphite">
+          <h3 className="flex items-center gap-2.5 font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
             {t.map.theRoute}
             <span aria-hidden className="h-px flex-1 bg-rule" />
           </h3>
@@ -261,14 +276,14 @@ export default function MapView({
               return (
                 <li
                   key={node.id}
-                  className={`relative grid grid-cols-[34px_1fr] gap-4 pb-5 ${
+                  className={`relative grid grid-cols-[calc(34rem/16)_1fr] gap-4 pb-5 ${
                     stop.isPrerequisite ? "ms-10" : ""
                   }`}
                 >
                   {!isLast && (
                     <span
                       aria-hidden
-                      className="absolute start-[16px] top-[26px] bottom-[-6px] w-px"
+                      className="absolute start-[calc(16rem/16)] top-[calc(26rem/16)] bottom-[calc(-6rem/16)] w-px"
                       style={
                         nextIsUnlock
                           ? {
@@ -283,14 +298,14 @@ export default function MapView({
                   <span className="flex justify-center pt-2.5">
                     <span
                       aria-hidden
-                      className="relative z-10 h-[15px] w-[15px] rounded-full border-2 bg-ink"
+                      className="relative z-10 h-[calc(15rem/16)] w-[calc(15rem/16)] rounded-full border-2 bg-ink"
                       style={{
                         borderColor: isCurrent ? "var(--color-signal)" : s.stroke,
                         background: isCurrent ? "var(--color-ink)" : s.fill,
-                        boxShadow: isCurrent ? "0 0 0 4px rgba(91,200,232,0.16)" : undefined,
+                        boxShadow: isCurrent ? "0 0 0 4px var(--color-signal-halo)" : undefined,
                       }}
                     >
-                      {isCurrent && <span className="absolute inset-[3px] rounded-full bg-signal" />}
+                      {isCurrent && <span className="absolute inset-[calc(3rem/16)] rounded-full bg-signal" />}
                     </span>
                   </span>
 
@@ -298,12 +313,12 @@ export default function MapView({
                     onClick={() => onNodeClick(node)}
                     className="flex flex-col gap-2 rounded-md border-2 px-4 py-3.5 text-start transition hover:border-signal-dim"
                     style={{
-                      background: isCurrent ? "#16232b" : "var(--color-slab)",
+                      background: isCurrent ? "var(--color-signal-wash)" : "var(--color-slab)",
                       borderColor: isCurrent ? "var(--color-signal)" : "var(--color-rule)",
                     }}
                   >
                     {stop.isPrerequisite && (
-                      <span className="flex flex-wrap items-center gap-2 font-mono text-[10px] tracking-[0.06em] text-signal">
+                      <span className="flex flex-wrap items-center gap-2 font-mono text-[calc(10rem/16)] tracking-[0.06em] text-signal">
                         <span aria-hidden className="h-px w-4 bg-signal" />
                         {t.rail.addedAfterConfusion}
                         {stop.unlocksTitle && (
@@ -313,13 +328,13 @@ export default function MapView({
                     )}
 
                     <span
-                      className="font-display text-[17px] font-medium leading-[1.3] tracking-tight"
+                      className="font-display text-[calc(17rem/16)] font-medium leading-[1.3] tracking-tight"
                       style={{ color: isCurrent ? "var(--color-signal)" : "var(--color-chalk)" }}
                     >
                       {node.title}
                     </span>
 
-                    <span className="font-mono text-[11px] text-graphite">
+                    <span className="font-mono text-[calc(11rem/16)] text-graphite">
                       {node.file}
                       {" · "}
                       {t.lesson.lines(node.line_start, node.line_end)}
@@ -331,7 +346,7 @@ export default function MapView({
                         return (
                           <span
                             key={tag}
-                            className="rounded-[2px] border px-1.5 py-px font-mono text-[9.5px] tracking-[0.05em]"
+                            className="rounded-[2px] border px-1.5 py-px font-mono text-[calc(9.5rem/16)] tracking-[0.05em]"
                             style={{
                               color: style.text,
                               borderColor: style.border,
@@ -343,7 +358,7 @@ export default function MapView({
                         );
                       })}
                       {node.weak_spot && (
-                        <span className="font-mono text-[9.5px] tracking-[0.05em] text-rust">
+                        <span className="font-mono text-[calc(9.5rem/16)] tracking-[0.05em] text-rust">
                           {t.rail.markedWeak}
                         </span>
                       )}

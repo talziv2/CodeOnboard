@@ -2,7 +2,12 @@
 
 /* CodeOnboard design tokens — a cold "survey instrument" palette.
    Signal cyan is reserved for "you are here" and never used decoratively.
-   Jade / brass / rust are semantic only; they never double as accent. */
+   Jade / brass / rust are semantic only; they never double as accent.
+
+   Every token below is a CSS variable, so a theme is a *value* swap and not a
+   second set of class names: components keep writing `bg-ink` / `text-chalk`
+   and the light palette further down re-points those same variables. Nothing
+   in a component branches on the theme. */
 @theme {
   --color-ink: #0a1014;
   --color-trench: #0c1318;
@@ -18,7 +23,139 @@
   --color-brass: #d9a441;
   --color-rust: #d4634f;
 
+  /* Signal used as a *surface* rather than as ink: the halo around the current
+     pin, and the fill of the card you are standing on. */
+  --color-signal-halo: rgba(91, 200, 232, 0.16);
+  --color-signal-wash: #16232b;
+
+  /* The source pane. Deliberately quieter than body prose — code is there to be
+     referred to, not read end to end, until a line is the one under discussion. */
+  --color-code-gutter: #3e4e58;
+  --color-code-line: #8fa0ac;
+  --color-code-hot: #c8d5dd;
+
   --font-display: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
+}
+
+/* Concept-tag chips. One fixed hue per tag so the colour becomes readable on
+   its own after a couple of encounters; `lib/tags.ts` reads these by name. */
+:root {
+  --tag-architecture-text: #8fb6d9;
+  --tag-architecture-border: #33506b;
+  --tag-architecture-bg: rgba(143, 182, 217, 0.09);
+  --tag-flow-text: #7fcbb8;
+  --tag-flow-border: #2e5f55;
+  --tag-flow-bg: rgba(127, 203, 184, 0.09);
+  --tag-extension_point-text: #c7a0dc;
+  --tag-extension_point-border: #543e63;
+  --tag-extension_point-bg: rgba(199, 160, 220, 0.09);
+  --tag-risk-text: #d4634f;
+  --tag-risk-border: #6b2f26;
+  --tag-risk-bg: rgba(212, 99, 79, 0.1);
+  --tag-test_coverage-text: #d9a441;
+  --tag-test_coverage-border: #6b5220;
+  --tag-test_coverage-bg: rgba(217, 164, 65, 0.09);
+  --tag-component-text: #7b8d99;
+  --tag-component-border: #24333d;
+  --tag-component-bg: rgba(123, 141, 153, 0.08);
+  /* A unit that connects several earlier ones and introduces no new code —
+     where the mental model consolidates rather than grows. Warm and distinct
+     from the six "here is a new thing" kinds, because it is the opposite. */
+  --tag-synthesis-text: #e0b088;
+  --tag-synthesis-border: #6b4a2e;
+  --tag-synthesis-bg: rgba(224, 176, 136, 0.09);
+  --tag-freeform-text: #7b8d99;
+  --tag-freeform-border: #24333d;
+  --tag-freeform-bg: rgba(123, 141, 153, 0.06);
+
+  color-scheme: dark;
+}
+
+/* --- light -----------------------------------------------------------------
+
+   Not an inversion, and deliberately not white: the same cold instrument seen in
+   daylight — blueprint paper rather than a blank page. The ground keeps a blue
+   cast at every level so the surfaces read as material, and the rules are dark
+   enough to actually draw the structure instead of hinting at it.
+
+   The semantic roles hold. Signal is still the only accent; it deepens rather
+   than brightens, because on paper contrast comes from going darker. Jade,
+   brass and rust gain saturation for the same reason — a pastel on a light
+   ground reads as disabled, which is the one thing they must never say. */
+:root[data-theme="light"] {
+  --color-ink: #e7eef3;
+  --color-trench: #dbe5ec;
+  --color-slab: #f3f8fa;
+  --color-raise: #c6d5df;
+  --color-rule: #a7bbc8;
+  --color-chalk: #0c1f2a;
+  --color-paper: #2c4653;
+  /* Chosen so every one of these clears 4.5:1 against the *darkest* surface
+     they land on (trench, the rail), not just against the page ground. */
+  --color-graphite: #4b6675;
+  --color-signal: #056782;
+  /* signal-dim does double duty — hover/focus borders AND dim label text (area
+     headings, line ranges). On a dark ground one value serves both; on a light
+     one a border tint is far too pale to read, so this is set from the text
+     requirement and the borders simply come out more definite. */
+  --color-signal-dim: #2d6d86;
+  --color-jade: #0d6a46;
+  --color-brass: #7d5602;
+  --color-rust: #b1301a;
+
+  --color-signal-halo: rgba(5, 103, 130, 0.2);
+  --color-signal-wash: #cbe4ee;
+
+  --color-code-gutter: #5f7a8a;
+  --color-code-line: #2f4f5f;
+  --color-code-hot: #04202c;
+
+  --tag-architecture-text: #16558c;
+  --tag-architecture-border: #7ba7cb;
+  --tag-architecture-bg: rgba(22, 85, 140, 0.12);
+  --tag-flow-text: #055d4e;
+  --tag-flow-border: #6fbcaa;
+  --tag-flow-bg: rgba(6, 110, 92, 0.12);
+  --tag-extension_point-text: #642a91;
+  --tag-extension_point-border: #b192d0;
+  --tag-extension_point-bg: rgba(100, 42, 145, 0.12);
+  --tag-risk-text: #9e2b17;
+  --tag-risk-border: #d99584;
+  --tag-risk-bg: rgba(177, 48, 26, 0.12);
+  --tag-test_coverage-text: #6e4c02;
+  --tag-test_coverage-border: #d0b164;
+  --tag-test_coverage-bg: rgba(138, 96, 2, 0.12);
+  --tag-component-text: #445c6a;
+  --tag-component-border: #a7bbc8;
+  --tag-component-bg: rgba(75, 102, 117, 0.12);
+  --tag-synthesis-text: #7f400f;
+  --tag-synthesis-border: #d7a679;
+  --tag-synthesis-bg: rgba(145, 74, 18, 0.12);
+  --tag-freeform-text: #4b6675;
+  --tag-freeform-border: #a7bbc8;
+  --tag-freeform-bg: rgba(75, 102, 117, 0.08);
+
+  color-scheme: light;
+}
+
+/* --- text size -------------------------------------------------------------
+
+   One dial, applied at the root. Type and spacing are both authored in rem, so
+   scaling the root font size scales the whole instrument proportionally rather
+   than reflowing text inside fixed-size chrome. The base is `100%` and not
+   `16px` on purpose: a reader who has already raised their browser's default
+   font size keeps that, and this multiplies it.
+
+   Type in the components is written `text-[calc(13.5rem/16)]` rather than
+   `text-[13.5px]`. It is the same size at scale 1 — the design number stays
+   readable in the markup — but it is now relative, so this dial and the
+   browser's own font setting both reach it. A px literal would ignore both. */
+:root {
+  --ui-scale: 1;
+}
+
+html {
+  font-size: calc(100% * var(--ui-scale));
 }
 
 body {
@@ -30,6 +167,53 @@ body {
 /* The lesson column holds long-form prose; cap the measure for readability. */
 .measure {
   max-width: 62ch;
+}
+
+/* --- the source pane -------------------------------------------------------
+
+   Width lives here rather than in React because the divider is dragged: the
+   grid re-flows on every pointer move, and re-rendering a thousand lines of
+   code with it would make the gesture stutter. The boot script sets this from
+   storage before first paint, so the column never starts at the wrong width.
+   In rem, so the pane scales with the text-size dial like every other column. */
+:root {
+  --source-width: 21.25rem;
+}
+
+/* Syntax colours arrive as a *pair* of custom properties per token — Shiki's
+   dual-theme output, see `lib/highlight.ts`. Choosing between them in CSS is
+   what lets the theme flip without re-tokenising the file, and keeps the pane
+   theme-blind like every other component. The fallback matters: a token the
+   grammar gave no colour simply inherits the line's own. */
+.tok {
+  color: var(--code-dark, currentColor);
+  font-style: var(--code-dark-font-style, normal);
+  font-weight: var(--code-dark-font-weight, inherit);
+}
+
+:root[data-theme="light"] .tok {
+  color: var(--code-light, currentColor);
+  font-style: var(--code-light-font-style, normal);
+  font-weight: var(--code-light-font-weight, inherit);
+}
+
+/* Code outside the band under discussion keeps its hue but steps back. The pane
+   used to say this with brightness alone — two flat greys — which syntax colour
+   would otherwise have flattened back out.
+
+   Deliberately a light touch. Colour is already doing most of the separating,
+   and the band has a tint and a rule of its own, so this only has to tip the
+   balance. Measured, not guessed: at these values cold code holds ~5.7:1 in
+   dark and ~5:1 in light, against the ~6.7:1 the flat treatment had. A heavier
+   veil looked right in isolation and was unreadable in a paragraph — light
+   suffers most, where dimming ink toward paper washes it out fastest, so it
+   gets the gentler value. */
+.code-cold {
+  opacity: 0.82;
+}
+
+:root[data-theme="light"] .code-cold {
+  opacity: 0.9;
 }
 
 @media (prefers-reduced-motion: reduce) {

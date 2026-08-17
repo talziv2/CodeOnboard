@@ -27,20 +27,20 @@ interface Props {
 
 /** Keyed by the classification value the Grader returns. */
 const VERDICT_COLOR: Record<string, string> = {
-  understood: "#4fb286",
-  partial: "#d9a441",
-  confused: "#d4634f",
-  "off-topic": "#d4634f",
+  understood: "var(--color-jade)",
+  partial: "var(--color-brass)",
+  confused: "var(--color-rust)",
+  "off-topic": "var(--color-rust)",
 };
 
-const NEUTRAL = "#dde5ea";
+const NEUTRAL = "var(--color-chalk)";
 
 const FAILED: Classification[] = ["confused", "off-topic"];
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2.5">
-      <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-graphite">
+      <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
         {children}
       </span>
       <span aria-hidden className="h-px flex-1 bg-rule" />
@@ -80,35 +80,35 @@ function AttemptCard({ attempt, index }: { attempt: Attempt; index: number }) {
   return (
     <details className="group rounded border border-rule bg-slab open:bg-trench">
       <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2">
-        <span aria-hidden className="font-mono text-[10px] text-graphite">
+        <span aria-hidden className="font-mono text-[calc(10rem/16)] text-graphite">
           {String(index + 1).padStart(2, "0")}
         </span>
         <span
-          className="font-mono text-[10.5px] uppercase tracking-[0.13em]"
+          className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.13em]"
           style={{ color }}
         >
           {label}
         </span>
-        <span className="ms-auto font-mono text-[10px] text-graphite">
+        <span className="ms-auto font-mono text-[calc(10rem/16)] text-graphite">
           {whenLabel(attempt.at)}
         </span>
         <Chevron />
       </summary>
       <div className="flex flex-col gap-2.5 border-t border-rule px-3 py-3">
         <div className="flex flex-col gap-1">
-          <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-graphite">
+          <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
             {t.lesson.youWrote}
           </span>
-          <p className="measure whitespace-pre-wrap text-[12.5px] leading-relaxed text-paper">
+          <p className="measure whitespace-pre-wrap text-[calc(12.5rem/16)] leading-relaxed text-paper">
             {attempt.answer}
           </p>
         </div>
         {attempt.rationale && (
           <div className="flex flex-col gap-1">
-            <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-graphite">
+            <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
               {t.lesson.feedback}
             </span>
-            <p className="measure text-[12.5px] leading-relaxed text-graphite">
+            <p className="measure text-[calc(12.5rem/16)] leading-relaxed text-graphite">
               {attempt.rationale}
             </p>
           </div>
@@ -286,17 +286,17 @@ export default function LessonPanel({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-graphite">
+        <span className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.14em] text-graphite">
           {isPrerequisite ? t.lesson.warmUpHeading : t.lesson.stopOf(position, total)}
         </span>
 
-        <h2 className="font-display text-[23px] font-medium leading-[1.2] tracking-tight text-chalk text-balance">
+        <h2 className="font-display text-[calc(23rem/16)] font-medium leading-[1.2] tracking-tight text-chalk text-balance">
           {node.title}
         </h2>
 
         <button
           onClick={() => onFileClick(node.file)}
-          className="w-fit border-b border-dashed border-signal-dim pb-px font-mono text-[11px] text-signal transition hover:border-signal"
+          className="w-fit border-b border-dashed border-signal-dim pb-px font-mono text-[calc(11rem/16)] text-signal transition hover:border-signal"
         >
           {node.file}
           {" · "}
@@ -310,7 +310,7 @@ export default function LessonPanel({
               return (
                 <span
                   key={tag}
-                  className="rounded-[2px] border px-1.5 py-px font-mono text-[9.5px] tracking-[0.05em]"
+                  className="rounded-[2px] border px-1.5 py-px font-mono text-[calc(9.5rem/16)] tracking-[0.05em]"
                   style={{ color: s.text, borderColor: s.border, background: s.background }}
                 >
                   {tagLabel(tag)}
@@ -323,10 +323,10 @@ export default function LessonPanel({
 
       {recovered && (
         <div className="flex flex-col gap-1 rounded border border-jade/40 bg-jade/10 px-4 py-3">
-          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-jade">
+          <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.14em] text-jade">
             {t.lesson.recoveredLabel}
           </span>
-          <p className="text-[12.5px] leading-relaxed text-paper">
+          <p className="text-[calc(12.5rem/16)] leading-relaxed text-paper">
             {t.lesson.recoveredBody}{" "}
             <span className="text-chalk">“{warmUpTitle}”</span>
             {t.lesson.recoveredBodyEnd}
@@ -335,7 +335,7 @@ export default function LessonPanel({
       )}
 
       {isSplit && lesson.lesson.why_now && (
-        <p className="measure border-s-2 border-rule ps-3 text-[12.5px] italic leading-relaxed text-graphite">
+        <p className="measure border-s-2 border-rule ps-3 text-[calc(12.5rem/16)] italic leading-relaxed text-graphite">
           {lesson.lesson.why_now}
         </p>
       )}
@@ -344,7 +344,7 @@ export default function LessonPanel({
         {/* A pre-B4 lesson has no halves to withhold, so it renders exactly as
             it always did, under the label it always had. */}
         <SectionLabel>{isSplit ? t.lesson.setup : t.lesson.walkthrough}</SectionLabel>
-        <p className="measure whitespace-pre-wrap text-[13.5px] leading-[1.72] text-paper">
+        <p className="measure whitespace-pre-wrap text-[calc(13.5rem/16)] leading-[1.72] text-paper">
           {isSplit ? lesson.lesson.setup : lesson.lesson.walkthrough}
         </p>
       </div>
@@ -359,13 +359,13 @@ export default function LessonPanel({
                   onClick={() => onFileClick(a.file, a.line_start, a.line_end)}
                   className="group flex w-full items-baseline gap-2.5 rounded px-2 py-1 text-start transition hover:bg-slab"
                 >
-                  <span className="font-mono text-[9.5px] uppercase tracking-[0.13em] text-graphite">
+                  <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.13em] text-graphite">
                     {t.lesson.anchorStep(i + 1, anchors.length)}
                   </span>
-                  <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-signal transition group-hover:text-chalk">
+                  <span className="min-w-0 flex-1 truncate font-mono text-[calc(11rem/16)] text-signal transition group-hover:text-chalk">
                     {a.symbol ?? a.file}
                   </span>
-                  <span className="shrink-0 font-mono text-[10px] text-graphite">
+                  <span className="shrink-0 font-mono text-[calc(10rem/16)] text-graphite">
                     {t.lesson.lines(a.line_start, a.line_end)}
                   </span>
                 </button>
@@ -389,12 +389,12 @@ export default function LessonPanel({
       {!result && (
         <div className="flex flex-col gap-3">
           <SectionLabel>{t.lesson.checkUnderstanding}</SectionLabel>
-          <p className="measure text-[13.5px] leading-[1.6] text-chalk">
+          <p className="measure text-[calc(13.5rem/16)] leading-[1.6] text-chalk">
             {lesson.lesson.prompt}
           </p>
           <textarea
             rows={4}
-            className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[13px] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
+            className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[calc(13rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
             placeholder={t.lesson.answerPlaceholder}
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
@@ -411,18 +411,18 @@ export default function LessonPanel({
             <button
               onClick={submitAnswer}
               disabled={loading || !answer.trim()}
-              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
             >
               {loading ? t.lesson.grading : t.lesson.submit}
             </button>
             <button
               onClick={handleAdvance}
               disabled={loading}
-              className="rounded border border-rule px-4 py-2 text-[13px] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+              className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
             >
               {t.lesson.skipStop}
             </button>
-            <span className="ms-auto font-mono text-[10.5px] text-graphite">
+            <span className="ms-auto font-mono text-[calc(10.5rem/16)] text-graphite">
               {t.lesson.submitHint}
             </span>
           </div>
@@ -435,16 +435,16 @@ export default function LessonPanel({
       {isSplit && revealed && lesson.lesson.reveal && (
         <div className="flex flex-col gap-3">
           <SectionLabel>{t.lesson.reveal}</SectionLabel>
-          <p className="measure whitespace-pre-wrap text-[13.5px] leading-[1.72] text-paper">
+          <p className="measure whitespace-pre-wrap text-[calc(13.5rem/16)] leading-[1.72] text-paper">
             {lesson.lesson.reveal}
           </p>
 
           {lesson.lesson.takeaway && (
             <div className="mt-1 flex flex-col gap-1.5 rounded border border-signal-dim/40 bg-signal/[0.06] px-4 py-3">
-              <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-signal">
+              <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-signal">
                 {t.lesson.takeaway}
               </span>
-              <p className="measure text-[13px] leading-[1.65] text-chalk">
+              <p className="measure text-[calc(13rem/16)] leading-[1.65] text-chalk">
                 {lesson.lesson.takeaway}
               </p>
             </div>
@@ -452,10 +452,10 @@ export default function LessonPanel({
 
           {lesson.lesson.ownership && (
             <div className="flex flex-col gap-1.5 rounded border border-rule bg-slab px-4 py-3">
-              <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-graphite">
+              <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
                 {t.lesson.ownership}
               </span>
-              <p className="measure text-[12.5px] leading-[1.65] text-paper">
+              <p className="measure text-[calc(12.5rem/16)] leading-[1.65] text-paper">
                 {lesson.lesson.ownership}
               </p>
             </div>
@@ -466,12 +466,12 @@ export default function LessonPanel({
       {result && (
         <div className="flex flex-col gap-3 rounded border border-rule bg-slab p-4">
           <p
-            className="font-mono text-[11px] uppercase tracking-[0.14em]"
+            className="font-mono text-[calc(11rem/16)] uppercase tracking-[0.14em]"
             style={{ color: VERDICT_COLOR[result.classification] ?? NEUTRAL }}
           >
             {t.lesson.verdict[result.classification] ?? result.classification}
           </p>
-          <p className="measure text-[13px] leading-[1.65] text-paper">
+          <p className="measure text-[calc(13rem/16)] leading-[1.65] text-paper">
             {result.rationale}
           </p>
           {error && <p className="text-sm text-rust">{error}</p>}
@@ -480,30 +480,30 @@ export default function LessonPanel({
               grows the journey; the rest answer the learner where they are. */}
           {adaptation?.text && (
             <div className="flex flex-col gap-1.5 rounded border border-signal-dim/40 bg-signal/[0.06] px-4 py-3">
-              <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-signal">
+              <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-signal">
                 {adaptation.kind === "hint" ? t.lesson.hint : t.lesson.followup}
               </span>
-              <p className="measure text-[13px] leading-[1.65] text-chalk">
+              <p className="measure text-[calc(13rem/16)] leading-[1.65] text-chalk">
                 {adaptation.text}
               </p>
             </div>
           )}
 
           {adaptation?.retaught && (
-            <p className="font-mono text-[10.5px] uppercase tracking-[0.13em] text-signal">
+            <p className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.13em] text-signal">
               {t.lesson.retaught}
             </p>
           )}
 
           {typeof adaptation?.pruned === "number" && adaptation.pruned > 0 && (
-            <p className="font-mono text-[10.5px] uppercase tracking-[0.13em] text-jade">
+            <p className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.13em] text-jade">
               {t.lesson.pruned(adaptation.pruned)}
             </p>
           )}
 
           {FAILED.includes(result.classification) &&
             adaptation?.kind === "prerequisite" && (
-              <p className="text-[12.5px] leading-relaxed text-paper">
+              <p className="text-[calc(12.5rem/16)] leading-relaxed text-paper">
                 {result.mutation?.kind === "prerequisite"
                   ? t.lesson.warmUpAdded
                   : result.mutation?.reason === "prerequisite_exists"
@@ -517,7 +517,7 @@ export default function LessonPanel({
               <button
                 onClick={handleAdvance}
                 disabled={loading}
-                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
               >
                 {loading ? t.lesson.loadingShort : t.lesson.nextStop}
               </button>
@@ -529,7 +529,7 @@ export default function LessonPanel({
               <button
                 onClick={handleAdvance}
                 disabled={loading}
-                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
               >
                 {loading ? t.lesson.loadingShort : t.lesson.nextStop}
               </button>
@@ -539,7 +539,7 @@ export default function LessonPanel({
               <button
                 onClick={() => { setResult(null); setAnswer(""); }}
                 disabled={loading}
-                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
               >
                 {t.lesson.tryAgain}
               </button>
@@ -558,7 +558,7 @@ export default function LessonPanel({
                       }
                     }}
                     disabled={loading}
-                    className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+                    className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
                   >
                     {loading ? t.lesson.loadingShort : t.lesson.startWarmUp}
                   </button>
@@ -566,7 +566,7 @@ export default function LessonPanel({
                 <button
                   onClick={handleAdvance}
                   disabled={loading}
-                  className="rounded border border-rule px-4 py-2 text-[13px] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+                  className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
                 >
                   {result.mutation?.kind === "prerequisite"
                     ? t.lesson.skipItMoveOn
@@ -580,7 +580,7 @@ export default function LessonPanel({
               <button
                 onClick={handleRetry}
                 disabled={loading}
-                className="rounded border border-rule px-4 py-2 text-[13px] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+                className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
               >
                 {t.lesson.buildWarmUp}
               </button>
@@ -592,7 +592,7 @@ export default function LessonPanel({
       <div className="border-t border-rule pt-4">
         <button
           onClick={() => setDone(true)}
-          className="font-mono text-[10.5px] text-graphite transition hover:text-chalk"
+          className="font-mono text-[calc(10.5rem/16)] text-graphite transition hover:text-chalk"
         >
           {t.lesson.finishEarly}
         </button>
@@ -617,7 +617,7 @@ function CompletionScreen({
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`-mb-px border-b-2 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.12em] transition ${
+            className={`-mb-px border-b-2 px-4 py-2 font-mono text-[calc(11rem/16)] uppercase tracking-[0.12em] transition ${
               tab === key
                 ? "border-signal text-signal"
                 : "border-transparent text-graphite hover:text-chalk"
@@ -631,27 +631,27 @@ function CompletionScreen({
       {tab === "summary" ? (
         <div className="flex flex-col gap-6">
           <div className="flex flex-col gap-2">
-            <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-graphite">
+            <span className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.14em] text-graphite">
               {t.completion.label}
             </span>
-            <h2 className="font-display text-[26px] font-medium leading-tight tracking-tight text-chalk">
+            <h2 className="font-display text-[calc(26rem/16)] font-medium leading-tight tracking-tight text-chalk">
               {t.completion.heading(understood, graph.nodes.length)}
             </h2>
-            <p className="measure text-[13.5px] leading-[1.7] text-paper">
+            <p className="measure text-[calc(13.5rem/16)] leading-[1.7] text-paper">
               {t.completion.body}
             </p>
           </div>
 
           {weak.length > 0 && (
             <div className="flex flex-col gap-3 rounded border border-rule bg-slab p-4">
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-rust">
+              <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.14em] text-rust">
                 {t.completion.anotherPass(weak.length)}
               </span>
               <ul className="flex flex-col gap-2.5">
                 {weak.map((n) => (
                   <li key={n.id} className="flex flex-col gap-0.5">
-                    <span className="text-[13px] font-medium text-chalk">{n.title}</span>
-                    <span className="font-mono text-[10.5px] text-graphite">
+                    <span className="text-[calc(13rem/16)] font-medium text-chalk">{n.title}</span>
+                    <span className="font-mono text-[calc(10.5rem/16)] text-graphite">
                       {n.file}
                       {" · "}
                       {t.lesson.lines(n.line_start, n.line_end)}
@@ -665,13 +665,13 @@ function CompletionScreen({
           <div className="flex gap-3">
             <button
               onClick={onNewSession}
-              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25"
+              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
             >
               {t.completion.newSession}
             </button>
             <button
               onClick={onFinish}
-              className="rounded border border-rule px-4 py-2 text-[13px] text-graphite transition hover:border-signal-dim hover:text-signal"
+              className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
             >
               {t.completion.goHome}
             </button>
@@ -683,7 +683,7 @@ function CompletionScreen({
             nodes={graph.nodes}
             edges={graph.edges}
             currentNodeId={graph.current_node_id}
-            readiness={graph.readiness}
+            progress={graph.progress}
             repoUrl={graph.repo_url}
             onNodeClick={() => {}}
           />

@@ -1,14 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import MapView from "@/components/MapView";
 import RouteRail from "@/components/RouteRail";
+import SectionOverview from "@/components/SectionOverview";
 import LessonPanel from "@/components/LessonPanel";
 import CodeViewer from "@/components/CodeViewer";
+import SettingsMenu from "@/components/SettingsMenu";
 import { getSession, jump, sessionStart, setScope } from "@/lib/api";
 import type { GraphNode, SessionGraph } from "@/lib/api";
 import { buildRoute, spineLength } from "@/lib/graph-layout";
+import { currentSection, splitJourney } from "@/lib/route-sections";
+import { useSourcePane } from "@/lib/source-pane";
 import { errorText, t } from "@/lib/strings";
 
 export default function SessionPage() {
@@ -21,11 +25,24 @@ export default function SessionPage() {
   // was opened, so step 2 of a flow opened the right file at the wrong lines.
   const [viewingRange, setViewingRange] = useState<[number, number] | null>(null);
   const [showCode, setShowCode] = useState(true);
+  // A counter, not a flag: asking for a location the pane is *already* showing
+  // still has to move it there. Nothing else changes when the same anchor is
+  // clicked twice, so without this the pane would just sit where it was.
+  const [focusKey, setFocusKey] = useState(0);
+  const { source, patch: patchSource } = useSourcePane();
   const [tab, setTab] = useState<"lesson" | "map">("lesson");
   const [error, setError] = useState<string | null>(null);
   const [restarting, setRestarting] = useState(false);
   const [scoping, setScoping] = useState(false);
   const [scopeNote, setScopeNote] = useState<string | null>(null);
+  // The chapter overview is a LAYER over the lesson column, not a destination:
+  // no route, no session state, and it never moves the current node. Closing it
+  // puts the learner back exactly where they already were.
+  const [overviewAreaId, setOverviewAreaId] = useState<string | null>(null);
+  // Sections already introduced this visit. Kept in a ref because it must not
+  // cause a render, and paired with an evidence guard below — a section with
+  // stops behind it is not new, whatever this page happens to remember.
+  const introduced = useRef<Set<string>>(new Set());
 
   // §5.3: scope is derived from evidence, then adjusted against a plan the
   // learner can see. This is the "adjusted" half — it moves existing units
@@ -79,17 +96,54 @@ export default function SessionPage() {
     [graph]
   );
 
+  // Journey → section → stop, derived from the same graph the rail walks.
+  const journey = useMemo(
+    () => splitJourney(stops, graph?.areas ?? [], graph?.current_node_id ?? null),
+    [stops, graph?.areas, graph?.current_node_id]
+  );
+
+  // Arriving in a new chapter shows its introduction once, in place of the
+  // lesson, with "continue" one click away — no Next → Section → Start → Lesson
+  // chain. It is offered only for a section with nothing behind it, so resuming
+  // mid-chapter, re-reading a finished one, or reloading the page never
+  // re-introduces anything.
+  useEffect(() => {
+    const section = currentSection(journey.sections);
+    const areaId = section?.area?.id;
+    if (!areaId || introduced.current.has(areaId)) return;
+    const isFirstSeen = introduced.current.size === 0;
+    introduced.current.add(areaId);
+    if (!isFirstSeen && section!.settled === 0) setOverviewAreaId(areaId);
+  }, [journey.sections]);
+
+  // Esc closes the overview, like it returns from the map.
+  useEffect(() => {
+    if (!overviewAreaId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOverviewAreaId(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [overviewAreaId]);
+
+  // Moving to another stop is also a request for a location — often in the file
+  // already open, where nothing else would tell the pane to scroll.
   const handleAdvance = async () => {
     setViewingFile(null);
     setViewingRange(null);
+    setFocusKey((k) => k + 1);
     await loadGraph();
   };
 
-  // Picking a stop on the map is a request to study it, so land on the lesson.
+  // Picking a stop is a request to study it, so land on the lesson itself —
+  // including from the section overview, which is what makes its lesson list a
+  // way in rather than a table of contents.
   const handleJump = async (node: GraphNode) => {
     setTab("lesson");
+    setOverviewAreaId(null);
     setViewingFile(null);
     setViewingRange(null);
+    setFocusKey((k) => k + 1);
     try {
       await jump(id, node.id);
       await loadGraph();
@@ -127,7 +181,7 @@ export default function SessionPage() {
   const currentNodeId = graph.current_node_id;
   const currentNode = graph.nodes.find((n) => n.id === currentNodeId);
   const currentStop = stops.find((s) => s.node.id === currentNodeId);
-  const pct = Math.round(graph.readiness * 100);
+  const pct = Math.round(graph.progress.goal_readiness * 100);
   const openFile = viewingFile ?? currentNode?.file ?? null;
   // The node's stored range describes ITS display file and nothing else. Using
   // it for whatever file happens to be open highlights arbitrary lines in an
@@ -137,15 +191,19 @@ export default function SessionPage() {
       ? { start: currentNode.line_start, end: currentNode.line_end }
       : null;
   const depth = graph.goal?.depth;
+  // Resolved from the live sections rather than trusted: a section whose stops
+  // all became optional, or which a re-plan removed, simply stops being open.
+  const overviewSection =
+    journey.sections.find((s) => s.area?.id === overviewAreaId) ?? null;
 
   return (
     <main className="flex h-screen flex-col overflow-hidden bg-ink">
       <header className="flex shrink-0 items-center gap-4 border-b border-rule bg-slab px-5 py-2.5">
-        <span className="font-display text-[15px] tracking-tight text-chalk">
+        <span className="font-display text-[calc(15rem/16)] tracking-tight text-chalk">
           {t.appName}
         </span>
 
-        <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-graphite">
+        <span className="min-w-0 flex-1 truncate font-mono text-[calc(11.5rem/16)] text-graphite">
           {graph.repo_url.replace(/^https?:\/\/github\.com\//, "")}
           {graph.goal?.primary_goal && (
             <> &nbsp;·&nbsp; <span className="text-signal">{graph.goal.primary_goal}</span></>
@@ -153,48 +211,80 @@ export default function SessionPage() {
           {depth && <> &nbsp;·&nbsp; {t.session.depth[depth] ?? depth}</>}
         </span>
 
+        {/* TWO measures, side by side (learning-graph.md §5.4, decision OQ-1).
+            Goal readiness is evidence — what has been demonstrated of what the
+            goal requires. Journey is coverage — how far along the walk. Showing
+            only the first reads 0% for a learner who walked every stop without
+            answering; showing only the second claims understanding nobody
+            demonstrated. */}
         <span className="flex shrink-0 items-center gap-2.5">
-          <span className="font-mono text-[10px] uppercase tracking-[0.13em] text-graphite">
-            {t.session.readiness}
+          <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.13em] text-graphite">
+            {t.session.goalReadiness}
           </span>
-          <span className="h-1 w-24 overflow-hidden rounded-full bg-raise">
+          <span className="h-1 w-20 overflow-hidden rounded-full bg-raise">
             <span
               className="block h-full rounded-full bg-gradient-to-r from-signal-dim to-signal transition-[width] duration-500"
               style={{ width: `${pct}%` }}
             />
           </span>
-          <span className="font-mono text-xs tabular-nums text-chalk">{pct}%</span>
+          <span
+            className="font-mono text-xs tabular-nums text-chalk"
+            title={t.map.coreDemonstrated(
+              graph.progress.core_understood,
+              graph.progress.core_total
+            )}
+          >
+            {pct}%
+          </span>
+        </span>
+
+        <span className="flex shrink-0 items-center gap-2.5">
+          <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.13em] text-graphite">
+            {t.session.journey}
+          </span>
+          <span
+            className="font-mono text-xs tabular-nums text-chalk"
+            title={t.map.stopsTaken(
+              graph.progress.stops_settled,
+              graph.progress.stops_total
+            )}
+          >
+            {t.session.journeyCount(
+              graph.progress.stops_settled,
+              graph.progress.stops_total
+            )}
+          </span>
         </span>
 
         {/* Scope control (U4). Sits in the header beside readiness because it
             is a statement about the whole journey, not about a stop. */}
         <span className="flex shrink-0 items-center gap-1.5">
-          <span className="font-mono text-[10px] uppercase tracking-[0.13em] text-graphite">
+          <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.13em] text-graphite">
             {t.scope.label(spineLength(stops))}
           </span>
           <button
             onClick={() => adjustScope("shorter")}
             disabled={scoping}
-            className="rounded border border-rule px-2 py-1 font-mono text-[10.5px] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+            className="rounded border border-rule px-2 py-1 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
           >
             {scoping ? t.scope.working : t.scope.shorter}
           </button>
           <button
             onClick={() => adjustScope("deeper")}
             disabled={scoping}
-            className="rounded border border-rule px-2 py-1 font-mono text-[10.5px] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+            className="rounded border border-rule px-2 py-1 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
           >
             {t.scope.deeper}
           </button>
           {scopeNote && (
-            <span className="font-mono text-[10px] text-signal">{scopeNote}</span>
+            <span className="font-mono text-[calc(10rem/16)] text-signal">{scopeNote}</span>
           )}
         </span>
 
         {tab === "lesson" && (
           <button
             onClick={() => setShowCode((v) => !v)}
-            className="shrink-0 rounded border border-rule px-3 py-1.5 font-mono text-[10.5px] text-graphite transition hover:border-signal-dim hover:text-signal"
+            className="shrink-0 rounded border border-rule px-3 py-1.5 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
           >
             {showCode ? t.session.hideSource : t.session.showSource}
           </button>
@@ -210,27 +300,39 @@ export default function SessionPage() {
             }
           }}
           disabled={restarting}
-          className="shrink-0 rounded border border-rule px-3 py-1.5 font-mono text-[10.5px] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+          className="shrink-0 rounded border border-rule px-3 py-1.5 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
         >
           {restarting ? t.session.startingOver : t.session.startOver}
         </button>
+
+        <SettingsMenu />
       </header>
 
       <div
         className="grid min-h-0 flex-1"
         style={{
           // The map wants the room, so the source column steps aside on that tab.
+          // In rem, so the side columns grow with the text-size setting instead
+          // of squeezing enlarged type into fixed-width chrome.
+          // A floating pane is out of flow, so it claims no track — only the
+          // docked one reserves a column, and its width is the variable the
+          // divider drags (see `globals.css`).
           gridTemplateColumns:
-            tab === "lesson" && showCode && openFile
-              ? "268px minmax(0,1fr) 340px"
-              : "268px minmax(0,1fr)",
+            tab === "lesson" && showCode && openFile && source.mode === "dock"
+              ? "16.75rem minmax(0,1fr) var(--source-width)"
+              : "16.75rem minmax(0,1fr)",
         }}
       >
         <RouteRail
-          stops={stops}
+          sections={journey.sections}
+          optional={journey.optional}
           currentNodeId={currentNodeId}
-          areas={graph.areas}
+          openSectionId={overviewAreaId}
           onJump={handleJump}
+          onOpenSection={(areaId) => {
+            setTab("lesson");
+            setOverviewAreaId(areaId);
+          }}
           onExpand={() => setTab("map")}
         />
 
@@ -244,7 +346,7 @@ export default function SessionPage() {
                 key={key}
                 onClick={() => setTab(key)}
                 aria-current={tab === key ? "page" : undefined}
-                className={`-mb-px border-b-2 px-3 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.13em] transition ${
+                className={`-mb-px border-b-2 px-3 py-2.5 font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.13em] transition ${
                   tab === key
                     ? "border-signal text-signal"
                     : "border-transparent text-graphite hover:text-chalk"
@@ -254,7 +356,7 @@ export default function SessionPage() {
               </button>
             ))}
             {tab === "map" && (
-              <span className="ms-auto font-mono text-[10.5px] text-graphite">
+              <span className="ms-auto font-mono text-[calc(10.5rem/16)] text-graphite">
                 {t.session.mapHint(graph.nodes.length)}
               </span>
             )}
@@ -262,7 +364,15 @@ export default function SessionPage() {
 
           {tab === "lesson" ? (
             <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
-              {currentNodeId && currentNode ? (
+              {overviewSection ? (
+                <SectionOverview
+                  section={overviewSection}
+                  sections={journey.sections}
+                  currentNodeId={currentNodeId}
+                  onJump={handleJump}
+                  onClose={() => setOverviewAreaId(null)}
+                />
+              ) : currentNodeId && currentNode ? (
                 <LessonPanel
                   sessionId={id}
                   nodeId={currentNodeId}
@@ -277,6 +387,7 @@ export default function SessionPage() {
                       lineStart && lineEnd ? [lineStart, lineEnd] : null
                     );
                     setShowCode(true);
+                    setFocusKey((k) => k + 1);
                   }}
                   onAdvance={handleAdvance}
                   onRespond={loadGraph}
@@ -292,7 +403,7 @@ export default function SessionPage() {
                 nodes={graph.nodes}
                 edges={graph.edges}
                 currentNodeId={currentNodeId}
-                readiness={graph.readiness}
+                progress={graph.progress}
                 repoUrl={graph.repo_url}
                 onNodeClick={handleJump}
               />
@@ -309,6 +420,9 @@ export default function SessionPage() {
             // is handed, not how it renders one.
             highlightStart={viewingRange?.[0] ?? highlightForOpenFile?.start}
             highlightEnd={viewingRange?.[1] ?? highlightForOpenFile?.end}
+            focusKey={focusKey}
+            source={source}
+            onSourceChange={patchSource}
             onClose={() => setShowCode(false)}
           />
         )}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import GoalDialogue from "@/components/GoalDialogue";
+import SettingsMenu from "@/components/SettingsMenu";
 import { checkRepo, sessionStart } from "@/lib/api";
 import { errorText, t } from "@/lib/strings";
 
@@ -89,11 +90,15 @@ export default function Home() {
 
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center bg-ink px-6 py-16">
+      {/* There is no chrome on this page to sit in, so it floats in the corner
+          the session header's copy occupies. */}
+      <SettingsMenu className="absolute end-5 top-5" />
+
       <div className="mb-12 flex flex-col items-center gap-2 text-center">
-        <h1 className="font-display text-[38px] font-medium leading-none tracking-tight text-chalk">
+        <h1 className="font-display text-[calc(38rem/16)] font-medium leading-none tracking-tight text-chalk">
           {t.appName}
         </h1>
-        <p className="max-w-sm text-[13.5px] leading-relaxed text-graphite">
+        <p className="max-w-sm text-[calc(13.5rem/16)] leading-relaxed text-graphite">
           {t.tagline}
         </p>
       </div>
@@ -102,14 +107,14 @@ export default function Home() {
         <form onSubmit={handleRepoSubmit} className="flex w-full max-w-md flex-col gap-3">
           <label
             htmlFor="repo"
-            className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-graphite"
+            className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.14em] text-graphite"
           >
             {t.home.repoLabel}
           </label>
           <input
             id="repo"
             type="url"
-            className="rounded border border-rule bg-trench px-3.5 py-3 text-start font-mono text-[13px] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
+            className="rounded border border-rule bg-trench px-3.5 py-3 text-start font-mono text-[calc(13rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
             placeholder={t.home.repoPlaceholder}
             value={repoUrl}
             onChange={(e) => { setRepoUrl(e.target.value); setError(null); }}
@@ -118,7 +123,7 @@ export default function Home() {
 
           {recent.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-graphite">
+              <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.14em] text-graphite">
                 {t.home.recent}
               </span>
               {recent.map((url) => (
@@ -126,7 +131,7 @@ export default function Home() {
                   key={url}
                   type="button"
                   onClick={() => { setRepoUrl(url); setError(null); }}
-                  className="rounded border border-rule px-2.5 py-1 font-mono text-[11px] text-graphite transition hover:border-signal-dim hover:text-signal"
+                  className="rounded border border-rule px-2.5 py-1 font-mono text-[calc(11rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
                 >
                   {url.replace(/^https?:\/\/github\.com\//, "")}
                 </button>
@@ -134,12 +139,12 @@ export default function Home() {
             </div>
           )}
 
-          {error && <p className="text-[13px] text-rust">{error}</p>}
+          {error && <p className="text-[calc(13rem/16)] text-rust">{error}</p>}
 
           <button
             type="submit"
             disabled={checking}
-            className="mt-1 rounded border border-signal-dim bg-signal/15 py-3 text-[13.5px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+            className="mt-1 rounded border border-signal-dim bg-signal/15 py-3 text-[calc(13.5rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
           >
             {checking ? t.home.checking : t.home.start}
           </button>
@@ -151,10 +156,10 @@ export default function Home() {
       {step === "starting" && (
         <div className="flex w-full max-w-md flex-col gap-5">
           <div className="flex flex-col gap-1.5">
-            <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-graphite">
+            <span className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.14em] text-graphite">
               {t.starting.label}
             </span>
-            <h2 className="font-display text-[21px] font-medium tracking-tight text-chalk">
+            <h2 className="font-display text-[calc(21rem/16)] font-medium tracking-tight text-chalk">
               {repoUrl.replace(/^https?:\/\/github\.com\//, "")}
             </h2>
           </div>
@@ -163,7 +168,7 @@ export default function Home() {
               than checked off — only elapsed time is real. */}
           <ul className="flex flex-col gap-2.5">
             {t.starting.phases.map((phase) => (
-              <li key={phase} className="flex items-center gap-2.5 text-[12.5px] text-graphite">
+              <li key={phase} className="flex items-center gap-2.5 text-[calc(12.5rem/16)] text-graphite">
                 <span aria-hidden className="h-[11px] w-[11px] shrink-0 rounded-full border-[1.5px] border-rule" />
                 {phase}
               </li>
@@ -172,7 +177,7 @@ export default function Home() {
 
           <div className="flex items-center gap-2.5 border-t border-rule pt-3">
             <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-signal" />
-            <span className="font-mono text-[11px] text-graphite">
+            <span className="font-mono text-[calc(11rem/16)] text-graphite">
               {t.starting.elapsed(elapsed)}
             </span>
           </div>
@@ -182,19 +187,19 @@ export default function Home() {
       {step === "failed" && (
         <div className="flex w-full max-w-md flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <span className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-rust">
+            <span className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.14em] text-rust">
               {t.failed.label}
             </span>
-            <h2 className="font-display text-[21px] font-medium tracking-tight text-chalk">
+            <h2 className="font-display text-[calc(21rem/16)] font-medium tracking-tight text-chalk">
               {repoUrl.replace(/^https?:\/\/github\.com\//, "")}
             </h2>
-            <p className="text-[13px] leading-relaxed text-graphite">
+            <p className="text-[calc(13rem/16)] leading-relaxed text-graphite">
               {t.failed.reassurance}
             </p>
           </div>
 
           {error && (
-            <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded border border-rule bg-trench p-3 font-mono text-[11px] leading-relaxed text-rust">
+            <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded border border-rule bg-trench p-3 font-mono text-[calc(11rem/16)] leading-relaxed text-rust">
               {error}
             </pre>
           )}
@@ -203,13 +208,13 @@ export default function Home() {
             <button
               onClick={() => goal && startSession(goal)}
               disabled={!goal}
-              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[13px] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
             >
               {t.failed.tryAgain}
             </button>
             <button
               onClick={() => { setStep("repo"); setError(null); setGoal(null); }}
-              className="rounded border border-rule px-4 py-2 text-[13px] text-graphite transition hover:border-signal-dim hover:text-signal"
+              className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
             >
               {t.failed.differentRepo}
             </button>

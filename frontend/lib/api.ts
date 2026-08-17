@@ -105,8 +105,54 @@ export interface Attempt {
   answer: string;
   classification: Classification;
   rationale: string;
+  /**
+   * WHY the answer fell short, not just how far. Already on the wire — the
+   * backend has recorded it on every attempt since B5; this type simply did
+   * not declare it.
+   */
+  gap_kind?: string;
   /** ISO-8601, UTC. */
   at: string;
+}
+
+/** Where a unit came from. Warm-ups are detours, not stops on the journey. */
+export type Origin = "planned" | "system_remediation" | "learner_request";
+
+/** One warm-up, and the unit it was spliced in to unblock. */
+export interface Detour {
+  node_id: string;
+  title: string;
+  origin: Origin;
+  unlocks: string | null;
+  understanding_state: UnderstandingState;
+}
+
+/**
+ * The two measures, computed server-side so there is exactly one implementation
+ * of each definition (learning-graph.md §5.4).
+ *
+ *   goal_readiness    evidence-weighted mastery of what the goal REQUIRES.
+ *                     Moves only when evidence about the learner changes.
+ *   journey_progress  how much of the planned walk has been dealt with.
+ *                     Coverage, not mastery.
+ *
+ * Neither counts remedial warm-ups: they are reported in `detours`.
+ */
+export interface Progress {
+  goal_readiness: number; // 0.0 – 1.0
+  core_total: number;
+  core_understood: number;
+  core_partial: number;
+  journey_progress: number; // 0.0 – 1.0
+  stops_settled: number;
+  stops_total: number;
+  assessed_coverage: number;
+  assessed: number;
+  state_mix: Record<UnderstandingState, number>;
+  detours: Detour[];
+  skipped: number;
+  optional_total: number;
+  optional_completed: number;
 }
 
 /** One verified location a unit is grounded in. */
@@ -137,6 +183,20 @@ export interface GraphNode {
   /** Which area this unit belongs to. Empty on pre-B3 graphs. */
   area_id?: string;
   concept_tags: string[];
+  /**
+   * The claim this unit exists to make the learner able to make — the contract
+   * between the Planner, Teaching and the Grader, and the standard an answer is
+   * marked against. Falls back to `understand` server-side on pre-B3 graphs.
+   */
+  objective?: string;
+  /**
+   * What the learner ASSERTED about their own understanding ("skip" |
+   * "mark_understood" | "mark_weak"), kept distinct from what they
+   * demonstrated. Null when the system's own state is authoritative.
+   */
+  user_override?: string | null;
+  /** "planned" for an ordinary stop; anything else is a warm-up. */
+  origin?: Origin;
   understanding_state: UnderstandingState;
   visited: boolean;
   weak_spot: boolean;
@@ -166,7 +226,12 @@ export interface SessionGraph {
   nodes: GraphNode[];
   edges: GraphEdge[];
   areas?: Area[];
+  /**
+   * RETAINED and equal to `progress.goal_readiness`. Prefer `progress` — this
+   * key exists so nothing that already reads it breaks.
+   */
   readiness: number; // 0.0 – 1.0
+  progress: Progress;
 }
 
 export const getSession = (session_id: string) =>

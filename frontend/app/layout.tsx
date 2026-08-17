@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { BOOT_SCRIPT, DEFAULT_PREFS } from "@/lib/prefs";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -25,8 +26,18 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      // The server renders the default; the boot script below corrects it from
+      // localStorage before first paint, which React would otherwise flag as a
+      // hydration mismatch on an attribute it was told to own.
+      data-theme={DEFAULT_PREFS.theme}
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        {/* Blocking on purpose: it must run before anything paints, or every
+            load flashes the default theme before the chosen one. */}
+        <script dangerouslySetInnerHTML={{ __html: BOOT_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

@@ -48,6 +48,34 @@ export const t = {
     differentRepo: "Use a different repository",
   },
 
+  // --- display settings ---
+  settings: {
+    open: "Display settings",
+    title: "Display",
+    theme: "Theme",
+    themes: {
+      system: "System",
+      light: "Light",
+      dark: "Dark",
+    } as Record<string, string>,
+    textSize: "Text size",
+    // Shown inside the size buttons themselves, so they double as a preview.
+    textSizes: {
+      small: "S",
+      medium: "M",
+      large: "L",
+      xlarge: "XL",
+    } as Record<string, string>,
+    textSizeNames: {
+      small: "Small",
+      medium: "Medium",
+      large: "Large",
+      xlarge: "Extra large",
+    } as Record<string, string>,
+    close: "Close",
+    note: "Saved on this device.",
+  },
+
   // --- goal interview ---
   goal: {
     starting: "Starting the interview…",
@@ -61,6 +89,11 @@ export const t = {
 
   // --- session shell ---
   session: {
+    // Two measures, never one (learning-graph.md §5.4). "Readiness" alone read
+    // 0% for someone who walked the whole journey without answering anything.
+    goalReadiness: "Goal readiness",
+    journey: "Journey",
+    journeyCount: (settled: number, total: number) => `${settled}/${total}`,
     readiness: "Readiness",
     hideSource: "Hide source",
     showSource: "Show source",
@@ -84,6 +117,14 @@ export const t = {
     } as Record<string, string>,
   },
 
+  // --- source pane ---
+  source: {
+    dock: "Dock to the side",
+    float: "Float in a window",
+    window: "Source",
+    resize: "Drag to resize the source pane",
+  },
+
   // --- route rail ---
   rail: {
     title: "Your route",
@@ -93,6 +134,43 @@ export const t = {
     optionalStops: (count: number) =>
       count === 1 ? "1 optional stop" : `${count} optional stops`,
     hideOptional: "Hide optional",
+    // The rail carries no permanent legend any more: a pin's meaning is on the
+    // pin, as its accessible name, and the map keeps the full key.
+    stopState: (state: string) => `— ${state}`,
+    weak: "marked weak",
+    // Both live on the section heading row, which is two controls rather than
+    // one: the chevron collapses, the title opens the chapter overview.
+    collapseSection: (title: string) => `Collapse ${title}`,
+    expandSection: (title: string) => `Expand ${title}`,
+    openSection: (title: string) => `Open the overview of ${title}`,
+    sectionProgress: (settled: number, total: number) => `${settled}/${total}`,
+    youAreHere: "you are here",
+  },
+
+  // --- section (chapter) overview ---
+  // A chapter introduction, not a lesson: it says what this stage of the route
+  // is for and what the learner should be able to claim at the end of it. Every
+  // line is derived from the curriculum the Planner already wrote — the area's
+  // own `why`, and the objectives of the units inside it.
+  section: {
+    label: "Section overview",
+    chapterOf: (index: number, total: number) => `Chapter ${index} of ${total}`,
+    purpose: "What this section is about",
+    whyNow: "Why now",
+    opensRoute: "This is where your route begins, so nothing is assumed yet.",
+    followsOn: (previous: string) =>
+      `It follows on from “${previous}”, and builds on what you took from it.`,
+    followsUnfinished: (previous: string, settled: number, total: number) =>
+      `It follows on from “${previous}”, where ${settled} of ${total} stops are behind you.`,
+    byTheEnd: "By the end you should be able to say",
+    lessons: "Lessons in this section",
+    progress: (settled: number, total: number) =>
+      `${settled} of ${total} stops taken`,
+    allTaken: "Every stop here is behind you.",
+    continue: (title: string) => `Continue: ${title}`,
+    startHere: (title: string) => `Start here: ${title}`,
+    close: "Close overview",
+    reopenHint: "Reopen this from the section heading in the route at any time.",
   },
 
   // --- scope control ---
@@ -199,7 +277,17 @@ export const t = {
     filesTouched: (count: number) =>
       `${count} file${count === 1 ? "" : "s"} touched`,
     markedWeak: (count: number) => `${count} marked weak`,
-    readiness: "readiness",
+    readiness: "goal readiness",
+    // The headline is a claim about the GOAL, so it is stated over the required
+    // set rather than over every node on screen.
+    coreDemonstrated: (understood: number, total: number) =>
+      `${understood} of ${total} required objectives demonstrated`,
+    stopsTaken: (settled: number, total: number) =>
+      `${settled} of ${total} stops taken`,
+    // Remedial work is reported rather than folded into a percentage (OQ-2).
+    detoursTaken: (count: number) =>
+      `${count} warm-up${count === 1 ? "" : "s"} taken`,
+    skippedStops: (count: number) => `${count} skipped`,
     byKind: "By kind of understanding",
     topicsTouched: "Topics touched",
     whereInRepo: "Where in the repository",
