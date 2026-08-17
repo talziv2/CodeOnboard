@@ -414,6 +414,12 @@ def run(
 
     user_content = _build_user_content(node, user_response)
 
+    # Whether the verdict below is the model's judgement or our fallback. The
+    # Grader is the only place that knows, and downstream cannot tell: the
+    # fallback is an ordinary-looking `partial`, and it therefore scores half in
+    # every measure that reads `understanding_state`. Reported so the attempt
+    # record can keep our outage out of the learner's evidence.
+    graded = True
     try:
         response = client.messages.create(
             model=MODEL,
@@ -427,6 +433,7 @@ def run(
         # Never block the session on a grading hiccup — assume partial.
         state.errors.append(f"grader_agent: classification failed, defaulting to partial: {e}")
         output = GraderOutput(classification="partial", rationale=_GRADING_FAILED)
+        graded = False
 
     # Flag-off, the model was never asked for gaps and anything it volunteered is
     # ignored: the whole path below is skipped, so the pre-M2 behaviour is exact
@@ -438,6 +445,7 @@ def run(
         "classification": output.classification,
         "gap_kind": output.gap_kind,
         "rationale": output.rationale,
+        "graded": graded,
     }
     if gap_report is not None:
         # Matched / new / rejected for this answer. Nothing reads it — it exists

@@ -150,6 +150,18 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
             conn.execute("ALTER TABLE nodes ADD COLUMN gaps_json TEXT")
         except Exception:
             pass
+        # PLAN-SCOPED history — prune-ahead, scope changes, remediation
+        # insertions (learning-graph.md M2). A column for exactly the reason
+        # `areas_json` got one: it belongs to the SESSION rather than to any one
+        # node, so there is no node payload it could ride in, and the only
+        # session payloads that exist are owned by other producers (`goal_json`
+        # is the agents' source of truth, `doc_context_json` the Documentation
+        # Agent's). Nothing queries it, so it stays JSON in one column rather
+        # than becoming a table.
+        try:
+            conn.execute("ALTER TABLE sessions ADD COLUMN journey_events_json TEXT")
+        except Exception:
+            pass
 
 
 def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
@@ -159,15 +171,16 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
             """
             INSERT INTO sessions
                 (session_id, repo_url, goal_json, current_node_id,
-                 doc_context_json, areas_json, schema_version)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                 doc_context_json, areas_json, journey_events_json, schema_version)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(session_id) DO UPDATE SET
-                repo_url         = excluded.repo_url,
-                goal_json        = excluded.goal_json,
-                current_node_id  = excluded.current_node_id,
-                doc_context_json = excluded.doc_context_json,
-                areas_json       = excluded.areas_json,
-                schema_version   = excluded.schema_version,
+                repo_url            = excluded.repo_url,
+                goal_json           = excluded.goal_json,
+                current_node_id     = excluded.current_node_id,
+                doc_context_json    = excluded.doc_context_json,
+                areas_json          = excluded.areas_json,
+                journey_events_json = excluded.journey_events_json,
+                schema_version      = excluded.schema_version,
                 updated_at       = strftime('%Y-%m-%d %H:%M:%f', 'now')
             """,
             (
@@ -177,6 +190,7 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
                 graph.current_node_id,
                 json.dumps(graph.doc_context) if graph.doc_context is not None else None,
                 json.dumps(graph.areas) if graph.areas else None,
+                json.dumps(graph.journey_events) if graph.journey_events else None,
                 SCHEMA_VERSION,
             ),
         )
@@ -223,6 +237,7 @@ def load_graph(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> LearningGrap
             current_node_id=session_row["current_node_id"],
             doc_context=json.loads(raw_doc) if raw_doc is not None else None,
             areas=_json_or_default(session_row, "areas_json", []),
+            journey_events=_json_or_default(session_row, "journey_events_json", []),
         )
         for node_row in conn.execute(
             "SELECT * FROM nodes WHERE session_id = ?", (session_id,)

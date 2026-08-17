@@ -756,12 +756,13 @@ version of "first-pass understanding".
 
 | area | change |
 |---|---|
-| backend | `/respond` writes the chosen action back onto the attempt it caused, in §18.9's shape: `attempt["response"] = {action, text?, retaught?, pruned?, mutation, declined_reason?}`; `attempt["kind"] = "assessment"`; `attempt["graded"] = bool`. `record_attempt` gains an `update_response(node_id, index, payload)` sibling so the write is one call, not ad-hoc dict poking. Mutator writes `lesson_brief["remediates"] = {node_id, attempt_index, gap_ids: []}` |
-| persistence | **none** — all inside `attempts_json` / `lesson_brief_json` |
+| backend | **`backend/learning/history.py`** owns the vocabulary and the accessors. `/respond` writes `attempt["kind"]`, `attempt["graded"]` and `attempt["response"] = {action, text?, retaught?, superseded_lesson?, remediation_node_id?, declined_reason?}` via `graph.record_response`. Plan-shape changes go to `graph.journey_events` instead — see the ownership split below. `lesson_brief["remediates"]` was **already delivered by gap-model M5**, so M2 does not rebuild it |
+| **ownership split (revised during the review, 2026-08-17)** | The original design put `pruned` on the attempt. It does not belong there: `scope.shorten/deepen` fire at `/session/{id}/scope`, **which takes no answer**, so half of all plan mutations have no attempt to hang from. Test applied: *could this have happened without a learner answering something?* A hint could not (attempt-scoped); a scope change routinely does (plan-scoped) |
+| persistence | attempt envelope rides in `attempts_json` (no change). Plan history needs **one additive nullable column**, `sessions.journey_events_json` — the same justification `areas_json` was given: it belongs to the **session**, not to any one node, and the only other session payloads are owned by other producers. `SCHEMA_VERSION` unmoved. Still no table: nothing queries it |
 | API | attempts on the wire gain `response`, `kind`, `graded`. Additive |
 | frontend | attempt timeline in the node drawer shows what the system did after each answer; pattern inputs become available |
-| migration | pre-M2 attempts have no `response` — every consumer treats absent as "unknown", **never as "no intervention"**. This distinction must be in the code, not just the docs, or metric 13 lies about old sessions |
-| tests | `tests/test_learning_events.py`: response recorded for each of the five actions; a declined prerequisite records its reason; re-grade appends rather than overwrites; old attempts read as unknown; round-trip through the store |
+| migration | pre-M2 attempts have no `response` — every consumer treats absent as "unknown", **never as "no intervention"**. Enforced in code: `intervention_of` returns `None` (not `"none"`) and `instrumented()` is the only supported denominator, so a metric cannot include an un-instrumented attempt by omission. Measured over the real database: **40 stored attempts, 0 instrumented, and a load/save/reload leaves every one byte-identical** |
+| tests | `tests/test_history.py`, 40 tests: unknown-vs-none in six forms; grading failures excluded from evidence but not from the progress measures; assessment vs verification kinds; each of the five actions round-tripping; declined reasons kept; superseded lessons kept; journey events with no attempt; store round trip; and two structural tests pinning the gap-model seam |
 
 **[REC]** Also here: `lesson_brief["lesson_versions"]` on re-teach (§4.2), capped
 at 3. It is three lines and it is the only thing that makes "how your

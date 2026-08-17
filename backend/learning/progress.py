@@ -31,6 +31,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from backend.learning import history
 from backend.learning.graph import understanding_of
 
 if TYPE_CHECKING:  # pragma: no cover - typing only, avoids an import cycle
@@ -187,13 +188,16 @@ def is_settled(node: "LearningNode") -> bool:
 def is_assessed(node: "LearningNode") -> bool:
     """Is there real evidence here?
 
-    An `off-topic` answer is excluded, for the same reason the Grader refuses to
-    let it change `understanding_state`: it is evidence of neither understanding
-    nor misunderstanding. A quarter of every attempt stored to date is
-    `off-topic`, so counting them would skew every coverage number the profile
-    reports.
+    Delegates to `history.is_evidence`, which excludes two things: an `off-topic`
+    answer (evidence of neither understanding nor misunderstanding — a quarter of
+    every attempt stored to date) and a FAILED GRADE (our error, not the
+    learner's answer).
+
+    The grading-failure exclusion arrived with M2, which is the first milestone
+    able to tell the two apart. It moves `assessed_coverage` only; the two
+    progress measures read `understanding_state` and are untouched.
     """
-    return any(a.get("classification") != "off-topic" for a in node.attempts)
+    return any(history.is_evidence(a) for a in node.attempts)
 
 
 # ── the measures ──────────────────────────────────────────────────────────────

@@ -42,6 +42,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Literal
 
+from backend.learning import history
 from backend.learning.gaps import Gap, GapState
 
 
@@ -269,6 +270,11 @@ class LearningGraph:
     # one by `lesson_brief["area_id"]`. Empty for every graph the objective-first
     # planner did not build.
     areas: list[dict] = field(default_factory=list)
+    # PLAN-SCOPED history: every change to the shape of the journey — prune-ahead,
+    # scope adjustments, remediation insertions. Session-scoped rather than
+    # node-scoped for the same reason `areas` is: it belongs to the journey, not
+    # to any one unit. Append-only, oldest first.
+    journey_events: list[dict] = field(default_factory=list)
 
     # --- construction helpers ---
 
@@ -300,6 +306,8 @@ class LearningGraph:
         classification: str,
         rationale: str,
         gap_kind: str = "none",
+        kind: str = history.ASSESSMENT,
+        graded: bool = True,
     ) -> dict:
         # Append-only: a re-answer on a revisited node adds to the record rather
         # than replacing it, so the history survives a change of state.
@@ -311,6 +319,14 @@ class LearningGraph:
             # before the field existed load unchanged.
             "gap_kind": gap_kind,
             "rationale": rationale,
+            # Assessment or verification (gap-model M6). Written explicitly from
+            # here on so the two can never be pooled; every stored attempt
+            # predates verification and reads correctly as an assessment.
+            "kind": kind,
+            # Did grading succeed, or is this the fallback verdict? A failed
+            # grade is our error, not the learner's answer, and `history` keeps
+            # it out of understanding evidence.
+            "graded": graded,
             "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
         node = self.nodes[node_id]
@@ -327,6 +343,36 @@ class LearningGraph:
         if node.user_override == "continue":
             node.user_override = None
         return attempt
+
+    def record_response(self, node_id: str, response: dict) -> dict | None:
+        """Attach what the system did to the answer that caused it (§18.9).
+
+        On the LATEST attempt, because a response is caused by exactly one
+        answer and is written in the same request that recorded it. Returns None
+        when there is no attempt to attach to, rather than inventing one — a
+        response with no answer behind it would be a system action the history
+        claims a learner triggered.
+
+        The presence of this key is what distinguishes "the system did nothing"
+        from "we have no record" for every attempt written before M2.
+        """
+        attempts = self.nodes[node_id].attempts
+        if not attempts:
+            return None
+        attempts[-1][history.RESPONSE] = response
+        return attempts[-1]
+
+    def record_journey_event(self, kind: str, **payload) -> dict:
+        """Record a change to the SHAPE of the journey.
+
+        Separate from `attempts` by lifecycle, not by taste: scope changes have
+        no attempt to hang from (`/session/{id}/scope` takes no answer), and a
+        demotion touches units far from whatever the learner just did. See
+        `history` for the full argument.
+        """
+        event = history.new_journey_event(kind, **payload)
+        self.journey_events.append(event)
+        return event
 
     def mark_understanding(self, node_id: str, state: UnderstandingState) -> None:
         """Record the LATEST ASSESSMENT. Not the node's understanding state.
@@ -650,6 +696,9 @@ class LearningGraph:
             "readiness": self.readiness(),
             "progress": progress_model.summary(self),
             "areas": self.areas,
+            # Plan-scoped history. On the wire so M3 can explain a journey that
+            # changed shape; no M2 surface reads it yet.
+            "journey_events": self.journey_events,
             "nodes": [
                 {
                     "id": n.id,

@@ -41,6 +41,7 @@ from backend.agents.mentor.mutator import Diagnosis, mutate as mutate_graph
 from backend.agents.teaching import run as run_teaching
 from backend.agents.teaching import respond as teaching_respond
 from backend.learning import adaptation
+from backend.learning import history
 from backend.learning import progress
 from backend.learning import scope
 from backend.learning import store as learning_store
@@ -506,6 +507,11 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
         classification,
         grade.get("rationale") or "",
         gap_kind=gap_kind,
+        # Whether the verdict is the Grader's or the fallback. The Grader signals
+        # a failure by appending to `state.errors` and returning `partial` with a
+        # fixed rationale; recorded here so the two are distinguishable forever
+        # after, instead of a system outage counting as half a learner's grasp.
+        graded=bool(grade.get("graded", True)),
     )
 
     # WHAT the answer earns is decided deterministically from why it fell short
@@ -527,6 +533,8 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
     rationale = grade.get("rationale") or ""
     mutation = {"kind": "none"}
     adapted: dict = {"kind": action}
+    # The lesson a re-teach replaces, captured before it is overwritten.
+    superseded: dict | None = None
 
     if action == "prerequisite":
         try:
@@ -564,6 +572,10 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
         )
     elif action == "reteach":
         try:
+            # Snapshot BEFORE the re-teach: `reteach` assigns `cached_lesson`
+            # directly, so after the call the previous body no longer exists
+            # anywhere.
+            previous_lesson = node.cached_lesson
             source = _node_source(graph, node)
             # Every target, not just the leading one: a re-teach is a lesson and
             # can name several misconceptions at once, and one it omits is one
@@ -573,6 +585,8 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
                 gaps=plan.targets,
             )
             adapted["retaught"] = lesson is not None
+            if lesson is not None:
+                superseded = previous_lesson
         except Exception as exc:
             state.errors.append(f"re-teach failed: {exc}")
             adapted["retaught"] = False
@@ -584,6 +598,48 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
     pruned = adaptation.prune_ahead(graph)
     if pruned:
         adapted["pruned"] = len(pruned)
+
+    # ── history (learning-graph.md M2) ────────────────────────────────────────
+    #
+    # Two records, deliberately in two places, because they have two lifecycles.
+    #
+    # ATTEMPT-SCOPED: what this answer earned. Caused by one answer, describes
+    # one answer. The ids and reasons are kept, not a boolean — "a warm-up was
+    # inserted" cannot later answer "and did the learner come back and get it".
+    graph.record_response(current, history.new_response(
+        action,
+        **({"text": adapted["text"]} if adapted.get("text") else {}),
+        **({"retaught": adapted["retaught"]} if "retaught" in adapted else {}),
+        # The superseded lesson, kept where the supersession happened. A re-teach
+        # overwrites `cached_lesson`, so without this the version that misled the
+        # learner is gone and "how their understanding moved" loses one side.
+        **({"superseded_lesson": superseded} if superseded else {}),
+        **({"remediation_node_id": mutation.get("new_node_id")}
+           if mutation.get("kind") == "prerequisite" else {}),
+        # A refusal is a real answer, not a malfunction: "every candidate was a
+        # peer, not a foundation" is the most useful thing the system can say
+        # about a confusion it chose not to act on. It was being discarded.
+        **({"declined_reason": mutation.get("rationale") or mutation.get("reason")}
+           if mutation.get("kind") == "none" and action == "prerequisite" else {}),
+    ))
+
+    # PLAN-SCOPED: the journey changed shape. Recorded with the ids it moved, so
+    # a later view can explain a shorter journey rather than only report one.
+    if pruned:
+        graph.record_journey_event(
+            history.PRUNE_AHEAD, nodes=pruned,
+            cause={"node_id": current,
+                   "attempt_index": len(graph.nodes[current].attempts) - 1},
+        )
+    if mutation.get("kind") == "prerequisite":
+        graph.record_journey_event(
+            history.REMEDIATION_INSERTED,
+            nodes=[mutation.get("new_node_id")],
+            cause={"node_id": current,
+                   "attempt_index": len(graph.nodes[current].attempts) - 1},
+            origin=progress.SYSTEM_REMEDIATION,
+            unlocks=current,
+        )
 
     learning_store.save_graph(graph, SESSIONS_DB_PATH)
 
@@ -623,6 +679,16 @@ def session_retry(session_id: str, body: dict) -> dict:
     mutate_graph(
         state, "prerequisite", client=client, origin=progress.LEARNER_REQUEST
     )
+    # Also attempt-less: the learner asked for a warm-up some time after
+    # answering, so this is a change to the journey rather than a response to an
+    # answer. `origin` is what later separates "I chose to step back" from "the
+    # system sent me back" — a distinction no intervention rate should blur.
+    inserted = (state.last_mutation or {}).get("new_node_id")
+    if inserted:
+        graph.record_journey_event(
+            history.REMEDIATION_INSERTED, nodes=[inserted],
+            origin=progress.LEARNER_REQUEST, unlocks=current,
+        )
     learning_store.save_graph(graph, SESSIONS_DB_PATH)
     if graph.current_node_id == current:
         # No prerequisite was inserted (guard triggered) — just return current
@@ -668,6 +734,15 @@ def session_scope(session_id: str, body: ScopeRequest) -> dict:
     changed = (
         scope.shorten(graph) if body.direction == "shorter" else scope.deepen(graph)
     )
+    # THE CASE THAT DECIDED THE OWNERSHIP SPLIT: this endpoint takes no answer,
+    # so there is no attempt to hang this on. A journey-shape history that lived
+    # inside `attempts` could not record half of what changes a journey.
+    if changed:
+        graph.record_journey_event(
+            history.SCOPE_SHORTER if body.direction == "shorter"
+            else history.SCOPE_DEEPER,
+            nodes=changed,
+        )
     learning_store.save_graph(graph, SESSIONS_DB_PATH)
 
     return {
