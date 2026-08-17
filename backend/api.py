@@ -44,6 +44,7 @@ from backend.learning import adaptation
 from backend.learning import progress
 from backend.learning import scope
 from backend.learning import store as learning_store
+from backend.learning.graph import understanding_of
 from backend.pipeline.runner import run_pipeline
 from backend.repo import dossier_store
 from backend.pipeline.state import OnboardState
@@ -581,7 +582,7 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
         "classification": classification,
         "gap_kind": gap_kind,
         "rationale": grade.get("rationale"),
-        "understanding_state": graph.nodes[current].understanding_state,
+        "understanding_state": understanding_of(graph.nodes[current]),
         "mutation": mutation,
         "adaptation": adapted,
         "current_node_id": graph.current_node_id,  # may now point at a new prerequisite
@@ -689,7 +690,7 @@ def session_override(session_id: str, body: OverrideRequest) -> dict:
     node = graph.nodes[node_id]
     return {
         "node_id": node_id,
-        "understanding_state": node.understanding_state,
+        "understanding_state": understanding_of(node),
         "visited": node.visited,
         "weak_spot": node.weak_spot,
     }

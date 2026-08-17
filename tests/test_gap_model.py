@@ -1,8 +1,13 @@
 """M1 — the gap model, its persistence, and the flag contract.
 
-gap-model.md M1. Everything here is about a model that is deliberately INERT:
-nothing reads gaps yet, nothing blocks, nothing is remediated. What M1 must
-prove is that the data exists, survives, and changes nothing.
+gap-model.md M1. What M1 had to prove is that the data exists, survives, and —
+at the time — changed nothing: gaps were deliberately INERT, because blocking
+could not land until M6 made closure possible.
+
+**The inertness claim expired when M7 shipped**, and one test here was inverted
+to say so rather than deleted, so the sequencing rule's history stays readable.
+Everything else in this file is about the model and its persistence, which M7
+did not touch.
 
 Run with: uv run pytest tests/test_gap_model.py -v
 """
@@ -22,7 +27,7 @@ from backend.learning.gaps import (
     Gap,
     GapState,
 )
-from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
+from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode, understanding_of
 
 
 REPO = "https://github.com/psf/requests"
@@ -292,9 +297,22 @@ def test_gaps_do_not_reach_the_api_payload():
     assert "gap_state" not in node_payload
 
 
-def test_gaps_do_not_affect_understanding_state_or_readiness():
-    """Blocking lands in M7, deliberately after M6 makes closure possible."""
+def test_gaps_now_hold_back_understanding_and_readiness():
+    """Updated when M7 landed; it previously asserted the opposite.
+
+    Through M1–M6 this test pinned the fact that gaps were INERT — recorded but
+    powerless — because blocking had to wait until M6 made closure possible.
+    That was the point of the sequencing rule, and this assertion is what proved
+    the rule was being followed.
+
+    M7 gives gaps their teeth, so the expectation inverts. What survives
+    unchanged is the *recording*: `mark_understanding` still writes what the
+    Grader concluded. What changed is that writing it no longer settles the
+    question — `understanding_of` does, and it will not report mastery over two
+    open blocking gaps.
+    """
     graph, node = _graph_with_two_gaps()
     graph.mark_understanding(node.id, "understood")
-    assert node.understanding_state == "understood"   # two open blocking gaps
-    assert graph.readiness() == 1.0
+    assert node.understanding_state == "understood"   # still recorded
+    assert understanding_of(node) == "partial"        # but not concluded
+    assert graph.readiness() < 1.0

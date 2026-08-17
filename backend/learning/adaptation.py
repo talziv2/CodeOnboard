@@ -23,7 +23,7 @@ from backend.learning.gaps import (
     Gap,
     by_precedence,
 )
-from backend.learning.graph import LearningGraph
+from backend.learning.graph import LearningGraph, understanding_of
 
 
 # What the system does in response. `none` means the answer needs no response
@@ -300,7 +300,7 @@ def prune_ahead(graph: LearningGraph) -> list[str]:
         area = (node.lesson_brief or {}).get("area_id")
         if not area:
             continue
-        if node.understanding_state == "understood":
+        if understanding_of(node) == "understood":
             understood_by_area[area] = understood_by_area.get(area, 0) + 1
         elif node.visited:
             # A visited unit that was NOT understood breaks the streak: the

@@ -24,6 +24,7 @@ from pydantic import BaseModel
 
 from backend.learning.graph import LearningGraph, LearningNode
 from backend.pipeline.state import OnboardState
+from backend.learning.graph import understanding_of
 from backend.repo import dossier_context, dossier_store, structure
 from backend.repo.skeleton import build_skeleton
 
@@ -389,7 +390,7 @@ def _build_prior_context(graph: LearningGraph, current_id: str) -> str:
     understood = [
         n
         for nid, n in graph.nodes.items()
-        if nid != current_id and n.understanding_state == "understood"
+        if nid != current_id and understanding_of(n) == "understood"
     ]
     if not understood:
         return "This is the developer's first lesson in this session — assume no prior nodes covered."

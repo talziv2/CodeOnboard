@@ -146,6 +146,61 @@ class LearningNode:
         return (brief.get("objective") or brief.get("understand") or "").strip()
 
 
+def understanding_of(node: LearningNode) -> UnderstandingState:
+    """The node's understanding state. **The single owner of this question.**
+
+    `understanding_state` on the node is the LATEST RECORDED ASSESSMENT — what
+    the Grader last concluded from an answer. This function turns that into what
+    the learner has actually demonstrated, by also consulting the gaps
+    (learning-engine.md §18.8, gap-model.md M7).
+
+    The consequential rule, and the whole reason M7 exists:
+
+        A node cannot be `understood` while a blocking gap is unverified, even
+        when the most recent answer was graded `understood`.
+
+    That is loss point 5. Before this, an answer could be marked `understood`
+    while two detected misconceptions sat open on the same node, and the graph
+    would report mastery.
+
+    **`verified` is the only status that permits `understood`** — not merely
+    "not open". A `waived` gap is one the learner chose to stop working on, which
+    is a decision rather than evidence, so it keeps the node off `understood`
+    exactly as an open one does (§18.16's final state model; the M7 build row
+    states the condition as "every blocking gap is `verified`"). What waiving buys
+    is that the system stops asking, which is M8's business, not this function's.
+
+    Non-blocking gaps never affect the outcome: a `right_idea_wrong_altitude` gap
+    is real, is worth showing, and is not a claim that the objective was missed.
+
+    **Compatibility is by construction, not by care.** When no blocking gap
+    exists — every graph written before the gap model, and every flag-off session
+    — the first branch returns the stored value untouched. There is no arithmetic
+    that could drift, which is what makes the stored-session gate exact rather
+    than approximate.
+    """
+    blocking = [g for g in node.gaps if g.is_blocking]
+    if all(g.status == "verified" for g in blocking):
+        return node.understanding_state
+
+    # Something blocking is unverified. The node is not `understood`, whatever
+    # the last answer scored — but it is not demoted below what was recorded
+    # either:
+    #
+    #   failed       stays failed. The latest answer showed a real
+    #                misunderstanding, and that is a sharper fact than "some gap
+    #                is open". `weak_spot` is already sticky, so §18.8's "stays
+    #                true while any blocking gap is open" needs nothing here.
+    #   not_started  stays not_started. Gaps cannot exist without an attempt in
+    #                practice, but if they somehow do, inventing progress would
+    #                be worse than reporting none.
+    #   otherwise    `partial` — including a stored `understood`, which is the
+    #                one demotion this function performs and the point of it.
+    if node.understanding_state in ("failed", "not_started"):
+        return node.understanding_state
+    return "partial"
+
+
 @dataclass
 class LearningEdge:
     from_node_id: str
@@ -223,6 +278,18 @@ class LearningGraph:
         return attempt
 
     def mark_understanding(self, node_id: str, state: UnderstandingState) -> None:
+        """Record the LATEST ASSESSMENT. Not the node's understanding state.
+
+        Since M7 this writes an input, not a conclusion: `understanding_of(node)`
+        owns the conclusion, and combines what is recorded here with the node's
+        gaps. The name is kept because every caller is still doing the same
+        thing — reporting what the Grader concluded from one answer.
+
+        The distinction is load-bearing. Writing `understood` here no longer
+        makes a node understood; it records that the answer reached the
+        objective, and the node still cannot be `understood` while a blocking
+        gap is unverified (§18.8, loss point 5).
+        """
         node = self.nodes[node_id]
         node.understanding_state = state
         if state == "failed":
@@ -346,7 +413,7 @@ class LearningGraph:
                 if e.kind == "prerequisite" and e.to_node_id == node_id
             ]
             if all(
-                self.nodes[p].understanding_state == "understood"
+                understanding_of(self.nodes[p]) == "understood"
                 for p in prereqs
                 if p in self.nodes
             ):
@@ -440,7 +507,10 @@ class LearningGraph:
                     # written before the key existed.
                     "origin": progress_model.origin_of(n, remedial),
                     "concept_tags": n.concept_tags,
-                    "understanding_state": n.understanding_state,
+                    # DERIVED, not the stored assessment: this is what the UI
+                    # renders, and it must not report mastery over an
+                    # unverified blocking gap (§18.8).
+                    "understanding_state": understanding_of(n),
                     "visited": n.visited,
                     "weak_spot": n.weak_spot,
                     "has_lesson": n.cached_lesson is not None,

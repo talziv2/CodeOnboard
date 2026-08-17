@@ -31,6 +31,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from backend.learning.graph import understanding_of
+
 if TYPE_CHECKING:  # pragma: no cover - typing only, avoids an import cycle
     from backend.learning.graph import LearningGraph, LearningNode
 
@@ -207,7 +209,7 @@ def goal_readiness(graph: "LearningGraph") -> float:
     core = core_nodes(graph)
     if not core:
         return 0.0
-    earned = sum(_WEIGHT.get(n.understanding_state, 0.0) for n in core)
+    earned = sum(_WEIGHT.get(understanding_of(n), 0.0) for n in core)
     return earned / len(core)
 
 
@@ -235,8 +237,9 @@ def state_mix(graph: "LearningGraph") -> dict[str, int]:
     """Understanding states across the promised journey."""
     mix = {state: 0 for state in _STATES}
     for node in walk_nodes(graph):
-        if node.understanding_state in mix:
-            mix[node.understanding_state] += 1
+        state = understanding_of(node)
+        if state in mix:
+            mix[state] += 1
     return mix
 
 
@@ -258,7 +261,7 @@ def detours(graph: "LearningGraph") -> list[dict]:
             "title": node.title,
             "origin": origin_of(node, remedial),
             "unlocks": unlocks(graph, node.id),
-            "understanding_state": node.understanding_state,
+            "understanding_state": understanding_of(node),
         })
     return out
 
@@ -290,8 +293,8 @@ def summary(graph: "LearningGraph") -> dict:
     return {
         "goal_readiness": goal_readiness(graph),
         "core_total": len(core),
-        "core_understood": sum(1 for n in core if n.understanding_state == "understood"),
-        "core_partial": sum(1 for n in core if n.understanding_state == "partial"),
+        "core_understood": sum(1 for n in core if understanding_of(n) == "understood"),
+        "core_partial": sum(1 for n in core if understanding_of(n) == "partial"),
         "journey_progress": journey_progress(graph),
         "stops_settled": sum(1 for n in walk if is_settled(n)),
         "stops_total": len(walk),
@@ -302,6 +305,6 @@ def summary(graph: "LearningGraph") -> dict:
         "skipped": skipped(graph),
         "optional_total": len(optional),
         "optional_completed": sum(
-            1 for n in optional if n.understanding_state == "understood"
+            1 for n in optional if understanding_of(n) == "understood"
         ),
     }
