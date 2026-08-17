@@ -1,13 +1,15 @@
 # Learning Graph — from route tracker to understanding model
 
 **Status: written 2026-08-17. Product decisions taken 2026-08-17 (§11) — eight
-resolved, OQ-5 deliberately still open. M1 authorised and implemented; M2–M5
-planned only.**
+resolved, OQ-5 deliberately still open. M1 done; M2 done (`6f57398`); M3 split
+and M3a.1 done 2026-08-18. M3a.2 and M3b planned only.**
 
-> **Gap-model cross-reference is current as of gap-model M3 (done 2026-08-17).**
-> M3 landed while this document was being drafted; §2.4, §6.3 metric 20, §9 and
-> §10 were corrected afterwards. Detection is complete; **closure (M6) is not**,
-> which is what gates every gap surface in the UI.
+> **Gap-model cross-reference is current as of gap-model M8 (done 2026-08-18).**
+> The phase moved fast while this document was being written: §2.4, §6.3 metric
+> 20, §9 and §10 were corrected for M3, and the M3 split below was revised again
+> for M7/M8. Detection, remediation, **closure (M6)**, derived state (M7) and
+> learner intents (M8) are all in place. **M9 — gaps on the wire — is the one
+> remaining gate**, and it blocks M3b only.
 
 This document owns the *learner-facing understanding artifact*: the progress
 model, the understanding profile, learning-pattern surfacing, and the UI that
@@ -768,7 +770,73 @@ version of "first-pass understanding".
 at 3. It is three lines and it is the only thing that makes "how your
 understanding evolved" showable.
 
-### M3 — Understanding profile + deterministic patterns
+### M3 — split into M3a.1 · M3a.2 · M3b (revised 2026-08-18)
+
+The original single M3 was split for a reason that is structural rather than
+stylistic: **its gap-derived half has no data on the wire.** `to_dict` carries no
+gaps and will not until gap-model M9, so bundling would either block the profile
+behind another phase or render analytics from data the frontend cannot see.
+
+| step | scope | dependency |
+|---|---|---|
+| **M3a.1** ✅ | the understanding model, the profile, Needs Work / Worked Through / Set Aside, the Evidence Drawer | M1 + M2 + gap-model M7/M8 only |
+| **M3a.2** | the three deterministic L2 pattern templates | none — deferred by choice, not by blocker |
+| **M3b** | gap-derived insight (repeated gaps, foundational vs not, verification performance) | gap-model **M9** |
+
+#### The state model — two dimensions, not five states
+
+**Decided 2026-08-18 on evidence, after reviewing the final gap-model M8
+semantics.** The alternative considered was a fifth mutually-exclusive
+understanding state, *deliberately set aside*. It is wrong, and M8 makes the
+reason observable rather than theoretical:
+
+> A learner can waive a gap, later pass verification on it, and end with a node
+> that is genuinely `understood` while `user_override` still records
+> `waive_remaining`. **A single variable would have to report either
+> "demonstrated" or "waived", and would be wrong about the other.**
+
+So understanding and disposition are orthogonal:
+
+| dimension | values | changed by |
+|---|---|---|
+| **understanding** — what the evidence demonstrates | `strength` · `recovered` · `unresolved` · `insufficient` | evidence only. Never by a decision about remediation |
+| **disposition** — what the learner decided | `active` · `continued` · `waived` · `skipped` · `asserted` | explicit intent only. Never changes what was demonstrated |
+
+**Needs Work is the conjunction**, and that is what satisfies the product rule
+*preserve the truth about unresolved understanding without presenting it as an
+active task*: a continued or waived node keeps `unresolved` — the truth survives
+— and moves to a third **Set aside** band rather than being hidden or nagged
+about.
+
+#### What M3a.1 shipped
+
+| area | change |
+|---|---|
+| backend | `backend/learning/understanding.py` — `classify`, `disposition_of`, `is_needs_work`, `is_set_aside`, `node_summary`, `profile`, `evidence`. Pure; `understanding_of` remains the single owner of state and is never re-derived |
+| API | `understanding` on the session payload; `understanding` + `disposition` per node so every surface renders one classification; `GET /session/{id}/evidence/{node_id}` for the drawer (own endpoint — the timeline carries answer text and superseded lesson bodies) |
+| persistence | **none.** Entirely derived |
+| frontend | `MapView` gains the profile (by area, pips per unit) and the three bands; new `EvidenceDrawer`; **`weak_spot` rendering replaced in `RouteRail`, `SectionOverview`, `MapView` and the completion screen** — it is sticky, so it captioned mastered units "⚑ marked weak" forever |
+| tests | `tests/test_understanding.py`, 36 tests |
+
+**The defect it removes, measured:** across the 68 stored sessions there are **5
+recovered nodes**, every one of which rendered as a current weakness. Verified in
+the browser on `aimacode/aima-python` session `6844db10…` — goal readiness 100%,
+five of five understood, three carrying `weak_spot=True`: **"marked weak" now
+appears zero times.**
+
+One of those five had `weak_spot=False` — a `partial → understood` recovery,
+invisible to the sticky flag entirely. That is why the discriminator is the
+attempt history rather than `weak_spot`.
+
+#### Deferred, still
+
+`state_matches_latest_answer` reports *that* gap-model M7 is holding a unit back
+although its latest answer reached the objective; it cannot report *why* without
+gaps on the wire. The drawer says so plainly rather than inventing a reason.
+**OQ-5 remains open** and is revisited when M3a.2 introduces cards worth
+reacting to.
+
+### M3a.2 — deterministic patterns (not started)
 
 **Unlocks:** vision questions 2 and 3 at L1/L2.
 

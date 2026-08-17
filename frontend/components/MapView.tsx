@@ -1,7 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
-import type { GraphNode, GraphEdge, Progress, UnderstandingState } from "@/lib/api";
+import type {
+  Area, GraphNode, GraphEdge, Progress, UnderstandingClass, UnderstandingProfile,
+  UnderstandingRow, UnderstandingState,
+} from "@/lib/api";
+import {
+  understandingLabel, understandingStyle, UNDERSTANDING_ORDER,
+} from "@/lib/tags";
 import { buildRoute } from "@/lib/graph-layout";
 import {
   tagStyle, tagLabel, stateStyle, stateLabel, isCanonicalTag, STATE_ORDER,
@@ -19,8 +25,18 @@ interface Props {
    * disagree (learning-graph.md §5.6).
    */
   progress: Progress;
+  /**
+   * The Understanding Profile — computed server-side from the evidence. Two
+   * dimensions per unit: what was demonstrated, and what the learner decided
+   * about remediation. Never derived here.
+   */
+  understanding: UnderstandingProfile;
+  /** Curriculum grouping. Empty on pre-B3 graphs, which group as one list. */
+  areas?: Area[];
   repoUrl?: string;
   onNodeClick: (node: GraphNode) => void;
+  /** Opens the evidence chain behind one unit's state. */
+  onOpenEvidence: (nodeId: string) => void;
 }
 
 type Tally = Record<UnderstandingState, number>;
@@ -80,6 +96,18 @@ function BreakdownRow({
   );
 }
 
+/** Profile rows grouped by area, preserving walk order within each group. */
+function groupRows(rows: UnderstandingRow[]): Record<string, UnderstandingRow[]> {
+  const groups: Record<string, UnderstandingRow[]> = {};
+  for (const row of rows) (groups[row.area_id ?? ""] ??= []).push(row);
+  return groups;
+}
+
+/** Pre-B3 graphs have no areas, so an unnamed group is normal, not an error. */
+function areaTitle(areas: Area[] | undefined, areaId: string): string {
+  return areas?.find((a) => a.id === areaId)?.title ?? t.map.theRoute;
+}
+
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-3.5 rounded-md border border-rule bg-slab p-4">
@@ -89,8 +117,64 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
+/**
+ * One unit as a pip, coloured by what the evidence shows. Clicking it opens the
+ * evidence behind that colour — no claim the learner cannot inspect.
+ */
+function Pip({ row, onOpen }: { row: UnderstandingRow; onOpen: () => void }) {
+  const style = understandingStyle(row.understanding);
+  return (
+    <button
+      onClick={onOpen}
+      title={`${row.title} — ${understandingLabel(row.understanding)}`}
+      aria-label={`${row.title} — ${understandingLabel(row.understanding)}`}
+      className="h-[calc(13rem/16)] w-[calc(13rem/16)] shrink-0 rounded-full border-[1.5px] transition hover:scale-125"
+      style={{ borderColor: style.stroke, background: style.fill }}
+    />
+  );
+}
+
+/** A named list of units, each opening its own evidence. Used by all three
+ *  outcome bands, which differ in meaning rather than in shape. */
+function UnitList({
+  rows, onOpen, tone,
+}: {
+  rows: UnderstandingRow[];
+  onOpen: (id: string) => void;
+  tone?: string;
+}) {
+  return (
+    <ul className="flex flex-col gap-2">
+      {rows.map((row) => (
+        <li key={row.node_id}>
+          <button
+            onClick={() => onOpen(row.node_id)}
+            className="flex w-full flex-col gap-0.5 rounded border border-rule bg-slab px-3 py-2 text-start transition hover:border-signal-dim"
+          >
+            <span
+              className="text-[calc(12.5rem/16)] font-medium leading-snug"
+              style={{ color: tone ?? "var(--color-chalk)" }}
+            >
+              {row.title}
+            </span>
+            <span className="font-mono text-[calc(10rem/16)] text-graphite">
+              {row.attempts === 1
+                ? t.map.ofAssessed(1, 1).replace("1 of 1", "1 answer")
+                : `${row.attempts} answers`}
+              {row.disposition !== "active" && (
+                <> · {t.map.disposition[row.disposition] ?? row.disposition}</>
+              )}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default function MapView({
-  nodes, edges, currentNodeId, progress, repoUrl, onNodeClick,
+  nodes, edges, currentNodeId, progress, understanding, areas, repoUrl,
+  onNodeClick, onOpenEvidence,
 }: Props) {
   const stops = useMemo(() => buildRoute(nodes, edges), [nodes, edges]);
 
@@ -132,9 +216,21 @@ export default function MapView({
         .sort(rank)
         .map(([k, tally]) => [k, tally, totalOf(tally)] as const),
       files: [...byFile.entries()].sort(rank).map(([k, tally]) => [k, tally, totalOf(tally)] as const),
-      weak: nodes.filter((n) => n.weak_spot).length,
     };
   }, [nodes]);
+
+  // The three outcome bands. Server-classified, so nothing here decides what
+  // counts as a weakness — and `recovered` can never leak into `needs work`,
+  // because the backend put each id in exactly one bucket.
+  const byId = useMemo(
+    () => new Map(understanding.nodes.map((r) => [r.node_id, r])),
+    [understanding.nodes]
+  );
+  const pick = (ids: string[]) =>
+    ids.map((id) => byId.get(id)).filter((r): r is UnderstandingRow => Boolean(r));
+  const needsWork = pick(understanding.needs_work);
+  const setAside = pick(understanding.set_aside);
+  const recovered = pick(understanding.recovered);
 
   const pct = Math.round(progress.goal_readiness * 100);
   const repo = repoUrl?.replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "");
@@ -165,9 +261,11 @@ export default function MapView({
                 <> · {t.map.detoursTaken(progress.detours.length)}</>
               )}
               {progress.skipped > 0 && <> · {t.map.skippedStops(progress.skipped)}</>}
-              {summary.weak > 0 && (
-                <> · <span className="text-rust">{t.map.markedWeak(summary.weak)}</span></>
-              )}
+            </p>
+            {/* The honest denominator for everything below: a profile over 16
+                units where 3 carry evidence is a profile of 3. */}
+            <p className="font-mono text-[calc(10.5rem/16)] text-graphite">
+              {t.map.assessedOf(understanding.assessed, understanding.total)}
             </p>
           </div>
           <div className="flex items-baseline gap-2">
@@ -200,6 +298,103 @@ export default function MapView({
             ))}
           </div>
         </div>
+
+        {/* ── UNDERSTANDING PROFILE ──────────────────────────────────────────
+            What the evidence demonstrates, grouped by AREA — the curriculum's
+            own grouping, which the rail already uses. A file is where code
+            happens to live; an area is what the journey is about. */}
+        <Panel title={t.map.profileTitle}>
+          {understanding.assessed === 0 ? (
+            <p className="text-[calc(12.5rem/16)] leading-relaxed text-graphite">
+              {t.map.noEvidenceYet}
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+                {UNDERSTANDING_ORDER.map((state) => {
+                  const style = understandingStyle(state);
+                  return (
+                    <span
+                      key={state}
+                      className="flex items-center gap-2 font-mono text-[calc(10.5rem/16)] text-graphite"
+                    >
+                      <span
+                        aria-hidden
+                        className="h-[calc(9rem/16)] w-[calc(9rem/16)] shrink-0 rounded-full border-[1.5px]"
+                        style={{ borderColor: style.stroke, background: style.fill }}
+                      />
+                      <span className="tabular-nums text-chalk">
+                        {understanding.totals[state]}
+                      </span>
+                      {understandingLabel(state)}
+                    </span>
+                  );
+                })}
+              </div>
+
+              <ul className="flex flex-col gap-3 border-t border-rule pt-3">
+                {Object.entries(groupRows(understanding.nodes)).map(([areaId, rows]) => (
+                  <li key={areaId} className="flex flex-col gap-1.5">
+                    <span className="flex items-baseline justify-between gap-3">
+                      <span className="min-w-0 truncate font-mono text-[calc(11rem/16)] text-paper">
+                        {areaTitle(areas, areaId)}
+                      </span>
+                      <span className="shrink-0 font-mono text-[calc(10.5rem/16)] tabular-nums text-graphite">
+                        {t.map.ofAssessed(
+                          rows.filter((r) => r.understanding === "strength"
+                            || r.understanding === "recovered").length,
+                          rows.length
+                        )}
+                      </span>
+                    </span>
+                    {/* Every pip is one unit, and clicking it shows the evidence
+                        that produced its colour. */}
+                    <span className="flex flex-wrap gap-1.5">
+                      {rows.map((row) => (
+                        <Pip key={row.node_id} row={row} onOpen={() => onOpenEvidence(row.node_id)} />
+                      ))}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </Panel>
+
+        {/* ── NEEDS WORK / WORKED THROUGH / SET ASIDE ─────────────────────────
+            Three bands, adjacent on purpose. Separating "still open" from
+            "worked through" is the point of the milestone; putting them side by
+            side is what stops the second reading as the first. */}
+        {(needsWork.length > 0 || recovered.length > 0 || setAside.length > 0) && (
+          <div className="grid gap-4 md:grid-cols-2">
+            {needsWork.length > 0 && (
+              <Panel title={`${t.map.needsWork} · ${needsWork.length}`}>
+                <UnitList rows={needsWork} onOpen={onOpenEvidence} tone="var(--color-rust)" />
+              </Panel>
+            )}
+
+            {recovered.length > 0 && (
+              <Panel title={`${t.map.workedThrough} · ${recovered.length}`}>
+                <p className="text-[calc(11.5rem/16)] leading-snug text-graphite">
+                  {t.map.workedThroughHint}
+                </p>
+                <UnitList rows={recovered} onOpen={onOpenEvidence} />
+              </Panel>
+            )}
+
+            {/* Unresolved, and the learner closed the question. Kept visible so
+                the truth survives, kept OUT of "needs work" so it does not nag
+                about a decision already made. */}
+            {setAside.length > 0 && (
+              <Panel title={`${t.map.setAside} · ${setAside.length}`}>
+                <p className="text-[calc(11.5rem/16)] leading-snug text-graphite">
+                  {t.map.setAsideHint}
+                </p>
+                <UnitList rows={setAside} onOpen={onOpenEvidence} />
+              </Panel>
+            )}
+          </div>
+        )}
 
         {/* the two breakdowns that make this a reflection view rather than a list */}
         <div className="grid gap-4 md:grid-cols-2">
@@ -357,9 +552,15 @@ export default function MapView({
                           </span>
                         );
                       })}
-                      {node.weak_spot && (
-                        <span className="font-mono text-[calc(9.5rem/16)] tracking-[0.05em] text-rust">
-                          {t.rail.markedWeak}
+                      {/* CURRENT state, not the sticky flag. `weak_spot` stays
+                          true forever once set, so rendering it captioned a unit
+                          the learner has since mastered as a weakness. */}
+                      {node.understanding && node.understanding !== "insufficient" && (
+                        <span
+                          className="font-mono text-[calc(9.5rem/16)] tracking-[0.05em]"
+                          style={{ color: understandingStyle(node.understanding).stroke }}
+                        >
+                          {understandingLabel(node.understanding)}
                         </span>
                       )}
                     </span>

@@ -146,7 +146,11 @@ function Stop({
           </span>
         )}
 
-        {node.weak_spot && (
+        {/* CURRENT difficulty only. `weak_spot` is sticky — true forever once
+            the learner failed here — so rendering it kept a unit they have
+            since mastered captioned as a weakness. `understanding` is the
+            server-classified state and distinguishes the two. */}
+        {node.understanding === "unresolved" && (
           <span
             className="font-mono text-[calc(9.5rem/16)] tracking-[0.05em] text-rust"
             title={t.rail.weak}

@@ -96,6 +96,43 @@ export function stateLabel(state: UnderstandingState): string {
   return t.states[state] ?? state;
 }
 
+// --- the four understanding classes (M3a.1) --------------------------------
+//
+// Reuses the existing state palette deliberately: `recovered` is jade like
+// `strength` because both are demonstrated understanding, and the difference
+// between them is a fact about the ROUTE there, not about how well it is known.
+// Rendering recovery in the failure colour is the very mistake this milestone
+// removes.
+
+import type { UnderstandingClass } from "@/lib/api";
+
+export const UNDERSTANDING_STYLES: Record<UnderstandingClass, StateStyle> = {
+  strength: { stroke: "var(--color-jade)", fill: "var(--color-jade)" },
+  recovered: {
+    stroke: "var(--color-jade)",
+    // Half-filled: demonstrated, and it took more than one pass to get there.
+    fill: "linear-gradient(90deg,var(--color-jade) 50%,transparent 50%)",
+  },
+  unresolved: { stroke: "var(--color-rust)", fill: "transparent" },
+  insufficient: { stroke: "var(--color-graphite)", fill: "transparent" },
+};
+
+export function understandingStyle(state: UnderstandingClass): StateStyle {
+  return UNDERSTANDING_STYLES[state] ?? UNDERSTANDING_STYLES.insufficient;
+}
+
+export function understandingLabel(state: UnderstandingClass): string {
+  return t.map.understanding[state] ?? state;
+}
+
+/** Display order: demonstrated first, unknown last. */
+export const UNDERSTANDING_ORDER: UnderstandingClass[] = [
+  "strength",
+  "recovered",
+  "unresolved",
+  "insufficient",
+];
+
 export const STATE_ORDER: UnderstandingState[] = [
   "understood",
   "partial",

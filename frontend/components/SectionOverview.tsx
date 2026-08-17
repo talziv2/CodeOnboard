@@ -169,7 +169,9 @@ export default function SectionOverview({
                           {t.rail.addedAfterConfusion}
                         </span>
                       )}
-                      {node.weak_spot && (
+                      {/* Current difficulty, not the sticky historical flag —
+                          see RouteRail for the full reasoning. */}
+                      {node.understanding === "unresolved" && (
                         <span className="font-mono text-[calc(9.5rem/16)] tracking-[0.05em] text-rust">
                           {t.rail.markedWeak}
                         </span>

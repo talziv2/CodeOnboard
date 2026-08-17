@@ -688,6 +688,7 @@ class LearningGraph:
         # cached_lesson bodies (large) — the lesson endpoint returns those
         # separately. Includes the derived progress measures.
         from backend.learning import progress as progress_model
+        from backend.learning import understanding as understanding_model
 
         # Once, not per node — the structural pass walks every edge.
         remedial = progress_model.remedial_ids(self)
@@ -701,6 +702,10 @@ class LearningGraph:
             # consumer keeps working; the two-measure view lives in `progress`.
             "readiness": self.readiness(),
             "progress": progress_model.summary(self),
+            # The Understanding Profile (M3a.1). Derived, never stored: two
+            # dimensions per node — what the evidence demonstrates, and what the
+            # learner decided about remediation.
+            "understanding": understanding_model.profile(self),
             "areas": self.areas,
             # Plan-scoped history. On the wire so M3 can explain a journey that
             # changed shape; no M2 surface reads it yet.
@@ -731,6 +736,12 @@ class LearningGraph:
                     # directly, so without this the two are indistinguishable
                     # downstream (learning-graph.md §10 R9).
                     "user_override": n.user_override,
+                    # The two dimensions, per node, so every surface renders the
+                    # same classification instead of each deriving its own from
+                    # `weak_spot` — which is sticky, and therefore captions a
+                    # recovered unit as a current weakness forever (M3a.1).
+                    "understanding": understanding_model.classify(n),
+                    "disposition": understanding_model.disposition_of(n),
                     # "planned" | "system_remediation" | "learner_request",
                     # resolved through the structural fallback for graphs
                     # written before the key existed.

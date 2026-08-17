@@ -166,6 +166,101 @@ export interface Progress {
   optional_completed: number;
 }
 
+/**
+ * TWO DIMENSIONS, never one (learning-graph.md M3a.1).
+ *
+ * `UnderstandingClass` is what the EVIDENCE demonstrates. `Disposition` is what
+ * the learner DECIDED about remediation. They are independent: a waived gap can
+ * later be verified, leaving a node genuinely demonstrated while the record
+ * still says the learner had chosen to stop.
+ */
+export type UnderstandingClass =
+  | "strength"      // demonstrated, never fell short here
+  | "recovered"     // fell short, then demonstrated — NOT a weakness
+  | "unresolved"    // assessed and not demonstrated
+  | "insufficient"; // no usable evidence either way
+
+export type Disposition =
+  | "active"     // nothing decided; help is still on offer
+  | "continued"  // "I'll move on" — withdrawn by a new attempt
+  | "waived"     // "stop asking me"
+  | "skipped"
+  | "asserted";  // claimed, not demonstrated
+
+export type StateTally = Record<UnderstandingClass, number>;
+
+/** One row of the Understanding Profile. */
+export interface UnderstandingRow {
+  node_id: string;
+  title: string;
+  objective: string;
+  understanding: UnderstandingClass;
+  disposition: Disposition;
+  /** The derived `understanding_of` value — the single owner of this question. */
+  state: UnderstandingState;
+  attempts: number;
+  evidence_count: number;
+  /** null means UNKNOWN (pre-M2), never "no help was given". */
+  interventions: (string | null)[] | null;
+  first_answer: Classification | null;
+  /**
+   * False when the latest answer reached the objective but the unit is still
+   * held back — gap-model M7 doing its job. Without gaps on the wire the UI can
+   * say THAT honestly, but not why.
+   */
+  state_matches_latest_answer: boolean;
+  area_id: string;
+  kind: string;
+}
+
+export interface UnderstandingProfile {
+  totals: StateTally;
+  /** Units carrying real evidence — the honest denominator for the profile. */
+  assessed: number;
+  total: number;
+  by_area: Record<string, StateTally>;
+  by_kind: Record<string, StateTally>;
+  /** Unresolved AND still an open task. */
+  needs_work: string[];
+  /** Unresolved, but the learner deliberately closed the question. */
+  set_aside: string[];
+  recovered: string[];
+  nodes: UnderstandingRow[];
+}
+
+/** One step of the evidence chain behind a node's state. */
+export interface EvidenceStep {
+  index: number;
+  kind: string;
+  answer: string;
+  classification: Classification;
+  rationale: string;
+  graded: boolean;
+  counts_as_evidence: boolean;
+  /** null = no record (pre-M2). "none" = recorded, nothing was owed. */
+  intervention: string | null;
+  intervention_text: string | null;
+  superseded_lesson: LessonBody | null;
+  at: string;
+}
+
+export interface EvidenceChain extends UnderstandingRow {
+  timeline: EvidenceStep[];
+  journey_events: JourneyEvent[];
+}
+
+export interface JourneyEvent {
+  kind: string;
+  at: string;
+  nodes?: string[];
+  cause?: { node_id: string; attempt_index: number };
+  origin?: Origin;
+  unlocks?: string;
+}
+
+export const getEvidence = (session_id: string, node_id: string) =>
+  get<EvidenceChain>(`/session/${session_id}/evidence/${node_id}`);
+
 /** One verified location a unit is grounded in. */
 export interface Anchor {
   file: string;
@@ -208,8 +303,18 @@ export interface GraphNode {
   user_override?: string | null;
   /** "planned" for an ordinary stop; anything else is a warm-up. */
   origin?: Origin;
+  /**
+   * What the evidence demonstrates, and what the learner decided about
+   * remediation. Computed server-side so every surface renders the SAME
+   * classification — deriving it locally from `weak_spot` is what captioned
+   * recovered units "marked weak" permanently.
+   */
+  understanding?: UnderstandingClass;
+  disposition?: Disposition;
   understanding_state: UnderstandingState;
   visited: boolean;
+  /** Sticky: true once the learner ever failed here. HISTORY, not current
+   *  state — use `understanding` to decide what to show. */
   weak_spot: boolean;
   has_lesson: boolean;
   attempts: Attempt[];
@@ -243,6 +348,8 @@ export interface SessionGraph {
    */
   readiness: number; // 0.0 – 1.0
   progress: Progress;
+  understanding: UnderstandingProfile;
+  journey_events?: JourneyEvent[];
 }
 
 export const getSession = (session_id: string) =>

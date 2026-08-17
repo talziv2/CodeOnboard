@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import MapView from "@/components/MapView";
+import EvidenceDrawer from "@/components/EvidenceDrawer";
 import RouteRail from "@/components/RouteRail";
 import SectionOverview from "@/components/SectionOverview";
 import LessonPanel from "@/components/LessonPanel";
@@ -31,6 +32,8 @@ export default function SessionPage() {
   const [focusKey, setFocusKey] = useState(0);
   const { source, patch: patchSource } = useSourcePane();
   const [tab, setTab] = useState<"lesson" | "map">("lesson");
+  // Which unit's evidence chain is open, if any. Null = closed.
+  const [evidenceNodeId, setEvidenceNodeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [restarting, setRestarting] = useState(false);
   const [scoping, setScoping] = useState(false);
@@ -398,15 +401,29 @@ export default function SessionPage() {
               )}
             </div>
           ) : (
-            <div className="min-h-0 flex-1">
-              <MapView
-                nodes={graph.nodes}
-                edges={graph.edges}
-                currentNodeId={currentNodeId}
-                progress={graph.progress}
-                repoUrl={graph.repo_url}
-                onNodeClick={handleJump}
-              />
+            <div className="flex min-h-0 flex-1">
+              <div className="min-h-0 flex-1">
+                <MapView
+                  nodes={graph.nodes}
+                  edges={graph.edges}
+                  currentNodeId={currentNodeId}
+                  progress={graph.progress}
+                  understanding={graph.understanding}
+                  areas={graph.areas}
+                  repoUrl={graph.repo_url}
+                  onNodeClick={handleJump}
+                  onOpenEvidence={setEvidenceNodeId}
+                />
+              </div>
+              {/* Progressive disclosure: the profile states a classification,
+                  and this is where the learner sees what produced it. */}
+              {evidenceNodeId && (
+                <EvidenceDrawer
+                  sessionId={id}
+                  nodeId={evidenceNodeId}
+                  onClose={() => setEvidenceNodeId(null)}
+                />
+              )}
             </div>
           )}
         </div>

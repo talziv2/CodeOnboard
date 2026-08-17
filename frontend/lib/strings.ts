@@ -92,7 +92,12 @@ export const t = {
     // Two measures, never one (learning-graph.md §5.4). "Readiness" alone read
     // 0% for someone who walked the whole journey without answering anything.
     goalReadiness: "Goal readiness",
-    journey: "Journey",
+    // "Stops taken", not "Journey": the number is a COUNT of stops settled, and
+    // the lesson header beside it shows a POSITION ("Stop 9 of 13"). Labelled
+    // "Journey 13/13" the two read as a contradiction — verified in the browser
+    // on a session where all 13 stops are visited but the learner is back on
+    // stop 9, which is a legitimate state and looked like a bug.
+    journey: "Stops taken",
     journeyCount: (settled: number, total: number) => `${settled}/${total}`,
     readiness: "Readiness",
     hideSource: "Hide source",
@@ -288,6 +293,57 @@ export const t = {
     detoursTaken: (count: number) =>
       `${count} warm-up${count === 1 ? "" : "s"} taken`,
     skippedStops: (count: number) => `${count} skipped`,
+    // --- understanding profile (M3a.1) ---
+    // Wording rule: every label describes ANSWERS and UNITS, never the learner.
+    // "3 objectives need work" is a fact; "you are weak at flows" is a claim
+    // about a person that this evidence cannot support.
+    understanding: {
+      strength: "Demonstrated",
+      recovered: "Worked through",
+      unresolved: "Needs work",
+      insufficient: "Not yet assessed",
+    } as Record<string, string>,
+    // The learner's own decision about remediation — a second dimension, never
+    // a replacement for what the evidence shows.
+    disposition: {
+      continued: "you chose to move on",
+      waived: "you chose not to pursue this",
+      skipped: "skipped",
+      asserted: "you marked this understood",
+    } as Record<string, string>,
+    profileTitle: "What you understand",
+    needsWork: "Needs work",
+    workedThrough: "Worked through",
+    workedThroughHint: "Fell short at first, then demonstrated.",
+    setAside: "Set aside",
+    setAsideHint: "Still unresolved, but you chose not to pursue it.",
+    notAssessed: (count: number) => `${count} not yet assessed`,
+    assessedOf: (assessed: number, total: number) =>
+      `${assessed} of ${total} units have evidence`,
+    ofAssessed: (n: number, total: number) => `${n} of ${total}`,
+    noEvidenceYet: "No answers recorded yet — nothing to show about your understanding.",
+    // Shown when gap-model M7 holds a unit back although the last answer
+    // reached the objective. Says THAT, never invents a why.
+    pendingVerification: "Not yet counted as demonstrated — verification pending.",
+    // --- evidence drawer ---
+    evidence: "Evidence",
+    evidenceFor: "Why this state",
+    close: "Close",
+    objectiveLabel: "The claim you were marked against",
+    timeline: "What happened",
+    yourAnswer: "Your answer",
+    systemDid: "The system",
+    noRecord: "no record of what the system did",
+    notEvidence: "not counted as evidence",
+    gradingFailed: "grading failed — not counted",
+    supersededLesson: "Replaced an earlier version of this lesson",
+    interventionLabel: {
+      none: "recorded — nothing was owed",
+      hint: "gave a hint",
+      reteach: "re-taught this unit",
+      followup: "asked a follow-up",
+      prerequisite: "added a warm-up",
+    } as Record<string, string>,
     byKind: "By kind of understanding",
     topicsTouched: "Topics touched",
     whereInRepo: "Where in the repository",

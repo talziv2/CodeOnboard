@@ -47,6 +47,7 @@ from backend.learning import history
 from backend.learning import progress
 from backend.learning import scope
 from backend.learning import store as learning_store
+from backend.learning import understanding
 from backend.learning.graph import understanding_of
 from backend.pipeline.runner import run_pipeline
 from backend.repo import dossier_store
@@ -985,6 +986,21 @@ def session_override(session_id: str, body: OverrideRequest) -> dict:
         "visited": node.visited,
         "weak_spot": node.weak_spot,
     }
+
+
+@app.get("/session/{session_id}/evidence/{node_id}")
+def session_evidence(session_id: str, node_id: str) -> dict:
+    """The evidence chain behind one node's understanding state (M3a.1).
+
+    Its own endpoint rather than a slice of the session payload: the timeline
+    carries full answer text and superseded lesson bodies, which would multiply
+    the size of every `/session/{id}` poll for something read on demand when the
+    learner opens one node.
+    """
+    graph = _load_session_or_404(session_id)
+    if node_id not in graph.nodes:
+        raise HTTPException(status_code=404, detail="node_not_found")
+    return understanding.evidence(graph, node_id)
 
 
 @app.get("/session/{session_id}/file")

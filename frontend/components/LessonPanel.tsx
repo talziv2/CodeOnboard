@@ -618,7 +618,10 @@ function CompletionScreen({
   graph, onNewSession, onFinish,
 }: { graph: SessionGraph; onNewSession: () => void; onFinish: () => void }) {
   const [tab, setTab] = useState<"summary" | "map">("summary");
-  const weak = graph.nodes.filter((n) => n.weak_spot);
+  // "Another pass" must list what is STILL unresolved — not everything the
+  // learner ever stumbled on. `weak_spot` is sticky, so it kept offering a
+  // second pass over units already mastered.
+  const weak = graph.nodes.filter((n) => n.understanding === "unresolved");
   const understood = graph.nodes.filter((n) => n.understanding_state === "understood").length;
 
   return (
@@ -695,8 +698,13 @@ function CompletionScreen({
             edges={graph.edges}
             currentNodeId={graph.current_node_id}
             progress={graph.progress}
+            understanding={graph.understanding}
+            areas={graph.areas}
             repoUrl={graph.repo_url}
             onNodeClick={() => {}}
+            // The completion screen is a read-only recap; drilling into evidence
+            // belongs to the live session, where the drawer has room.
+            onOpenEvidence={() => {}}
           />
         </div>
       )}
