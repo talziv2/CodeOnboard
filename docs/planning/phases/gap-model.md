@@ -6,10 +6,31 @@ re-grades, arbitrated into one plan, remediated by name, closed only by a fresh
 question, and they gate `understood` — and the learner can move past them
 without being sent back or granted mastery they did not earn.
 
+**PHASE CLOSED 2026-08-18**, after M10 and one follow-up: the
+`wrong_model` / `right_idea_wrong_altitude` boundary, investigated as a general
+Grader question and corrected — leakage 3/10 → 0/10, gate 47/48 on both axes,
+the altitude kind sharpened rather than collapsed
+([`evidence/altitude-boundary/`](evidence/altitude-boundary/README.md)).
+
 **One acceptance criterion is qualified rather than clean, and it is stated in
 the table below rather than buried:** AC1 is reproducible on `psf/requests` and
-intermittent on `aimacode/aima-python` (1 of 4 samples). Nothing was tuned to
-make it pass. See [`evidence/m10-acceptance/`](evidence/m10-acceptance/README.md).
+intermittent on `aimacode/aima-python` — 1 of 4 samples as recorded by M10, 2 of
+3 after the follow-up. Nothing was tuned to make it pass, and the M10 figure
+stands as the acceptance record.
+See [`evidence/m10-acceptance/`](evidence/m10-acceptance/README.md).
+
+### The four recorded limitations, and the bar for reopening
+
+**No further Gap Model work should happen on any of these until a real learner
+session shows it materially affecting learning.** They are recorded so that a
+future decision has evidence to start from, not a to-do list.
+
+| # | limitation | why it is not blocking |
+|---|---|---|
+| 1 | **AC1 detection variance on AIMA** — the second, subtler misconception is noticed 2/3 of the time | Nothing is lost when it *is* detected, and no gap has ever been silently dropped. The classification half of this was fixed by the follow-up |
+| 2 | **The multi-gap `reveal` splits into sections** at 3+ gaps, more so at 5 | Every claim is still corrected, inside budget, organised by what the code does rather than by the input list. Judged, not tuned ([`evidence/m5-multi-gap-reteach/`](evidence/m5-multi-gap-reteach/README.md)) |
+| 3 | **`right_idea_wrong_altitude` is nearly unreachable as a gap** — the addendum excludes true statements from the gaps list, and altitude errors are true at some level | A design question about what a gap is *for*, not a classification error. Nothing in the evidence shows it costing a learner anything |
+| 4 | **Cost rose to ≈$0.46 warm** (+13.6%), plus ≈$0.0042 per gap closed | Deliberate: the system now detects several misconceptions, remediates each and verifies closure. Owned by [`cost-optimization.md`](cost-optimization.md), not by this phase |
 
 | step | state |
 |---|---|
