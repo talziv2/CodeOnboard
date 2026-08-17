@@ -1,0 +1,136 @@
+{
+  "node": "7ecc5fe3",
+  "answer": "The handler owns the whole authentication decision: it inspects the URL and the environment, decides whether credentials are needed at all, opens the connection so it can read the server's challenge, and then returns a fresh Request object that replaces the original one.",
+  "cases": [
+    {
+      "targets": 1,
+      "gaps": [
+        {
+          "claim": "The auth handler inspects the URL and environment, decides whether credentials are needed, and opens the connection.",
+          "objective_part": "what the handler owns"
+        }
+      ],
+      "lesson": {
+        "setup": "You said the auth handler 'inspects the URL and the environment, decides whether credentials are needed at all, and opens the connection.' This reasoning makes sense: authentication is about making decisions. But look at what `prepare_auth()` actually does *before* calling the handler: it has already inspected the URL via `get_auth_from_url()`, already decided `if auth:` before the handler ever runs, and at no point does the handler open a connection. The handler receives `self`\u2014a `PreparedRequest` that is already fully constructed. After the handler returns, `prepare_auth()` doesn't hand off to network code; it updates `self.__dict__` and recomputes `Content-Length`. The connection happens later, during transmission.",
+        "prompt": "Look at `prepare_auth()` line by line. What decisions has the code already made *before* `auth_handler(self)` is called? What is the handler's input, and what does the handler see about the request's readiness? After the handler returns, what remains undone\u2014what hasn't happened yet?",
+        "reveal": "The handler is not a gatekeeper deciding whether to authenticate. `prepare_auth()` makes that decision upfront: `if auth:` runs before the handler exists. The handler receives a fully prepared request object\u2014URL resolved, body set, method fixed\u2014not a raw one it constructs. Its job is to add headers (or mutate the request); it cannot and does not open connections. That happens during the actual HTTP transmission, which occurs entirely outside `prepare_auth()`. The handler's return value is merged back into `self` via `__dict__.update()`, not used to replace the request. The 'decision of whether credentials are needed' is made by the caller passing `auth=` or by extracting it from the URL\u2014not by the handler inspecting anything.",
+        "why_now": "The developer reasoned that auth handlers must make intelligent decisions about whether to authenticate, inspecting URLs and opening connections. This is plausible because authentication *is* inherently about deciding when and how to add credentials \u2014 but they missed that `prepare_auth()` itself owns the decision of *whether* to call the handler at all, and the handler receives an already-prepared request with no ability to open connections or replace the entire request.",
+        "takeaway": "Auth handlers are mutation handlers, not decision makers. They receive a request that the framework has already decided to authenticate, and their only job is to transform it by adding authentication details (headers, body changes, etc.). The framework owns the decision of whether to authenticate and when to send the request; the handler owns adding the proof.",
+        "ownership": "Framework: whether to authenticate, whether to call the handler, opening connections, sending the request. Handler: adding headers and other request mutations that prove authentication.",
+        "expected_answer": "Before calling the handler, `prepare_auth()` has already decided whether to authenticate (checking `if auth:`) and has extracted auth from the URL if needed. The handler receives `self`\u2014a fully prepared request\u2014and is called only if auth was provided. During the call, the handler adds headers or mutates the request. After, `prepare_auth()` updates `self` to reflect those changes and recomputes `Content-Length`. The connection is not opened by the handler; that happens during transmission, outside this method.",
+        "prompt_kind": "compare",
+        "walkthrough": "You said the auth handler 'inspects the URL and the environment, decides whether credentials are needed at all, and opens the connection.' This reasoning makes sense: authentication is about making decisions. But look at what `prepare_auth()` actually does *before* calling the handler: it has already inspected the URL via `get_auth_from_url()`, already decided `if auth:` before the handler ever runs, and at no point does the handler open a connection. The handler receives `self`\u2014a `PreparedRequest` that is already fully constructed. After the handler returns, `prepare_auth()` doesn't hand off to network code; it updates `self.__dict__` and recomputes `Content-Length`. The connection happens later, during transmission.\n\nThe handler is not a gatekeeper deciding whether to authenticate. `prepare_auth()` makes that decision upfront: `if auth:` runs before the handler exists. The handler receives a fully prepared request object\u2014URL resolved, body set, method fixed\u2014not a raw one it constructs. Its job is to add headers (or mutate the request); it cannot and does not open connections. That happens during the actual HTTP transmission, which occurs entirely outside `prepare_auth()`. The handler's return value is merged back into `self` via `__dict__.update()`, not used to replace the request. The 'decision of whether credentials are needed' is made by the caller passing `auth=` or by extracting it from the URL\u2014not by the handler inspecting anything."
+      },
+      "coverage": [
+        {
+          "claim": "The auth handler inspects the URL and environment, decides whether cre",
+          "probe": "opens the connection",
+          "hits": [
+            "connection"
+          ]
+        }
+      ]
+    },
+    {
+      "targets": 2,
+      "gaps": [
+        {
+          "claim": "The auth handler inspects the URL and environment, decides whether credentials are needed, and opens the connection.",
+          "objective_part": "what the handler owns"
+        },
+        {
+          "claim": "The auth handler returns a fresh Request object that replaces the original one.",
+          "objective_part": "what the handler returns"
+        }
+      ],
+      "lesson": {
+        "setup": "You described the auth handler as inspecting the URL and environment to decide whether credentials are needed, opening connections, and returning a fresh Request object. This is plausible: authentication is a complex domain, and those sound like reasonable responsibilities. But look at what `prepare_auth()` actually does: it extracts auth from the URL *itself*, before calling the handler. It calls the handler with `self`\u2014the same PreparedRequest object\u2014not a new one. And it doesn't open connections at all; it just calls the handler and then syncs the handler's mutations back into `self` using `__dict__.update()`. The handler doesn't replace the request; it modifies it in place.",
+        "prompt": "Trace through `prepare_auth()` step by step. What state does `self` have when the handler is called? What does the handler receive\u2014a fresh object or the existing one? What happens to its return value immediately after the call? How does `self` change? Use the code to explain why the auth handler cannot possibly be deciding whether to authenticate or opening connections.",
+        "reveal": "The auth handler owns one thing: adding headers (or other mutations) to the PreparedRequest it receives. It does not own deciding whether to authenticate\u2014`prepare_auth()` does that by checking if `auth` is None and extracting from the URL. It does not own opening connections; that happens during `send()`, long after auth completes. Most importantly, the handler does not return a replacement request. Look at line `r = auth_handler(self)`: the handler is called with `self`, the existing PreparedRequest. Its return value is captured as `r`, but then immediately `self.__dict__.update(r.__dict__)` syncs those changes back into the original object. The handler mutates; it does not replace. This is why any callable works\u2014it just needs to accept a PreparedRequest and return one with headers added.",
+        "why_now": "The developer built a mental model where the auth handler is a heavyweight component that makes strategic decisions about whether to authenticate, inspects the request context, and constructs new objects. In reality, it's a lightweight mutation tool: it receives a prepared request and adds headers to it. The code shows this plainly, but the misconception is plausible because authentication *feels* like it should involve those decisions.",
+        "takeaway": "Auth handlers are mutation layers, not decision engines. They sit between `prepare_auth()`'s logic (deciding whether auth is needed) and `send()`'s logic (opening the connection and transmitting). The handler's job is narrowly scoped: receive the prepared request, add or modify headers, return it.",
+        "ownership": "Auth handler owns: adding headers or modifying the PreparedRequest's state. Auth handler does NOT own: deciding whether to authenticate, inspecting environment, opening connections, replacing the request object.",
+        "expected_answer": "Before calling the handler, `prepare_auth()` has already decided whether auth is needed and extracted it from the URL if necessary. During the call, it passes `self`\u2014the same PreparedRequest object\u2014to the handler. The handler adds headers to it and returns it. After the call, `prepare_auth()` syncs the handler's mutations back into `self` using `__dict__.update()` and recomputes Content-Length. The handler owns only mutation; requests owns the decision logic and the connection.",
+        "prompt_kind": "compare",
+        "walkthrough": "You described the auth handler as inspecting the URL and environment to decide whether credentials are needed, opening connections, and returning a fresh Request object. This is plausible: authentication is a complex domain, and those sound like reasonable responsibilities. But look at what `prepare_auth()` actually does: it extracts auth from the URL *itself*, before calling the handler. It calls the handler with `self`\u2014the same PreparedRequest object\u2014not a new one. And it doesn't open connections at all; it just calls the handler and then syncs the handler's mutations back into `self` using `__dict__.update()`. The handler doesn't replace the request; it modifies it in place.\n\nThe auth handler owns one thing: adding headers (or other mutations) to the PreparedRequest it receives. It does not own deciding whether to authenticate\u2014`prepare_auth()` does that by checking if `auth` is None and extracting from the URL. It does not own opening connections; that happens during `send()`, long after auth completes. Most importantly, the handler does not return a replacement request. Look at line `r = auth_handler(self)`: the handler is called with `self`, the existing PreparedRequest. Its return value is captured as `r`, but then immediately `self.__dict__.update(r.__dict__)` syncs those changes back into the original object. The handler mutates; it does not replace. This is why any callable works\u2014it just needs to accept a PreparedRequest and return one with headers added."
+      },
+      "coverage": [
+        {
+          "claim": "The auth handler inspects the URL and environment, decides whether cre",
+          "probe": "opens the connection",
+          "hits": [
+            "connection"
+          ]
+        },
+        {
+          "claim": "The auth handler returns a fresh Request object that replaces the orig",
+          "probe": "fresh Request object",
+          "hits": [
+            "return",
+            "same",
+            "mutat",
+            "in place",
+            "new "
+          ]
+        }
+      ]
+    },
+    {
+      "targets": 3,
+      "gaps": [
+        {
+          "claim": "The auth handler inspects the URL and environment, decides whether credentials are needed, and opens the connection.",
+          "objective_part": "what the handler owns"
+        },
+        {
+          "claim": "The auth handler returns a fresh Request object that replaces the original one.",
+          "objective_part": "what the handler returns"
+        },
+        {
+          "claim": "The auth handler opens the connection so it can read the server's challenge.",
+          "objective_part": "where connection management lives"
+        }
+      ],
+      "lesson": {
+        "setup": "You described the auth handler as owning URL inspection, credential decisions, connection management, and request construction. That's a coherent mental model of what 'authentication' *should* do. But look at what `prepare_auth()` actually does:\n\n1. **Before the call**: It extracts auth from the URL if none was passed in. The handler never sees that logic.\n2. **During the call**: It invokes `auth_handler(self)` and gets back a `PreparedRequest`\u2014the same object, mutated.\n3. **After the call**: It updates `self.__dict__` with the result and recomputes Content-Length.\n\nThe handler never opens a connection. The handler never decides whether credentials are needed. The handler never constructs a fresh request. It receives a fully prepared one and modifies it in place.",
+        "prompt": "Looking at the three lines in `prepare_auth()` that involve the auth handler (the call itself, the update, and the content-length recompute), explain what state exists before the handler runs, what the handler is allowed to change, and what requests itself owns before and after. Be specific about what object type flows in and out of the handler.",
+        "reveal": "**What the handler receives and returns**: You said it returns 'a fresh Request object that replaces the original one.' The code shows `r = auth_handler(self)` followed by `self.__dict__.update(r.__dict__)`. The handler receives `self` (the PreparedRequest) and returns the same object back, now with mutations applied. It is not constructing a new request; it is modifying and returning the one it was given.\n\n**Where URL inspection and credential decisions live**: You attributed those to the handler. But the first block of `prepare_auth()` shows `get_auth_from_url(cast(str, self.url))` runs *before* the handler is ever called. The request already has a URL. The handler does not inspect it; requests does. The handler only adds headers that represent those credentials\u2014headers that were already decided before it ran.\n\n**Where connection management lives**: You said the handler opens the connection to read server challenges. Connection management does not happen in `prepare_auth()` at all. This method runs during request preparation, before any network I/O. The handler's job is purely local: mutate headers on a request object. Opening connections, reading challenges, and retrying with new credentials happens in the session or adapter layer, *after* this whole prepared request exists.",
+        "why_now": "The developer modeled the auth handler as an intelligent agent that makes authentication decisions, inspects context, manages connections, and constructs new requests. This is plausible\u2014auth *sounds* like it should own those decisions. But the code shows auth is a minimal mutator: it receives an already-prepared request and adds headers. Everything else\u2014URL inspection, credential discovery, connection handling, request construction\u2014happens elsewhere.",
+        "takeaway": "The auth handler is a header mutator, not an authentication agent. It receives a fully-formed PreparedRequest, modifies it (almost always by adding an Authorization header or similar), returns it, and that's complete. Every decision about whether to use auth, where to find it, and how to handle server responses happens outside the handler.",
+        "ownership": "**Handler owns**: Adding/modifying headers and other request fields that belong to the current attempt.\n**Handler does NOT own**: URL parsing, credential discovery, connection I/O, request construction, or retry logic.",
+        "expected_answer": "Before calling the handler, `prepare_auth()` resolves where auth comes from (URL or parameter) and determines whether auth is needed. The handler receives `self`\u2014a fully prepared request with URL, method, body, and headers already set. The handler's sole job is to mutate that request (typically adding an Authorization header), then return it. After the call, `prepare_auth()` syncs any changes back into `self.__dict__` and recalculates Content-Length. The handler owns the mutation; requests owns everything else: URL inspection, credential sourcing, connection handling, and what happens after the request is sent.",
+        "prompt_kind": "compare",
+        "walkthrough": "You described the auth handler as owning URL inspection, credential decisions, connection management, and request construction. That's a coherent mental model of what 'authentication' *should* do. But look at what `prepare_auth()` actually does:\n\n1. **Before the call**: It extracts auth from the URL if none was passed in. The handler never sees that logic.\n2. **During the call**: It invokes `auth_handler(self)` and gets back a `PreparedRequest`\u2014the same object, mutated.\n3. **After the call**: It updates `self.__dict__` with the result and recomputes Content-Length.\n\nThe handler never opens a connection. The handler never decides whether credentials are needed. The handler never constructs a fresh request. It receives a fully prepared one and modifies it in place.\n\n**What the handler receives and returns**: You said it returns 'a fresh Request object that replaces the original one.' The code shows `r = auth_handler(self)` followed by `self.__dict__.update(r.__dict__)`. The handler receives `self` (the PreparedRequest) and returns the same object back, now with mutations applied. It is not constructing a new request; it is modifying and returning the one it was given.\n\n**Where URL inspection and credential decisions live**: You attributed those to the handler. But the first block of `prepare_auth()` shows `get_auth_from_url(cast(str, self.url))` runs *before* the handler is ever called. The request already has a URL. The handler does not inspect it; requests does. The handler only adds headers that represent those credentials\u2014headers that were already decided before it ran.\n\n**Where connection management lives**: You said the handler opens the connection to read server challenges. Connection management does not happen in `prepare_auth()` at all. This method runs during request preparation, before any network I/O. The handler's job is purely local: mutate headers on a request object. Opening connections, reading challenges, and retrying with new credentials happens in the session or adapter layer, *after* this whole prepared request exists."
+      },
+      "coverage": [
+        {
+          "claim": "The auth handler inspects the URL and environment, decides whether cre",
+          "probe": "opens the connection",
+          "hits": [
+            "connection",
+            "adapter"
+          ]
+        },
+        {
+          "claim": "The auth handler returns a fresh Request object that replaces the orig",
+          "probe": "fresh Request object",
+          "hits": [
+            "return",
+            "same",
+            "mutat",
+            "in place",
+            "new "
+          ]
+        },
+        {
+          "claim": "The auth handler opens the connection so it can read the server's chal",
+          "probe": "opens the connection",
+          "hits": [
+            "connection",
+            "adapter"
+          ]
+        }
+      ]
+    }
+  ]
+}

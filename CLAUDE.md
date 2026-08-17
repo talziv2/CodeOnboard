@@ -246,7 +246,19 @@ GITHUB_TOKEN=        # optional, increases rate limit
 Optional flags:
 ```
 CODEONBOARD_CURRICULUM=1   # objective-first planner (B3). Default 0 = pre-B3 planner
+CODEONBOARD_GAPS=1         # gap model. Default 0. ON IN DEV ONLY — see below
 ```
+
+**`CODEONBOARD_GAPS` is not data-collection-only.** As well as recording the
+misconceptions an answer contains, it makes the Grader *derive* the scalar
+`gap_kind` from those gaps — and that scalar is what `adaptation.decide()` uses
+to choose the intervention (hint / re-teach / prerequisite / follow-up) and what
+the Mutator's `Diagnosis` carries. A flag-on session can therefore receive a
+different response than the same session flag-off. Measured direction: `gap_kind`
+agreement 47–48/48 against a baseline of 45, `missing_prerequisite` 4/6 → 6/6.
+Gaps are collected but never shown to the learner until gap-model M6 ships
+verification — until then nothing can close one, so a displayed list could only
+ever grow. Decided in `learning-graph.md` §11 OQ-4.
 
 ---
 
@@ -259,5 +271,6 @@ CODEONBOARD_CURRICULUM=1   # objective-first planner (B3). Default 0 = pre-B3 pl
 - **Curriculum size is decided by code, not by a prompt.** Under `CODEONBOARD_CURRICULUM=1` the planner is told to enumerate everything worth learning and is given no target number; `backend/agents/mentor/curriculum.py` then cuts by required-set closure, dependency closure, area coverage and a guard band. Overflow is demoted to `priority: optional` on the same spine, never discarded. Every sizing rule is a pure function, so it is testable without an API key — that is the point, not a side effect.
 - **No source, no lesson.** Grounding is verified at plan time but *read* at lesson time, and the two can disagree. If **some** of a unit's anchors fail to load, Teaching degrades and teaches from the rest. If **all** of them fail, Teaching must **fail the lesson** — never render one. With no source the model has only the objective, and it will write a fluent, confident, entirely ungrounded lesson from it; nothing in the output looks wrong, which is why this is refused at the point of reading. See `learning-engine.md` §4.1.2.
 - **`optional` means excluded from the default walk, not removed.** `/advance` steps over an optional unit, `resume_point()` skips it, the stop counter and `readiness()`'s denominator exclude it, and the rail collapses it — but it stays in the graph, in `path_order()`, and teaches and grades normally when reached from the rail. `optional` describes the *promised journey*, not the graph. A unit with no `priority` at all is **not** optional and stays on the walk. See `learning-engine.md` §6.3.
+- **Progress is two measures, and neither is `completed / total`.** `backend/learning/progress.py` owns both. **Goal readiness** is evidence-weighted mastery of the `required` set — the planner's dependency-closed floor, which is by construction "the goal is not met without this". **Journey progress** is how much of the promised walk has been dealt with. Remedial warm-ups are excluded from *both* and reported as detours; `readiness()` delegates and the `readiness` wire key is retained as an alias for goal readiness. The invariant, tested in `tests/test_progress.py`: **goal readiness may fall only when evidence about the learner changes, never because the system changed the plan.** Before this, inserting a remedial prerequisite dropped the gauge from 0.50 to 0.33 — the system's decision to help looked like the learner losing ground. See `learning-graph.md` §5.
 - **A learning unit is grounded by one *or more* verified anchors.** A flow crossing three files is anchored on all three. `nodes.file` / `line_start` / `line_end` hold a *derived display projection*; `lesson_brief["anchors"]` is the semantic truth. The invariant, asserted in tests and in the sanity script: the display columns always equal one member of `anchors`.
 - **Interactive learning graph (Phase 3, future).** The current Mentor Agent will retire; its responsibilities split across a Planner Agent (owns and mutates the learning graph), a Teaching Agent (expands a node into the actual lesson), and a Grader Agent (classifies user responses). The current step JSON becomes the *lesson brief*, not the lesson itself. The Planner's learning graph is also the **user's understanding graph** — the same object, persisted across sessions and surfaced to the user as the product's centerpiece artifact (this is the project's X-factor). Strategic positioning: CodeOnboard complements AI code generation by training humans to understand, critique, and direct it — Grader scope expands to critique-of-AI-output tasks, and a new AI-Assisted Development Mode operationalizes this. See `docs/planning/phases/roadmap.md` for the full Phase 3 description and the deferred design decisions.

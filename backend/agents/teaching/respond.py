@@ -21,6 +21,7 @@
 
 import json
 import os
+from collections.abc import Sequence
 
 import anthropic
 from pydantic import BaseModel
@@ -33,6 +34,7 @@ from backend.agents.teaching.agent import (
     _text_of,
     lesson_form,
 )
+from backend.learning.gaps import Gap
 from backend.learning.graph import LearningNode
 from backend.pipeline.state import OnboardState
 
@@ -85,22 +87,48 @@ Return ONLY the JSON object — no markdown fences, no preamble.
 """
 
 _RETEACH_SYSTEM = """\
-You are re-teaching one unit to a developer who answered it with a CONFIDENT
-MISCONCEPTION. They were not lost — they had a clear mental model and it was
-wrong.
+You are re-teaching one unit to a developer who answered it with one or more
+CONFIDENT MISCONCEPTIONS. They were not lost — they had a clear mental model
+and parts of it were wrong.
 
 This is not the same lesson again. A developer who reasoned their way to a
 wrong conclusion will reason their way there a second time unless the wrong
 turn is named.
 
-  - In `setup`, NAME THE MISCONCEPTION explicitly and say what makes it
+The user message lists the MISCONCEPTIONS TO CORRECT. Every one of them was
+detected in their answer, and every one must be corrected in this lesson.
+
+  - In `setup`, NAME EACH MISCONCEPTION explicitly and say what makes it
     plausible — they had a reason, and treating it as carelessness is both
     wrong and insulting. Then point at what the code actually shows.
   - Your `prompt` must ask the objective again in a form that CANNOT be
-    answered by the wrong model. If their misconception would still produce a
-    passing answer, the question has not done its job.
-  - `reveal` corrects the model directly: what they believed, what is true,
-    and which detail in the shown code distinguishes them.
+    answered while still holding ANY of them. If any one of the listed
+    misconceptions would still produce a passing answer, the question has not
+    done its job.
+  - `reveal` corrects each one directly: what they believed, what is true, and
+    which detail in the shown code distinguishes them.
+
+WHEN THERE IS MORE THAN ONE, WRITE ONE LESSON, NOT SEVERAL STACKED TOGETHER.
+This is the difference between re-teaching and issuing a list of corrections:
+
+  - DO NOT STRUCTURE THE LESSON AROUND THE LIST YOU WERE GIVEN. Never write
+    "Misconception 1 / 2 / 3". Never give each one its own labelled section,
+    heading or dedicated paragraph. Never follow the order they are listed in.
+    That order is the order they happened to be detected in; mirroring it turns
+    a lesson into a checklist.
+  - FIND THE ROOT FIRST: the single wrong idea that produced several of these
+    conclusions. If there is one, IT is the lesson — state it, correct it, and
+    let the individual claims fall out of it as consequences. Naming the root
+    and then enumerating anyway is the failure this rule exists to prevent.
+  - Where they genuinely are independent, order them so each builds on the last
+    and join them in prose. Never manufacture a shared root that is not there;
+    a false unifying story is worse than none.
+  - Never drop one because it did not fit the narrative.
+
+LENGTH DOES NOT SCALE WITH THE NUMBER OF MISCONCEPTIONS. The whole response
+stays under 600 words, with `setup` and `reveal` together under 300, whether
+there is one misconception or four. More to correct means LESS room for
+re-explaining what they already had right — cut that, never the corrections.
 """
 
 _LESSON_KEYS = """
@@ -117,13 +145,44 @@ def _client(client: anthropic.Anthropic | None) -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
 
-def _node_context(node: LearningNode, answer: str, rationale: str) -> str:
+def _gap_block(gaps: Sequence[Gap]) -> str:
+    """The misconceptions this response must correct, named one by one.
+
+    These are the M4 `Plan`'s `targets` — gaps the policy SELECTED for this
+    response — never "every gap on the node". A deferred gap is real and still
+    open, but it is not what is being taught right now, and listing it here
+    would have the lesson correct something the plan did not choose.
+
+    Empty for a node with no gap records (every flag-off session, and every
+    session written before the gap model), which is what keeps those prompts
+    byte-identical to the ones they sent before M5.
+    """
+    if not gaps:
+        return ""
+    lines = []
+    for i, gap in enumerate(gaps, 1):
+        line = f"  {i}. {gap.claim}"
+        if gap.objective_part.strip():
+            line += f"\n     (violates: {gap.objective_part.strip()})"
+        lines.append(line)
+    header = (
+        "The MISCONCEPTION to correct:" if len(gaps) == 1
+        else f"The {len(gaps)} MISCONCEPTIONS to correct — all of them, in one lesson:"
+    )
+    return f"{header}\n" + "\n".join(lines) + "\n\n"
+
+
+def _node_context(
+    node: LearningNode, answer: str, rationale: str,
+    gaps: Sequence[Gap] = (),
+) -> str:
     lesson = node.cached_lesson or {}
     return (
         f"The objective they were meant to reach:\n{node.objective()}\n\n"
         f"The question they were asked:\n{lesson.get('prompt', '')}\n\n"
         f"What they wrote:\n{answer}\n\n"
         f"Why the grader marked it short:\n{rationale}\n\n"
+        f"{_gap_block(gaps)}"
         f"The material they were shown:\n{lesson.get('setup') or lesson.get('walkthrough', '')}"
     )
 
@@ -148,10 +207,19 @@ def _nudge(system: str, client, user_content: str) -> str:
 def hint(
     state: OnboardState, node: LearningNode, answer: str, rationale: str,
     client: anthropic.Anthropic | None = None,
+    gaps: Sequence[Gap] = (),
 ) -> str | None:
-    """A way into the question they did not attempt. No graph change."""
+    """A way into the question they did not attempt. No graph change.
+
+    `gaps` is always empty in practice — a hint answers `no_attempt`, which by
+    policy opens no gaps at all. It is accepted so all three responses have one
+    signature, and passed through rather than dropped so that a future policy
+    change cannot make this the one path that silently ignores its targets.
+    """
     try:
-        return _nudge(_HINT_SYSTEM, _client(client), _node_context(node, answer, rationale))
+        return _nudge(
+            _HINT_SYSTEM, _client(client), _node_context(node, answer, rationale, gaps)
+        )
     except Exception as e:
         state.errors.append(f"adaptation: hint failed (non-fatal): {e}")
         return None
@@ -160,11 +228,13 @@ def hint(
 def followup(
     state: OnboardState, node: LearningNode, answer: str, rationale: str,
     client: anthropic.Anthropic | None = None,
+    gaps: Sequence[Gap] = (),
 ) -> str | None:
     """The same objective, asked from the altitude it actually wants."""
     try:
         return _nudge(
-            _FOLLOWUP_SYSTEM, _client(client), _node_context(node, answer, rationale)
+            _FOLLOWUP_SYSTEM, _client(client),
+            _node_context(node, answer, rationale, gaps),
         )
     except Exception as e:
         state.errors.append(f"adaptation: follow-up failed (non-fatal): {e}")
@@ -174,16 +244,21 @@ def followup(
 def reteach(
     state: OnboardState, node: LearningNode, answer: str, rationale: str,
     source: str, client: anthropic.Anthropic | None = None,
+    gaps: Sequence[Gap] = (),
 ) -> LessonOutput | None:
-    """Re-render this unit's lesson with the misconception named.
+    """Re-render this unit's lesson with every selected misconception named.
 
     Replaces `cached_lesson` — the corrected lesson is the lesson now, and a
     learner who returns should not meet the version that misled them. The
     attempt history keeps the record of what happened, which is where a record
     belongs.
+
+    `gaps` are the M4 `Plan`'s targets: every open gap of the leading kind, so
+    one lesson corrects all of them (§18.5, "one mutation, many corrections").
+    Empty is the pre-M5 shape and produces the pre-M5 prompt.
     """
     user_content = (
-        _node_context(node, answer, rationale)
+        _node_context(node, answer, rationale, gaps)
         + f"\n\nThe source code for this unit:\n{source}\n"
         + _LESSON_KEYS
     )

@@ -31,6 +31,9 @@ from dataclasses import dataclass
 import anthropic
 from pydantic import BaseModel
 
+from backend.learning import progress
+from backend.learning.adaptation import decide_all
+from backend.learning.gaps import Gap
 from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
 from backend.pipeline.state import OnboardState
 from backend.repo import anchors, dossier_context, dossier_store, structure
@@ -64,9 +67,18 @@ class Diagnosis:
     answer: str = ""
     rationale: str = ""
     gap_kind: str = ""
+    # The ONE gap this warm-up exists to unblock (M5, §18.6). Selected by the
+    # M4 plan, never inferred here from `gap_kind` — the scalar names a category
+    # and a warm-up has to be built for a specific false belief.
+    #
+    # Singular by policy: §18.5 allows one structural mutation per graded answer,
+    # so there is exactly one gap to carry. Its id is recorded on the inserted
+    # node as `lesson_brief["remediates"]`, which is how M6 later knows what this
+    # warm-up was supposed to fix.
+    gap: Gap | None = None
 
     def __bool__(self) -> bool:
-        return bool(self.answer.strip() or self.rationale.strip())
+        return bool(self.answer.strip() or self.rationale.strip() or self.gap is not None)
 
     @classmethod
     def from_attempt(cls, attempt: dict | None) -> "Diagnosis | None":
@@ -84,6 +96,43 @@ class Diagnosis:
             gap_kind=str(attempt.get("gap_kind") or ""),
         )
         return diagnosis or None
+
+    @classmethod
+    def from_node(cls, node: LearningNode) -> "Diagnosis | None":
+        """The diagnosis for a warm-up requested after the fact, off the node.
+
+        `/retry` has no grade in scope, and an attempt record carries the scalar
+        `gap_kind` but no gap ids — so the specific `Gap` cannot come from there.
+        It comes from the same place `/respond` gets it: the M4 plan, run over
+        the node's own open gaps. Inferring one from `gap_kind` instead would be
+        exactly the downstream re-derivation M5 exists to remove — the scalar
+        names a category, and several open gaps can share it.
+
+        Falls back to the attempt alone when the node has no gaps, which is
+        every flag-off session and every session written before the gap model.
+        """
+        attempt = node.attempts[-1] if node.attempts else None
+        base = cls.from_attempt(attempt)
+        if not node.gaps:
+            return base
+
+        # `partial` rather than the recorded classification: this is a learner
+        # ASKING for a warm-up, so the question is only which gap it should
+        # unblock, not whether the answer earned one. Passing the recorded
+        # verdict could return `none` and leave the warm-up unaimed.
+        plan = decide_all("partial", list(node.gaps))
+        gap = plan.targets[0] if plan.action == "prerequisite" and plan.targets else None
+        if gap is None:
+            # No foundational gap leads. The learner still asked for a warm-up
+            # and still gets one; it is simply aimed by the answer rather than
+            # by a specific false belief, which is the pre-M5 behaviour.
+            return base
+        return cls(
+            answer=base.answer if base else "",
+            rationale=base.rationale if base else "",
+            gap_kind=gap.kind,
+            gap=gap,
+        )
 
 
 class _NodeWire(BaseModel):
@@ -108,7 +157,16 @@ def mutate(
     signal: str,
     client: anthropic.Anthropic | None = None,
     diagnosis: Diagnosis | None = None,
+    origin: str = progress.SYSTEM_REMEDIATION,
 ) -> OnboardState:
+    """`origin` records WHO asked for the warm-up (learning-engine.md §18.11).
+
+    It defaults to `system_remediation` because that is what a policy-driven
+    insertion is; `/retry` passes `learner_request`. Progress excludes both from
+    its measures either way — the distinction exists because §18.11 protects a
+    learner-requested warm-up from demotion, and because "you asked to step
+    back" and "the system sent you back" are different things to show someone.
+    """
     if state.graph is None:
         state.errors.append("mutator: graph missing")
         state.last_mutation = {"kind": "none"}
@@ -125,7 +183,7 @@ def mutate(
     if signal == "prerequisite":
         if client is None:
             client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-        return _mutate_prerequisite(state, current, client, diagnosis)
+        return _mutate_prerequisite(state, current, client, diagnosis, origin)
 
     state.errors.append(f"mutator: unknown signal {signal!r}")
     state.last_mutation = {"kind": "none"}
@@ -180,6 +238,7 @@ def _mutate_prerequisite(
     current: str,
     client: anthropic.Anthropic,
     diagnosis: Diagnosis | None = None,
+    origin: str = progress.SYSTEM_REMEDIATION,
 ) -> OnboardState:
     graph = state.graph
 
@@ -193,10 +252,8 @@ def _mutate_prerequisite(
     if diagnosis is None:
         # `/retry` arrives with no grade in scope: the learner asked for a warm-up
         # after the fact. The diagnosis is already on the node.
-        diagnosis = Diagnosis.from_attempt(
-            anchor.attempts[-1] if anchor.attempts else None
-        )
-    new_node = _generate_prerequisite_node(state, anchor, client, diagnosis)
+        diagnosis = Diagnosis.from_node(anchor)
+    new_node = _generate_prerequisite_node(state, anchor, client, diagnosis, origin)
     if isinstance(new_node, _Declined):
         # A real answer, not a failure: candidates were offered and none was a
         # smaller foundation than the node the developer is already on. Inserting
@@ -314,6 +371,7 @@ def _generate_prerequisite_node(
     anchor: LearningNode,
     client: anthropic.Anthropic,
     diagnosis: Diagnosis | None = None,
+    origin: str = progress.SYSTEM_REMEDIATION,
 ) -> LearningNode | _Declined | None:
     """A prerequisite node, a `_Declined`, or None on failure.
 
@@ -399,6 +457,25 @@ def _generate_prerequisite_node(
             # an empty priority happens to behave correctly everywhere today,
             # and correctness by accident is one refactor from being wrong.
             "priority": "required",
+            # A DETOUR, not a stop on the promised journey. This is what keeps
+            # the progress gauge from falling when the system decides to help:
+            # `progress` excludes remedial units from both sides of goal
+            # readiness, and `priority: required` above would otherwise put this
+            # node straight into the denominator (learning-graph.md §5.2 D1).
+            progress.ORIGIN_KEY: origin,
+            # WHICH false belief this warm-up was built to unblock (M5, §18.6).
+            # M6 reads it to know what passing this node is evidence about —
+            # without it, a warm-up is a node that appeared near a failure, and
+            # nothing downstream can tell which gap it was supposed to close.
+            #
+            # A LIST with one entry, not a scalar: §18.5 caps the structural
+            # mutation at one gap per answer, so one is all there can be today,
+            # but the field describes a relationship that is naturally many and
+            # a later widening should not have to change its shape. Omitted
+            # entirely when there is no gap, so pre-gap warm-ups and flag-off
+            # sessions keep the brief they have always had.
+            **({"remediates": [diagnosis.gap.id]}
+               if diagnosis is not None and diagnosis.gap is not None else {}),
         },
     )
 
@@ -481,12 +558,33 @@ def _build_prereq_prompt(
     # failed, this says why.
     diagnosed = ""
     if diagnosis:
-        parts = ["What the developer actually wrote:\n" + diagnosis.answer.strip()]
+        parts = []
+        if diagnosis.answer.strip():
+            parts.append("What the developer actually wrote:\n" + diagnosis.answer.strip())
         if diagnosis.rationale.strip():
             parts.append("Why it fell short:\n" + diagnosis.rationale.strip())
-        if diagnosis.gap_kind and diagnosis.gap_kind != "none":
+        # The specific false belief this warm-up exists to unblock, when the
+        # policy named one. Placed last so it is the final thing read before the
+        # candidates, and stated as a claim rather than a category: "they believe
+        # X" is something a warm-up can be chosen against, where `wrong_model`
+        # only says a warm-up is warranted.
+        if diagnosis.gap is not None:
+            gap_lines = [
+                "THE MISCONCEPTION THIS WARM-UP MUST UNBLOCK:\n"
+                f"  {diagnosis.gap.claim}"
+            ]
+            if diagnosis.gap.objective_part.strip():
+                gap_lines.append(
+                    f"  (it violates: {diagnosis.gap.objective_part.strip()})"
+                )
+            gap_lines.append(
+                "Choose the candidate that builds the foundation this belief is "
+                "missing — not merely one near the node they failed."
+            )
+            parts.append("\n".join(gap_lines))
+        elif diagnosis.gap_kind and diagnosis.gap_kind != "none":
             parts.append(f"Diagnosed gap: {diagnosis.gap_kind}")
-        diagnosed = "\n\n".join(parts) + "\n\n"
+        diagnosed = "\n\n".join(parts) + "\n\n" if parts else ""
     return (
         f"Developer profile:\n"
         f"  familiarity with THIS codebase: {goal.get('familiarity', 'unknown')}\n"

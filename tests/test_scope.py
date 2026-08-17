@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 import backend.api as api
-from backend.learning import scope
+from backend.learning import progress, scope
 from backend.learning.adaptation import prune_ahead
 from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
 
@@ -192,17 +192,27 @@ def test_optional_units_stay_in_the_graph_and_in_walk_order():
     assert len(graph.path_order()) == 2
 
 
-def test_readiness_rises_when_the_journey_is_shortened():
-    # Shortening must not punish the learner: the same understanding over a
-    # smaller journey is more progress, not less.
+def test_shortening_moves_journey_progress_and_leaves_goal_readiness_alone():
+    """Shortening must not punish the learner — and must not flatter them either.
+
+    RE-POINTED with the progress model (learning-graph.md §5.5). The original
+    assertion — that `readiness()` RISES when the journey is shortened — is
+    exactly what OQ-3 rules out for the goal measure: the learner demonstrated
+    nothing new, only the plan changed. The same understanding over a smaller
+    journey IS more journey progress, which is where it now shows.
+    """
     graph = _graph([
         ("a1", "required", "understood"),
         ("a1", "recommended", "not_started"),
         ("a1", "recommended", "not_started"),
     ])
-    before = graph.readiness()
+    goal_before = progress.goal_readiness(graph)
+    journey_before = progress.journey_progress(graph)
+
     scope.shorten(graph)
-    assert graph.readiness() > before
+
+    assert progress.goal_readiness(graph) == goal_before
+    assert progress.journey_progress(graph) > journey_before
 
 
 # ── through the endpoint ──────────────────────────────────────────────────────

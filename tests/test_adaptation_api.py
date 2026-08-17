@@ -292,7 +292,7 @@ def test_respond_passes_the_graded_answer_into_prerequisite_generation(p, t, c, 
     session_id, _ = _start(client)
     seen = {}
 
-    def _capture(state, signal, client=None, diagnosis=None):
+    def _capture(state, signal, client=None, diagnosis=None, origin=None):
         seen["diagnosis"] = diagnosis
         state.last_mutation = {"kind": "none"}
         return state
@@ -329,7 +329,7 @@ def test_retry_recovers_the_diagnosis_from_the_recorded_attempt(p, t, c, client)
 
     seen = {}
 
-    def _capture(state, signal, client=None, diagnosis=None):
+    def _capture(state, signal, client=None, diagnosis=None, origin=None):
         from backend.agents.mentor.mutator import Diagnosis
         node = state.graph.nodes[state.graph.current_node_id]
         seen["recovered"] = Diagnosis.from_attempt(

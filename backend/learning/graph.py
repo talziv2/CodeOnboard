@@ -356,30 +356,30 @@ class LearningGraph:
     # --- derived metrics ---
 
     def readiness(self) -> float:
-        """Progress toward the journey the learner was actually given.
+        """Goal readiness — evidence-weighted mastery of what the goal requires.
 
-        CORE-WEIGHTED: `optional` units are excluded from the denominator
-        entirely (learning-engine.md L10). They are depth nobody promised — the
-        overflow the guard band demoted, or material prune-ahead set aside —
-        and counting them means the gauge falls when the system *shortens* the
-        journey, which is precisely backwards.
+        DELEGATES to `learning/progress.py`, which owns the definition and the
+        second measure beside it (learning-graph.md §5.4). Kept as a method
+        because six call sites and the `readiness` wire key already exist; the
+        arithmetic moved out because the frontend, the map and any later report
+        must not each carry their own version of it.
 
-        Optional units the learner chose to do still count in the numerator:
-        opening one is work, and work should never lower a progress bar.
+        The definition CHANGED with the progress model, in two ways that matter:
 
-        `partial` scores half. That is honest for a genuinely partial answer and
-        wrong for a grading failure, which also defaults to `partial` — but the
-        fix belongs in the Grader, which is where the distinction exists. Paying
-        for it here would mean inventing a signal this method cannot see.
+          - the denominator is the `required` set, not every non-optional unit,
+            so the number is a claim about the GOAL rather than about a node
+            count;
+          - remedial warm-ups are excluded from both sides. Before this, the
+            Mutator's warm-up — marked `priority: required` so scope control
+            cannot take it away — entered the denominator, and the gauge fell
+            from 0.50 to 0.33 the moment the system decided to help.
+
+        The import is function-local to keep `progress` free to depend on this
+        module's types without a cycle.
         """
-        weight = {"understood": 1.0, "partial": 0.5}
-        core = [n for n in self.nodes.values() if not self.is_optional(n)]
-        if not core:
-            return 0.0
+        from backend.learning.progress import goal_readiness
 
-        earned = sum(weight.get(n.understanding_state, 0.0) for n in self.nodes.values())
-        # Extra credit from optional units cannot push the gauge past complete.
-        return min(earned / len(core), 1.0)
+        return goal_readiness(self)
 
     @staticmethod
     def is_optional(node: LearningNode) -> bool:
@@ -393,13 +393,21 @@ class LearningGraph:
     def to_dict(self) -> dict:
         # JSON-friendly view of the graph for HTTP responses. Excludes the
         # cached_lesson bodies (large) — the lesson endpoint returns those
-        # separately. Includes the derived readiness gauge.
+        # separately. Includes the derived progress measures.
+        from backend.learning import progress as progress_model
+
+        # Once, not per node — the structural pass walks every edge.
+        remedial = progress_model.remedial_ids(self)
+
         return {
             "session_id": self.session_id,
             "repo_url": self.repo_url,
             "goal": self.goal,
             "current_node_id": self.current_node_id,
+            # RETAINED, and equal to `progress.goal_readiness`. Every existing
+            # consumer keeps working; the two-measure view lives in `progress`.
             "readiness": self.readiness(),
+            "progress": progress_model.summary(self),
             "areas": self.areas,
             "nodes": [
                 {
@@ -417,6 +425,20 @@ class LearningGraph:
                     "kind": (n.lesson_brief or {}).get("kind", ""),
                     "priority": (n.lesson_brief or {}).get("priority", ""),
                     "area_id": (n.lesson_brief or {}).get("area_id", ""),
+                    # The claim this unit exists to make the learner able to
+                    # make — the marking standard the Grader uses. On the wire
+                    # so the UI can show what was actually being assessed
+                    # instead of only the title.
+                    "objective": n.objective(),
+                    # What the learner ASSERTED, kept distinct from what they
+                    # DEMONSTRATED. `override` writes `understanding_state`
+                    # directly, so without this the two are indistinguishable
+                    # downstream (learning-graph.md §10 R9).
+                    "user_override": n.user_override,
+                    # "planned" | "system_remediation" | "learner_request",
+                    # resolved through the structural fallback for graphs
+                    # written before the key existed.
+                    "origin": progress_model.origin_of(n, remedial),
                     "concept_tags": n.concept_tags,
                     "understanding_state": n.understanding_state,
                     "visited": n.visited,

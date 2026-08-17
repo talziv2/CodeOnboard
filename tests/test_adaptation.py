@@ -8,6 +8,7 @@ response then SAYS is generated, and lives in the teaching agent.
 """
 import pytest
 
+from backend.learning import progress
 from backend.learning.adaptation import decide, prune_ahead
 from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
 
@@ -250,16 +251,28 @@ def test_doing_an_optional_unit_never_lowers_the_gauge():
     assert graph.readiness() == 1.0
 
 
-def test_pruning_ahead_raises_readiness_rather_than_lowering_it():
+def test_pruning_ahead_never_lowers_progress():
+    """Adapting upward must not punish the learner — and must not flatter them.
+
+    RE-POINTED with the progress model (learning-graph.md §5.5). This used to
+    assert that pruning RAISED `readiness()`, which was true and is now the
+    wrong thing to want: pruning changes the PLAN, and goal readiness is
+    evidence-only (OQ-3). The shortening is real, so it shows up where it
+    belongs — in journey progress.
+    """
     graph = _graph_with([
         ("a1", "required", "understood"),
         ("a1", "required", "understood"),
         ("a1", "recommended", "not_started"),
         ("a1", "recommended", "not_started"),
     ])
-    before = graph.readiness()
+    goal_before = progress.goal_readiness(graph)
+    journey_before = progress.journey_progress(graph)
+
     prune_ahead(graph)
-    assert graph.readiness() > before
+
+    assert progress.goal_readiness(graph) == goal_before
+    assert progress.journey_progress(graph) > journey_before
 
 
 def test_partial_still_scores_half():

@@ -1,8 +1,8 @@
 # Gap model — multi-gap remediation and verification
 
-**Phase status: M1 done 2026-08-16; M2–M4 done 2026-08-17. Detection (M1–M3) is
-complete and the policy that reads it (M4) is written; M5 wires that policy into
-the agents that actually remediate.**
+**Phase status: M1 done 2026-08-16; M2–M5 done 2026-08-17. Detection (M1–M3),
+the policy that reads it (M4) and the remediation it drives (M5) are complete.
+M6 (verification) is next — and it is the step that lets a gap ever close.**
 
 | step | state |
 |---|---|
@@ -10,7 +10,31 @@ the agents that actually remediate.**
 | **M2** Grader emits a gap list | ✅ **done, gate met.** `GapOut`, `GraderOutput.gaps`, derived scalar `gap_kind`, the §18.5 arbitration order as pure functions in `gaps.py`, a flag-gated prompt addendum, 31 tests (864 total). **Multi-gap detection validated live**: 5–6 of 48 cases carry 2–3 independent false claims — the AC1 shape on real sessions. Gate: classification **47/48, 48/48, 48/48**; `gap_kind` **47, 47, 48** against a baseline of 45. Evidence: [`evidence/m2-grader-gate/`](evidence/m2-grader-gate/README.md) |
 | **M3** Gap identity across re-grades | ✅ **done, measured.** Open gaps are supplied with their ids; `GapOut.refers_to` names one or says `new`; an id outside the supplied set is discarded whole rather than guessed at. 15 tests (879 total). §3.2's required measurement, over 18 grades on 6 real nodes ([`evidence/m3-gap-identity/`](evidence/m3-gap-identity/README.md)): **29 matched, 1 `new`, 0 hand-judged duplicates, 0 invented ids** — and **0 duplicates on the verbatim identity floor**. The refusal to fuzzy-match costs nothing measurable |
 | **M4** Adaptation policy → plan | ✅ **done.** `decide_all(classification, gaps) → Plan` in `backend/learning/adaptation.py`: §18.5 precedence picks the response, one mutation but many corrections, active set ≤ 3, overflow collapses to a single full re-teach. Pure, mutates nothing, **no API cost**. 43 tests (922 total). The compatibility invariant is asserted against the live `_ACTION_BY_GAP` table, parametrised over **every** (classification, kind) pair, so the two functions cannot drift; the `off-topic` + named-gap rule is re-asserted at the new entry point |
-| M5 – M10 | not started |
+| **M5** Remediation becomes gap-scoped | ✅ **done, live-evaluated.** `/respond` runs `decide_all` and the `Plan` is the single source of truth: `reteach`/`followup` receive **every** target, the Mutator's `Diagnosis` carries the one `Gap` a structural mutation may address, and the warm-up records `lesson_brief["remediates"] = [gap_id]`. Nothing downstream re-derives targets from `gap_kind`. 24 tests (981 total). **The live evaluation found a real defect and it was fixed** — see [`evidence/m5-multi-gap-reteach/`](evidence/m5-multi-gap-reteach/README.md) |
+| M6 – M10 | not started |
+
+**M5's live evaluation is the reason the step is worth trusting, and it did not
+pass first time.** Every test passed while the 3-gap lesson degraded into a
+checklist: the numbered target list was mirrored into literal "Misconception
+1/2/3" headers, and the re-teach path — which inherits **no** length budget from
+the main teaching prompt — grew 405 → 525 → **611** words, breaching the
+system's own 600-word ceiling. The 3-gap case even identified the shared root and
+then enumerated anyway. Corrected by forbidding the output shape by name and
+decoupling the budget from the gap count: enumeration is now **0 in all six**
+post-fix cases, every case is under 600 words, and at 3 gaps the lesson is no
+longer longer than at 2. One weakness is recorded and deliberately **not** tuned
+away: the 3-gap `reveal` still reads as three well-ordered sections rather than
+one continuous argument.
+
+**Two conflicts between the plan and the real wiring, resolved rather than
+forced.** (a) `decide_all` could not simply replace `decide` at the call site:
+flag-off there are no gap *objects* but the base Grader prompt still returns a
+meaningful scalar, so a naive swap would have downgraded every flag-off
+`reteach`/`followup` to `none`. `decide_all` therefore takes `gap_kind` as a
+fallback consulted **only** when no gap objects exist. (b) `/retry` has no grade
+in scope and an attempt record carries no gap ids, so the specific `Gap` cannot
+come from there; `Diagnosis.from_node` runs the M4 plan over the node's own open
+gaps instead, which keeps the plan authoritative on both entry points.
 
 **One narrowing against the build order, recorded because it is a design
 choice.** M4 was sketched as `Plan{actions, active_set}`; what shipped is
@@ -72,7 +96,7 @@ replacing the other mid-phase.
 | **M2** ✅ | **Grader emits a gap list.** `GraderOutput.gaps: list[GapOut]` (`kind`, `claim`, `objective_part`, `foundational`). Scalar `classification` kept; scalar `gap_kind` **derived** from the highest-precedence gap. Ids minted by our code on persist, never by the model | `/respond`'s `gap_kind` equals what the single-gap Grader produced. Gaps are recorded but **inert** — nothing blocks, nothing is remediated per-gap | **Classification calibration.** A prompt change can shift the verdict distribution. Gate: re-run the 48-case evaluation and require classification agreement ≥ the recorded 48/48 |
 | **M3** ✅ | **Gap identity across re-grades** (§19.3.2). Re-grade mode shows open gaps *with their ids*; the model references an id or declares `new`. Code validates membership | A gap id never changes. A `verified` gap never reopens under a new id. An id the model invents is rejected and the gap stays as it was | Duplicate gaps if the model over-reports `new`. Bounded by the queue cap; measured, not assumed |
 | **M4** ✅ | **Adaptation policy → plan.** `decide_all(classification, gaps) → Plan{actions, active_set}`. §18.5 precedence, active set ≤ 3, collapse to one re-teach above 3 | With exactly one gap, `decide_all` produces exactly what `decide` produces today — asserted directly against the existing table | The B5 adaptation tests; the `off-topic` + named-gap rule must survive intact |
-| **M5** | **Remediation becomes gap-scoped.** Re-teach receives *every* open gap of its kind and is instructed in the plural; the Mutator's `Diagnosis` (step G) gains the specific `Gap` it must unblock, recorded as `lesson_brief["remediates"]` | With one gap, both produce the same shape as today. The warm-up decline path stays reachable | Re-teach quality with 3 gaps at once — a prompt property no test asserts (LR3-class risk) |
+| **M5** ✅ | **Remediation becomes gap-scoped.** Re-teach receives *every* open gap of its kind and is instructed in the plural; the Mutator's `Diagnosis` (step G) gains the specific `Gap` it must unblock, recorded as `lesson_brief["remediates"]` | With one gap, both produce the same shape as today. The warm-up decline path stays reachable | Re-teach quality with 3 gaps at once — a prompt property no test asserts (LR3-class risk) |
 | **M6** | **Verification.** `teaching.verify(node, gaps, source) → VerificationPrompt` stored on `node.pending_verification`, **separate from `cached_lesson`**, carrying **no `reveal`**. Grader verification mode returns per-gap `resolved` + any new gaps. Per-gap and per-node counters persisted | A gap moves to `verified` **only** here. Silence about a gap leaves it `open`. Caps stop the system proposing without closing anything | Cost: this adds calls per gap. The Baseline-1 cost record must be re-measured (§19.7) |
 | **M7** | **Derived `understanding_state`.** `understood` ⟺ latest assessment reaches the objective **and** every blocking gap is `verified`. **Blocking takes effect here — after M6 made closure possible** | On any graph with `gaps == []`, every derived value **equals the stored value**. This is the compatibility gate, run over all 61 stored sessions | `prune_ahead` (reads `understood`), `resume_point` (reads `understood`), `readiness()` (reads state), `mark_understanding` (currently assigns) |
 | **M8** | **Learner intents + resume + completion.** `continue`, `waive`, `waive_remaining`; `/advance` records `continue` when leaving a node with open blocking gaps; `resume_point()` per §18.16.3; `is_complete()`; `mark_understood` migration | A refresh **never** records `continue`. Resume returns to unfinished remediation. `is_complete()` is reachable by walking the journey | `resume_point` stranding a learner; `/advance` recording `continue` on nodes without blocking gaps |

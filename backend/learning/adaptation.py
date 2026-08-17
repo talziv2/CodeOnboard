@@ -132,7 +132,11 @@ class Plan:
     collapsed: bool = False
 
 
-def decide_all(classification: str, gaps: list[Gap] | None) -> Plan:
+def decide_all(
+    classification: str,
+    gaps: list[Gap] | None,
+    gap_kind: str | None = None,
+) -> Plan:
     """What to do about an answer that may contain several misconceptions.
 
     The generalisation of `decide`, and it agrees with it exactly wherever
@@ -159,8 +163,22 @@ def decide_all(classification: str, gaps: list[Gap] | None) -> Plan:
 
     Everything not addressed stays `open`. Nothing here decays, resolves or
     reclassifies a gap; this function reads and returns, and mutates nothing.
+
+    **`gap_kind` is a fallback for when there are no gap OBJECTS at all**, which
+    is the flag-off world: `CODEONBOARD_GAPS=0` records no gaps, but the base
+    Grader prompt still returns the scalar and it still means something. Without
+    it, moving a call site from `decide` to `decide_all` would silently downgrade
+    every flag-off `reteach` and `followup` to `none`. It is consulted **only**
+    when `gaps` is empty, so wherever gap objects exist they remain the single
+    source of truth and the scalar cannot override them.
     """
-    open_gaps = by_precedence([g for g in (gaps or []) if g.is_open])
+    # Deduplicated by id. `_record_gaps` cannot produce a repeat — matching an
+    # existing gap creates nothing — but two reports naming one id are a shape
+    # the model does produce (measured in M3), and a target list that mentioned
+    # the same misconception twice would ask a lesson to correct it twice.
+    seen: set[str] = set()
+    unique = [g for g in (gaps or []) if not (g.id in seen or seen.add(g.id))]
+    open_gaps = by_precedence([g for g in unique if g.is_open])
     blocking = [g for g in open_gaps if g.is_blocking]
     active = tuple(blocking[:ACTIVE_SET_MAX])
     deferred = tuple(blocking[ACTIVE_SET_MAX:])
@@ -175,10 +193,11 @@ def decide_all(classification: str, gaps: list[Gap] | None) -> Plan:
         return Plan("none", (), active, deferred, collapsed)
 
     if not open_gaps:
-        # No gap to point at: fall back to the coarse signal, which is the whole
-        # of `decide`'s remaining behaviour, including `off-topic` earning
-        # nothing. Delegated rather than restated so the two cannot drift.
-        return Plan(decide(classification, None), (), active, deferred, collapsed)
+        # No gap to point at: fall back to the scalar and then to the coarse
+        # signal, which is the whole of `decide`'s remaining behaviour, including
+        # `off-topic` earning nothing. Delegated rather than restated so the two
+        # cannot drift. `targets` stays empty — a scalar names no gap to remediate.
+        return Plan(decide(classification, gap_kind), (), active, deferred, collapsed)
 
     if collapsed:
         # A full re-teach of the unit, naming every blocking gap. Not the active
@@ -192,6 +211,10 @@ def decide_all(classification: str, gaps: list[Gap] | None) -> Plan:
         # An unknown kind, from a store written by a future or foreign version.
         # Same conservative direction as `is_blocking` and `precedence_rank`:
         # what we cannot interpret earns nothing rather than a guessed response.
+        #
+        # `None`, NOT `gap_kind`: a gap object exists here, so gaps are the
+        # source of truth and the scalar must not be allowed to answer over the
+        # top of one we could not read.
         return Plan(decide(classification, None), (), active, deferred, collapsed)
 
     if action == "prerequisite":

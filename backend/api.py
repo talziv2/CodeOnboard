@@ -41,6 +41,7 @@ from backend.agents.mentor.mutator import Diagnosis, mutate as mutate_graph
 from backend.agents.teaching import run as run_teaching
 from backend.agents.teaching import respond as teaching_respond
 from backend.learning import adaptation
+from backend.learning import progress
 from backend.learning import scope
 from backend.learning import store as learning_store
 from backend.pipeline.runner import run_pipeline
@@ -503,7 +504,16 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
     # earn nothing — an unrelated answer is evidence of neither understanding nor
     # misunderstanding, and must not reshape a path.
     node = graph.nodes[current]
-    action = adaptation.decide(classification, gap_kind)
+    # The M4 plan is the SINGLE SOURCE OF TRUTH for both what happens and which
+    # gaps it addresses. Nothing below re-derives targets from `gap_kind`: the
+    # scalar names a category, and one category can cover several distinct
+    # misconceptions that each need correcting by name (§18.5).
+    #
+    # `gap_kind` is still passed, and is consulted only when there are no gap
+    # objects at all — the flag-off world, where the scalar is the whole signal.
+    # That is what keeps this call identical to the old `decide` there.
+    plan = adaptation.decide_all(classification, list(node.gaps), gap_kind)
+    action = plan.action
     rationale = grade.get("rationale") or ""
     mutation = {"kind": "none"}
     adapted: dict = {"kind": action}
@@ -521,8 +531,13 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
                 mutation_state, "prerequisite", client=client,
                 # The warm-up is chosen for the diagnosed misconception, not
                 # merely for the node (§18.2). We already hold the grade here.
+                #
+                # `plan.targets[0]` is the ONE gap §18.5 allows a structural
+                # mutation to address; the rest stay open and are picked up on a
+                # later cycle, after this foundation has landed.
                 diagnosis=Diagnosis(
                     answer=body.response, rationale=rationale, gap_kind=gap_kind,
+                    gap=plan.targets[0] if plan.targets else None,
                 ),
             )
             mutation = mutation_state.last_mutation or {"kind": "none"}
@@ -531,17 +546,21 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
             state.errors.append(f"auto prerequisite failed: {exc}")
     elif action == "hint":
         adapted["text"] = teaching_respond.hint(
-            state, node, body.response, rationale, client=client
+            state, node, body.response, rationale, client=client, gaps=plan.targets
         )
     elif action == "followup":
         adapted["text"] = teaching_respond.followup(
-            state, node, body.response, rationale, client=client
+            state, node, body.response, rationale, client=client, gaps=plan.targets
         )
     elif action == "reteach":
         try:
             source = _node_source(graph, node)
+            # Every target, not just the leading one: a re-teach is a lesson and
+            # can name several misconceptions at once, and one it omits is one
+            # nothing else will come back for.
             lesson = teaching_respond.reteach(
-                state, node, body.response, rationale, source, client=client
+                state, node, body.response, rationale, source, client=client,
+                gaps=plan.targets,
             )
             adapted["retaught"] = lesson is not None
         except Exception as exc:
@@ -587,7 +606,13 @@ def session_retry(session_id: str, body: dict) -> dict:
     # No grade in scope — the learner asked for this warm-up after answering, so
     # the diagnosis comes off the node's own attempt history. `mutate` does the
     # lookup when we pass nothing, which keeps the fallback in one place.
-    mutate_graph(state, "prerequisite", client=client)
+    #
+    # `learner_request` is the one thing this endpoint knows that `/respond`
+    # does not: the learner asked to step back rather than the policy sending
+    # them (learning-engine.md §18.11).
+    mutate_graph(
+        state, "prerequisite", client=client, origin=progress.LEARNER_REQUEST
+    )
     learning_store.save_graph(graph, SESSIONS_DB_PATH)
     if graph.current_node_id == current:
         # No prerequisite was inserted (guard triggered) — just return current
