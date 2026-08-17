@@ -57,10 +57,14 @@ for stream in (sys.stdout, sys.stderr):
 import anthropic  # noqa: E402
 
 from backend.agents.grader import run as run_grader  # noqa: E402
+from backend.agents.grader.verification import grade_verification  # noqa: E402
 from backend.agents.mentor.mutator import mutate as mutate_graph  # noqa: E402
 from backend.agents.teaching import respond as teaching_respond  # noqa: E402
 from backend.agents.teaching import run as run_teaching  # noqa: E402
+from backend.agents.teaching import verify as teaching_verify  # noqa: E402
 from backend.agents.teaching.agent import _read_node_source  # noqa: E402
+from backend.learning.flags import gaps_enabled  # noqa: E402
+from backend.learning.gaps import Gap  # noqa: E402
 from backend.pipeline.runner import (  # noqa: E402
     run_documentation,
     run_goal_investigation,
@@ -167,6 +171,13 @@ def summarise(calls: list[dict]) -> dict:
         "input_tokens": sum(c["input_tokens"] for c in calls),
         "output_tokens": sum(c["output_tokens"] for c in calls),
         "cache_read": sum(c["cache_read"] for c in calls),
+        # `cost_of` bills all four token classes; this used to report only three,
+        # so the second-largest line in `goal_investigation` (21.5% of that
+        # stage) was invisible in the JSON and had to be RECONSTRUCTED by
+        # arithmetic to make Baseline 1 reconcile. Recorded directly now, because
+        # a figure inferred from a total cannot be compared against a later run
+        # (cost-optimization.md §1.2, A1).
+        "cache_write": sum(c["cache_write"] for c in calls),
         "cost_usd": round(sum(c["cost_usd"] for c in calls), 6),
         "seconds": round(sum(c["seconds"] for c in calls), 1),
     }
@@ -299,10 +310,122 @@ def measure_scenario(
     return {"scenario": name, "gap_kind": gap_kind, "parts": parts, "total": total}
 
 
+# ── verification (M6) ──────────────────────────────────────────────────────────
+
+# The claims are real ones the Grader opened on `psf/requests` during the M3
+# probe, so the prompts are realistically sized rather than toy-sized.
+_VERIFY_CLAIMS = [
+    ("The auth handler opens the connection so it can read the server's challenge.",
+     "where connection management lives"),
+    ("The auth handler returns a fresh Request object that replaces the original one.",
+     "what the handler returns"),
+    ("The auth handler inspects the URL and environment and decides whether "
+     "credentials are needed.", "what the handler owns"),
+]
+
+_VERIFY_ANSWER = (
+    "Nothing has been sent when the handler runs — it is called while the request "
+    "is still being prepared, so there is no connection and no response to read. "
+    "It edits the request object it was handed and returns that same object."
+)
+
+
+def measure_verification(
+    open_gaps: int, planned: OnboardState, recorder: RecordingClient, repo_path: str,
+) -> dict:
+    """One verification CYCLE: generate a fresh question, then grade the answer.
+
+    `open_gaps` controls how many gaps are open on the node, NOT how many the
+    question targets — M6 aims a question at one gap deliberately (§18.7), so a
+    node with three open gaps costs three cycles, not one. What extra open gaps
+    do change is the GRADING prompt, which lists every one of them so silence
+    about any is visible. Measuring 1 and 3 therefore separates the per-cycle
+    cost from the per-open-gap overhead, which is what a projection needs.
+    """
+    graph = copy.deepcopy(planned.graph)
+    state = OnboardState(repo_url=REPO, goal=dict(GOAL), client=recorder)
+    state.repo_path = repo_path
+    state.graph = graph
+    state.investigation = planned.investigation
+
+    node = graph.nodes[graph.current_node_id]
+    node.cached_lesson = {"prompt": "What does prepare_auth() hand the handler?",
+                          "setup": "…"}
+    gaps = [
+        Gap.create("wrong_model", claim, objective_part=part)
+        for claim, part in _VERIFY_CLAIMS[:open_gaps]
+    ]
+    node.gap_state.gaps.extend(gaps)
+    source = _read_node_source(repo_path, node)
+    parts: dict[str, dict] = {}
+    name = f"verification_{open_gaps}gap{'s' if open_gaps > 1 else ''}"
+
+    recorder.stage = f"{name}:question"
+    prompt = teaching_verify.verify(state, node, [gaps[0]], source, client=recorder)
+    parts["question"] = summarise(recorder.drain())
+    if prompt is None:
+        return {"scenario": name, "error": state.errors[-1] if state.errors else "?",
+                "parts": parts}
+    teaching_verify.store(node, prompt)
+
+    recorder.stage = f"{name}:grade"
+    result = grade_verification(state, node, _VERIFY_ANSWER, client=recorder)
+    parts["grade"] = summarise(recorder.drain())
+
+    total = {
+        key: sum(p[key] for p in parts.values())
+        for key in ("calls", "input_tokens", "output_tokens")
+    }
+    total["cost_usd"] = round(sum(p["cost_usd"] for p in parts.values()), 6)
+    return {
+        "scenario": name, "open_gaps": open_gaps, "parts": parts, "total": total,
+        # Recorded so a cost figure can never be read without knowing whether the
+        # cycle actually did anything.
+        "resolved": len(result.get("resolved", [])),
+        "unresolved": len(result.get("unresolved", [])),
+    }
+
+
 # ── report ─────────────────────────────────────────────────────────────────────
 
 
-def report(planning: dict, scenarios: list[dict], journey: int) -> None:
+def report_verification(verifications: list[dict], journey: int) -> None:
+    """The cost M6 adds, which Baseline 1 does not contain at all."""
+    line = "=" * 78
+    print(f"\n{line}\nVERIFICATION (M6) — per gap closed, NOT per unit\n{line}")
+    if not verifications:
+        print("  not measured (CODEONBOARD_GAPS=0)")
+        return
+    print(f"  {'cycle':<24}{'calls':>6}{'in':>10}{'out':>9}{'cost':>10}  outcome")
+    per_cycle = None
+    for v in verifications:
+        if "error" in v:
+            print(f"  {v['scenario']:<24}  FAILED: {str(v['error'])[:44]}")
+            continue
+        t = v["total"]
+        print(f"  {v['scenario']:<24}{t['calls']:>6}{t['input_tokens']:>10}"
+              f"{t['output_tokens']:>9}{t['cost_usd']:>10.6f}"
+              f"  resolved {v['resolved']}, open {v['unresolved']}")
+        for part, s in v["parts"].items():
+            print(f"    {part:<20}{s['calls']:>8}{s['input_tokens']:>10}"
+                  f"{s['output_tokens']:>9}{s['cost_usd']:>10.6f}")
+        if v["open_gaps"] == 1:
+            per_cycle = t["cost_usd"]
+
+    if per_cycle is None:
+        return
+    print(f"\n  A cycle is one question + one grading, aimed at ONE gap (§18.7), so")
+    print(f"  a node with k open gaps costs k cycles — verification scales with")
+    print(f"  GAPS DETECTED, not with units taught. That is the shape to watch.")
+    for gaps_per_journey in (1, 3, 6):
+        print(f"    {gaps_per_journey} gap(s) verified in a {journey}-unit journey:"
+              f" {per_cycle * gaps_per_journey:>9.4f}")
+    print(f"\n  Baseline 1 contains NONE of this: it predates M6 entirely, so the")
+    print(f"  comparison is 'baseline + verification', never 'baseline vs'.")
+
+
+def report(planning: dict, scenarios: list[dict], journey: int,
+           verifications: list[dict] | None = None) -> None:
     line = "=" * 78
     print(f"\n{line}\nPLANNING TIME — paid once per session\n{line}")
     print(f"  {'stage':<22}{'calls':>6}{'in':>10}{'out':>9}{'cost':>10}  models")
@@ -373,6 +496,12 @@ def main() -> int:
         print("projected journey length:", args.journey)
         print("pricing (USD/Mtok):", PRICING)
         print("CODEONBOARD_CURRICULUM:", os.environ.get("CODEONBOARD_CURRICULUM", "0"))
+        print("CODEONBOARD_GAPS:", os.environ.get("CODEONBOARD_GAPS", "0"))
+        if gaps_enabled():
+            print("verification cycles: 1 open gap, 3 open gaps"
+                  " (2 calls each: question + grading)")
+        else:
+            print("verification cycles: SKIPPED — set CODEONBOARD_GAPS=1 to measure M6")
         return 0
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
@@ -398,7 +527,18 @@ def main() -> int:
             measure_scenario(name, classification, gap_kind, planned, recorder, repo_path)
         )
 
-    report(planning, scenarios, args.journey)
+    verifications = []
+    if gaps_enabled():
+        for open_gaps in (1, 3):
+            print(f"verification {open_gaps} open gap(s) ...", flush=True)
+            verifications.append(
+                measure_verification(open_gaps, planned, recorder, repo_path)
+            )
+    else:
+        print("skipping verification (CODEONBOARD_GAPS=0) — set it to 1 to measure M6",
+              flush=True)
+
+    report(planning, scenarios, args.journey, verifications)
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
