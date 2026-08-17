@@ -3,9 +3,18 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import MapView from "@/components/MapView";
-import { getLesson, respond, advance, retry } from "@/lib/api";
+import {
+  getLesson,
+  respond,
+  advance,
+  retry,
+  requestVerification,
+  respondToVerification,
+  waive,
+} from "@/lib/api";
 import type {
-  Anchor, Attempt, Classification, GraphNode, Lesson, RespondResult, SessionGraph,
+  Anchor, Attempt, Classification, GraphNode, Lesson, NodeGap, RespondResult,
+  SessionGraph, VerificationPrompt,
 } from "@/lib/api";
 import { tagStyle, tagLabel } from "@/lib/tags";
 import { errorText, t } from "@/lib/strings";
@@ -128,6 +137,11 @@ export default function LessonPanel({
   const [result, setResult] = useState<RespondResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The outstanding verification question, once requested. Held in component
+  // state rather than on the lesson: a verification is a different question with
+  // a different lifetime, and `cached_lesson` is the teacher's artifact.
+  const [verification, setVerification] = useState<VerificationPrompt | null>(null);
+  const [verifying, setVerifying] = useState(false);
   const [done, setDone] = useState(false);
 
   useEffect(() => {
@@ -205,6 +219,55 @@ export default function LessonPanel({
     }
   };
 
+  // Ask for a FRESH question about the leading gap. Not a retry: the learner
+  // has already been shown the reasoning for the question they answered, so
+  // re-asking it would test recall (§18.7).
+  const onCheckUnderstanding = async () => {
+    setVerifying(true);
+    setError(null);
+    try {
+      setVerification(await requestVerification(sessionId, nodeId));
+      setAnswer("");
+      setResult(null);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? errorText(e.message) : t.lesson.warmUpFailed);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const onSubmitVerification = async () => {
+    if (!answer.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const got = await respondToVerification(sessionId, answer, nodeId);
+      setResult(got);
+      setVerification(null);
+      setAnswer("");
+      onRespond();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? errorText(e.message) : t.lesson.warmUpFailed);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Stop being asked. Never evidence — the stop stays short of demonstrated,
+  // which is what keeps the measure honest while letting the journey finish.
+  const onWaive = async (gapId?: string) => {
+    setLoading(true);
+    try {
+      await waive(sessionId, gapId, nodeId);
+      setVerification(null);
+      onRespond();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? errorText(e.message) : t.lesson.warmUpFailed);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (done) {
     return <CompletionScreen graph={graph} onNewSession={() => router.push("/")} onFinish={onFinish} />;
   }
@@ -269,6 +332,10 @@ export default function LessonPanel({
   // answered is reading, not being tested, and hiding it from them would be
   // pointless friction rather than pedagogy.
   const revealed = Boolean(result) || attempts.length > 0;
+
+  // What the learner still does not know here, preferring the just-graded reply
+  // over the graph, which lags by one refresh on the warm-up path.
+  const openGaps: NodeGap[] = result?.gaps ?? node.gaps ?? [];
 
   const anchors: Anchor[] = node.anchors ?? [];
   const adaptation = result?.adaptation;
@@ -383,6 +450,75 @@ export default function LessonPanel({
               </li>
             ))}
           </ol>
+        </div>
+      )}
+
+      {/* The outstanding-gaps list. §18.10 calls this "the product's most
+          honest surface: it tells the learner what they still do not know, by
+          name". Named rather than counted — a count says how much is wrong, and
+          only the claim says what. */}
+      {openGaps.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <SectionLabel>{t.lesson.gapsHeading}</SectionLabel>
+          <p className="text-[calc(12rem/16)] text-graphite">{t.lesson.gapsHelp}</p>
+          <ul className="flex flex-col gap-2">
+            {openGaps.map((gap) => (
+              <li
+                key={gap.id}
+                className="flex items-start justify-between gap-3 rounded border border-hairline bg-paper px-3 py-2"
+              >
+                <div className="flex flex-col gap-1">
+                  <span className="text-[calc(13rem/16)] text-ink">{gap.claim}</span>
+                  <span className="text-[calc(11rem/16)] uppercase tracking-wide text-graphite">
+                    {gap.blocking ? t.lesson.gapBlocking : t.lesson.gapNonBlocking}
+                  </span>
+                </div>
+                <button
+                  onClick={() => onWaive(gap.id)}
+                  disabled={loading}
+                  className="shrink-0 rounded border border-hairline px-2 py-1 text-[calc(11rem/16)] text-graphite transition hover:text-ink disabled:opacity-40"
+                >
+                  {t.lesson.waiveOne}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* The verification question. No reveal and no model answer are rendered
+          because none is sent — showing the answer beside the question is what
+          made re-asking meaningless in the first place (§18.7). */}
+      {verification && (
+        <div className="flex flex-col gap-3">
+          <SectionLabel>{t.lesson.verificationHeading}</SectionLabel>
+          <p className="text-[calc(14rem/16)] text-ink">{verification.question}</p>
+          <p className="text-[calc(12rem/16)] text-graphite">
+            {t.lesson.verificationHelp}
+          </p>
+          <textarea
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+            placeholder={t.lesson.answerPlaceholder}
+            rows={4}
+            className="w-full rounded border border-hairline bg-paper p-3 text-[calc(14rem/16)] text-ink"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={onSubmitVerification}
+              disabled={loading || !answer.trim()}
+              className="rounded bg-signal px-4 py-2 text-[calc(13rem/16)] font-medium text-paper transition disabled:opacity-40"
+            >
+              {loading ? t.lesson.grading : t.lesson.submit}
+            </button>
+            <button
+              onClick={() => setVerification(null)}
+              disabled={loading}
+              className="rounded border border-hairline px-3 py-2 text-[calc(13rem/16)] text-graphite transition hover:text-ink disabled:opacity-40"
+            >
+              {t.lesson.notNow}
+            </button>
+          </div>
         </div>
       )}
 
@@ -546,7 +682,20 @@ export default function LessonPanel({
               </button>
             )}
 
-            {canAnswerAgain && (
+            {canAnswerAgain && openGaps.length > 0 && (
+              // NOT "Try again". That cleared the form and re-showed the very
+              // question whose answer `reveal` had just given away, so passing it
+              // proved only that they had read the page. This asks a NEW question
+              // about the same misconception (§18.7).
+              <button
+                onClick={onCheckUnderstanding}
+                disabled={loading || verifying}
+                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+              >
+                {verifying ? t.lesson.verifyCtaBusy : t.lesson.verifyCta}
+              </button>
+            )}
+            {canAnswerAgain && openGaps.length === 0 && (
               <button
                 onClick={() => { setResult(null); setAnswer(""); }}
                 disabled={loading}

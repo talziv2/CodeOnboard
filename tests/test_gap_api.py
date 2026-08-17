@@ -502,3 +502,170 @@ def test_a_waived_gap_can_be_verified_later(client):
     stored = _stored(session_id).nodes[node.id]
     assert stored.gaps[0].status == "waived"
     assert stored.gaps[0].claim == CLAIM      # still nameable, still recoverable
+
+
+# ── the M2 envelope carries the gap slots (§18.9) ────────────────────────────
+
+
+def test_an_assessment_records_the_gaps_it_opened(client):
+    """Into M2's EXISTING envelope, via the `**detail` channel it provides —
+    not a second verification-history shape beside it."""
+    node = _node("A")
+    session_id = _start(client, _graph(node, _node("B")))
+
+    def _grader_opens(state, user_response, client=None):
+        target = state.graph.nodes[state.graph.current_node_id]
+        target.gap_state.gaps.append(Gap.create("wrong_model", CLAIM))
+        state.last_grade = {"classification": "confused",
+                            "gap_kind": "wrong_model", "rationale": "r"}
+        return state
+
+    with patch("backend.api.run_grader", side_effect=_grader_opens), \
+         patch("backend.api._node_source", return_value="source"), \
+         patch("backend.api.teaching_respond") as respond, \
+         patch("backend.api.mutate_graph"):
+        respond.reteach.return_value = MagicMock()
+        client.post(f"/session/{session_id}/respond", json={"response": "wrong"})
+
+    stored = _stored(session_id).nodes[node.id]
+    envelope = stored.attempts[-1][history.RESPONSE]
+    gap_id = stored.gaps[0].id
+    assert envelope["gaps_opened"] == [gap_id]
+    assert envelope["gaps_addressed"] == [gap_id]
+
+
+def test_an_answer_that_opens_nothing_records_no_gap_keys(client):
+    """Absent means "none", like every other detail key — not "unknown"."""
+    node = _node("A", "understood")
+    session_id = _start(client, _graph(node, _node("B")))
+    _respond(client, session_id, "understood", "none")
+    envelope = _stored(session_id).nodes[node.id].attempts[-1].get(history.RESPONSE)
+    assert "gaps_opened" not in (envelope or {})
+
+
+def test_a_verification_records_what_it_resolved(client):
+    node = _node("A")
+    gap = Gap.create("wrong_model", CLAIM)
+    node.gap_state.gaps.append(gap)
+    session_id = _start(client, _graph(node))
+    _verify(client, session_id)
+
+    with patch("backend.api.grade_verification",
+               side_effect=_grade_verification([gap.id])):
+        client.post(f"/session/{session_id}/respond",
+                    json={"response": "answer", "kind": "verification"})
+
+    attempts = _stored(session_id).nodes[node.id].attempts
+    envelope = attempts[-1][history.RESPONSE]
+    assert attempts[-1]["kind"] == history.VERIFICATION
+    assert envelope["gaps_resolved"] == [gap.id]
+    assert envelope["action"] == "none"     # verification produces no adaptation
+
+
+def test_the_verification_envelope_does_not_land_on_the_assessment(client):
+    """`record_response` files against the latest assessment, so verification
+    writes its own record directly — the two questions stay apart."""
+    node = _node("A")
+    gap = Gap.create("wrong_model", CLAIM)
+    node.gap_state.gaps.append(gap)
+    session_id = _start(client, _graph(node))
+    graph = _stored(session_id)
+    graph.record_attempt(node.id, "first", "confused", "r")
+    learning_store.save_graph(graph, api.SESSIONS_DB_PATH)
+    _verify(client, session_id)
+
+    with patch("backend.api.grade_verification",
+               side_effect=_grade_verification([gap.id])):
+        client.post(f"/session/{session_id}/respond",
+                    json={"response": "answer", "kind": "verification"})
+
+    attempts = _stored(session_id).nodes[node.id].attempts
+    assessment = history.assessments(attempts)[-1]
+    assert history.RESPONSE not in assessment
+    assert attempts[-1][history.RESPONSE]["gaps_resolved"] == [gap.id]
+
+
+# ── the drawer can now explain "understood, but not demonstrated" ────────────
+
+
+def test_evidence_explains_an_understood_answer_that_is_still_unresolved(client):
+    """M3a.1's open question, closed by M9.
+
+    `node_summary` said it plainly: gap-model M7 can hold a node at `partial`
+    though its latest answer reached the objective, and "without gap content on
+    the wire (M9) the UI cannot say *why*". This is that content.
+    """
+    from backend.learning import understanding
+
+    node = _node("A")
+    gap = Gap.create("wrong_model", CLAIM, objective_part="what the handler owns")
+    node.gap_state.gaps.append(gap)
+    graph = _graph(node)
+    graph.mark_understanding(node.id, "understood")
+    graph.record_attempt(node.id, "a good answer", "understood", "reached it")
+
+    got = understanding.evidence(graph, node.id)
+
+    # The honest discrepancy M3a.1 could report...
+    assert got["understanding"] == "unresolved"
+    assert got["state_matches_latest_answer"] is False
+    # ...and the reason it could not, until now.
+    assert got["gaps_blocking"] == 1
+    assert [g["claim"] for g in got["gaps"]] == [CLAIM]
+    assert got["gaps"][0]["status"] == "open"
+
+
+def test_evidence_reports_a_pending_verification(client):
+    """The precise case: the answer landed, the check has been issued, and the
+    node is waiting on it rather than on the learner."""
+    from backend.agents.teaching.verify import VerificationPrompt
+    from backend.agents.teaching import verify as tv
+    from backend.learning import understanding
+
+    node = _node("A")
+    node.gap_state.gaps.append(Gap.create("wrong_model", CLAIM))
+    graph = _graph(node)
+    graph.mark_understanding(node.id, "understood")
+    graph.record_attempt(node.id, "a good answer", "understood", "reached it")
+    tv.store(node, VerificationPrompt(question="q?", targets=[node.gaps[0].id]))
+
+    got = understanding.evidence(graph, node.id)
+    assert got["verification_pending"] is True
+    assert got["understanding"] == "unresolved"
+
+
+def test_evidence_shows_a_waived_gap_as_part_of_the_explanation(client):
+    """"This was waived" explains a state as much as "this is still open"."""
+    from backend.learning import understanding
+
+    node = _node("A")
+    node.gap_state.gaps.append(Gap.create("wrong_model", CLAIM))
+    graph = _graph(node)
+    graph.mark_understanding(node.id, "understood")
+    graph.record_attempt(node.id, "a good answer", "understood", "reached it")
+    graph.waive_remaining(node.id)
+
+    got = understanding.evidence(graph, node.id)
+    assert got["gaps_waived"] == 1
+    assert got["gaps_open"] == 0
+    assert got["gaps"][0]["status"] == "waived"
+    assert got["disposition"] == "waived"
+    # Waiving is a decision, not evidence: still not demonstrated.
+    assert got["understanding"] == "unresolved"
+
+
+def test_evidence_links_a_gap_to_the_attempts_that_opened_and_closed_it(client):
+    from backend.learning import understanding
+
+    node = _node("A")
+    gap = Gap.create("wrong_model", CLAIM, origin_attempt=0)
+    node.gap_state.gaps.append(gap)
+    graph = _graph(node)
+    graph.record_attempt(node.id, "wrong", "confused", "r")
+    graph.record_attempt(node.id, "verified", "", "r", kind=history.VERIFICATION)
+    gap.mark_verified(1)
+
+    got = understanding.evidence(graph, node.id)
+    assert got["gaps"][0]["origin_attempt"] == 0
+    assert got["gaps"][0]["resolved_by"] == 1
+    assert got["timeline"][1]["kind"] == history.VERIFICATION

@@ -755,6 +755,16 @@ class LearningGraph:
                     "weak_spot": n.weak_spot,
                     "has_lesson": n.cached_lesson is not None,
                     "attempts": n.attempts,
+                    # OPEN gaps only (gap-model M9). What the learner still does
+                    # not know, by name — the rail marks these distinctly from
+                    # untouched stops, which previously both read as "not done".
+                    # Settled gaps are omitted: a verified one is closed, and a
+                    # waived one is what they asked to stop hearing about.
+                    "gaps": [
+                        {"id": g.id, "kind": g.kind, "claim": g.claim,
+                         "blocking": g.is_blocking}
+                        for g in n.gaps if g.is_open
+                    ],
                 }
                 for n in self.nodes.values()
             ],

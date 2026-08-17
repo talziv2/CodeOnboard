@@ -132,6 +132,13 @@ export const t = {
 
   // --- route rail ---
   rail: {
+    /** Tooltip suffix naming what is still unresolved on a stop. */
+    unresolved: "unresolved",
+    unresolvedCount: (count: number) =>
+      count === 1 ? "◇ 1 unresolved" : `◇ ${count} unresolved`,
+    unresolvedHint: "Named misconceptions still open here",
+    setAside: "◦ set aside",
+    setAsideHint: "You chose to stop being asked about this",
     title: "Your route",
     openMap: "Open map",
     addedAfterConfusion: "added after confusion",
@@ -206,6 +213,31 @@ export const t = {
     recoveredBody: "You got this one after studying",
     recoveredBodyEnd:
       "first. It stays marked as a rough patch, but you came back from it.",
+    // "Try again" re-showed the question the learner had just been given the
+    // answer to. The replacement asks a NEW question about the same
+    // misconception, so the label has to promise a check rather than a retry.
+    verifyCta: "Check my understanding",
+    verifyCtaBusy: "Writing a question…",
+    verificationHeading: "A different angle on the same idea",
+    verificationHelp:
+      "Answering this is the only thing that clears the gap — moving on leaves it open.",
+    // The outstanding-gaps list: the most honest surface in the product. Named,
+    // never counted, because "what you still do not know" is only useful specific.
+    gapsHeading: "Still unresolved",
+    gapsHelp: "You can check these now, or carry on and come back.",
+    gapBlocking: "Holding this stop back",
+    gapNonBlocking: "Worth knowing",
+    gapWaived: "You set this aside",
+    gapVerified: "Checked and cleared",
+    gapExhausted: "No more checks offered here",
+    waiveOne: "Set aside",
+    notNow: "Not now",
+    waiveAll: "Set all aside",
+    gapResolved: "Cleared",
+    gapStillOpen: "Still open",
+    // The M7 case the drawer could not previously explain.
+    pendingVerification:
+      "Your last answer reached the objective — this stop counts as demonstrated once the check below is cleared.",
     walkthrough: "Walkthrough",
     setup: "Before you answer",
     hint: "A way in",
@@ -261,6 +293,14 @@ export const t = {
 
   // --- completion ---
   completion: {
+    // Two measures, and neither gates the other (§18.16.3). "Journey complete"
+    // beside "92% verified" is the intended final state, not a contradiction.
+    journeyComplete: "Journey complete",
+    journeyIncomplete: (open: number) =>
+      open === 1 ? "1 stop still open" : `${open} stops still open`,
+    verifiedUnderstanding: "Verified understanding",
+    waivedHeading: "What you chose not to check",
+    waivedHelp: "These stay on the record. You can check any of them now.",
     tabSummary: "Summary",
     tabMap: "Your map",
     label: "Session complete",
@@ -324,6 +364,12 @@ export const t = {
     noEvidenceYet: "No answers recorded yet — nothing to show about your understanding.",
     // Shown when gap-model M7 holds a unit back although the last answer
     // reached the objective. Says THAT, never invents a why.
+    gapsLabel: "What is unresolved",
+    gapBlocking: "Holding this back",
+    gapNonBlocking: "Worth knowing",
+    gapWaived: "Set aside by you",
+    gapVerified: "Checked and cleared",
+    gapExhausted: "No more checks offered",
     pendingVerification: "Not yet counted as demonstrated — verification pending.",
     // --- evidence drawer ---
     evidence: "Evidence",

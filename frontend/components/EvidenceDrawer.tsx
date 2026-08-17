@@ -94,11 +94,40 @@ export default function EvidenceDrawer({
               )}
             </span>
             {/* M7 can hold a unit back although the last answer reached the
-                objective. Without gaps on the wire we can say THAT, not why. */}
+                objective. M9 put gaps on the wire, so the drawer now says WHY
+                rather than only THAT — the reason is named below. */}
             {!chain.state_matches_latest_answer && (
               <p className="text-[calc(11.5rem/16)] leading-snug text-brass">
                 {t.map.pendingVerification}
               </p>
+            )}
+            {(chain.gaps?.length ?? 0) > 0 && (
+              <div className="flex flex-col gap-1.5 border-t border-rule pt-2">
+                <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+                  {t.map.gapsLabel}
+                </span>
+                {chain.gaps!.map((gap) => (
+                  <div key={gap.id} className="flex flex-col">
+                    <span className="text-[calc(12rem/16)] leading-snug text-paper">
+                      {gap.claim}
+                    </span>
+                    <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.12em] text-graphite">
+                      {/* Every status is shown, not only the open ones: "this
+                          was waived" explains a state as much as "this is still
+                          open" does. */}
+                      {gap.status === "verified"
+                        ? t.map.gapVerified
+                        : gap.status === "waived"
+                          ? t.map.gapWaived
+                          : gap.exhausted
+                            ? t.map.gapExhausted
+                            : gap.blocking
+                              ? t.map.gapBlocking
+                              : t.map.gapNonBlocking}
+                    </span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 

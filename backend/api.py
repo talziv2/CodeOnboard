@@ -546,6 +546,7 @@ def _respond_to_verification(
     if not node.gap_state.pending_verification:
         raise HTTPException(status_code=409, detail="no_pending_verification")
 
+    before_gaps = {g.id for g in node.gaps}
     result = grade_verification(state, node, body.response, client=client)
     if result.get("failed"):
         # Nothing resolved, no attempt charged, the question still pending. The
@@ -560,6 +561,19 @@ def _respond_to_verification(
         classification="",
         rationale=result.get("rationale") or "",
         kind=history.VERIFICATION,
+    )
+    # The verification's own envelope, on the verification attempt. `action` is
+    # `none` because verification produces no adaptation — the outcome is a gap
+    # closing or not closing, and saying "none" is how M2 distinguishes "the
+    # system deliberately did nothing" from "we have no record".
+    #
+    # `record_response` files against the latest ASSESSMENT, so it is not used
+    # here: this record belongs to the verification attempt itself.
+    opened = [g.id for g in node.gaps if g.id not in before_gaps]
+    node.attempts[-1][history.RESPONSE] = history.new_response(
+        "none",
+        **({"gaps_resolved": result["resolved"]} if result.get("resolved") else {}),
+        **({"gaps_opened": opened} if opened else {}),
     )
     learning_store.save_graph(graph, SESSIONS_DB_PATH)
 
@@ -698,7 +712,12 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
     if body.kind == history.VERIFICATION:
         return _respond_to_verification(graph, state, current, body, client)
 
+    # Which gaps this ANSWER opened, as a fact rather than a count. Taken as a
+    # before/after delta because the Grader mints ids internally; asking it to
+    # report them too would be a second source of the same truth.
+    before_gaps = {g.id for g in graph.nodes[current].gaps}
     run_grader(state, body.response, client=client)
+    opened = [g.id for g in graph.nodes[current].gaps if g.id not in before_gaps]
     # The Grader updated the node's understanding_state / weak_spot in place.
 
     grade = state.last_grade or {}
@@ -824,6 +843,12 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
         # about a confusion it chose not to act on. It was being discarded.
         **({"declined_reason": mutation.get("rationale") or mutation.get("reason")}
            if mutation.get("kind") == "none" and action == "prerequisite" else {}),
+        # The gap slots M2 reserved (§18.9). Carried in the SAME envelope rather
+        # than in a parallel verification history, so "what this answer revealed"
+        # and "what the system did about it" stay one record. Omitted when empty,
+        # like every other detail key — absent means "none", not "unknown".
+        **({"gaps_opened": opened} if opened else {}),
+        **({"gaps_addressed": [g.id for g in plan.targets]} if plan.targets else {}),
     ))
 
     # PLAN-SCOPED: the journey changed shape. Recorded with the ids it moved, so

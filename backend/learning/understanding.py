@@ -194,6 +194,19 @@ def node_summary(node: "LearningNode") -> dict:
         ),
         "area_id": (node.lesson_brief or {}).get("area_id", ""),
         "kind": (node.lesson_brief or {}).get("kind", ""),
+        # WHY the state is what it is, when the answer alone does not explain it
+        # (gap-model M9). `state_matches_latest_answer` above reports the
+        # discrepancy honestly; these report its cause, which is what this
+        # docstring said was missing until M9 put gap content on the wire.
+        "gaps_open": sum(1 for g in node.gaps if g.is_open),
+        "gaps_blocking": sum(
+            1 for g in node.gaps if g.is_blocking and g.status != "verified"
+        ),
+        "gaps_verified": sum(1 for g in node.gaps if g.status == "verified"),
+        "gaps_waived": sum(1 for g in node.gaps if g.status == "waived"),
+        # Awaiting an answer to a fresh question. The precise reason a node can
+        # sit at `unresolved` with an `understood` latest answer.
+        "verification_pending": bool(node.gap_state.pending_verification),
     }
 
 
@@ -292,6 +305,29 @@ def evidence(graph: "LearningGraph", node_id: str) -> dict:
 
     return {
         **node_summary(node),
+        # Every gap on the node, settled ones included — the drawer explains a
+        # state, and "this was waived" and "this was verified" are as much a part
+        # of that explanation as what is still open (gap-model M9).
+        "gaps": [
+            {
+                "id": g.id,
+                "kind": g.kind,
+                "claim": g.claim,
+                "objective_part": g.objective_part,
+                "status": g.status,
+                "blocking": g.is_blocking,
+                "verification_attempts": g.verification_attempts,
+                "exhausted": g.is_exhausted,
+                "opened_at": g.opened_at,
+                "closed_at": g.closed_at,
+                # Which attempt opened it, and which closed it — the history of
+                # the gap, expressed as indices into the timeline below rather
+                # than as a second parallel record.
+                "origin_attempt": g.origin_attempt,
+                "resolved_by": g.resolved_by,
+            }
+            for g in node.gaps
+        ],
         "timeline": timeline,
         # Plan-scoped events that touched this node — the remediation it caused
         # or received. Kept beside the attempts because "the journey grew here"

@@ -211,6 +211,19 @@ export interface UnderstandingRow {
   state_matches_latest_answer: boolean;
   area_id: string;
   kind: string;
+  /**
+   * Why the state is what it is, when the latest answer alone does not explain
+   * it (gap-model M9). `state_matches_latest_answer` reports the discrepancy;
+   * these report its cause — which is exactly what the drawer could not say
+   * before gap content reached the wire.
+   */
+  gaps_open?: number;
+  /** Unverified AND blocking: the count that holds a stop back. */
+  gaps_blocking?: number;
+  gaps_verified?: number;
+  gaps_waived?: number;
+  /** A fresh question has been issued and is awaiting an answer. */
+  verification_pending?: boolean;
 }
 
 export interface UnderstandingProfile {
@@ -247,6 +260,12 @@ export interface EvidenceStep {
 export interface EvidenceChain extends UnderstandingRow {
   timeline: EvidenceStep[];
   journey_events: JourneyEvent[];
+  /**
+   * Every gap on the stop, settled ones included — the drawer explains a STATE,
+   * and "this was waived" or "this was verified" is as much a part of that
+   * explanation as what is still open.
+   */
+  gaps?: GapDetail[];
 }
 
 export interface JourneyEvent {
@@ -318,6 +337,41 @@ export interface GraphNode {
   weak_spot: boolean;
   has_lesson: boolean;
   attempts: Attempt[];
+  /**
+   * What the learner still does not know here, by name (gap-model M9). OPEN
+   * gaps only — a verified one is closed and a waived one is what they asked to
+   * stop hearing about, so neither is outstanding work.
+   *
+   * This is what lets a stop carrying unresolved misconceptions read differently
+   * from one nobody has touched; before M9 both rendered as "not done".
+   */
+  gaps?: NodeGap[];
+}
+
+/** A misconception, as a stop carries it. */
+export interface NodeGap {
+  id: string;
+  /** "wrong_model" | "missing_prerequisite" | "right_idea_wrong_altitude". */
+  kind: string;
+  /** The false claim itself, in the learner's own terms. */
+  claim: string;
+  /** Does it hold the stop back from counting as demonstrated? */
+  blocking: boolean;
+}
+
+/** A gap with its full lifecycle, as the evidence drawer receives it. */
+export interface GapDetail extends NodeGap {
+  objective_part: string;
+  /** "open" | "verified" | "waived". Only `verified` permits `understood`. */
+  status: string;
+  verification_attempts: number;
+  /** The system has stopped proposing checks for this one. */
+  exhausted: boolean;
+  opened_at: string;
+  closed_at: string | null;
+  /** Indices into the evidence timeline. */
+  origin_attempt: number;
+  resolved_by: number | null;
 }
 
 /** One level of curriculum grouping. Empty list on pre-B3 graphs. */
@@ -415,6 +469,14 @@ export interface RespondResult {
   mutation: Mutation;
   adaptation?: Adaptation;
   current_node_id: string | null;
+  /** Still-open gaps on the graded stop, after this answer. */
+  gaps?: NodeGap[];
+  /** Journey completion — separate from readiness, and neither gates the other. */
+  complete?: boolean;
+  /** Present only on a verification reply: ids this answer closed / left open. */
+  kind?: string;
+  resolved?: string[];
+  unresolved?: string[];
 }
 
 export const respond = (session_id: string, answer: string, node_id?: string) =>
@@ -422,6 +484,46 @@ export const respond = (session_id: string, answer: string, node_id?: string) =>
     response: answer,
     node_id,
   });
+
+/**
+ * A FRESH question about one gap. Replaces "Try again", which re-showed the
+ * question the learner had already been given the answer to.
+ */
+export interface VerificationPrompt {
+  node_id: string;
+  question: string;
+  targets: string[];
+  gaps: NodeGap[];
+}
+
+export const requestVerification = (session_id: string, node_id?: string) =>
+  post<VerificationPrompt>(`/session/${session_id}/verify`, { node_id });
+
+/** Answer a verification question. Graded against the gaps, not the objective. */
+export const respondToVerification = (
+  session_id: string,
+  answer: string,
+  node_id?: string,
+) =>
+  post<RespondResult>(`/session/${session_id}/respond`, {
+    response: answer,
+    node_id,
+    kind: "verification",
+  });
+
+export interface WaiveResult {
+  node_id: string;
+  /** Named, never a bare count — "what you chose not to check". */
+  waived: string[];
+  gaps: NodeGap[];
+  understanding_state: string;
+  readiness: number;
+  complete: boolean;
+}
+
+/** Stop the system asking: one gap, or every open one on the stop. */
+export const waive = (session_id: string, gap_id?: string, node_id?: string) =>
+  post<WaiveResult>(`/session/${session_id}/waive`, { gap_id, node_id });
 
 // --- Advance ---
 

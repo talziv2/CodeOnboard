@@ -284,17 +284,32 @@ def test_the_flag_defaults_to_off(monkeypatch):
 # ── M1 is inert ──────────────────────────────────────────────────────────────
 
 
-def test_gaps_do_not_reach_the_api_payload():
-    """M1 changes no observable product behaviour, and that includes the wire.
+def test_open_gaps_reach_the_api_payload_by_name():
+    """Inverted when M9 landed; through M1–M8 this asserted the opposite.
 
-    Gaps surface in M9. Adding them to `to_dict` now would be a visible change
-    in a step whose whole contract is that nothing changes.
+    M1's contract was that nothing observable changed, and the wire was part of
+    that — "gaps surface in M9" was the note. M9 is where they surface, so the
+    expectation flips. What is asserted now is the shape M9 promised: OPEN gaps,
+    named, with the `blocking` flag the UI needs to distinguish "holding this
+    stop back" from "worth knowing".
+
+    The internal container still does not leak: `gap_state` is storage, `gaps`
+    is the wire.
     """
     graph, node = _graph_with_two_gaps()
     payload = graph.to_dict()
-    assert "gaps" not in json.dumps(payload)
     node_payload = next(n for n in payload["nodes"] if n["id"] == node.id)
+
     assert "gap_state" not in node_payload
+    assert {g["claim"] for g in node_payload["gaps"]} == {CLAIM_A, CLAIM_B}
+    assert all(g["blocking"] is True for g in node_payload["gaps"])
+
+    # Settled gaps are not outstanding work and do not appear.
+    node.gap_state.gaps[0].waive()
+    reshown = next(
+        n for n in graph.to_dict()["nodes"] if n["id"] == node.id
+    )["gaps"]
+    assert [g["claim"] for g in reshown] == [CLAIM_B]
 
 
 def test_gaps_now_hold_back_understanding_and_readiness():

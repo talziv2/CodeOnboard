@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { GraphNode } from "@/lib/api";
 import type { RouteStop } from "@/lib/graph-layout";
-import { isComplete, type RouteSection } from "@/lib/route-sections";
+import { isComplete, isSettled, type RouteSection } from "@/lib/route-sections";
 import { stateStyle, stateLabel } from "@/lib/tags";
 import { t } from "@/lib/strings";
 
@@ -109,7 +109,16 @@ function Stop({
     <button
       onClick={() => onJump(node)}
       aria-current={isCurrent ? "step" : undefined}
-      title={`${node.title} — ${state}`}
+      // The detail the row no longer spends a line on stays one hover away.
+      // Open gaps are named here too: a stop with unresolved misconceptions and
+      // an untouched stop both read as "not done" otherwise (§18.10).
+      title={
+        (node.gaps?.length ?? 0) > 0
+          ? `${node.title} · ${node.file} — ${state} · ${t.rail.unresolved}: ${node
+              .gaps!.map((g) => g.claim)
+              .join("; ")}`
+          : `${node.title} · ${node.file} — ${state}`
+      }
       className={`group relative grid w-full grid-cols-[calc(18rem/16)_1fr] gap-3 py-[calc(5rem/16)] text-start ${
         stop.isPrerequisite ? "ms-[calc(22rem/16)] w-[calc(100%-22rem/16)]" : ""
       } ${tone === "done" ? "opacity-80 transition-opacity hover:opacity-100" : ""}`}
@@ -150,12 +159,32 @@ function Stop({
             the learner failed here — so rendering it kept a unit they have
             since mastered captioned as a weakness. `understanding` is the
             server-classified state and distinguishes the two. */}
+        {/* And where gaps ARE on the wire (M9), say which of the two it is.
+            "marked weak" is wrong for the commonest new case: a learner whose
+            latest answer reached the objective, held back only by a check they
+            have not taken yet. Captioning that as a weakness reports a failure
+            that did not happen. */}
         {node.understanding === "unresolved" && (
           <span
             className="font-mono text-[calc(9.5rem/16)] tracking-[0.05em] text-rust"
-            title={t.rail.weak}
+            title={
+              (node.gaps?.length ?? 0) > 0
+                ? t.rail.unresolvedHint
+                : node.disposition === "waived"
+                  ? t.rail.setAsideHint
+                  : t.rail.weak
+            }
           >
-            {t.rail.markedWeak}
+            {/* Three reasons a stop can be unresolved, and they are not the
+                same thing to a learner: work still open, work they chose to
+                set aside, and a genuine rough patch. Only the last is a
+                weakness, and saying so for all three is what M3a.1 set out to
+                stop. */}
+            {(node.gaps?.length ?? 0) > 0
+              ? t.rail.unresolvedCount(node.gaps!.length)
+              : node.disposition === "waived"
+                ? t.rail.setAside
+                : t.rail.markedWeak}
           </span>
         )}
       </span>
@@ -246,12 +275,13 @@ export default function RouteRail({
   const currentIsOptional = optional.some((s) => s.node.id === currentNodeId);
   const optionalOpen = showOptional || currentIsOptional;
 
+  // Loudest for where you are, quietest for what is behind you. "Behind" is the
+  // same `settled` the section counts use, so a muted row and the count above it
+  // can never tell different stories.
   const toneFor = (section: RouteSection, stop: RouteStop): Tone => {
     if (stop.node.id === currentNodeId) return "current";
-    if (stop.node.understanding_state !== "not_started" || stop.node.visited) {
-      return "done";
-    }
-    return section.status === "past" ? "done" : "ahead";
+    if (isSettled(stop.node) || section.status === "past") return "done";
+    return "ahead";
   };
 
   return (
