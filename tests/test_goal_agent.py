@@ -11,7 +11,9 @@ from backend.agents.goal import (
     GoalSession,
     Question,
     process_answer,
+    question_progress,
     start_session,
+    step_back,
 )
 from backend.agents.goal.agent import _synthesize_goal
 from backend.agents.goal.questions import CODE_DEPTH_OPTIONS
@@ -401,3 +403,103 @@ def test_the_synthesis_prompt_describes_use_library():
 
     assert "use_library" in _SYSTEM_PROMPT
     assert "USE this code" in _SYSTEM_PROMPT
+
+
+# ── step_back (interview navigation) ──────────────────────────────────────────
+
+def test_step_back_returns_the_question_and_what_was_answered():
+    session = start_session(REPO_URL)
+    process_answer(session, ANS_FAMILIARITY, client=None)
+
+    stepped = step_back(session)
+
+    assert stepped is not None
+    question, previous = stepped
+    assert question.key == "familiarity"
+    assert previous == ANS_FAMILIARITY
+
+
+def test_step_back_at_the_first_question_has_nothing_to_return():
+    session = start_session(REPO_URL)
+    assert step_back(session) is None
+
+
+def test_step_back_un_answers_so_the_same_question_comes_round_again():
+    session = start_session(REPO_URL)
+    process_answer(session, ANS_FAMILIARITY, client=None)
+    process_answer(session, ANS_GOAL_UNDERSTAND, client=None)
+
+    step_back(session)
+    # Re-answering Q2 must land on Q3, not skip ahead: the answer was replaced,
+    # not appended.
+    next_q, _ = process_answer(session, ANS_GOAL_UNDERSTAND, client=None)
+
+    assert next_q is not None
+    assert next_q.key == "primary_goal"
+    assert len(session.answers) == 2
+
+
+def test_position_and_total_move_back_with_the_step():
+    session = start_session(REPO_URL)
+    process_answer(session, ANS_FAMILIARITY, client=None)
+    process_answer(session, ANS_GOAL_DEBUG, client=None)
+    assert question_progress(session)[0] == 3
+
+    step_back(session)
+
+    index, total = question_progress(session)
+    assert index == 2
+    # goal_type is no longer known, so the total drops back to its lower bound.
+    assert total == len(CORE_QUESTIONS) + 1
+
+
+def test_going_back_past_q2_lets_a_different_goal_type_change_the_followups():
+    # The bug this guards: stepping back over Q2 without clearing goal_type
+    # leaves the old goal_type's follow-ups queued, so a user who switches from
+    # debugging to contributing is still asked what error they are seeing.
+    session = start_session(REPO_URL)
+    process_answer(session, ANS_FAMILIARITY, client=None)
+    process_answer(session, ANS_GOAL_DEBUG, client=None)
+    assert session.goal_type == "debug_issue"
+
+    step_back(session)
+    assert session.goal_type is None
+
+    process_answer(session, ANS_GOAL_CONTRIBUTE, client=None)
+    process_answer(session, ANS_PRIMARY_GOAL, client=None)
+    process_answer(session, ANS_CODE_DEPTH, client=None)
+    next_q, _ = process_answer(session, ANS_BACKGROUND, client=None)
+
+    assert next_q is not None
+    assert next_q.key == "contribution_context"
+
+
+def test_step_back_reaches_a_followup_not_just_the_core_questions():
+    session = start_session(REPO_URL)
+    process_answer(session, ANS_FAMILIARITY, client=None)
+    process_answer(session, ANS_GOAL_DEBUG, client=None)
+    process_answer(session, ANS_PRIMARY_GOAL, client=None)
+    process_answer(session, ANS_CODE_DEPTH, client=None)
+    process_answer(session, ANS_BACKGROUND, client=None)
+    process_answer(session, "ConnectionError on retry", client=None)
+
+    stepped = step_back(session)
+
+    assert stepped is not None
+    question, previous = stepped
+    assert question.key == "error_description"
+    assert previous == "ConnectionError on retry"
+
+
+def test_stepping_all_the_way_back_empties_the_interview():
+    session = start_session(REPO_URL)
+    process_answer(session, ANS_FAMILIARITY, client=None)
+    process_answer(session, ANS_GOAL_USE, client=None)
+    process_answer(session, ANS_PRIMARY_GOAL, client=None)
+
+    while step_back(session) is not None:
+        pass
+
+    assert session.answers == {}
+    assert session.goal_type is None
+    assert question_progress(session)[0] == 1

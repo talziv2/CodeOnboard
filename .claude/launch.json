@@ -14,6 +14,21 @@
       "port": 8000
     },
     {
+      "name": "backend-3001",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "python", "-m", "uvicorn", "backend.api:app", "--port", "8001", "--reload"],
+      "env": { "CODEONBOARD_ALLOWED_ORIGINS": "http://localhost:3001,http://127.0.0.1:3001" },
+      "port": 8001
+    },
+    {
+      "name": "frontend-3001",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "3001"],
+      "env": { "NEXT_PUBLIC_API_URL": "http://localhost:8001" },
+      "cwd": "frontend",
+      "port": 3001
+    },
+    {
       "name": "frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],

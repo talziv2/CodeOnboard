@@ -101,6 +101,7 @@ def get_or_create_survey(
     owner_repo: str,
     commit_sha: str,
     db_path: Path | None = None,
+    on_call=None,
 ) -> tuple[dict | None, dict]:
     """The survey for this checkout — loaded when stored, produced once otherwise.
 
@@ -108,6 +109,10 @@ def get_or_create_survey(
     not be produced at all; the caller decides what a survey-less onboarding
     does (the investigation runs from the skeleton alone). ``meta`` reports
     where the survey came from and what it cost, for telemetry.
+
+    ``on_call`` is forwarded to the exploration harness so a caller can watch a
+    fresh survey being produced. A cached survey never calls it, which is the
+    honest signal: there is nothing happening to report.
     """
     stored = load_survey(owner_repo, commit_sha, db_path=db_path)
     if stored is not None:
@@ -115,7 +120,9 @@ def get_or_create_survey(
 
     from backend.repo import survey as survey_module
 
-    run = survey_module.run_survey(client=client, repo_path=repo_path)
+    run = survey_module.run_survey(
+        client=client, repo_path=repo_path, on_call=on_call
+    )
     payload = run.survey
     meta = {
         "source": "fresh",

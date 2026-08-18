@@ -72,6 +72,10 @@ class OnboardState:
     # rather than replaced. Required for safe concurrent writes once parallel
     # nodes exist (e.g. Documentation Agent in Phase 2). Harmless today.
     errors: Annotated[list, operator.add] = field(default_factory=list)
+    # Client-supplied id for live progress reporting (backend/pipeline/progress).
+    # Empty string means "nobody is watching" — every reporting call short-circuits
+    # on it, so a run without one behaves exactly as before.
+    progress_id: str = ""
     # Carried through the graph so nodes can reach the Anthropic client.
     # LangGraph nodes receive only the state, so extra args like `client=`
     # can't be passed positionally — they ride along here instead.

@@ -85,14 +85,54 @@ export const goalStart = (repo_url: string) =>
 export const goalAnswer = (session_id: string, answer: string) =>
   post<AnswerResponse>("/goal/answer", { session_id, answer });
 
+/** The question stepped back to, plus the answer already given for it. */
+export interface BackResponse {
+  question: Question;
+  answer: string;
+}
+
+export const goalBack = (session_id: string) =>
+  post<BackResponse>("/goal/back", { session_id });
+
 // --- Session ---
 
 export interface SessionStartResponse {
   session_id: string;
 }
 
-export const sessionStart = (repo_url: string, goal: Record<string, string>, force_new = false) =>
-  post<SessionStartResponse>("/session/start", { repo_url, goal, force_new });
+export const sessionStart = (
+  repo_url: string,
+  goal: Record<string, string>,
+  force_new = false,
+  progress_id?: string,
+) =>
+  post<SessionStartResponse>("/session/start", {
+    repo_url,
+    goal,
+    force_new,
+    progress_id,
+  });
+
+/** Live progress of an in-flight /session/start, polled with the same
+ *  `progress_id` that request was sent with.
+ *
+ *  `stages` is the backend's own vocabulary and order — render from it rather
+ *  than from a hardcoded list, so a pipeline that grows a stage shows it.
+ *  `stage` is null before the first one lands and once the run has finished. */
+export interface PipelineProgress {
+  stages: string[];
+  stage: string | null;
+  done: string[];
+  /** The exploration's last tool call: which tool, and what it looked at. */
+  activity: { tool: string; target: string } | null;
+  turn: number;
+  calls: number;
+  seconds: number;
+  finished: boolean;
+}
+
+export const sessionProgress = (progress_id: string) =>
+  get<PipelineProgress>(`/session/progress/${encodeURIComponent(progress_id)}`);
 
 // --- Learning graph ---
 

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import anthropic
 
+from backend.pipeline import progress
 from backend.pipeline.state import OnboardState
 from backend.repo.cloner import clone_repo, get_commit_sha, parse_repo_url
 from backend.repo import investigation as investigation_module
@@ -69,6 +70,9 @@ def run_repo_survey(
     client: anthropic.Anthropic | None = None,
 ) -> OnboardState:
     """Clone, index, and attach the Layer B survey (stored, or produced once)."""
+    # Three stages of a run live inside this one graph node, and only this
+    # function can see the transitions between them.
+    progress.stage(state.progress_id, "clone")
     try:
         state.repo_path = clone_repo(state.repo_url)
     except Exception as e:
@@ -77,12 +81,14 @@ def run_repo_survey(
 
     # D15: no skeleton, no onboarding. A graph whose anchors cannot be
     # verified is worse than no graph.
+    progress.stage(state.progress_id, "structure")
     try:
         skeleton = build_skeleton(state.repo_path)
     except Exception as e:
         state.errors.append(f"repo_survey: skeleton build failed: {e}")
         return state
 
+    progress.stage(state.progress_id, "survey")
     try:
         owner, repo = parse_repo_url(state.repo_url)
         commit_sha = get_commit_sha(state.repo_path)
@@ -91,6 +97,7 @@ def run_repo_survey(
             repo_path=state.repo_path,
             owner_repo=f"{owner}/{repo}",
             commit_sha=commit_sha,
+            on_call=progress.tool_reporter(state.progress_id),
         )
         state.survey = payload
         if payload is None:
@@ -124,12 +131,14 @@ def run_goal_investigation(
         state.errors.append("goal_investigation: repo_path missing")
         return state
 
+    progress.stage(state.progress_id, "investigation")
     try:
         run = investigation_module.run_investigation(
             client=client,
             repo_path=state.repo_path,
             goal=state.goal,
             survey_payload=state.survey,
+            on_call=progress.tool_reporter(state.progress_id),
         )
     except Exception as e:
         state.errors.append(f"goal_investigation failed: {e}")

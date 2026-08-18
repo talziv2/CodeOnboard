@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import GoalDialogue from "@/components/GoalDialogue";
 import SettingsMenu from "@/components/SettingsMenu";
+import StartingProgress from "@/components/StartingProgress";
 import { checkRepo, sessionStart } from "@/lib/api";
 import { errorText, t } from "@/lib/strings";
 
@@ -35,20 +36,15 @@ export default function Home() {
   const [step, setStep] = useState<Step>("repo");
   const [repoUrl, setRepoUrl] = useState("");
   const [recent, setRecent] = useState<string[]>([]);
-  const [elapsed, setElapsed] = useState(0);
+  // Invented per run and sent with /session/start, so the progress screen can
+  // poll what that call is doing while it blocks.
+  const [progressId, setProgressId] = useState("");
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Kept so a failed pipeline can be retried without redoing the interview.
   const [goal, setGoal] = useState<Record<string, string> | null>(null);
 
   useEffect(() => setRecent(readRecent()), []);
-
-  useEffect(() => {
-    if (step !== "starting") return;
-    setElapsed(0);
-    const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
-    return () => clearInterval(timer);
-  }, [step]);
 
   // Verify the repo can actually be cloned before spending five questions on it.
   const handleRepoSubmit = async (e: React.FormEvent) => {
@@ -71,10 +67,12 @@ export default function Home() {
   };
 
   const startSession = async (forGoal: Record<string, string>) => {
+    const runId = crypto.randomUUID();
+    setProgressId(runId);
     setStep("starting");
     setError(null);
     try {
-      const { session_id } = await sessionStart(repoUrl, forGoal);
+      const { session_id } = await sessionStart(repoUrl, forGoal, false, runId);
       rememberRepo(repoUrl);
       router.push(`/session/${session_id}`);
     } catch (err: unknown) {
@@ -154,34 +152,7 @@ export default function Home() {
       {step === "goal" && <GoalDialogue repoUrl={repoUrl} onDone={handleGoalDone} />}
 
       {step === "starting" && (
-        <div className="flex w-full max-w-md flex-col gap-5">
-          <div className="flex flex-col gap-1.5">
-            <span className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.14em] text-graphite">
-              {t.starting.label}
-            </span>
-            <h2 className="font-display text-[calc(21rem/16)] font-medium tracking-tight text-chalk">
-              {repoUrl.replace(/^https?:\/\/github\.com\//, "")}
-            </h2>
-          </div>
-
-          {/* The backend doesn't stream progress, so these are listed rather
-              than checked off — only elapsed time is real. */}
-          <ul className="flex flex-col gap-2.5">
-            {t.starting.phases.map((phase) => (
-              <li key={phase} className="flex items-center gap-2.5 text-[calc(12.5rem/16)] text-graphite">
-                <span aria-hidden className="h-[11px] w-[11px] shrink-0 rounded-full border-[1.5px] border-rule" />
-                {phase}
-              </li>
-            ))}
-          </ul>
-
-          <div className="flex items-center gap-2.5 border-t border-rule pt-3">
-            <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-signal" />
-            <span className="font-mono text-[calc(11rem/16)] text-graphite">
-              {t.starting.elapsed(elapsed)}
-            </span>
-          </div>
-        </div>
+        <StartingProgress repoUrl={repoUrl} progressId={progressId} />
       )}
 
       {step === "failed" && (

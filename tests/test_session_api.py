@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 
 import backend.api as api
 from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
+from backend.pipeline import progress as pipeline_progress
 
 
 FAKE_REPO_URL = "https://github.com/psf/requests"
@@ -66,7 +67,7 @@ def _make_two_node_graph() -> LearningGraph:
     return graph
 
 
-def _pipeline_side_effect(repo_url, goal, client=None):
+def _pipeline_side_effect(repo_url, goal, client=None, progress_id=""):
     # Mimic run_pipeline: returns a state carrying a populated graph.
     state = MagicMock()
     state.graph = _make_two_node_graph()
@@ -113,6 +114,57 @@ def test_session_start_500_when_no_graph(mock_pipeline, client):
     resp = client.post("/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL})
     assert resp.status_code == 500
     assert "boom" in str(resp.json()["detail"])
+
+
+# ── /session/progress/{id} ───────────────────────────────────────────────────
+
+def test_progress_of_an_unknown_run_is_a_404(client):
+    # The client treats this as "no news" — the POST is the only authority on
+    # whether the run worked — so it must not be a 500.
+    resp = client.get("/session/progress/never-started")
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "progress_not_found"
+
+
+def test_the_run_reports_the_stages_it_passed_through():
+    def _reporting_pipeline(repo_url, goal, client=None, progress_id=""):
+        # Stand in for the real nodes, which report from inside the graph.
+        pipeline_progress.stage(progress_id, "clone")
+        pipeline_progress.stage(progress_id, "structure")
+        return _pipeline_side_effect(repo_url, goal, client=client)
+
+    with patch("backend.api.run_pipeline", side_effect=_reporting_pipeline):
+        resp = TestClient(api.app).post("/session/start", json={
+            "repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL, "progress_id": "run-abc",
+        })
+
+    assert resp.status_code == 200
+    snap = pipeline_progress.snapshot("run-abc")
+    assert snap["done"] == ["clone", "structure"]
+
+
+def test_a_run_is_marked_finished_even_when_the_pipeline_fails(client):
+    # Otherwise a client polls a dead run forever, having already been told the
+    # request failed.
+    state = MagicMock()
+    state.graph = None
+    state.errors = ["pipeline failed: boom"]
+    with patch("backend.api.run_pipeline", return_value=state):
+        resp = client.post("/session/start", json={
+            "repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL, "progress_id": "run-dead",
+        })
+
+    assert resp.status_code == 500
+    assert pipeline_progress.snapshot("run-dead")["finished"] is True
+
+
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_a_run_without_a_progress_id_reports_nothing(mock_pipeline, client):
+    # The id is optional: an older client must still get a session.
+    resp = client.post("/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL})
+
+    assert resp.status_code == 200
+    assert pipeline_progress.snapshot("") is None
 
 
 # ── /session/{id} ─────────────────────────────────────────────────────────────

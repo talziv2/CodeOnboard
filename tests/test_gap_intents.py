@@ -468,7 +468,7 @@ def test_resume_survives_a_round_trip(tmp_path):
 
 
 def _session(client, graph) -> str:
-    def _pipeline(repo_url, goal, client=None):
+    def _pipeline(repo_url, goal, client=None, progress_id=""):
         state = MagicMock()
         state.graph = graph
         state.errors = []

@@ -25,8 +25,17 @@ def run_pipeline(
     repo_url: str,
     goal: dict,
     client: anthropic.Anthropic | None = None,
+    progress_id: str = "",
 ) -> OnboardState:
-    initial = OnboardState(repo_url=repo_url, goal=goal, client=client)
+    """Run the pipeline to completion.
+
+    ``progress_id``, when given, is the key the nodes report their stages under
+    so a client can poll what this run is doing while it blocks (see
+    backend/pipeline/progress.py). Omitting it reports nothing.
+    """
+    initial = OnboardState(
+        repo_url=repo_url, goal=goal, client=client, progress_id=progress_id
+    )
     final = _graph.invoke(initial)
     # LangGraph returns the compiled state. With a dataclass schema it is
     # already an OnboardState in current versions; fall back to constructing

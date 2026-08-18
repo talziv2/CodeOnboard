@@ -77,7 +77,7 @@ def _graph(*nodes: LearningNode) -> LearningGraph:
 
 
 def _start(client, graph) -> str:
-    def _pipeline(repo_url, goal, client=None):
+    def _pipeline(repo_url, goal, client=None, progress_id=""):
         state = MagicMock()
         state.graph = graph
         state.errors = []

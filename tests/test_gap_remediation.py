@@ -439,7 +439,7 @@ def _graph_with_gaps(*gaps: Gap) -> LearningGraph:
 
 
 def _run_respond(client, graph, classification, gap_kind):
-    def _pipeline(repo_url, goal, client=None):
+    def _pipeline(repo_url, goal, client=None, progress_id=""):
         state = MagicMock()
         state.graph = graph
         state.errors = []

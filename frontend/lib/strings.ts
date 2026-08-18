@@ -23,18 +23,74 @@ export const t = {
   },
 
   // --- home: pipeline progress ---
+  //
+  // The stage list, the stage the run is in, and every activity line below are
+  // REAL: the backend reports each transition and each exploration tool call as
+  // it happens (backend/pipeline/progress.py), and the client polls it while
+  // /session/start blocks. Keys come from the backend; all wording is here.
+  //
+  // The one thing that is not measured is a percentage. The bar is drawn from
+  // stages completed, and `hints` fills the gaps where nothing streams — the
+  // planning call is a single opaque request, so there is genuinely nothing to
+  // report until it returns. Rotating a description of the work is honest;
+  // inventing a number that creeps toward 100% is not.
   starting: {
     label: "Reading the repository",
-    // These track the real pipeline: clone + parse (Layer A), survey the
-    // repository (Layer B), investigate the goal (Layer C), then plan. There is
-    // no indexing step any more — nothing is embedded or stored for retrieval.
-    phases: [
-      "Cloning the repository",
-      "Mapping the code structure",
-      "Surveying the architecture",
-      "Investigating your goal",
-      "Planning your route",
-    ],
+    // Keyed on backend stage keys: clone + parse (Layer A), survey the
+    // repository (Layer B), read the docs, investigate the goal (Layer C), then
+    // plan. There is no indexing step — nothing is embedded or stored for
+    // retrieval.
+    stages: {
+      clone: "Cloning the repository",
+      structure: "Mapping the code structure",
+      survey: "Surveying the architecture",
+      documentation: "Reading the documentation",
+      investigation: "Investigating your goal",
+      plan: "Planning your route",
+    } as Record<string, string>,
+    // What the exploration is doing right now, keyed on the tool it called.
+    // `target` is a path, a symbol or a pattern — whatever that tool was aimed at.
+    activity: {
+      read_file: (target: string) => `Reading ${target}`,
+      search_code: (target: string) => `Searching for ${target}`,
+      symbols: (target: string) => `Outlining ${target}`,
+      list_files: (target: string) => `Listing ${target}`,
+      neighbors: (target: string) => `Tracing what touches ${target}`,
+      propose_anchor: (target: string) => `Verifying ${target}`,
+    } as Record<string, (target: string) => string>,
+    // Fallback when a tool is reported that this list doesn't know — a new
+    // primitive should read as unfamiliar, not as nothing happening.
+    activityUnknown: (target: string) => (target ? `Looking at ${target}` : "Looking around"),
+    // Shown while a stage is running but has nothing to stream: no tool calls
+    // (the survey came from cache) or none possible (the planning call is one
+    // opaque request). Rotated so the screen isn't frozen; each line describes
+    // work the stage is actually doing.
+    hints: {
+      clone: ["Fetching a shallow clone — history isn't needed"],
+      structure: [
+        "Parsing every Python file into a syntax tree",
+        "Indexing symbols with their exact line ranges",
+        "Resolving imports between modules",
+      ],
+      survey: [
+        "Accounting for every subsystem in the repository",
+        "Finding the entry points and core abstractions",
+        "Checking each citation resolves to real code",
+      ],
+      documentation: ["Collecting the README and module docstrings"],
+      investigation: [
+        "Following the paths your goal turns on",
+        "Reading the code behind each claim",
+        "Verifying every citation against the repository",
+      ],
+      plan: [
+        "Choosing what you need to learn, and in what order",
+        "Cutting the curriculum to a journey that fits your goal",
+        "Anchoring each stop to verified code",
+      ],
+    } as Record<string, string[]>,
+    lookups: (count: number) =>
+      `${count} lookup${count === 1 ? "" : "s"} so far`,
     elapsed: (seconds: number) =>
       `${seconds}s elapsed · usually two to four minutes`,
   },
@@ -83,8 +139,14 @@ export const t = {
     answerPlaceholder: "Your answer…",
     thinking: "Thinking…",
     continue: "Continue",
+    back: "Back",
     enterHint: "↵ to continue",
     answerFailed: "Couldn't save that answer.",
+    backFailed: "Couldn't go back to the previous question.",
+    // Every question is required: the interview's five answers are the only
+    // input the whole pipeline has, so there is nothing sensible to infer from
+    // a skipped one.
+    answerRequired: "Answer to continue",
   },
 
   // --- session shell ---
@@ -522,6 +584,9 @@ export const t = {
     file_not_found: "That file isn't in the repository.",
     no_graph: "The learning path couldn't be built for this repository.",
     synthesis_failed: "Couldn't make sense of those answers. Try rephrasing.",
+    at_first_question: "This is the first question — there's nothing behind it.",
+    invalid_goal_type_option: "Pick one of the listed options.",
+    invalid_code_depth_option: "Pick one of the listed options.",
     server_unreachable:
       "Couldn't reach the server. Check the backend is running on port 8000, " +
       "and that this page is open on the same host it allows (localhost).",

@@ -109,6 +109,30 @@ def question_progress(session: GoalSession) -> tuple[int, int]:
     return answered + 1, len(_get_question_sequence(session))
 
 
+def step_back(session: GoalSession) -> tuple[Question, str] | None:
+    """Un-answer the last question and hand it back with what was answered.
+
+    Returns (question, previous_answer), or None at the first question — there
+    is nothing behind it, and the caller decides what that means over HTTP.
+
+    Going back before Q2 clears `goal_type`, which is what makes the follow-up
+    tail correct rather than stale: re-answering Q2 differently must change which
+    follow-ups come after Q5, not leave the old goal_type's ones queued.
+
+    Position is derived from the sequence, not from dict order, for the same
+    reason `question_progress` does: the sequence is the authority on which
+    question index N is, and answers are only ever filled in that order.
+    """
+    if not session.answers:
+        return None
+    sequence = _get_question_sequence(session)
+    last = sequence[len(session.answers) - 1]
+    previous = session.answers.pop(last.key)
+    if last.key == "goal_type_raw":
+        session.goal_type = None
+    return last, previous
+
+
 def process_answer(
     session: GoalSession,
     answer: str,

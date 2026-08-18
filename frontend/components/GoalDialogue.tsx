@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { goalStart, goalAnswer } from "@/lib/api";
+import { goalStart, goalAnswer, goalBack } from "@/lib/api";
 import type { Question } from "@/lib/api";
 import { errorText, t } from "@/lib/strings";
 
@@ -50,6 +50,25 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
     }
   };
 
+  // The backend un-answers the last question and hands it back with what was
+  // said, so the previous answer is restored rather than re-typed. It also owns
+  // the consequences — going back past Q2 clears the goal_type that decides
+  // which follow-ups come later.
+  const back = async () => {
+    if (!sessionId || loading || !question || question.index <= 1) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await goalBack(sessionId);
+      setQuestion(res.question);
+      setAnswer(res.answer);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? errorText(e.message) : t.goal.backFailed);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (loading && !question) {
     return (
       <p className="animate-pulse font-mono text-sm text-graphite">{t.goal.starting}</p>
@@ -61,6 +80,8 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
   }
 
   const ticks = Math.max(question.total, question.index);
+  const answered = answer.trim().length > 0;
+  const atStart = question.index <= 1;
 
   return (
     <div className="flex w-full max-w-xl flex-col gap-5">
@@ -84,13 +105,18 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
         {question.text}
       </h2>
 
-      {question.options && (
+      {question.options ? (
+        /* A fixed vocabulary: the backend rejects anything outside it, and
+           `familiarity` is matched against the same strings downstream. So the
+           options are the whole input — no free-text box beside them to type an
+           answer that can only be refused. */
         <div className="flex flex-wrap gap-2">
           {question.options.map((opt) => (
             <button
               key={opt}
               onClick={() => setAnswer(opt)}
-              className={`rounded border px-3 py-1.5 text-[calc(13rem/16)] transition ${
+              disabled={loading}
+              className={`rounded border px-3 py-1.5 text-start text-[calc(13rem/16)] transition disabled:opacity-50 ${
                 answer === opt
                   ? "border-signal-dim bg-signal/15 text-signal"
                   : "border-rule text-graphite hover:border-signal-dim hover:text-chalk"
@@ -100,34 +126,50 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
             </button>
           ))}
         </div>
+      ) : (
+        <textarea
+          className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[calc(13.5rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
+          rows={3}
+          placeholder={t.goal.answerPlaceholder}
+          value={answer}
+          onChange={(e) => setAnswer(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          disabled={loading}
+          autoFocus
+        />
       )}
-
-      <textarea
-        className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[calc(13.5rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
-        rows={3}
-        placeholder={t.goal.answerPlaceholder}
-        value={answer}
-        onChange={(e) => setAnswer(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            submit();
-          }
-        }}
-        disabled={loading}
-      />
 
       {error && <p className="text-sm text-rust">{error}</p>}
 
       <div className="flex items-center gap-3">
         <button
+          onClick={back}
+          disabled={loading || atStart}
+          className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-30 disabled:hover:border-rule disabled:hover:text-graphite"
+        >
+          {t.goal.back}
+        </button>
+        <button
           onClick={submit}
-          disabled={loading || !answer.trim()}
+          disabled={loading || !answered}
           className="rounded border border-signal-dim bg-signal/15 px-5 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
         >
           {loading ? t.goal.thinking : t.goal.continue}
         </button>
-        <span className="font-mono text-[calc(10.5rem/16)] text-graphite">{t.goal.enterHint}</span>
+        {/* Says why Continue is dead rather than leaving the user to guess.
+            The ↵ hint belongs only to the free-text box that honours it. */}
+        <span className="font-mono text-[calc(10.5rem/16)] text-graphite">
+          {!answered
+            ? t.goal.answerRequired
+            : question.options
+              ? ""
+              : t.goal.enterHint}
+        </span>
       </div>
     </div>
   );

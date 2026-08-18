@@ -57,7 +57,7 @@ def _graph() -> LearningGraph:
     return graph
 
 
-def _pipeline(repo_url, goal, client=None):
+def _pipeline(repo_url, goal, client=None, progress_id=""):
     state = MagicMock()
     state.graph = _graph()
     state.errors = []

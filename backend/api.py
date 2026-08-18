@@ -17,6 +17,11 @@
 #              ← if not done: returns { done: false, question: { text, options } }
 #                if done:     deletes session, returns { done: true, goal: { ... } }
 #
+#   2b. Client calls POST /goal/back { session_id } to correct an earlier answer
+#      api.py  → calls agent.step_back(session), which un-answers the last
+#                question and hands it back with what was answered
+#              ← returns { question: {...}, answer: "<what they said>" }
+#
 # The api.py layer only handles HTTP concerns (routing, status codes, request
 # parsing). All dialogue logic lives in agent.py.
 
@@ -35,6 +40,7 @@ from backend.agents.goal import (
     process_answer,
     question_progress,
     start_session,
+    step_back,
 )
 from backend.agents.grader import run as run_grader
 from backend.agents.grader.verification import grade_verification
@@ -49,6 +55,7 @@ from backend.learning import scope
 from backend.learning import store as learning_store
 from backend.learning import understanding
 from backend.learning.graph import understanding_of
+from backend.pipeline import progress as pipeline_progress
 from backend.pipeline.runner import run_pipeline
 from backend.repo import dossier_store
 from backend.pipeline.state import OnboardState
@@ -129,6 +136,18 @@ class AnswerResponse(BaseModel):
     done: bool
 
 
+class BackRequest(BaseModel):
+    session_id: str
+
+
+# The question being returned to, plus the answer already given for it, so the
+# client can put the user back exactly where they were rather than in front of
+# an empty field.
+class BackResponse(BaseModel):
+    question: QuestionOut
+    answer: str
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 class RepoCheckRequest(BaseModel):
@@ -186,6 +205,31 @@ def goal_answer(body: AnswerRequest) -> AnswerResponse:
     )
 
 
+@app.post("/goal/back", response_model=BackResponse)
+def goal_back(body: BackRequest) -> BackResponse:
+    session = sessions.get(body.session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="session_not_found")
+
+    stepped = step_back(session)
+    if stepped is None:
+        # The client disables its own Back control on question one; this is the
+        # race, not the normal path.
+        raise HTTPException(status_code=400, detail="at_first_question")
+
+    question, previous = stepped
+    index, total = question_progress(session)
+    return BackResponse(
+        question=QuestionOut(
+            text=question.text,
+            options=question.options,
+            index=index,
+            total=total,
+        ),
+        answer=previous,
+    )
+
+
 # ── /onboard ──────────────────────────────────────────────────────────────────
 
 class OnboardRequest(BaseModel):
@@ -231,6 +275,10 @@ class SessionStartRequest(BaseModel):
     # resumes it instead of re-running the pipeline. Set force_new to start a
     # fresh session regardless.
     force_new: bool = False
+    # A client-invented id it can poll GET /session/progress/{id} with while this
+    # request is still in flight. Optional: without one the run reports nothing
+    # and behaves exactly as before.
+    progress_id: str | None = None
 
 
 class AdvanceRequest(BaseModel):
@@ -361,6 +409,19 @@ def _render_current_lesson(graph, client) -> dict:
 
 @app.post("/session/start")
 def session_start(body: SessionStartRequest) -> dict:
+    # Registered before the first stage so a poll that arrives during the clone
+    # finds an empty run rather than a 404, and finished in a `finally` so a
+    # client is never left polling a run that has already returned — including
+    # the resume path, which returns before the pipeline starts.
+    pid = body.progress_id or ""
+    pipeline_progress.begin(pid)
+    try:
+        return _run_session_start(body, pid)
+    finally:
+        pipeline_progress.finish(pid)
+
+
+def _run_session_start(body: SessionStartRequest, pid: str) -> dict:
     # Resume: if an identical (repo_url, goal) session exists, continue it
     # rather than paying for the pipeline again. Match on exact goal equality.
     if not body.force_new:
@@ -369,7 +430,7 @@ def session_start(body: SessionStartRequest) -> dict:
             return resumed
 
     client = _new_client()
-    state = run_pipeline(body.repo_url, body.goal, client=client)
+    state = run_pipeline(body.repo_url, body.goal, client=client, progress_id=pid)
     if state.graph is None:
         raise HTTPException(
             status_code=500,
@@ -419,6 +480,22 @@ def _try_resume(repo_url: str, goal: dict) -> dict | None:
             "errors": [],
         }
     return None
+
+
+@app.get("/session/progress/{progress_id}")
+def session_progress(progress_id: str) -> dict:
+    """What the /session/start call using this id is doing right now.
+
+    Polled on its own request while that POST blocks — FastAPI serves sync
+    endpoints from a threadpool, so this is answered while the pipeline works.
+    404 means the id was never registered (or has been evicted): the client
+    treats that as "no news", never as a failure, because the POST's own
+    response is the only authority on whether the run worked.
+    """
+    snapshot = pipeline_progress.snapshot(progress_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="progress_not_found")
+    return snapshot
 
 
 @app.get("/sessions")

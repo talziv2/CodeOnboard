@@ -23,6 +23,7 @@
 from langgraph.graph import END, START, StateGraph
 
 from backend.agents.reviewer.agent import should_run as _reviewer_should_run
+from backend.pipeline import progress
 from backend.pipeline.state import OnboardState
 
 
@@ -41,6 +42,10 @@ def _extract_new_errors(state: OnboardState, prev: list) -> list:
 def documentation_node(state: OnboardState) -> dict:
     from backend.pipeline import runner
 
+    # Stage reporting sits in the node wrappers rather than in the agents: the
+    # orchestration layer is what knows the run has moved on. The exception is
+    # repo_survey, whose three substages are only visible from inside it.
+    progress.stage(state.progress_id, "documentation")
     prev_errors = list(state.errors)
     runner.run_documentation(state)
     return {
@@ -63,6 +68,7 @@ def reviewer_node(state: OnboardState) -> dict:
 def mentor_node(state: OnboardState) -> dict:
     from backend.pipeline import runner
 
+    progress.stage(state.progress_id, "plan")
     prev_errors = list(state.errors)
     runner.run_mentor(state, client=state.client)
     return {
