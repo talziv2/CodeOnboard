@@ -297,6 +297,15 @@ export default function SessionPage() {
             {showCode ? t.session.hideSource : t.session.showSource}
           </button>
         )}
+        {/* The briefing and the profile card stay reachable: what the system
+            took the goal to be is worth re-reading mid-journey, and it is the
+            page that explains why the lessons are pitched the way they are. */}
+        <button
+          onClick={() => router.push(`/session/${id}/welcome`)}
+          className="shrink-0 rounded border border-rule px-3 py-1.5 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
+        >
+          {t.welcome.headerLink}
+        </button>
         <button
           onClick={async () => {
             setRestarting(true);

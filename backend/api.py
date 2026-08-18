@@ -42,6 +42,7 @@ from backend.agents.goal import (
     start_session,
     step_back,
 )
+from backend.agents.briefing import build_briefing
 from backend.agents.grader import run as run_grader
 from backend.agents.grader.verification import grade_verification
 from backend.agents.mentor.mutator import Diagnosis, mutate as mutate_graph
@@ -57,9 +58,14 @@ from backend.learning import understanding
 from backend.learning.graph import understanding_of
 from backend.pipeline import progress as pipeline_progress
 from backend.pipeline.runner import run_pipeline
-from backend.repo import dossier_store
+from backend.repo import dossier_store, survey_store
 from backend.pipeline.state import OnboardState
-from backend.repo.cloner import check_repo_reachable, clone_repo, get_commit_sha
+from backend.repo.cloner import (
+    check_repo_reachable,
+    clone_repo,
+    get_commit_sha,
+    parse_repo_url,
+)
 
 load_dotenv(override=True)
 logger = logging.getLogger(__name__)
@@ -509,6 +515,50 @@ def list_sessions(repo_url: str) -> dict:
 def session_get(session_id: str) -> dict:
     graph = _load_session_or_404(session_id)
     return graph.to_dict()
+
+
+@app.get("/session/{session_id}/welcome")
+def session_welcome(session_id: str) -> dict:
+    """The welcome page's briefing: what this repository is, for this learner.
+
+    Written once and cached on the session. The profile half of that page needs
+    no endpoint — it is `graph.goal`, which the session payload already carries.
+
+    The survey is READ, never produced here: it is keyed by (repo, commit) in
+    `survey_store`, so a session whose commit has since been re-cloned at another
+    revision simply finds nothing and gets a README-only briefing rather than
+    prose about code that is no longer there.
+    """
+    graph = _load_session_or_404(session_id)
+    if graph.briefing is not None:
+        return {"briefing": graph.briefing}
+
+    survey = None
+    repo_path = None
+    try:
+        repo_path = clone_repo(graph.repo_url)
+        owner, repo = parse_repo_url(graph.repo_url)
+        survey = survey_store.load_survey(
+            f"{owner}/{repo}",
+            get_commit_sha(repo_path),
+            db_path=SESSIONS_DB_PATH,
+        )
+    except Exception as e:
+        # A missing survey costs the architecture account, not the page: the
+        # README and the profile are still there to write from.
+        logger.warning("welcome: survey unavailable for %s: %s", session_id, e)
+
+    briefing = build_briefing(
+        repo_url=graph.repo_url,
+        goal=graph.goal,
+        survey=survey,
+        doc_context=graph.doc_context,
+        repo_path=repo_path,
+        client=_new_client(),
+    )
+    graph.briefing = briefing
+    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    return {"briefing": briefing}
 
 
 @app.get("/session/{session_id}/lesson")

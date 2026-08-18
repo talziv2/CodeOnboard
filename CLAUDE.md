@@ -35,6 +35,8 @@ backend/
   agents/
     goal/         # dialogue → goal JSON
     documentation/# README + docstrings → doc_context (no LLM)
+    briefing/     # the welcome page's paragraph: survey + README + the learner's
+                  #   profile → one Haiku call, cached on the session
     mentor/       # agent.py: wire format + LearningGraph construction + the
                   #   CODEONBOARD_CURRICULUM dispatch between the two planners
                   # curriculum.py: the objective-first planner (B3) — the model

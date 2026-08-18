@@ -74,7 +74,10 @@ export default function Home() {
     try {
       const { session_id } = await sessionStart(repoUrl, forGoal, false, runId);
       rememberRepo(repoUrl);
-      router.push(`/session/${session_id}`);
+      // Land on the welcome page, not the first lesson: after a wait this long,
+      // the first thing owed is what the repository is and what the system took
+      // the goal to be — both checkable before any teaching starts.
+      router.push(`/session/${session_id}/welcome`);
     } catch (err: unknown) {
       setError(err instanceof Error ? errorText(err.message) : t.home.pipelineFailed);
       setStep("failed");

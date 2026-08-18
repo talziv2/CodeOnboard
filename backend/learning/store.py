@@ -162,6 +162,15 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
             conn.execute("ALTER TABLE sessions ADD COLUMN journey_events_json TEXT")
         except Exception:
             pass
+        # The welcome briefing, for the same reason `areas_json` gets a column:
+        # it belongs to the SESSION, not to any node, and the session payloads
+        # that already exist are owned by other producers. Additive and nullable,
+        # so a graph written before the welcome page loads with briefing = None
+        # and simply writes one the first time that page is opened.
+        try:
+            conn.execute("ALTER TABLE sessions ADD COLUMN briefing_json TEXT")
+        except Exception:
+            pass
 
 
 def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
@@ -171,8 +180,9 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
             """
             INSERT INTO sessions
                 (session_id, repo_url, goal_json, current_node_id,
-                 doc_context_json, areas_json, journey_events_json, schema_version)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 doc_context_json, areas_json, journey_events_json, briefing_json,
+                 schema_version)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(session_id) DO UPDATE SET
                 repo_url            = excluded.repo_url,
                 goal_json           = excluded.goal_json,
@@ -180,6 +190,7 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
                 doc_context_json    = excluded.doc_context_json,
                 areas_json          = excluded.areas_json,
                 journey_events_json = excluded.journey_events_json,
+                briefing_json       = excluded.briefing_json,
                 schema_version      = excluded.schema_version,
                 updated_at       = strftime('%Y-%m-%d %H:%M:%f', 'now')
             """,
@@ -191,6 +202,7 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
                 json.dumps(graph.doc_context) if graph.doc_context is not None else None,
                 json.dumps(graph.areas) if graph.areas else None,
                 json.dumps(graph.journey_events) if graph.journey_events else None,
+                json.dumps(graph.briefing) if graph.briefing is not None else None,
                 SCHEMA_VERSION,
             ),
         )
@@ -238,6 +250,7 @@ def load_graph(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> LearningGrap
             doc_context=json.loads(raw_doc) if raw_doc is not None else None,
             areas=_json_or_default(session_row, "areas_json", []),
             journey_events=_json_or_default(session_row, "journey_events_json", []),
+            briefing=_json_or_default(session_row, "briefing_json", None),
         )
         for node_row in conn.execute(
             "SELECT * FROM nodes WHERE session_id = ?", (session_id,)

@@ -481,6 +481,36 @@ export interface SessionGraph {
 export const getSession = (session_id: string) =>
   get<SessionGraph>(`/session/${session_id}`);
 
+// --- Welcome briefing ---
+
+/** One thing worth knowing before starting, and where in the code it lives. */
+export interface BriefingNote {
+  text: string;
+  /**
+   * A path the backend checked against the checkout, or null. Null does not mean
+   * the note is unanchored prose the model made up — it means the citation it
+   * offered did not resolve and was dropped rather than shown on trust.
+   */
+  file: string | null;
+}
+
+export interface Briefing {
+  paragraph: string;
+  notes: BriefingNote[];
+  /**
+   * False when the paragraph is the repository survey's own architecture prose —
+   * true, but written for nobody in particular. The page says which one this is
+   * rather than claiming every briefing was written for this reader.
+   */
+  personalized: boolean;
+  /** False when there was no grounded material to write a briefing from. */
+  available: boolean;
+}
+
+/** First call writes the briefing (one Haiku call); later calls read it back. */
+export const getWelcome = (session_id: string) =>
+  get<{ briefing: Briefing }>(`/session/${session_id}/welcome`);
+
 // --- Lesson ---
 
 export interface LessonBody {

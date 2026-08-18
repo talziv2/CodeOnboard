@@ -188,6 +188,77 @@ export const t = {
     } as Record<string, string>,
   },
 
+  // --- welcome page ---
+  //
+  // Shown once the pipeline has built a path, before the first lesson. Two
+  // halves: what this repository is (written by the Briefing Agent from the
+  // survey and the README) and who the system thinks the reader is (derived
+  // from the interview answers alone — no model involved).
+  welcome: {
+    label: "Before you start",
+    // In the session header, where it is a way back rather than a first visit.
+    headerLink: "Briefing",
+    heading: "This repository, and you",
+    briefingLabel: "What you're about to read",
+    // Said plainly rather than hidden, because the difference is real: one
+    // paragraph was written against this profile, the other is the repository's
+    // generic architecture summary.
+    personalized: "Written for your profile",
+    generic: "General summary — couldn't be tailored this time",
+    notesLabel: "Worth knowing",
+    unavailable:
+      "There wasn't enough grounded material to describe this repository, so " +
+      "there's nothing here rather than a guess. Your route is still ready.",
+    loading: "Writing your briefing…",
+    failed: "Couldn't write the briefing — your route is still ready.",
+    // --- the profile card ---
+    profileLabel: "Your learner profile",
+    profileNote: "Built from your answers. Every lesson is pitched against it.",
+    goalLabel: "Goal",
+    focusLabel: "Focus",
+    familiarityLabel: "Starting point",
+    depthLabel: "Depth",
+    backgroundLabel: "You already know",
+    routeLabel: "Your route",
+    routeCount: (stops: number, areas: number) =>
+      areas > 0
+        ? `${stops} stops across ${areas} ${areas === 1 ? "chapter" : "chapters"}`
+        : `${stops} ${stops === 1 ? "stop" : "stops"}`,
+    begin: "Start learning",
+    // The interview answers are fixed strings and fixed keys; these are the
+    // short forms that fit on a card. An unrecognised value falls back to
+    // itself, so a new option shows up as its own wording rather than blank.
+    familiarity: {
+      "Starting fresh — never looked at it": "New to it",
+      "Skimmed the README or docs": "Read the docs",
+      "Looked at some code but still confused": "Some code, still fuzzy",
+      "Used it before, now diving into the source": "Used it, now reading it",
+    } as Record<string, string>,
+    goalType: {
+      use_library: "Using it in your own project",
+      understand_system: "Reading it to understand it",
+      understand_component: "Diving into one component",
+      understand_architecture: "Understanding the architecture",
+      contribute_code: "Contributing code",
+      improve_existing_system: "Changing it safely",
+      debug_issue: "Debugging an issue",
+    } as Record<string, string>,
+    codeDepth: {
+      map: "The map",
+      working: "Working knowledge",
+      implementation: "The internals",
+    } as Record<string, string>,
+    // The goal-type follow-ups. Only one goal_type fills each of these, so the
+    // card shows whichever are present rather than reserving room for all.
+    followups: {
+      change_target: "The change you want to make",
+      risk_tolerance: "How safety-critical it is",
+      contribution_context: "What you're contributing",
+      error_description: "The error you're hitting",
+      tried_so_far: "What you've tried",
+    } as Record<string, string>,
+  },
+
   // --- source pane ---
   source: {
     dock: "Dock to the side",

@@ -263,6 +263,12 @@ class LearningGraph:
     # on the graph so Teaching Agent can access it during interactive sessions
     # (where state is reconstructed from the persisted graph, not from the pipeline).
     doc_context: dict | None = None
+    # The welcome briefing — what this repository is, written for THIS learner's
+    # profile (backend/agents/briefing). Session-scoped rather than derived on
+    # every read because it costs a model call: the first GET of the welcome page
+    # writes it, later ones read it back. None means "not written yet", which is
+    # every graph until its welcome page is opened.
+    briefing: dict | None = None
     # Ordered curriculum areas: [{id, title, why, order}]. One level of grouping
     # so a sixteen-stop journey is legible as a shape rather than a list
     # (learning-engine.md LD3). Deliberately metadata, not an entity: an area
