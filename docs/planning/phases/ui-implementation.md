@@ -313,6 +313,20 @@ Why this order:
 
 ---
 
+### D2b — What a check reports *(found in manual testing, shipped)*
+- **Goal.** After answering a verification, say what happened. Added to the plan after J4 turned it up by hand.
+- **Files.** `LessonPanel.tsx`, `lib/strings.ts`
+- **Behaviour.** The result panel branches on `kind === "verification"` and reads `resolved` / `unresolved`, which were on the wire since M9 and rendered nowhere. Actions are chosen by what is left open rather than by `classification`, which is `null` on this path by design.
+- **Visual.** A headline from what closed (Cleared / Partly cleared / Still open); a named list of closed gaps; the learner's own answer; a primary that moves on or checks again.
+- **Data deps.** None. `resolved`, `unresolved`, `gaps` and `rationale` all already returned by `_respond_to_verification`.
+- **Tests.** Six, covering all three outcomes against the real reply shape, including "the headline is never empty".
+- **Must NOT change.** The attempts-history filter (it protects `latest`), the absence of a model answer beside a question, waive semantics, and the rule that a verification produces no adaptation.
+- **Gate.** All-cleared path verified live; the other two branches unit-tested; no contrast regression in either theme.
+- **Commit.** 1 — `d9cc50d`.
+- **Lesson for L4.** Every branch in the result panel keyed off one nullable field, and a legitimate `null` silently disabled all of them. The phase model must not key presentation off a value that one real path leaves empty — this is exactly what `lessonPhase.ts` is for.
+
+---
+
 ### D3 — Focus and disabled states
 - **Goal.** Close the two remaining accessibility defects globally.
 - **Files.** `globals.css`, then every component with an interactive element
@@ -709,10 +723,11 @@ outside this plan.
 ## 10. Summary of the build order
 
 ```
-M0  scaffolding                     1 commit, no visual change
-D1  invisible surfaces        🔴    isolated + cherry-pickable
-D2  one composer                    isolated + cherry-pickable
-D3  focus + disabled                isolated + cherry-pickable
+M0  scaffolding                     1 commit, no visual change   ✅ 4679d4e
+D1  invisible surfaces        🔴    isolated + cherry-pickable   ✅ 276459c
+D2  one composer                    isolated + cherry-pickable   ✅ 9ca38ca
+D2b what a check reports            found in manual J4 testing   ✅ d9cc50d
+D3  focus + disabled                isolated + cherry-pickable   ← next
 F1  tokens                          additive, zero visual diff
 F2  primitives
 F3  type / space / geometry   🔴    the "does it feel new" gate
