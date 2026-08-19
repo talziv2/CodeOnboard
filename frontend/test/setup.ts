@@ -29,3 +29,10 @@ if (!window.matchMedia) {
 if (!Element.prototype.scrollTo) {
   Element.prototype.scrollTo = () => {};
 }
+
+// jsdom has no layout, so neither of these exists. Both are called on a normal
+// render path — `scrollIntoView` when a verdict arrives, `scrollTo` by the code
+// pane — and an unimplemented DOM method throws rather than no-opping.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}

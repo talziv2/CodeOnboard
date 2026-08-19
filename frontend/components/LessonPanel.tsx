@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import MapView from "@/components/MapView";
 import {
@@ -143,6 +143,7 @@ export default function LessonPanel({
   const [verification, setVerification] = useState<VerificationPrompt | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [done, setDone] = useState(false);
+  const verdictRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setLesson(null);
@@ -159,6 +160,51 @@ export default function LessonPanel({
     setResult(null);
     setAnswer("");
   }, [sessionId, nodeId]);
+
+  // Bring the verdict to the learner.
+  //
+  // INTERIM. Grading inserts the reveal ABOVE the verdict, so the verdict lands
+  // roughly three viewports below the button that produced it — measured at
+  // 2027px in a 611px column, with the scroll position unmoved. Until the
+  // workspace co-locates an action with its own result, move the column and the
+  // focus ring to the thing that just happened.
+  //
+  // Deliberately NOT `scrollIntoView`: measured against the real page it moved
+  // nothing at all. There are two nested scroll contexts here — the lesson
+  // column and the source pane — and it walks for its own.
+  //
+  // And deliberately NOT `offsetTop`, which is what the first attempt used and
+  // why it still moved nothing: `offsetTop` is measured against the nearest
+  // POSITIONED ancestor, and the lesson column is static, so the number belonged
+  // to a different coordinate space than the one being scrolled. `CodeLines`
+  // documents this same trap — its scroller is explicitly `relative` "so
+  // offsetTop is measured against this box and not against the document".
+  // Rect arithmetic needs no such cooperation from the layout.
+  //
+  // A third of the way down rather than centred, matching the source pane.
+  useEffect(() => {
+    const el = verdictRef.current;
+    if (!result || !el) return;
+
+    // Focus first: it must not depend on the scroll succeeding.
+    el.focus({ preventScroll: true });
+
+    let box: HTMLElement | null = el.parentElement;
+    while (box && !/(auto|scroll)/.test(getComputedStyle(box).overflowY)) {
+      box = box.parentElement;
+    }
+    if (!box) return;
+
+    const delta = el.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    const top = Math.max(0, box.scrollTop + delta - box.clientHeight / 3);
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Plain assignment for the instant case rather than `scrollTo({behavior})`:
+    // identical result, and it works where the animated form does not — a
+    // backgrounded tab runs no animation frames, so `scrollTo` is inert there
+    // while this is not.
+    if (still) box.scrollTop = top;
+    else box.scrollTo({ top, behavior: "smooth" });
+  }, [result]);
 
   const submitAnswer = async () => {
     if (!answer.trim() || loading) return;
@@ -535,7 +581,12 @@ export default function LessonPanel({
         </div>
       )}
 
-      {!result && (
+      {/* The lesson's own question. Hidden while a verification is outstanding:
+          both blocks bind the SAME `answer` state, so rendering them together
+          put two textareas on screen that mirrored each other's text, under two
+          buttons both labelled "Submit" that did different things. `Not now`
+          clears the verification and brings this back. */}
+      {!result && !verification && (
         <div className="flex flex-col gap-3">
           <SectionLabel>{t.lesson.checkUnderstanding}</SectionLabel>
           <p className="measure text-[calc(13.5rem/16)] leading-[1.6] text-chalk">
@@ -613,7 +664,13 @@ export default function LessonPanel({
       )}
 
       {result && (
-        <div className="flex flex-col gap-3 rounded border border-rule bg-slab p-4">
+        <div
+          ref={verdictRef}
+          // Focused after grading so the verdict is what a keyboard or screen
+          // reader lands on, not just what the viewport moved to.
+          tabIndex={-1}
+          className="flex flex-col gap-3 rounded border border-rule bg-slab p-4 focus:outline-none"
+        >
           <p
             className="font-mono text-[calc(11rem/16)] uppercase tracking-[0.14em]"
             style={{ color: VERDICT_COLOR[result.classification] ?? NEUTRAL }}
