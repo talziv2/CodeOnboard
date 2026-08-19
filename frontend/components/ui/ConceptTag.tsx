@@ -19,7 +19,7 @@ export default function ConceptTag({ tag }: { tag: string }) {
   const s = tagStyle(tag);
   return (
     <span
-      className="rounded-[2px] border px-1.5 py-px font-mono text-[calc(9.5rem/16)] tracking-[0.05em]"
+      className="rounded-[2px] border px-1.5 py-px font-mono text-micro tracking-[0.05em]"
       style={{ color: s.text, borderColor: s.border, background: s.background }}
     >
       {tagLabel(tag)}

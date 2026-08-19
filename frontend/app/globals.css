@@ -282,10 +282,12 @@
    `16px` on purpose: a reader who has already raised their browser's default
    font size keeps that, and this multiplies it.
 
-   Type in the components is written `text-[calc(13.5rem/16)]` rather than
-   `text-[13.5px]`. It is the same size at scale 1 — the design number stays
-   readable in the markup — but it is now relative, so this dial and the
-   browser's own font setting both reach it. A px literal would ignore both. */
+   Components no longer write sizes at all: they name a step from the scale
+   above (`text-body`, `text-micro`), and each step is authored as
+   `calc(N rem/16)` there. Same property as before — the value stays relative, so
+   this dial and the browser's own font setting both reach it, where a px literal
+   would ignore both — but the number now lives in one table instead of being
+   spelled out at 199 call sites in 22 different sizes. */
 :root {
   --ui-scale: 1;
 }
@@ -300,9 +302,24 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
-/* The lesson column holds long-form prose; cap the measure for readability. */
+/* The lesson column holds long-form prose; cap the measure for readability.
+ *
+ * 48ch, not the 62ch this started at, and the difference is a unit trap worth
+ * writing down. `ch` is the advance width of the `0` glyph, which in Geist is
+ * 10.61px at 16px — while the average character in English prose measures
+ * 7.29px. `ch` is therefore 1.45× a real character, so `62ch` renders about
+ * NINETY characters per line, not sixty-two. Measured, not estimated.
+ *
+ * Ninety is well outside the comfortable 60–75 band. 48ch lands at ~70 (507px at
+ * 16px), which is also why the lesson column's floor is specified at 560px: that
+ * is this measure plus its padding.
+ *
+ * The old value was never exposed because the column was narrower than the cap
+ * and did the limiting itself — prose sat at ~62 characters by accident. Raising
+ * prose to 16px without fixing this would have traded one accident for a
+ * genuinely too-wide line the moment the source pane is closed. */
 .measure {
-  max-width: 62ch;
+  max-width: 48ch;
 }
 
 /* --- focus -----------------------------------------------------------------

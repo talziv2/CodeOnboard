@@ -122,7 +122,7 @@ export default function SettingsMenu({ className = "" }: { className?: string })
             </div>
           </Field>
 
-          <p className="font-mono text-[calc(9.5rem/16)] leading-relaxed text-graphite">
+          <p className="font-mono text-micro text-graphite">
             {t.settings.note}
           </p>
         </div>
@@ -133,16 +133,16 @@ export default function SettingsMenu({ className = "" }: { className?: string })
 
 /** Each step previewed at roughly its own relative size. */
 const PREVIEW_SIZE: Record<TextSize, string> = {
-  small: "text-[calc(9.5rem/16)]",
-  medium: "text-[calc(11rem/16)]",
-  large: "text-[calc(12.5rem/16)]",
-  xlarge: "text-[calc(14rem/16)]",
+  small: "text-micro",
+  medium: "text-micro",
+  large: "text-meta",
+  xlarge: "text-aside",
 };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+      <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
         {label}
       </span>
       {children}
@@ -165,7 +165,7 @@ function Choice({
       onClick={onSelect}
       aria-pressed={selected}
       aria-label={label}
-      className={`flex h-[1.9rem] items-center justify-center rounded border text-[calc(11rem/16)] transition ${
+      className={`flex h-[1.9rem] items-center justify-center rounded border text-micro transition ${
         selected
           ? "border-signal-dim bg-signal/15 font-medium text-signal"
           : "border-rule text-graphite hover:border-signal-dim hover:text-chalk"

@@ -55,7 +55,7 @@ export default function SectionOverview({
   return (
     <div className="flex flex-col gap-7">
       <div className="flex flex-col gap-2.5">
-        <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
+        <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-micro uppercase tracking-[0.16em] text-graphite">
           <span className="text-signal">{t.section.label}</span>
           <span>{t.section.chapterOf(section.index, sections.filter((s) => s.area).length)}</span>
           <span className="tabular-nums">
@@ -63,12 +63,12 @@ export default function SectionOverview({
           </span>
         </span>
 
-        <h2 className="font-display text-[calc(23rem/16)] font-medium leading-[1.2] tracking-tight text-chalk text-balance">
+        <h2 className="font-display text-head font-medium tracking-tight text-chalk text-balance">
           {area.title}
         </h2>
 
         {area.why && (
-          <p className="measure text-[calc(13.5rem/16)] leading-[1.7] text-paper">
+          <p className="measure text-body text-paper">
             {area.why}
           </p>
         )}
@@ -76,10 +76,10 @@ export default function SectionOverview({
 
       {/* Why now — the chapter's place in the route, not a new claim about it. */}
       <div className="flex flex-col gap-1.5 border-s-2 border-rule ps-3.5">
-        <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+        <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
           {t.section.whyNow}
         </span>
-        <p className="measure text-[calc(12.5rem/16)] leading-relaxed text-graphite">
+        <p className="measure text-meta text-graphite">
           {!previous
             ? t.section.opensRoute
             : previous.settled === previous.total
@@ -107,7 +107,7 @@ export default function SectionOverview({
                     aria-hidden
                     className="mt-[calc(7rem/16)] h-px w-3 shrink-0 bg-signal-dim"
                   />
-                  <p className="measure text-[calc(13rem/16)] leading-[1.65] text-paper">
+                  <p className="measure text-aside text-paper">
                     {s.node.objective}
                   </p>
                 </li>
@@ -141,7 +141,7 @@ export default function SectionOverview({
                   <span className="flex min-w-0 flex-col gap-1">
                     <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
                       <span
-                        className={`text-[calc(13rem/16)] leading-snug transition ${
+                        className={`text-aside transition ${
                           isCurrent
                             ? "font-semibold text-signal"
                             : "font-medium text-chalk group-hover:text-signal"
@@ -149,11 +149,11 @@ export default function SectionOverview({
                       >
                         {node.title}
                       </span>
-                      <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.13em] text-graphite">
+                      <span className="font-mono text-micro uppercase tracking-[0.13em] text-graphite">
                         {understandingLabel(node.understanding ?? "insufficient")}
                       </span>
                       {stop.isPrerequisite && (
-                        <span className="font-mono text-[calc(9.5rem/16)] tracking-[0.05em] text-signal">
+                        <span className="font-mono text-micro tracking-[0.05em] text-signal">
                           {t.rail.addedAfterConfusion}
                         </span>
                       )}
@@ -162,7 +162,7 @@ export default function SectionOverview({
                           survived recovery (M3a.3 AC3). */}
                     </span>
 
-                    <span className="truncate font-mono text-[calc(10.5rem/16)] text-graphite">
+                    <span className="truncate font-mono text-micro text-graphite">
                       {node.file}
                     </span>
 
@@ -202,7 +202,7 @@ export default function SectionOverview({
         >
           {t.section.close}
         </Button>
-        <span className="ms-auto font-mono text-[calc(10rem/16)] text-graphite">
+        <span className="ms-auto font-mono text-micro text-graphite">
           {t.section.reopenHint}
         </span>
       </div>

@@ -516,3 +516,101 @@ state with more evidence is useful later.
 **Lesson for later gates:** a digest gate is only valid on fixed data. Any
 milestone whose verification needs live grading should re-baseline afterwards
 rather than comparing across the mutation.
+
+---
+
+### F3a — 2026-08-19 · typography and the reading measure
+
+First milestone that deliberately changes how the product looks, so the gate is
+rendered inspection rather than a digest.
+
+199 size usages remapped across 18 files. **22 distinct sizes → 8 tokens.** On the
+lesson screen, 11 sizes → **6** (11 · 12.5 · 14 · 16 · 18 · 22); on the map, 5.
+The band that was 9.5–15px is now 11–16px for body-scale text.
+
+Explicit `leading-*` was removed wherever a token applies, since the token carries
+the line-height — two exceptions preserved, the map's big fraction and its
+denominator, where `leading-none` keeps the numerals optically aligned.
+
+#### The finding that mattered: `ch` is not a character
+
+`.measure` was `62ch`, and the concept document predicted that gave 66–70
+characters per line. Rendered and measured, it gave **90**.
+
+```
+Geist at 16px:  average English character  7.29px
+                the "0" glyph (= 1ch)     10.61px
+                ratio                      1.45×
+62ch = 658px  ->  90 characters per line
+```
+
+`ch` is the advance width of `0`, which in this typeface is 1.45× a real
+character. So the cap was 45% looser than intended, and 90 CPL is well outside
+the comfortable 60–75 band.
+
+This never showed before because **the column was narrower than the cap and did
+the limiting itself** — prose sat at ~62 characters by accident. Raising prose to
+16px without catching this would have traded that accident for a genuinely
+too-wide line the moment the source pane is closed.
+
+Corrected to **48ch**. Measured after, with the cap binding, every prose block
+lands at exactly **70 CPL** regardless of its size — which is the point of a
+`ch`-based cap:
+
+```
+16px -> 509px   18px -> 573px   14px -> 446px   12.5px -> 398px      all 70 CPL
+```
+
+With the source pane open at 1129px the column still constrains it to 62 CPL —
+in range, at the low end. That is S2's floor to fix, and 48ch is now also the
+reason the lesson column's floor is 560px: the measure plus its padding.
+
+**Assessment on 16px:** keep it. The earlier worry was that 16px would read
+sparse; the real problem was line *length*, not size, and it was there at 13.5px
+too. 16px / 1.70 / 70 CPL is textbook. The 15px fallback is not needed.
+
+#### Regression introduced, and left for S1
+
+The header's minimum width moved **1111px → 1150px**, because the micro-label
+collapse raised its labels from 10px to 11px.
+
+| viewport | goal text before | after |
+|---|---|---|
+| 1600 | 469px | 430px |
+| 1440 | 309px | 270px |
+| 1366 | — | 196px |
+| 1280 | 149px | **110px** |
+| 1200 | — | 30px |
+| 1150 | — | 0px, overflow begins |
+
+1280 and 1366 still fit. This is a modest worsening of a failure that already
+existed, in a header S1 rebuilds into four zones with an overflow menu — patching
+it here would be doing S1's work inside F3a. Recorded rather than absorbed.
+
+#### Other visible changes
+
+- Concept chips 9.5px → 11px, so chip rows are wider and slightly taller.
+- The app wordmark 15px → 14px, collapsed into `aside`. It loses a little
+  presence; S1 owns the header's hierarchy and can revisit.
+- The lesson's question prompt 13.5px → 18px (`lede`), which is the single
+  largest promotion in the step and the one most worth an opinion.
+- Lesson title 23px → 22px; welcome/completion/map headings 25–27px → 28px.
+
+#### Probe
+
+```
+lesson, both themes   PASS contrast (87 runs) · PASS focus 34/34 · PASS disabled
+                      PASS distinct font sizes: 6
+map                   PASS focus 68/68 · PASS distinct font sizes: 5
+                      FAIL 4 tag/status items 4.20–4.35:1  → F3d owns these
+both                  FAIL header  → S1 owns this
+```
+
+No contrast regression: every size change was upward, and the four map items are
+the ones already deferred to F3d, unchanged in ratio and now rendering at 11px
+rather than 9.5px.
+
+**Not touched in this step, deliberately:** letter-spacing. Micro labels still
+carry five different `tracking-*` values (0.05 / 0.06 / 0.13 / 0.14 / 0.16em).
+That is a second axis, and folding it in would have made the size change
+impossible to judge on its own.

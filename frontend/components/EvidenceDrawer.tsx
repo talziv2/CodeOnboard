@@ -55,7 +55,7 @@ export default function EvidenceDrawer({
       className="flex h-full min-h-0 w-[26rem] shrink-0 flex-col gap-4 overflow-y-auto border-s border-rule bg-slab px-5 py-4"
     >
       <div className="flex items-baseline justify-between gap-3">
-        <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
+        <span className="font-mono text-micro uppercase tracking-[0.16em] text-graphite">
           {t.map.evidenceFor}
         </span>
         <Button variant="ghost"
@@ -65,9 +65,9 @@ export default function EvidenceDrawer({
         </Button>
       </div>
 
-      {failed && <p className="text-[calc(12.5rem/16)] text-rust">{t.session.loadFailed}</p>}
+      {failed && <p className="text-meta text-rust">{t.session.loadFailed}</p>}
       {!chain && !failed && (
-        <p className="animate-pulse font-mono text-[calc(11rem/16)] text-graphite">
+        <p className="animate-pulse font-mono text-micro text-graphite">
           {t.session.loading}
         </p>
       )}
@@ -75,10 +75,10 @@ export default function EvidenceDrawer({
       {chain && (
         <>
           <div className="flex flex-col gap-2">
-            <h3 className="font-display text-[calc(16rem/16)] font-medium leading-snug text-chalk">
+            <h3 className="font-display text-lede font-medium text-chalk">
               {chain.title}
             </h3>
-            <span className="flex items-center gap-2 font-mono text-[calc(10.5rem/16)]">
+            <span className="flex items-center gap-2 font-mono text-micro">
               <span
                 aria-hidden
                 className="h-[calc(9rem/16)] w-[calc(9rem/16)] shrink-0 rounded-full border-[1.5px]"
@@ -103,7 +103,7 @@ export default function EvidenceDrawer({
                 "still open" and "you chose not to pursue this" produce the same
                 classification for completely different reasons. */}
             {chain.understanding === "unresolved" && (
-              <p className="text-[calc(11.5rem/16)] leading-snug text-brass">
+              <p className="text-meta text-brass">
                 {chain.verification_pending
                   ? t.map.whyPendingVerification
                   : (chain.gaps_waived ?? 0) > 0 && (chain.gaps_open ?? 0) === 0
@@ -115,21 +115,21 @@ export default function EvidenceDrawer({
             )}
             {chain.understanding !== "unresolved"
               && !chain.state_matches_latest_answer && (
-              <p className="text-[calc(11.5rem/16)] leading-snug text-brass">
+              <p className="text-meta text-brass">
                 {t.map.pendingVerification}
               </p>
             )}
             {(chain.gaps?.length ?? 0) > 0 && (
               <div className="flex flex-col gap-1.5 border-t border-rule pt-2">
-                <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+                <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
                   {t.map.gapsLabel}
                 </span>
                 {chain.gaps!.map((gap) => (
                   <div key={gap.id} className="flex flex-col">
-                    <span className="text-[calc(12rem/16)] leading-snug text-paper">
+                    <span className="text-meta text-paper">
                       {gap.claim}
                     </span>
-                    <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.12em] text-graphite">
+                    <span className="font-mono text-micro uppercase tracking-[0.12em] text-graphite">
                       {/* Every status is shown, not only the open ones: "this
                           was waived" explains a state as much as "this is still
                           open" does. */}
@@ -151,28 +151,28 @@ export default function EvidenceDrawer({
 
           {chain.objective && (
             <div className="flex flex-col gap-1 border-t border-rule pt-3">
-              <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+              <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
                 {t.map.objectiveLabel}
               </span>
-              <p className="text-[calc(12.5rem/16)] leading-relaxed text-paper">
+              <p className="text-meta text-paper">
                 {chain.objective}
               </p>
             </div>
           )}
 
           <div className="flex flex-col gap-3 border-t border-rule pt-3">
-            <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+            <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
               {t.map.timeline}
             </span>
 
             {chain.timeline.length === 0 && (
-              <p className="text-[calc(12rem/16)] text-graphite">{t.map.noEvidenceYet}</p>
+              <p className="text-meta text-graphite">{t.map.noEvidenceYet}</p>
             )}
 
             <ol className="flex flex-col gap-3.5">
               {chain.timeline.map((step) => (
                 <li key={step.index} className="flex flex-col gap-1.5">
-                  <span className="flex flex-wrap items-baseline gap-2 font-mono text-[calc(10rem/16)]">
+                  <span className="flex flex-wrap items-baseline gap-2 font-mono text-micro">
                     <span className="text-graphite">
                       {t.map.yourAnswer} {step.index + 1}
                     </span>
@@ -187,19 +187,19 @@ export default function EvidenceDrawer({
                     )}
                   </span>
 
-                  <p className="border-s-2 border-rule ps-2.5 text-[calc(12rem/16)] leading-relaxed text-paper">
+                  <p className="border-s-2 border-rule ps-2.5 text-meta text-paper">
                     {step.answer}
                   </p>
 
                   {step.rationale && (
-                    <p className="text-[calc(11.5rem/16)] leading-snug text-graphite">
+                    <p className="text-meta text-graphite">
                       {step.rationale}
                     </p>
                   )}
 
                   {/* null = no record. Rendering it as "nothing happened" would
                       invent history for every pre-instrumentation answer. */}
-                  <span className="font-mono text-[calc(10rem/16)] text-graphite">
+                  <span className="font-mono text-micro text-graphite">
                     {t.map.systemDid}:{" "}
                     {step.intervention === null ? (
                       <span className="italic">{t.map.noRecord}</span>
@@ -211,13 +211,13 @@ export default function EvidenceDrawer({
                   </span>
 
                   {step.intervention_text && (
-                    <p className="rounded border border-rule bg-raise px-2.5 py-1.5 text-[calc(11.5rem/16)] leading-relaxed text-paper">
+                    <p className="rounded border border-rule bg-raise px-2.5 py-1.5 text-meta text-paper">
                       {step.intervention_text}
                     </p>
                   )}
 
                   {step.superseded_lesson && (
-                    <span className="font-mono text-[calc(10rem/16)] text-graphite">
+                    <span className="font-mono text-micro text-graphite">
                       {t.map.supersededLesson}
                     </span>
                   )}

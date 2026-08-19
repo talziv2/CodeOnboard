@@ -175,7 +175,7 @@ export default function SessionPage() {
   if (!graph) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-ink">
-        <p className="animate-pulse font-mono text-sm text-graphite">
+        <p className="animate-pulse font-mono text-aside text-graphite">
           {t.session.loading}
         </p>
       </main>
@@ -203,11 +203,11 @@ export default function SessionPage() {
   return (
     <main className="flex h-screen flex-col overflow-hidden bg-ink">
       <header className="flex shrink-0 items-center gap-4 border-b border-rule bg-slab px-5 py-2.5">
-        <span className="font-display text-[calc(15rem/16)] tracking-tight text-chalk">
+        <span className="font-display text-aside tracking-tight text-chalk">
           {t.appName}
         </span>
 
-        <span className="min-w-0 flex-1 truncate font-mono text-[calc(11.5rem/16)] text-graphite">
+        <span className="min-w-0 flex-1 truncate font-mono text-meta text-graphite">
           {graph.repo_url.replace(/^https?:\/\/github\.com\//, "")}
           {graph.goal?.primary_goal && (
             <> &nbsp;·&nbsp; <span className="text-signal">{graph.goal.primary_goal}</span></>
@@ -222,7 +222,7 @@ export default function SessionPage() {
             answering; showing only the second claims understanding nobody
             demonstrated. */}
         <span className="flex shrink-0 items-center gap-2.5">
-          <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.13em] text-graphite">
+          <span className="font-mono text-micro uppercase tracking-[0.13em] text-graphite">
             {t.session.demonstrated}
           </span>
           <span className="h-1 w-20 overflow-hidden rounded-full bg-raise">
@@ -236,7 +236,7 @@ export default function SessionPage() {
               required objectives demonstrated" is a claim the learner can check
               against the journey below (M3a.3). */}
           <span
-            className="font-mono text-xs tabular-nums text-chalk"
+            className="font-mono text-meta tabular-nums text-chalk"
             title={t.map.coreDemonstrated(
               graph.progress.core_demonstrated,
               graph.progress.core_total
@@ -248,11 +248,11 @@ export default function SessionPage() {
         </span>
 
         <span className="flex shrink-0 items-center gap-2.5">
-          <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.13em] text-graphite">
+          <span className="font-mono text-micro uppercase tracking-[0.13em] text-graphite">
             {t.session.journey}
           </span>
           <span
-            className="font-mono text-xs tabular-nums text-chalk"
+            className="font-mono text-meta tabular-nums text-chalk"
             title={t.map.stopsTaken(
               graph.progress.stops_settled,
               graph.progress.stops_total
@@ -268,7 +268,7 @@ export default function SessionPage() {
         {/* Scope control (U4). Sits in the header beside readiness because it
             is a statement about the whole journey, not about a stop. */}
         <span className="flex shrink-0 items-center gap-1.5">
-          <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.13em] text-graphite">
+          <span className="font-mono text-micro uppercase tracking-[0.13em] text-graphite">
             {t.scope.label(spineLength(stops))}
           </span>
           <Button variant="chrome" size="xs"
@@ -284,7 +284,7 @@ export default function SessionPage() {
             {t.scope.deeper}
           </Button>
           {scopeNote && (
-            <span className="font-mono text-[calc(10rem/16)] text-signal">{scopeNote}</span>
+            <span className="font-mono text-micro text-signal">{scopeNote}</span>
           )}
         </span>
 
@@ -359,7 +359,7 @@ export default function SessionPage() {
                 key={key}
                 onClick={() => setTab(key)}
                 aria-current={tab === key ? "page" : undefined}
-                className={`-mb-px border-b-2 px-3 py-2.5 font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.13em] transition ${
+                className={`-mb-px border-b-2 px-3 py-2.5 font-mono text-micro uppercase tracking-[0.13em] transition ${
                   tab === key
                     ? "border-signal text-signal"
                     : "border-transparent text-graphite hover:text-chalk"
@@ -369,7 +369,7 @@ export default function SessionPage() {
               </button>
             ))}
             {tab === "map" && (
-              <span className="ms-auto font-mono text-[calc(10.5rem/16)] text-graphite">
+              <span className="ms-auto font-mono text-micro text-graphite">
                 {t.session.mapHint(graph.nodes.length)}
               </span>
             )}
@@ -407,7 +407,7 @@ export default function SessionPage() {
                   onFinish={() => router.push("/")}
                 />
               ) : (
-                <p className="font-mono text-sm text-graphite">{t.session.firstLesson}</p>
+                <p className="font-mono text-aside text-graphite">{t.session.firstLesson}</p>
               )}
             </div>
           ) : (

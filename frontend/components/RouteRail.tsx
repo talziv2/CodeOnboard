@@ -63,9 +63,9 @@ function Check() {
 }
 
 const TITLE_TONE: Record<Tone, string> = {
-  current: "text-[calc(12.5rem/16)] font-semibold text-signal",
-  done: "text-[calc(12rem/16)] font-medium text-graphite group-hover:text-signal",
-  ahead: "text-[calc(12rem/16)] font-medium text-paper group-hover:text-signal",
+  current: "text-meta font-semibold text-signal",
+  done: "text-meta font-medium text-graphite group-hover:text-signal",
+  ahead: "text-meta font-medium text-paper group-hover:text-signal",
 };
 
 /**
@@ -124,7 +124,7 @@ function Stop({
 
       <span className="flex min-w-0 flex-col gap-[2px]">
         {stop.isPrerequisite && (
-          <span className="flex items-center gap-[5px] font-mono text-[calc(9.5rem/16)] tracking-[0.06em] text-signal">
+          <span className="flex items-center gap-[5px] font-mono text-micro tracking-[0.06em] text-signal">
             <span aria-hidden className="h-px w-3 bg-signal" />
             {t.rail.addedAfterConfusion}
           </span>
@@ -139,7 +139,7 @@ function Stop({
         <span className="sr-only">{t.rail.stopState(state)}</span>
 
         {isCurrent && (
-          <span className="truncate font-mono text-[calc(10rem/16)] text-graphite">
+          <span className="truncate font-mono text-micro text-graphite">
             {node.file}
           </span>
         )}
@@ -155,7 +155,7 @@ function Stop({
             that did not happen. */}
         {node.understanding === "unresolved" && (
           <span
-            className="font-mono text-[calc(9.5rem/16)] tracking-[0.05em] text-rust"
+            className="font-mono text-micro tracking-[0.05em] text-rust"
             title={
               (node.gaps?.length ?? 0) > 0
                 ? t.rail.unresolvedHint
@@ -224,7 +224,7 @@ function SectionHead({
       >
         <span className="flex items-baseline gap-2">
           <span
-            className={`min-w-0 flex-1 font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.15em] transition ${
+            className={`min-w-0 flex-1 font-mono text-micro uppercase tracking-[0.15em] transition ${
               isCurrent || isOverviewOpen
                 ? "text-signal"
                 : "text-graphite group-hover:text-signal"
@@ -232,7 +232,7 @@ function SectionHead({
           >
             {area.title}
           </span>
-          <span className="shrink-0 font-mono text-[calc(9.5rem/16)] tabular-nums text-graphite">
+          <span className="shrink-0 font-mono text-micro tabular-nums text-graphite">
             {t.rail.sectionProgress(section.settled, section.total)}
           </span>
         </span>
@@ -243,7 +243,7 @@ function SectionHead({
             // that a learner is expected to read. It was quiet by being dimmed;
             // it is quiet now by being small and set back, which is the channel
             // that does not cost legibility.
-            className={`line-clamp-2 text-[calc(10.5rem/16)] leading-snug ${
+            className={`line-clamp-2 text-micro ${
               isCurrent ? "text-paper" : "text-graphite"
             }`}
           >
@@ -281,12 +281,12 @@ export default function RouteRail({
   return (
     <aside className="flex h-full min-h-0 flex-col gap-3 border-e border-rule bg-trench py-4">
       <div className="flex items-baseline justify-between px-4">
-        <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
+        <span className="font-mono text-micro uppercase tracking-[0.16em] text-graphite">
           {t.rail.title}
         </span>
         <button
           onClick={onExpand}
-          className="font-mono text-[calc(10.5rem/16)] text-signal transition hover:text-chalk"
+          className="font-mono text-micro text-signal transition hover:text-chalk"
         >
           {t.rail.openMap}
         </button>
@@ -345,7 +345,7 @@ export default function RouteRail({
               onClick={() => setShowOptional((v) => !v)}
               disabled={currentIsOptional}
               aria-expanded={optionalOpen}
-              className="flex w-full items-center gap-2 py-1 font-mono text-[calc(10rem/16)] uppercase tracking-[0.13em] text-graphite transition hover:text-signal"
+              className="flex w-full items-center gap-2 py-1 font-mono text-micro uppercase tracking-[0.13em] text-graphite transition hover:text-signal"
             >
               <Chevron open={optionalOpen} />
               {optionalOpen && !currentIsOptional

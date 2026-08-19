@@ -39,7 +39,7 @@ export default function Callout({
   return (
     <div className={`flex flex-col gap-1.5 rounded border px-4 py-3 ${t.box} ${className}`}>
       <span
-        className={`font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] ${t.label}`}
+        className={`font-mono text-micro uppercase tracking-[0.14em] ${t.label}`}
       >
         {label}
       </span>

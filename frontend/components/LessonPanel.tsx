@@ -81,35 +81,35 @@ function AttemptCard({ attempt, index }: { attempt: Attempt; index: number }) {
   return (
     <details className="group rounded border border-rule bg-slab open:bg-trench">
       <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2">
-        <span aria-hidden className="font-mono text-[calc(10rem/16)] text-graphite">
+        <span aria-hidden className="font-mono text-micro text-graphite">
           {String(index + 1).padStart(2, "0")}
         </span>
         <span
-          className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.13em]"
+          className="font-mono text-micro uppercase tracking-[0.13em]"
           style={{ color }}
         >
           {label}
         </span>
-        <span className="ms-auto font-mono text-[calc(10rem/16)] text-graphite">
+        <span className="ms-auto font-mono text-micro text-graphite">
           {whenLabel(attempt.at)}
         </span>
         <Chevron />
       </summary>
       <div className="flex flex-col gap-2.5 border-t border-rule px-3 py-3">
         <div className="flex flex-col gap-1">
-          <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+          <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
             {t.lesson.youWrote}
           </span>
-          <p className="measure whitespace-pre-wrap text-[calc(12.5rem/16)] leading-relaxed text-paper">
+          <p className="measure whitespace-pre-wrap text-meta text-paper">
             {attempt.answer}
           </p>
         </div>
         {attempt.rationale && (
           <div className="flex flex-col gap-1">
-            <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+            <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
               {t.lesson.feedback}
             </span>
-            <p className="measure text-[calc(12.5rem/16)] leading-relaxed text-graphite">
+            <p className="measure text-meta text-graphite">
               {attempt.rationale}
             </p>
           </div>
@@ -326,12 +326,12 @@ export default function LessonPanel({
 
   if (loading && !lesson) {
     return (
-      <p className="animate-pulse font-mono text-sm text-graphite">{t.lesson.writing}</p>
+      <p className="animate-pulse font-mono text-aside text-graphite">{t.lesson.writing}</p>
     );
   }
 
   if (error && !lesson) {
-    return <p className="text-sm text-rust">{error}</p>;
+    return <p className="text-aside text-rust">{error}</p>;
   }
 
   if (!lesson) return null;
@@ -441,17 +441,17 @@ export default function LessonPanel({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <span className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+        <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
           {isPrerequisite ? t.lesson.warmUpHeading : t.lesson.stopOf(position, total)}
         </span>
 
-        <h2 className="font-display text-[calc(23rem/16)] font-medium leading-[1.2] tracking-tight text-chalk text-balance">
+        <h2 className="font-display text-head font-medium tracking-tight text-chalk text-balance">
           {node.title}
         </h2>
 
         <button
           onClick={() => onFileClick(node.file)}
-          className="w-fit border-b border-dashed border-signal-dim pb-px font-mono text-[calc(11rem/16)] text-signal transition hover:border-signal"
+          className="w-fit border-b border-dashed border-signal-dim pb-px font-mono text-micro text-signal transition hover:border-signal"
         >
           {node.file}
           {" · "}
@@ -469,7 +469,7 @@ export default function LessonPanel({
 
       {recovered && (
         <Callout tone="jade" label={t.lesson.recoveredLabel}>
-          <p className="text-[calc(12.5rem/16)] leading-relaxed text-paper">
+          <p className="text-meta text-paper">
             {t.lesson.recoveredBody}{" "}
             <span className="text-chalk">“{warmUpTitle}”</span>
             {t.lesson.recoveredBodyEnd}
@@ -478,7 +478,7 @@ export default function LessonPanel({
       )}
 
       {isSplit && lesson.lesson.why_now && (
-        <p className="measure border-s-2 border-rule ps-3 text-[calc(12.5rem/16)] italic leading-relaxed text-graphite">
+        <p className="measure border-s-2 border-rule ps-3 text-meta italic text-graphite">
           {lesson.lesson.why_now}
         </p>
       )}
@@ -487,7 +487,7 @@ export default function LessonPanel({
         {/* A pre-B4 lesson has no halves to withhold, so it renders exactly as
             it always did, under the label it always had. */}
         <SectionLabel>{isSplit ? t.lesson.setup : t.lesson.walkthrough}</SectionLabel>
-        <p className="measure whitespace-pre-wrap text-[calc(13.5rem/16)] leading-[1.72] text-paper">
+        <p className="measure whitespace-pre-wrap text-body text-paper">
           {isSplit ? lesson.lesson.setup : lesson.lesson.walkthrough}
         </p>
       </div>
@@ -502,13 +502,13 @@ export default function LessonPanel({
                   onClick={() => onFileClick(a.file, a.line_start, a.line_end)}
                   className="group flex w-full items-baseline gap-2.5 rounded px-2 py-1 text-start transition hover:bg-slab"
                 >
-                  <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.13em] text-graphite">
+                  <span className="font-mono text-micro uppercase tracking-[0.13em] text-graphite">
                     {t.lesson.anchorStep(i + 1, anchors.length)}
                   </span>
-                  <span className="min-w-0 flex-1 truncate font-mono text-[calc(11rem/16)] text-signal transition group-hover:text-chalk">
+                  <span className="min-w-0 flex-1 truncate font-mono text-micro text-signal transition group-hover:text-chalk">
                     {a.symbol ?? a.file}
                   </span>
-                  <span className="shrink-0 font-mono text-[calc(10rem/16)] text-graphite">
+                  <span className="shrink-0 font-mono text-micro text-graphite">
                     {t.lesson.lines(a.line_start, a.line_end)}
                   </span>
                 </button>
@@ -525,7 +525,7 @@ export default function LessonPanel({
       {openGaps.length > 0 && (
         <div className="flex flex-col gap-3">
           <SectionLabel>{t.lesson.gapsHeading}</SectionLabel>
-          <p className="text-[calc(12rem/16)] text-graphite">{t.lesson.gapsHelp}</p>
+          <p className="text-meta text-graphite">{t.lesson.gapsHelp}</p>
           <ul className="flex flex-col gap-2">
             {openGaps.map((gap) => (
               <li
@@ -533,8 +533,8 @@ export default function LessonPanel({
                 className="flex items-start justify-between gap-3 rounded border border-rule bg-slab px-3 py-2"
               >
                 <div className="flex flex-col gap-1">
-                  <span className="text-[calc(13rem/16)] text-chalk">{gap.claim}</span>
-                  <span className="text-[calc(11rem/16)] uppercase tracking-wide text-graphite">
+                  <span className="text-aside text-chalk">{gap.claim}</span>
+                  <span className="text-micro uppercase tracking-wide text-graphite">
                     {gap.blocking ? t.lesson.gapBlocking : t.lesson.gapNonBlocking}
                   </span>
                 </div>
@@ -557,10 +557,10 @@ export default function LessonPanel({
       {verification && (
         <div className="flex flex-col gap-3">
           <SectionLabel>{t.lesson.verificationHeading}</SectionLabel>
-          <p className="measure text-[calc(14rem/16)] leading-[1.6] text-chalk">
+          <p className="measure text-lede text-chalk">
             {verification.question}
           </p>
-          <p className="text-[calc(12rem/16)] text-graphite">
+          <p className="text-meta text-graphite">
             {t.lesson.verificationHelp}
           </p>
           <textarea
@@ -568,7 +568,7 @@ export default function LessonPanel({
             onChange={(e) => setAnswer(e.target.value)}
             placeholder={t.lesson.answerPlaceholder}
             rows={4}
-            className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[calc(13rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim"
+            className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
           />
           <div className="flex gap-2">
             <Button variant="primary" size="md"
@@ -607,12 +607,12 @@ export default function LessonPanel({
       {!result && !verification && (
         <div className="flex flex-col gap-3">
           <SectionLabel>{t.lesson.checkUnderstanding}</SectionLabel>
-          <p className="measure text-[calc(13.5rem/16)] leading-[1.6] text-chalk">
+          <p className="measure text-lede text-chalk">
             {lesson.lesson.prompt}
           </p>
           <textarea
             rows={4}
-            className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[calc(13rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim"
+            className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
             placeholder={t.lesson.answerPlaceholder}
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
@@ -624,7 +624,7 @@ export default function LessonPanel({
             }}
             disabled={loading}
           />
-          {error && <p className="text-sm text-rust">{error}</p>}
+          {error && <p className="text-aside text-rust">{error}</p>}
           <div className="flex items-center gap-3">
             <Button variant="primary" size="md"
               onClick={submitAnswer}
@@ -638,7 +638,7 @@ export default function LessonPanel({
             >
               {t.lesson.skipStop}
             </Button>
-            <span className="ms-auto font-mono text-[calc(10.5rem/16)] text-graphite">
+            <span className="ms-auto font-mono text-micro text-graphite">
               {t.lesson.submitHint}
             </span>
           </div>
@@ -651,13 +651,13 @@ export default function LessonPanel({
       {isSplit && revealed && lesson.lesson.reveal && (
         <div className="flex flex-col gap-3">
           <SectionLabel>{t.lesson.reveal}</SectionLabel>
-          <p className="measure whitespace-pre-wrap text-[calc(13.5rem/16)] leading-[1.72] text-paper">
+          <p className="measure whitespace-pre-wrap text-body text-paper">
             {lesson.lesson.reveal}
           </p>
 
           {lesson.lesson.takeaway && (
             <Callout tone="signal" label={t.lesson.takeaway} className="mt-1">
-              <p className="measure text-[calc(13rem/16)] leading-[1.65] text-chalk">
+              <p className="measure text-aside text-chalk">
                 {lesson.lesson.takeaway}
               </p>
             </Callout>
@@ -665,7 +665,7 @@ export default function LessonPanel({
 
           {lesson.lesson.ownership && (
             <Callout tone="neutral" label={t.lesson.ownership}>
-              <p className="measure text-[calc(12.5rem/16)] leading-[1.65] text-paper">
+              <p className="measure text-meta text-paper">
                 {lesson.lesson.ownership}
               </p>
             </Callout>
@@ -682,7 +682,7 @@ export default function LessonPanel({
           className="flex flex-col gap-3 rounded border border-rule bg-slab p-4"
         >
           <p
-            className="font-mono text-[calc(11rem/16)] uppercase tracking-[0.14em]"
+            className="font-mono text-micro uppercase tracking-[0.14em]"
             style={{
               color: isCheck
                 ? checkOutcome.color
@@ -693,7 +693,7 @@ export default function LessonPanel({
               ? checkOutcome.label
               : t.lesson.verdict[result.classification] ?? result.classification}
           </p>
-          <p className="measure text-[calc(13rem/16)] leading-[1.65] text-paper">
+          <p className="measure text-aside text-paper">
             {result.rationale}
           </p>
 
@@ -708,7 +708,7 @@ export default function LessonPanel({
                 {closed.map((gap) => (
                   <li
                     key={gap.id}
-                    className="measure text-[calc(12.5rem/16)] leading-relaxed text-paper line-through decoration-jade/60"
+                    className="measure text-meta text-paper line-through decoration-jade/60"
                   >
                     {gap.claim}
                   </li>
@@ -724,7 +724,7 @@ export default function LessonPanel({
               half that is otherwise unrecoverable, because it has left the list
               above by the time this renders. */}
           {isCheck && closed.length === 0 && (
-            <p className="measure text-[calc(12.5rem/16)] leading-relaxed text-graphite">
+            <p className="measure text-meta text-graphite">
               {t.lesson.checkNothingClosed}
             </p>
           )}
@@ -735,16 +735,16 @@ export default function LessonPanel({
               the answer nowhere at all once the composer cleared. */}
           {isCheck && checked?.answer && (
             <div className="flex flex-col gap-1">
-              <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+              <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
                 {t.lesson.youWrote}
               </span>
-              <p className="measure whitespace-pre-wrap text-[calc(12.5rem/16)] leading-relaxed text-paper">
+              <p className="measure whitespace-pre-wrap text-meta text-paper">
                 {checked.answer}
               </p>
             </div>
           )}
 
-          {error && <p className="text-sm text-rust">{error}</p>}
+          {error && <p className="text-aside text-rust">{error}</p>}
 
           {/* What the system did about the gap. Only a missing foundation
               grows the journey; the rest answer the learner where they are. */}
@@ -753,27 +753,27 @@ export default function LessonPanel({
               tone="signal"
               label={adaptation.kind === "hint" ? t.lesson.hint : t.lesson.followup}
             >
-              <p className="measure text-[calc(13rem/16)] leading-[1.65] text-chalk">
+              <p className="measure text-aside text-chalk">
                 {adaptation.text}
               </p>
             </Callout>
           )}
 
           {adaptation?.retaught && (
-            <p className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.13em] text-signal">
+            <p className="font-mono text-micro uppercase tracking-[0.13em] text-signal">
               {t.lesson.retaught}
             </p>
           )}
 
           {typeof adaptation?.pruned === "number" && adaptation.pruned > 0 && (
-            <p className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.13em] text-jade">
+            <p className="font-mono text-micro uppercase tracking-[0.13em] text-jade">
               {t.lesson.pruned(adaptation.pruned)}
             </p>
           )}
 
           {FAILED.includes(result.classification) &&
             adaptation?.kind === "prerequisite" && (
-              <p className="text-[calc(12.5rem/16)] leading-relaxed text-paper">
+              <p className="text-meta text-paper">
                 {result.mutation?.kind === "prerequisite"
                   ? t.lesson.warmUpAdded
                   : result.mutation?.reason === "prerequisite_exists"
@@ -912,7 +912,7 @@ export default function LessonPanel({
       <div className="border-t border-rule pt-4">
         <button
           onClick={() => setDone(true)}
-          className="font-mono text-[calc(10.5rem/16)] text-graphite transition hover:text-chalk"
+          className="font-mono text-micro text-graphite transition hover:text-chalk"
         >
           {t.lesson.finishEarly}
         </button>
@@ -940,7 +940,7 @@ function CompletionScreen({
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`-mb-px border-b-2 px-4 py-2 font-mono text-[calc(11rem/16)] uppercase tracking-[0.12em] transition ${
+            className={`-mb-px border-b-2 px-4 py-2 font-mono text-micro uppercase tracking-[0.12em] transition ${
               tab === key
                 ? "border-signal text-signal"
                 : "border-transparent text-graphite hover:text-chalk"
@@ -954,27 +954,27 @@ function CompletionScreen({
       {tab === "summary" ? (
         <div className="flex flex-col gap-6">
           <div className="flex flex-col gap-2">
-            <span className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+            <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
               {t.completion.label}
             </span>
-            <h2 className="font-display text-[calc(26rem/16)] font-medium leading-tight tracking-tight text-chalk">
+            <h2 className="font-display text-chapter font-medium tracking-tight text-chalk">
               {t.completion.heading(understood, graph.nodes.length)}
             </h2>
-            <p className="measure text-[calc(13.5rem/16)] leading-[1.7] text-paper">
+            <p className="measure text-body text-paper">
               {t.completion.body}
             </p>
           </div>
 
           {weak.length > 0 && (
             <div className="flex flex-col gap-3 rounded border border-rule bg-slab p-4">
-              <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.14em] text-rust">
+              <span className="font-mono text-micro uppercase tracking-[0.14em] text-rust">
                 {t.completion.anotherPass(weak.length)}
               </span>
               <ul className="flex flex-col gap-2.5">
                 {weak.map((n) => (
                   <li key={n.id} className="flex flex-col gap-0.5">
-                    <span className="text-[calc(13rem/16)] font-medium text-chalk">{n.title}</span>
-                    <span className="font-mono text-[calc(10.5rem/16)] text-graphite">
+                    <span className="text-aside font-medium text-chalk">{n.title}</span>
+                    <span className="font-mono text-micro text-graphite">
                       {n.file}
                       {" · "}
                       {t.lesson.lines(n.line_start, n.line_end)}

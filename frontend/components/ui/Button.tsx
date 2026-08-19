@@ -33,17 +33,17 @@ const VARIANT: Record<Variant, string> = {
     "rounded border border-rule font-mono text-graphite transition hover:border-signal-dim hover:text-signal",
   // No border, no background, no padding — so it also carries its own type size,
   // which is why `ghost` takes no `size`.
-  ghost: "font-mono text-[calc(10.5rem/16)] text-graphite transition hover:text-signal",
+  ghost: "font-mono text-micro text-graphite transition hover:text-signal",
 };
 
 const SIZE: Record<Size, string> = {
-  xs: "px-2 py-1 text-[calc(10.5rem/16)]",
-  sm: "px-3 py-1.5 text-[calc(10.5rem/16)]",
-  md: "px-4 py-2 text-[calc(13rem/16)]",
-  lg: "px-5 py-2.5 text-[calc(13.5rem/16)]",
+  xs: "px-2 py-1 text-micro",
+  sm: "px-3 py-1.5 text-micro",
+  md: "px-4 py-2 text-aside",
+  lg: "px-5 py-2.5 text-aside",
   // No `w-full`: the one site is a flex-column child and already stretches, so
   // adding it would be a change dressed up as a default.
-  block: "py-3 text-[calc(13.5rem/16)]",
+  block: "py-3 text-aside",
 };
 
 export default function Button({

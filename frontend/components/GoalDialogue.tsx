@@ -72,12 +72,12 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
 
   if (loading && !question) {
     return (
-      <p className="animate-pulse font-mono text-sm text-graphite">{t.goal.starting}</p>
+      <p className="animate-pulse font-mono text-aside text-graphite">{t.goal.starting}</p>
     );
   }
 
   if (!question) {
-    return error ? <p className="text-sm text-rust">{error}</p> : null;
+    return error ? <p className="text-aside text-rust">{error}</p> : null;
   }
 
   const ticks = Math.max(question.total, question.index);
@@ -97,12 +97,12 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
             />
           ))}
         </div>
-        <span className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+        <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
           {t.goal.progress(question.index, ticks)}
         </span>
       </div>
 
-      <h2 className="font-display text-[calc(22rem/16)] font-medium leading-[1.25] tracking-tight text-chalk text-balance">
+      <h2 className="font-display text-head font-medium tracking-tight text-chalk text-balance">
         {question.text}
       </h2>
 
@@ -117,7 +117,7 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
               key={opt}
               onClick={() => setAnswer(opt)}
               disabled={loading}
-              className={`rounded border px-3 py-1.5 text-start text-[calc(13rem/16)] transition ${
+              className={`rounded border px-3 py-1.5 text-start text-aside transition ${
                 answer === opt
                   ? "border-signal-dim bg-signal/15 text-signal"
                   : "border-rule text-graphite hover:border-signal-dim hover:text-chalk"
@@ -129,7 +129,7 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
         </div>
       ) : (
         <textarea
-          className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[calc(13.5rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim"
+          className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
           rows={3}
           placeholder={t.goal.answerPlaceholder}
           value={answer}
@@ -145,7 +145,7 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
         />
       )}
 
-      {error && <p className="text-sm text-rust">{error}</p>}
+      {error && <p className="text-aside text-rust">{error}</p>}
 
       <div className="flex items-center gap-3">
         {/* Absent on the first question rather than present-and-disabled. There
@@ -169,7 +169,7 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
         </Button>
         {/* Says why Continue is dead rather than leaving the user to guess.
             The ↵ hint belongs only to the free-text box that honours it. */}
-        <span className="font-mono text-[calc(10.5rem/16)] text-graphite">
+        <span className="font-mono text-micro text-graphite">
           {!answered
             ? t.goal.answerRequired
             : question.options

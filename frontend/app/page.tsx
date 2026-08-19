@@ -97,10 +97,10 @@ export default function Home() {
       <SettingsMenu className="absolute end-5 top-5" />
 
       <div className="mb-12 flex flex-col items-center gap-2 text-center">
-        <h1 className="font-display text-[calc(38rem/16)] font-medium leading-none tracking-tight text-chalk">
+        <h1 className="font-display text-display font-medium tracking-tight text-chalk">
           {t.appName}
         </h1>
-        <p className="max-w-sm text-[calc(13.5rem/16)] leading-relaxed text-graphite">
+        <p className="max-w-sm text-aside text-graphite">
           {t.tagline}
         </p>
       </div>
@@ -109,14 +109,14 @@ export default function Home() {
         <form onSubmit={handleRepoSubmit} className="flex w-full max-w-md flex-col gap-3">
           <label
             htmlFor="repo"
-            className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.14em] text-graphite"
+            className="font-mono text-micro uppercase tracking-[0.14em] text-graphite"
           >
             {t.home.repoLabel}
           </label>
           <input
             id="repo"
             type="url"
-            className="rounded border border-rule bg-trench px-3.5 py-3 text-start font-mono text-[calc(13rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim"
+            className="rounded border border-rule bg-trench px-3.5 py-3 text-start font-mono text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
             placeholder={t.home.repoPlaceholder}
             value={repoUrl}
             onChange={(e) => { setRepoUrl(e.target.value); setError(null); }}
@@ -125,7 +125,7 @@ export default function Home() {
 
           {recent.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.14em] text-graphite">
+              <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
                 {t.home.recent}
               </span>
               {recent.map((url) => (
@@ -141,7 +141,7 @@ export default function Home() {
             </div>
           )}
 
-          {error && <p className="text-[calc(13rem/16)] text-rust">{error}</p>}
+          {error && <p className="text-aside text-rust">{error}</p>}
 
           <Button variant="primary" size="block" className="mt-1"
             type="submit"
@@ -161,19 +161,19 @@ export default function Home() {
       {step === "failed" && (
         <div className="flex w-full max-w-md flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <span className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.14em] text-rust">
+            <span className="font-mono text-micro uppercase tracking-[0.14em] text-rust">
               {t.failed.label}
             </span>
-            <h2 className="font-display text-[calc(21rem/16)] font-medium tracking-tight text-chalk">
+            <h2 className="font-display text-head font-medium tracking-tight text-chalk">
               {repoUrl.replace(/^https?:\/\/github\.com\//, "")}
             </h2>
-            <p className="text-[calc(13rem/16)] leading-relaxed text-graphite">
+            <p className="text-aside text-graphite">
               {t.failed.reassurance}
             </p>
           </div>
 
           {error && (
-            <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded border border-rule bg-trench p-3 font-mono text-[calc(11rem/16)] leading-relaxed text-rust">
+            <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded border border-rule bg-trench p-3 font-mono text-micro text-rust">
               {error}
             </pre>
           )}

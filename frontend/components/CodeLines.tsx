@@ -73,7 +73,7 @@ function CodeLines({ code, path, highlightStart, highlightEnd, focusKey }: Props
       // against the document.
       className="relative min-h-0 flex-1 overflow-auto py-2"
     >
-      <table className="w-full border-collapse font-mono text-[calc(11rem/16)] leading-[1.75]">
+      <table className="w-full border-collapse font-mono text-micro">
         <tbody>
           {lines.map((line, i) => {
             const lineNum = i + 1;

@@ -75,9 +75,9 @@ export default function CodeViewer({
 
   const body =
     error != null ? (
-      <p className="px-4 py-3 text-[calc(12rem/16)] text-rust">{error}</p>
+      <p className="px-4 py-3 text-meta text-rust">{error}</p>
     ) : content == null ? (
-      <p className="px-4 py-3 font-mono text-[calc(11rem/16)] text-graphite">
+      <p className="px-4 py-3 font-mono text-micro text-graphite">
         {t.session.loading}
       </p>
     ) : (
@@ -128,14 +128,14 @@ function PaneHeader({
         mode === "float" ? "cursor-move touch-none select-none" : ""
       }`}
     >
-      <span className="min-w-0 flex-1 truncate font-mono text-[calc(11rem/16)] text-graphite">
+      <span className="min-w-0 flex-1 truncate font-mono text-micro text-graphite">
         {filePath}
       </span>
       {/* `signal`, not `signal-dim`, which measured 3.84:1 on trench. This is the
           band under discussion — "you are here" — so the full accent is also the
           semantically correct one of the two. */}
       {highlightStart != null && (
-        <span className="shrink-0 font-mono text-[calc(10rem/16)] text-signal">
+        <span className="shrink-0 font-mono text-micro text-signal">
           {highlightStart}–{highlightEnd}
         </span>
       )}
@@ -161,7 +161,7 @@ function PaneHeader({
         data-no-drag
         onClick={onClose}
         aria-label={t.session.hideSource}
-        className="shrink-0 font-mono text-[calc(11rem/16)] text-graphite transition hover:text-signal"
+        className="shrink-0 font-mono text-micro text-graphite transition hover:text-signal"
       >
         ✕
       </button>

@@ -52,10 +52,10 @@ export default function ProfileCard({ goal, stops, areas }: Props) {
   return (
     <aside className="flex flex-col gap-4 rounded border border-rule bg-slab p-5">
       <div className="flex flex-col gap-1">
-        <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-signal">
+        <span className="font-mono text-micro uppercase tracking-[0.16em] text-signal">
           {t.welcome.profileLabel}
         </span>
-        <p className="text-[calc(11.5rem/16)] leading-relaxed text-graphite">
+        <p className="text-meta text-graphite">
           {t.welcome.profileNote}
         </p>
       </div>
@@ -66,7 +66,7 @@ export default function ProfileCard({ goal, stops, areas }: Props) {
         {[goalType, familiarity, depth].filter(Boolean).map((chip) => (
           <span
             key={chip}
-            className="rounded border border-signal-dim bg-signal-halo px-2 py-1 font-mono text-[calc(10.5rem/16)] text-signal"
+            className="rounded border border-signal-dim bg-signal-halo px-2 py-1 font-mono text-micro text-signal"
           >
             {chip}
           </span>
@@ -76,10 +76,10 @@ export default function ProfileCard({ goal, stops, areas }: Props) {
       <dl className="flex flex-col gap-3 border-t border-rule pt-4">
         {rows.map(([label, value]) => (
           <div key={label} className="flex flex-col gap-0.5">
-            <dt className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+            <dt className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
               {label}
             </dt>
-            <dd className="text-[calc(12.5rem/16)] leading-relaxed text-paper">
+            <dd className="text-meta text-paper">
               {value}
             </dd>
           </div>
@@ -87,10 +87,10 @@ export default function ProfileCard({ goal, stops, areas }: Props) {
       </dl>
 
       <div className="flex flex-col gap-0.5 border-t border-rule pt-4">
-        <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+        <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
           {t.welcome.routeLabel}
         </span>
-        <span className="font-mono text-[calc(12.5rem/16)] tabular-nums text-chalk">
+        <span className="font-mono text-meta tabular-nums text-chalk">
           {t.welcome.routeCount(stops, areas)}
         </span>
       </div>
