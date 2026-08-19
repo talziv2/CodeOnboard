@@ -35,7 +35,16 @@ interface Props {
   onFileClick: (file: string, lineStart?: number, lineEnd?: number) => void;
   onAdvance: () => Promise<void>;
   onRespond: () => void;
+  /**
+   * Whether the journey is over. Lifted out of this component because it is now
+   * reachable from two places — the end of the walk, and `Finish session` in the
+   * header menu — and a flag owned here could only be set from inside a lesson.
+   */
+  finished: boolean;
+  /** End the journey: the walk ran out, or the learner chose to stop. */
   onFinish: () => void;
+  /** Leave the session entirely, from the completion screen. */
+  onLeave: () => void;
 }
 
 /** Keyed by the classification value the Grader returns. */
@@ -122,7 +131,7 @@ function AttemptCard({ attempt, index }: { attempt: Attempt; index: number }) {
 
 export default function LessonPanel({
   sessionId, nodeId, node, position, total, isPrerequisite,
-  graph, onFileClick, onAdvance, onRespond, onFinish,
+  graph, onFileClick, onAdvance, onRespond, finished, onFinish, onLeave,
 }: Props) {
   const router = useRouter();
   const [lesson, setLesson] = useState<Lesson | null>(null);
@@ -135,7 +144,7 @@ export default function LessonPanel({
   // a different lifetime, and `cached_lesson` is the teacher's artifact.
   const [verification, setVerification] = useState<VerificationPrompt | null>(null);
   const [verifying, setVerifying] = useState(false);
-  const [done, setDone] = useState(false);
+
   const verdictRef = useRef<HTMLDivElement>(null);
   // What the last check was ABOUT, captured at submit time.
   //
@@ -239,7 +248,7 @@ export default function LessonPanel({
     try {
       const res = (await advance(sessionId, "next", nodeId)) as { done?: boolean };
       await onAdvance();
-      if (res?.done) setDone(true);
+      if (res?.done) onFinish();
     } catch (e: unknown) {
       setError(e instanceof Error ? errorText(e.message) : t.lesson.advanceFailed);
     } finally {
@@ -321,8 +330,8 @@ export default function LessonPanel({
     }
   };
 
-  if (done) {
-    return <CompletionScreen graph={graph} onNewSession={() => router.push("/")} onFinish={onFinish} />;
+  if (finished) {
+    return <CompletionScreen graph={graph} onNewSession={() => router.push("/")} onFinish={onLeave} />;
   }
 
   if (loading && !lesson) {
@@ -917,8 +926,14 @@ export default function LessonPanel({
 
 
       <div className="border-t border-rule pt-4">
+        {/* Kept where it is. `Finish session` in the header menu is the same
+            action reached from the session level; this one is reached in context,
+            at the end of a lesson, which is a different moment and a different
+            question ("I have what I need from this") — so it is not a duplicate
+            to be removed. Restructuring the lesson's own affordances is L-track
+            work, not the header's. */}
         <button
-          onClick={() => setDone(true)}
+          onClick={onFinish}
           className="font-mono text-micro text-graphite transition hover:text-chalk"
         >
           {t.lesson.finishEarly}

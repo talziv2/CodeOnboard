@@ -8,7 +8,7 @@ import RouteRail from "@/components/RouteRail";
 import SectionOverview from "@/components/SectionOverview";
 import LessonPanel from "@/components/LessonPanel";
 import CodeViewer from "@/components/CodeViewer";
-import SettingsMenu from "@/components/SettingsMenu";
+import SessionHeader from "@/components/SessionHeader";
 import { getSession, jump, sessionStart, setScope } from "@/lib/api";
 import type { GraphNode, SessionGraph } from "@/lib/api";
 import { buildRoute, spineLength } from "@/lib/graph-layout";
@@ -37,6 +37,9 @@ export default function SessionPage() {
   const [evidenceNodeId, setEvidenceNodeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [restarting, setRestarting] = useState(false);
+  // Owned here, not in LessonPanel, because two things end the journey now: the
+  // walk running out, and `Finish session` in the header menu.
+  const [finished, setFinished] = useState(false);
   const [scoping, setScoping] = useState(false);
   const [scopeNote, setScopeNote] = useState<string | null>(null);
   // The chapter overview is a LAYER over the lesson column, not a destination:
@@ -202,124 +205,29 @@ export default function SessionPage() {
 
   return (
     <main className="flex h-screen flex-col overflow-hidden bg-ink">
-      <header className="flex shrink-0 items-center gap-4 border-b border-rule bg-slab px-5 py-2.5">
-        <span className="font-display text-aside tracking-tight text-chalk">
-          {t.appName}
-        </span>
-
-        <span className="min-w-0 flex-1 truncate font-mono text-meta text-graphite">
-          {graph.repo_url.replace(/^https?:\/\/github\.com\//, "")}
-          {graph.goal?.primary_goal && (
-            <> &nbsp;·&nbsp; <span className="text-signal">{graph.goal.primary_goal}</span></>
-          )}
-          {depth && <> &nbsp;·&nbsp; {t.session.depth[depth] ?? depth}</>}
-        </span>
-
-        {/* TWO measures, side by side (learning-graph.md §5.4, decision OQ-1).
-            Goal readiness is evidence — what has been demonstrated of what the
-            goal requires. Journey is coverage — how far along the walk. Showing
-            only the first reads 0% for a learner who walked every stop without
-            answering; showing only the second claims understanding nobody
-            demonstrated. */}
-        <span className="flex shrink-0 items-center gap-2.5">
-          <span className="font-mono text-micro uppercase tracking-[0.13em] text-graphite">
-            {t.session.demonstrated}
-          </span>
-          <span className="h-1 w-20 overflow-hidden rounded-full bg-raise">
-            <span
-              className="block h-full rounded-full bg-gradient-to-r from-signal-dim to-signal transition-[width] duration-500"
-              style={{ width: `${pct}%` }}
-            />
-          </span>
-          {/* The FRACTION is the number; the percentage is a gloss on it. "47%
-              readiness" sounds like a calibrated prediction, where "7 / 15
-              required objectives demonstrated" is a claim the learner can check
-              against the journey below (M3a.3). */}
-          <span
-            className="font-mono text-meta tabular-nums text-chalk"
-            title={t.map.coreDemonstrated(
-              graph.progress.core_demonstrated,
-              graph.progress.core_total
-            )}
-          >
-            {graph.progress.core_demonstrated}/{graph.progress.core_total}
-            <span className="text-graphite"> ({pct}%)</span>
-          </span>
-        </span>
-
-        <span className="flex shrink-0 items-center gap-2.5">
-          <span className="font-mono text-micro uppercase tracking-[0.13em] text-graphite">
-            {t.session.journey}
-          </span>
-          <span
-            className="font-mono text-meta tabular-nums text-chalk"
-            title={t.map.stopsTaken(
-              graph.progress.stops_settled,
-              graph.progress.stops_total
-            )}
-          >
-            {t.session.journeyCount(
-              graph.progress.stops_settled,
-              graph.progress.stops_total
-            )}
-          </span>
-        </span>
-
-        {/* Scope control (U4). Sits in the header beside readiness because it
-            is a statement about the whole journey, not about a stop. */}
-        <span className="flex shrink-0 items-center gap-1.5">
-          <span className="font-mono text-micro uppercase tracking-[0.13em] text-graphite">
-            {t.scope.label(spineLength(stops))}
-          </span>
-          <Button variant="chrome" size="xs"
-            onClick={() => adjustScope("shorter")}
-            disabled={scoping}
-          >
-            {scoping ? t.scope.working : t.scope.shorter}
-          </Button>
-          <Button variant="chrome" size="xs"
-            onClick={() => adjustScope("deeper")}
-            disabled={scoping}
-          >
-            {t.scope.deeper}
-          </Button>
-          {scopeNote && (
-            <span className="font-mono text-micro text-signal">{scopeNote}</span>
-          )}
-        </span>
-
-        {tab === "lesson" && (
-          <Button variant="chrome" size="sm" className="shrink-0"
-            onClick={() => setShowCode((v) => !v)}
-          >
-            {showCode ? t.session.hideSource : t.session.showSource}
-          </Button>
-        )}
-        {/* The briefing and the profile card stay reachable: what the system
-            took the goal to be is worth re-reading mid-journey, and it is the
-            page that explains why the lessons are pitched the way they are. */}
-        <Button variant="chrome" size="sm" className="shrink-0"
-          onClick={() => router.push(`/session/${id}/welcome`)}
-        >
-          {t.welcome.headerLink}
-        </Button>
-        <Button variant="chrome" size="sm" className="shrink-0"
-          onClick={async () => {
-            setRestarting(true);
-            try {
-              const { session_id } = await sessionStart(graph.repo_url, graph.goal, true);
-              router.push(`/session/${session_id}`);
-            } catch {
-              setRestarting(false);
-            }
-          }}
-          disabled={restarting}
-        >
-          {restarting ? t.session.startingOver : t.session.startOver}
-        </Button>
-
-        <SettingsMenu />
-      </header>
+      <SessionHeader
+        graph={graph}
+        depth={depth}
+        pct={pct}
+        stopCount={spineLength(stops)}
+        scoping={scoping}
+        scopeNote={scopeNote}
+        onScope={adjustScope}
+        sourceHidden={tab === "lesson" ? !showCode : undefined}
+        onShowSource={() => setShowCode(true)}
+        onBriefing={() => router.push(`/session/${id}/welcome`)}
+        restarting={restarting}
+        onStartOver={async () => {
+          setRestarting(true);
+          try {
+            const { session_id } = await sessionStart(graph.repo_url, graph.goal, true);
+            router.push(`/session/${session_id}`);
+          } catch {
+            setRestarting(false);
+          }
+        }}
+        onFinish={() => setFinished(true)}
+      />
 
       <div
         className="grid min-h-0 flex-1"
@@ -404,7 +312,9 @@ export default function SessionPage() {
                   }}
                   onAdvance={handleAdvance}
                   onRespond={loadGraph}
-                  onFinish={() => router.push("/")}
+                  finished={finished}
+                  onFinish={() => setFinished(true)}
+                  onLeave={() => router.push("/")}
                 />
               ) : (
                 <p className="font-mono text-aside text-graphite">{t.session.firstLesson}</p>

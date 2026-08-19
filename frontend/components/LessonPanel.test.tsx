@@ -90,7 +90,9 @@ async function renderPanel() {
       onFileClick={vi.fn()}
       onAdvance={vi.fn()}
       onRespond={vi.fn()}
+      finished={false}
       onFinish={vi.fn()}
+      onLeave={vi.fn()}
     />
   );
   await screen.findByText(LESSON.lesson.prompt);

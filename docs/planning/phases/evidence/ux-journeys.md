@@ -1278,3 +1278,110 @@ Frontend suite 68 passed; backend `pytest tests/` 14 failed / 1280 passed — th
 14 pre-existing `test_mentor_dossier.py` failures as the standing baseline, no new
 ones. Note `pytest` with no path collects the cloned demo repos under `data/repos/`
 and dies with 578 collection errors; the documented command is `pytest tests/`.
+
+---
+
+## S1 — Header
+
+### The starvation, measured before
+
+Nine children in one flex row, at 1280px:
+
+```
+identity   82px
+context   110px   <- 84 characters of "repo · goal · depth"
+demonstrated 258px
+stops taken  127px
+scope        253px
+hide source   93px
+briefing      74px
+start over    86px
+settings      28px
+```
+
+The controls took **919px**; the goal — the one thing that says what this session
+is *for* — got 110px. At 1024px the context zone measured **0px** and the header
+overflowed; the floor was **1150px**. `flex-1 min-w-0` means "take what is left",
+and with seven controls ahead of it there was nothing left.
+
+### Four zones, and a floor instead of a truncation tweak
+
+```
+identity │ context ─────────── │ progress │ controls
+shrink-0 │ flex-1, min-w-15rem │ shrink-0 │ shrink-0
+```
+
+The fix is `min-w-[15rem]` on context — a width it can no longer be pushed below —
+paid for by moving four control widths behind one 28px `⋯`. Measured after:
+
+```
+width   context zone   truncated   header overflows
+1600px       1163px       no            no
+1280px        843px       no            no
+1150px        713px       no            no
+1024px        587px       yes           no
+ 960px        523px       yes           no
+ 700px        263px       yes           no
+ 640px        240px       yes           YES  <- floor
+```
+
+Goal at 1280: **110px → 843px**, and the full 84-character goal now fits without
+truncating at all down to 1150px. Floor: **1150px → 657px**. Below that the zone
+holds its 240px and the header overflows instead of collapsing the goal to
+nothing, which is the behaviour worth having at a width nobody uses.
+
+### What moved, and what deliberately did not
+
+Into the `⋯` menu: **scope** (shorter/deeper, with its live stop count and its
+result note), **Briefing**, **Start over**, **Finish session**. Ordered by
+consequence, quietest first. Only `Finish session` is confirmed, and the
+confirmation says what survives rather than asking "are you sure" — the real
+question is whether the work already done is lost, and it is not.
+
+`Hide source` is gone from the header. The pane already owned its own close
+(`aria-label="Hide source"` on its `✕`), so a header copy was a second control for
+the same thing. `Show source` appears in the menu **only while the pane is
+closed** — without that half, closing the pane would be one-way whenever the
+lesson has no citation to click. Verified as a round trip: the pane closes by its
+own control, the menu then offers `Show source`, using it restores the pane and
+closes the menu, and with the pane open the item is gone again.
+
+`Finish session early` at the foot of the lesson is **kept**. The header item is
+the same action reached from the session level; the in-lesson one is reached in
+context, at the end of a lesson, which is a different moment and a different
+question. Restructuring the lesson's own affordances is L-track work.
+
+### The state that had to move
+
+`done` lived inside `LessonPanel`, which meant only a lesson could end the
+journey. It is now `finished` on the page, because two things end it: the walk
+running out, and the menu. `LessonPanel`'s old `onFinish` (leave to the landing)
+became `onLeave`, and `onFinish` now means "end the journey" — one prop per idea
+rather than one name for two.
+
+### Gate
+
+```
+menu holds all four actions                      yes (12 unit tests + live)
+Finish requires confirmation                     yes, and backing out is clean
+scope round-trip                                 "Make it shorter" -> honest
+                                                 "Everything left is required",
+                                                 count unchanged at 15
+both progress measures, both grammars            7/12 (58%) "7 of 12 required
+                                                 objectives demonstrated"
+                                                 15/15   "15 of 15 stops taken"
+labels collapse, numbers never                   display:none -> block on
+                                                 hover/focus-within; both
+                                                 fractions keyboard-reachable
+goal zone >= 240px at 1024px                     587px
+no overflow >= 960px                             none
+contrast, header + menu + confirm, both themes   0 below 4.5
+```
+
+Frontend suite 80 passed (12 new in `SessionMenu.test.tsx`), typecheck clean.
+
+### Note
+
+The two progress numbers keep their `title` sentences, which is what carries the
+measure for anyone who never hovers or tabs — the labels collapsing is a density
+decision, not a decision to hide what the numbers mean.

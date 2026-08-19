@@ -208,6 +208,18 @@ export const t = {
     showSource: "Show source",
     startingOver: "Starting over…",
     startOver: "Start over",
+    // The session-level actions, behind one control. Named for what they act on
+    // rather than what they look like: "⋯" is not a word.
+    menu: "Session actions",
+    menuTitle: "Session",
+    finish: "Finish session",
+    // The only confirmed action here, and the confirmation says what survives
+    // rather than asking "are you sure" — the real question is whether the work
+    // already done is lost, and it is not.
+    finishConfirm:
+      "End the journey here? Everything you have answered is kept, and you'll see the summary of what you covered.",
+    finishYes: "Finish it",
+    finishNo: "Keep going",
     tabLesson: "Lesson",
     tabMap: "Progress map",
     mapHint: (count: number) =>

@@ -820,8 +820,8 @@ P1  landing                    ◀── pre-session lands here, not at the end
                                     ✅ 1ceed6c
 P2  interview                  ◀──  ✅ c8a9182 (motion) + 5fa2207
 P2b review gate                     ✅ 0d6e946   added after using P2
-S1  header                          ← next
-S2  rail + source + responsive 🔴
+S1  header                          ✅ (this commit)  goal 110px -> 843px
+S2  rail + source + responsive 🔴    ← next, and the first mandatory stop
 L1  phase logic (no render)
 L2  extract blocks (no visual)
 L3  Brief / Canvas frame      🔴
@@ -841,7 +841,9 @@ Base branch: **`master`** (verified — §7). Implementation begins at M0.
 
 Foundation (`F1`–`F3d`) is approved and closed. The pre-session front half
 (`P1`, `P2`, `P2b`) has shipped and been verified against the running backend.
-`S1` is next, with `S2` the first mandatory inspection stop after it.
+`S1` has shipped — the header regression is closed, with the goal zone going from
+110px to 843px at 1280px and the overflow floor from 1150px to 657px. `S2` is next
+and is the first mandatory inspection stop.
 
 Three things are carried forward rather than fixed in place, each recorded with
 numbers in `evidence/ux-journeys.md`:
