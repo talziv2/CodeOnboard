@@ -1,10 +1,15 @@
 /**
  * The app's buttons, at exactly their current visual language.
  *
- * This is an extraction, not a redesign. The two treatments below are the ones
- * already in use, unchanged: there is still no solid primary, `signal` is still a
- * 15% tint, and the radius is still `rounded`. Whether a primary action should
- * actually look like one is a question for the visual pass.
+ * Three weights, and only one of them is filled. `primary` is a solid `signal`
+ * fill; `secondary` is an outline; `chrome` and `ghost` are quieter still. The
+ * rule that makes it work is that exactly one primary is visible per state — if a
+ * state seems to need two, the state model is wrong rather than the button.
+ *
+ * The 15% `signal` tint that `primary` used to be is not gone from the product: it
+ * is now unambiguously the SELECTED/ACTIVE treatment — a chosen interview option,
+ * the active dock/float mode, a profile dial — while solid means "this is the
+ * action". Those two were previously indistinguishable.
  *
  * VARIANT carries colour, font family and weight. SIZE carries padding and font
  * size. They are split that way because the real call sites vary independently —
@@ -24,10 +29,19 @@ type Variant = "primary" | "secondary" | "chrome" | "ghost";
 type Size = "xs" | "sm" | "md" | "lg" | "block";
 
 const VARIANT: Record<Variant, string> = {
+  // SOLID. Until F3c this was a 15% tint, which meant no action anywhere looked
+  // like *the* action — the strongest CTA on any screen sat at the same weight as
+  // a chip. Measured: ink on signal is 9.91:1 dark and 6.73:1 light, against
+  // 7.53 / 5.35 for the tint it replaces (and 4.44 in light before D3 deepened
+  // the token). The border is kept, in `signal` so it is invisible, purely so the
+  // box geometry is unchanged from the outlined version.
   primary:
-    "rounded-field border border-signal-dim bg-signal/15 font-medium text-signal transition hover:bg-signal/25",
+    "rounded-field border border-signal bg-signal font-medium text-ink transition hover:bg-signal/90",
+  // `paper`, not `graphite`. Beside a solid primary, graphite read as unavailable
+  // rather than as the quieter of two live choices. Measured on every surface a
+  // button lands on: 8.94–10.97 dark, 7.41–9.31 light.
   secondary:
-    "rounded-field border border-rule text-graphite transition hover:border-signal-dim hover:text-signal",
+    "rounded-field border border-rule text-paper transition hover:border-signal-dim hover:text-signal",
   // The secondary colours in mono. Session furniture rather than lesson actions.
   chrome:
     "rounded-field border border-rule font-mono text-graphite transition hover:border-signal-dim hover:text-signal",
