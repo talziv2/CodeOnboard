@@ -863,3 +863,107 @@ regex yields the oklab components as if they were sRGB and reports the hot row a
 *darker* than the pane (1.009 separation, i.e. "the band is invisible"). Composite
 it through a 1×1 canvas instead — the same trap the earlier probe work hit, in a
 new place.
+
+---
+
+## P1 — Landing
+
+Four changes, one of which is a correction to the plan's own copy.
+
+### The expectation line, and the number it does not contain
+
+`ui-concept.md` §8.2 proposed *"Five short questions, then two to four minutes
+while we read the repository."* The plan already rejected the minutes as
+unmeasured. Checking `questions.py` showed the other half was wrong too:
+
+```
+CORE_QUESTIONS                                     5
++ follow-up, use_library / understand_system /
+  understand_component / understand_architecture /
+  contribute_code                                 +1  -> 6 total
++ follow-ups, improve_existing_system              +2  -> 7 total
++ follow-ups, debug_issue                          +2  -> 7 total
+```
+
+So a learner answers **six or seven**, never five, and which one is not known
+until Q2 is answered. "Five short questions" would have been an invented number of
+exactly the kind the rest of the product refuses — worse than vague, because it is
+specific and false. Shipped copy:
+
+> Six or seven short questions, then a few minutes while we read the repository —
+> longer for large ones.
+
+The question span is honest and the wait is described by its shape. Two tests pin
+this: one rejects any digit-or-word plus a time unit anywhere in the landing copy,
+the other rejects the phrase "five questions" specifically and requires the
+six-or-seven span.
+
+### Vertical placement, measured rather than chosen
+
+`justify-center` centres inside the *padded* box, so bottom padding is the dial.
+The first guess moved the centre from 50% to 46% — too small to read as
+deliberate. Simulated across viewport heights before committing to a value:
+
+```
+pb        720px      900px      640px     content fits
+16vh      46.4%      45.6%      47.0%     yes
+24vh      42.4%      41.6%      43.0%     yes
+28vh      40.4%      39.6%      41.0%     yes   <- chosen
+```
+
+Rendered result: **41.8%** in both themes at 1280x720, page does not scroll.
+Applied to the `repo` step only — the interview, progress and failure states are
+taller, and pushing those up would crowd them. Verified: with the interview
+showing, padding is back to a symmetric 64px and the page still does not scroll.
+
+### Order
+
+The concept's sketch puts the expectation *below* the action, and recents below
+that. Rendered order now matches:
+
+```
+LABEL "Repository to read" | INPUT | BUTTON "Start" | P expectation | DIV recents
+```
+
+A returning user looks for recents; a new one should not have to step over them to
+reach the button.
+
+### The mark
+
+A filled 8px square turned 45° above the wordmark — the one piece of ornament in
+the product, and a geometric primitive rather than a picture. Left inline in
+`page.tsx`: the concept plans it beside the wordmark in the session header too,
+and extracting a primitive before that second call site exists would be the
+speculative kind. Note for whoever measures it next: Tailwind v4 `rotate-45` sets
+the `rotate` property, not `transform`, so `getComputedStyle().transform` reads
+`none` — check `.rotate`, or the 11.3px (8·√2) bounding box.
+
+### Gate
+
+```
+                                    dark    light
+error text on the landing           6.37    5.42     (real backend, unreachable repo)
+tagline / label / expectation       5.57    5.18
+Start (ink on signal)               9.91    6.73
+wordmark                           15.01   14.39
+below 4.5                              0       0
+content centre                      41.8%   41.8%
+```
+
+Verified live: unreachable repository returns a mapped sentence rather than a raw
+slug; a recents chip fills the field and clears a standing error; a valid
+repository still advances to the interview. The server-down path was seen
+incidentally earlier in this session — the audit copy without its proxy env
+rendered *"Couldn't reach the server. Check the backend…"* at 6.37 — and is
+covered by test in both themes rather than re-verified by stopping the backend.
+
+Tests: 10 new in `app/page.test.tsx`; suite 44 passed, typecheck clean.
+
+### Not changed
+
+`checkRepo` validation, recents persistence and the `errorText` slug mapping are
+untouched, per the milestone's must-not-change list. One thing noticed and left
+alone: `t.home.serverUnreachable` ("Couldn't reach the server.") and
+`t.errors.server_unreachable` (the same thing plus how to fix it) are two strings
+for one condition, and which one appears depends on whether the thrown value was
+an `Error`. Recorded, not merged — it is copy consolidation, not P1's job.

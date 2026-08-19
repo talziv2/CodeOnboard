@@ -17,6 +17,17 @@ export const t = {
     recent: "Recent",
     checking: "Checking the repository…",
     start: "Start",
+    // Sets the expectation BEFORE the wait exists, which is a different
+    // experience from discovering it. Two numbers were considered and both were
+    // refused: "two to four minutes" (the concept's original wording) is
+    // unmeasured — we have no distribution across repository sizes or cached
+    // versus cold runs — and "five short questions" is wrong, which is worse than
+    // vague. `questions.py` asks 5 core questions plus 1 follow-up for five of
+    // the goal types and 2 for `improve_existing_system` and `debug_issue`, so
+    // the real count is six or seven and is not known until Q2 is answered.
+    // Six-or-seven is the honest span; the wait is described by its shape.
+    expectation:
+      "Six or seven short questions, then a few minutes while we read the repository — longer for large ones.",
     repoUnreachable: "That repository couldn't be opened.",
     serverUnreachable: "Couldn't reach the server.",
     pipelineFailed: "Couldn't build your learning path.",
