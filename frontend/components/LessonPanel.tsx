@@ -468,16 +468,13 @@ export default function LessonPanel({
       </div>
 
       {recovered && (
-        <div className="flex flex-col gap-1 rounded border border-jade/40 bg-jade/10 px-4 py-3">
-          <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.14em] text-jade">
-            {t.lesson.recoveredLabel}
-          </span>
+        <Callout tone="jade" label={t.lesson.recoveredLabel}>
           <p className="text-[calc(12.5rem/16)] leading-relaxed text-paper">
             {t.lesson.recoveredBody}{" "}
             <span className="text-chalk">“{warmUpTitle}”</span>
             {t.lesson.recoveredBodyEnd}
           </p>
-        </div>
+        </Callout>
       )}
 
       {isSplit && lesson.lesson.why_now && (
