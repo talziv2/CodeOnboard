@@ -1,6 +1,7 @@
 # UI Implementation Plan
 
-> **Status:** proposed build order. **Nothing implemented.**
+> **Status:** in progress on `ui-redesign`. **M0, D1, D2, D2b shipped; D3 next.**
+> Per-milestone commits and measurements: [`evidence/ux-journeys.md`](evidence/ux-journeys.md).
 > **Inputs:** [`ui-baseline.md`](ui-baseline.md) (evidence),
 > [`ui-direction.md`](ui-direction.md) (principles), [`ui-concept.md`](ui-concept.md) (visual concept).
 > **Purpose:** turn the concept into small, independently verifiable, independently
