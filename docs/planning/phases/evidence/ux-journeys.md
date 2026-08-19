@@ -1154,3 +1154,127 @@ returning HTTP 500. The build output itself is correct. Restarting that dev serv
 clears it. This is the same class of collision the `.ui-audit-fe` copy exists to
 avoid — the lesson is that the copy has to be used for *builds* too, not just for
 serving.
+
+---
+
+## P2b — the review gate, and three bugs found by using it
+
+Three changes asked for after using P2, plus what they turned up.
+
+### 1. A selection you had not confirmed was lost by going back
+
+Reported. Reproduced, then fixed. Choosing an option put it in `answer` and nowhere
+else; the server was never told, so stepping back and coming forward again cleared
+it. The learner had made a decision and the interview forgot it.
+
+Answers are now retained per question in a `drafts` ref, keyed on the question's
+**text** rather than its index — index 6 is a different question depending on the
+goal type, so keying on position would drop the previous follow-up's answer into a
+new follow-up and put words in the learner's mouth. A test pins exactly that: a
+draft recorded against one follow-up must not reappear on another.
+
+A ref rather than state, because nothing renders from it and reading it inside an
+async submit or a multi-step unwind must not see a stale closure.
+
+Verified live: after unwinding six questions from the review, walking forward again
+needed only Enter at each step — every question came back pre-filled.
+
+### 2. The answers are no longer shown during the interview
+
+They were beside every live question, which turned each question into a re-read of
+everything already said. The transcript now appears only on the review step.
+
+### 3. The last answer no longer starts anything
+
+Answering the final question used to hand straight off to the pipeline. It now opens
+a gate: the answers are shown back, and `onDone` fires only when the learner starts.
+Everything downstream is decided by these answers and the next thing that happens is
+a multi-minute run, so a wrong answer was expensive to discover.
+
+Two ways backwards, deliberately. `Back` reopens the last question — what someone
+who just mistyped wants. `Change` on a row goes to that specific answer — what
+someone scanning the summary wants, without stepping through everything between.
+Both run through the same `/goal/back` unwinding, so the server's rule about
+clearing the goal type applies either way.
+
+The call count is derived from what the SERVER holds, which differs by position:
+mid-interview the current question is unanswered (`index - 1` answers), on the review
+every question is answered (`index`). So reopening the last question from the review
+is one call, reopening question 1 from a six-question review is six, and
+mid-interview at question 4 it is three — the case verified by hand in P2.
+
+### The backend change this required
+
+`/goal/answer` did `del sessions[body.session_id]` the moment the goal was
+synthesised. The dialogue was disposable because the client always started the
+pipeline immediately. With a gate in front of that, every `Back` and `Change` on the
+review returned **404 session_not_found**.
+
+The delete is gone. Retention is bounded instead — insertion order is dict order, so
+dialogues past `_MAX_GOAL_SESSIONS` (64) are evicted oldest-first. A `GoalSession` is
+a repo URL, a few answers and a goal type, so the cap is about not leaking
+indefinitely rather than memory pressure; there is no "the learner closed the tab"
+signal to free them on.
+
+Four backend tests added: a finished dialogue survives and hands back its last
+question, unwinding from a finished dialogue walks 7 down to 1 and then refuses with
+`at_first_question`, the store stays at the cap, and the oldest entry is the one
+evicted.
+
+### The dead end that made visible, and how it now behaves
+
+Restarting the backend mid-interview wiped the in-memory dialogues, and the review
+step became a dead end: answers on screen, `Change` returning "That session no longer
+exists", no way forward but redoing the interview. The retention cap makes the same
+state reachable without a restart.
+
+It is not fatal, and the fix is to say so. `/session/start` needs only the goal, which
+the client is already holding at the review step, so **starting still works** — it is
+only editing that is lost. On `session_not_found` the gate now stays usable, the ways
+backwards are **removed** rather than left to fail again (a disabled button still says
+"this is a thing you could do"), and the message says what is still possible:
+
+> These answers can no longer be changed — the interview behind them has expired. You
+> can still start with them as they are, or reload to answer again.
+
+Mid-interview the same failure gets a different sentence, because there is no goal yet
+and there is nothing to do but begin again. Four tests cover both.
+
+### Verified live, on a fresh interview
+
+```
+answers shown during the interview            no, at all 6 questions
+review reached after the last answer          yes, session not started
+summary rows                                  6, every question with its answer
+a one-character answer renders                yes ("x" in row 3)
+Change on row 1 from the review               6 goalBack calls -> Question 1 of 6,
+                                              original answer restored, answers
+                                              hidden again, no error
+walking forward again                          Enter alone at every step (drafts)
+```
+
+Contrast on the review step, both themes, zero below 4.5:
+
+```
+                                dark    light
+"Let's start" (ink on signal)   9.91    6.73
+headings / answers              8.50+   8.50+
+eyebrow, note, question text    5.57    5.18
+```
+
+### Note on cost
+
+Reopening the last question from the review and re-confirming it runs the goal
+synthesis again — one extra Haiku call per correction. Cheap, but it is a real call
+and not obvious from the UI, so it is written down here and in `GoalDialogue`.
+
+### One thing that was not a bug
+
+Free-text rows in the reported screenshot rendered as a single small glyph. Checked
+by driving a fresh interview with a one-character answer: it renders correctly. The
+glyph was the short input itself, not a display fault.
+
+Frontend suite 68 passed; backend `pytest tests/` 14 failed / 1280 passed — the same
+14 pre-existing `test_mentor_dossier.py` failures as the standing baseline, no new
+ones. Note `pytest` with no path collects the cloned demo repos under `data/repos/`
+and dies with 578 collection errors; the documented command is `pytest tests/`.

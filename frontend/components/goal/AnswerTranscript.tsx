@@ -33,10 +33,17 @@ export default function AnswerTranscript({
   entries,
   onEdit,
   disabled = false,
+  editable = true,
 }: {
   entries: TranscriptEntry[];
   onEdit: (index: number) => void;
   disabled?: boolean;
+  /**
+   * False once the dialogue behind these answers is gone. The control is removed
+   * rather than disabled: a disabled button still says "this is a thing you could
+   * do", and offering a retry that cannot succeed is worse than not offering it.
+   */
+  editable?: boolean;
 }) {
   if (entries.length === 0) return null;
 
@@ -51,18 +58,20 @@ export default function AnswerTranscript({
             <span className="text-micro text-graphite">{entry.question}</span>
             <span className="text-meta text-paper">{entry.answer}</span>
           </span>
-          <button
-            type="button"
-            onClick={() => onEdit(entry.index)}
-            disabled={disabled}
-            // The glyph alone is not a name. The accessible label says which
-            // answer this changes, because five identical "edit" buttons in a row
-            // are five identical announcements.
-            aria-label={t.goal.editAnswer(entry.question)}
-            className="ms-auto shrink-0 font-mono text-micro text-graphite transition hover:text-signal"
-          >
-            {t.goal.edit}
-          </button>
+          {editable && (
+            <button
+              type="button"
+              onClick={() => onEdit(entry.index)}
+              disabled={disabled}
+              // The glyph alone is not a name. The accessible label says which
+              // answer this changes, because five identical "edit" buttons in a row
+              // are five identical announcements.
+              aria-label={t.goal.editAnswer(entry.question)}
+              className="ms-auto shrink-0 font-mono text-micro text-graphite transition hover:text-signal"
+            >
+              {t.goal.edit}
+            </button>
+          )}
         </li>
       ))}
     </ol>

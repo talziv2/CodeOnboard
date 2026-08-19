@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { goalStart, goalAnswer, goalBack } from "@/lib/api";
 import type { Question } from "@/lib/api";
-import AnswerTranscript, { type TranscriptEntry } from "@/components/goal/AnswerTranscript";
+import { type TranscriptEntry } from "@/components/goal/AnswerTranscript";
 import OptionList from "@/components/goal/OptionList";
+import ReviewStep from "@/components/goal/ReviewStep";
 import Button from "@/components/ui/Button";
 import { errorText, t } from "@/lib/strings";
 
@@ -19,9 +20,19 @@ interface Props {
  *
  * Three things are deliberate here.
  *
- * ANSWERS ACCUMULATE LOCALLY. `history` is built as the user goes and truncated
- * when they step back. The backend has no transcript concept, and adding one
- * would be a schema change to display something the client already knows.
+ * ANSWERS ACCUMULATE LOCALLY, AND ARE SHOWN ONLY AT THE END. `history` is built as
+ * the user goes and truncated when they step back, but it is rendered on the review
+ * step alone — a transcript beside a live question turned every question into a
+ * re-read of everything already said. The backend has no transcript concept, and
+ * adding one would be a schema change to display something the client already knows.
+ *
+ * THE LAST ANSWER DOES NOT START ANYTHING. When the backend returns the synthesised
+ * goal it is held on `review` and the answers are shown back for confirmation;
+ * `onDone` fires only when the user starts the session. Everything downstream is
+ * decided by these answers, and the next thing that happens is a multi-minute
+ * pipeline run, so a wrong answer is expensive to discover later. Note the cost of
+ * reopening from here: re-confirming the last question synthesises the goal again,
+ * which is one more Haiku call.
  *
  * `goalBack` STAYS THE ONLY WAY BACKWARDS, including for the transcript's Change
  * control on an answer four questions ago — that is a loop over the same call,
@@ -42,8 +53,36 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
   const [question, setQuestion] = useState<Question | null>(null);
   const [answer, setAnswer] = useState("");
   const [history, setHistory] = useState<TranscriptEntry[]>([]);
+  /**
+   * What has been typed or chosen for each question, whether or not it was
+   * confirmed, keyed on the question's own text.
+   *
+   * Without this, choosing an option and then stepping back lost the choice: it
+   * lived only in `answer`, the server was never told about it, and coming forward
+   * again cleared it. The user had made a decision and the interview forgot it,
+   * which is the opposite of the promise the transcript makes.
+   *
+   * Keyed on the TEXT rather than the index, because index 6 is a different
+   * question depending on the goal type. Changing the goal type on the way back
+   * must not drop the previous follow-up's answer into the new follow-up, which
+   * would put words in the user's mouth.
+   *
+   * A ref, not state: nothing renders from it directly, and reading it inside an
+   * async submit or a multi-step `jumpTo` must not see a stale closure.
+   */
+  const drafts = useRef<Record<string, string>>({});
+  /** Set when every question is answered: the goal, plus the answers to show back. */
+  const [review, setReview] = useState<{
+    goal: Record<string, string>;
+    entries: TranscriptEntry[];
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Set when the server no longer has the goal dialogue. From the review step that
+   * costs editing but not starting, so it is tracked rather than treated as fatal.
+   */
+  const [dialogueLost, setDialogueLost] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -51,6 +90,9 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
       setQuestion(null);
       setAnswer("");
       setHistory([]);
+      setReview(null);
+      setDialogueLost(false);
+      drafts.current = {};
       try {
         const res = await goalStart(repoUrl);
         setSessionId(res.session_id);
@@ -63,6 +105,12 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
     })();
   }, [repoUrl]);
 
+  /** Record the answer as well as showing it, so stepping away cannot lose it. */
+  const choose = (value: string) => {
+    if (question) drafts.current[question.text] = value;
+    setAnswer(value);
+  };
+
   const submit = async () => {
     if (!sessionId || !answer.trim() || loading || !question) return;
     setLoading(true);
@@ -72,13 +120,22 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
       // Recorded only once the backend has accepted it — the vocabulary check
       // lives there, so an out-of-vocabulary answer must not appear in the
       // transcript as though it had been taken.
-      setHistory((prev) => [
-        ...prev,
+      const entries = [
+        ...history,
         { index: question.index, question: question.text, answer },
-      ]);
-      setAnswer("");
-      if (res.done && res.goal) onDone(sessionId, res.goal);
-      else if (res.question) setQuestion(res.question);
+      ];
+      setHistory(entries);
+      if (res.done && res.goal) {
+        // Built from `entries` rather than read back from state, which has not
+        // committed yet — the review must show the answer just given.
+        setReview({ goal: res.goal, entries });
+        setAnswer("");
+      } else if (res.question) {
+        setQuestion(res.question);
+        // Whatever was already chosen for THIS question, if the user has seen it
+        // before and stepped away from it.
+        setAnswer(drafts.current[res.question.text] ?? "");
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? errorText(e.message) : t.goal.answerFailed);
     } finally {
@@ -87,35 +144,63 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
   };
 
   /**
-   * Step back to a specific question, one `goalBack` call at a time.
+   * Reopen question `target`, one `goalBack` call at a time.
    *
    * Sequential and not parallel on purpose: each call un-answers exactly one
    * question, and the server's position is what decides where the next one lands.
+   *
+   * The call count is derived from how many answers the SERVER is holding, which
+   * differs by where we are. Mid-interview the current question is unanswered, so
+   * that is `index - 1`; on the review step every question is answered, so it is
+   * `index`. Reopening the last question from the review is therefore one call, and
+   * reopening question 1 from a six-question review is six — whereas mid-interview
+   * at question 4 it is three, which is the case verified by hand.
    */
-  const jumpTo = async (target: number) => {
-    if (!sessionId || loading || !question || target < 1 || target >= question.index) return;
+  const reopen = async (target: number) => {
+    if (!sessionId || loading || !question || target < 1) return;
+    const answered = review ? question.index : question.index - 1;
+    const steps = answered - target + 1;
+    if (steps < 1) return;
     setLoading(true);
     setError(null);
     let current = question;
     let restored = "";
-    let trail = history;
+    let done = 0;
     try {
-      while (current.index > target) {
+      for (; done < steps; done++) {
         const res = await goalBack(sessionId);
         current = res.question;
         restored = res.answer;
-        trail = trail.slice(0, -1);
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? errorText(e.message) : t.goal.backFailed);
+      // `session_not_found` is not a failed request, it is a vanished interview:
+      // the dialogue lives in memory on the server, so a restart or the retention
+      // cap can take it while this page is still open. What to say depends on
+      // where we are — on the review step the goal is already in hand.
+      const gone = e instanceof Error && e.message === "session_not_found";
+      if (gone) setDialogueLost(true);
+      setError(
+        gone
+          ? review
+            ? t.goal.editExpired
+            : t.goal.sessionExpired
+          : e instanceof Error
+            ? errorText(e.message)
+            : t.goal.backFailed,
+      );
     } finally {
-      // Committed in `finally` because partial progress is still real: if the
-      // third call of three fails, two questions are already un-answered on the
-      // server, and leaving the client showing the old position would describe a
-      // state the server has left.
+      // Committed in `finally` because partial progress is still real: if the third
+      // call of three fails, two questions are already un-answered on the server,
+      // and leaving the client showing the old position would describe a state the
+      // server has left. `done` is how far it actually got.
       setQuestion(current);
-      setAnswer(restored);
-      setHistory(trail);
+      // The server's committed answer wins; the draft covers a question it has no
+      // answer for, which is any question reached going forward again.
+      setAnswer(restored || drafts.current[current.text] || "");
+      setHistory((prev) => prev.slice(0, Math.max(0, current.index - 1)));
+      // Leaving the review even on a partial failure: the server has un-answered
+      // something, so the goal it handed us no longer describes the session.
+      if (done > 0) setReview(null);
       setLoading(false);
     }
   };
@@ -130,21 +215,28 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
     return error ? <p className="text-aside text-rust">{error}</p> : null;
   }
 
+  if (review) {
+    return (
+      <div className="flex w-full max-w-xl flex-col gap-4">
+        <ReviewStep
+          entries={review.entries}
+          onEdit={reopen}
+          onBack={() => reopen(question.index)}
+          onStart={() => onDone(sessionId!, review.goal)}
+          busy={loading}
+          editable={!dialogueLost}
+        />
+        {error && <p className="text-aside text-rust">{error}</p>}
+      </div>
+    );
+  }
+
   const total = Math.max(question.total, question.index);
   const answered = answer.trim().length > 0;
   const atStart = question.index <= 1;
 
   return (
     <div className="flex w-full max-w-xl flex-col gap-7">
-      {history.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
-            {t.goal.answers}
-          </span>
-          <AnswerTranscript entries={history} onEdit={jumpTo} disabled={loading} />
-        </section>
-      )}
-
       {/* Keyed on the question so React remounts the block: that is what replays
           `rise` on every move, forwards or back, and what re-lands focus on the
           new answer control. The tick bar this replaced said the same thing as
@@ -163,7 +255,7 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
           <OptionList
             options={question.options}
             value={answer}
-            onSelect={setAnswer}
+            onSelect={choose}
             onConfirm={submit}
             disabled={loading}
           />
@@ -173,7 +265,7 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
             rows={3}
             placeholder={t.goal.answerPlaceholder}
             value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
+            onChange={(e) => choose(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -197,7 +289,7 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
               is the specific way back and this is the general one, so it should
               not hold the same weight as Continue. */}
           {!atStart && (
-            <Button variant="ghost" onClick={() => jumpTo(question.index - 1)} disabled={loading}>
+            <Button variant="ghost" onClick={() => reopen(question.index - 1)} disabled={loading}>
               {t.goal.back}
             </Button>
           )}

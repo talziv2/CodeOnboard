@@ -156,7 +156,25 @@ export const t = {
     // what the two keys DO, because selecting and confirming are separate here
     // and a hint that blurred them would undo the point of separating them.
     optionHint: "↑↓ to choose · ↵ to continue",
+    // Shown only on the review step, never beside a live question: a running
+    // transcript turned every question into a re-read of everything already said.
     answers: "Your answers",
+    reviewLabel: "Before we start",
+    reviewTitle: "Ready to start?",
+    // Says what the answers are FOR, which is why reviewing them is worth a beat.
+    // No duration here either — the landing already set that expectation honestly,
+    // and repeating it as a number is where invented figures creep back in.
+    reviewNote:
+      "These answers decide what gets read and what gets taught. Change anything that looks wrong — nothing starts until you say so.",
+    startSession: "Let's start",
+    // Two different dead ends, and they are not the same dead end. On the review
+    // step the goal is already in hand, so the session can still start — only
+    // editing is lost. Mid-interview there is no goal yet, so there is nothing to
+    // do but begin again. Reachable in normal use: the goal dialogue lives in
+    // memory, so a backend restart or the retention cap can take it.
+    editExpired:
+      "These answers can no longer be changed — the interview behind them has expired. You can still start with them as they are, or reload to answer again.",
+    sessionExpired: "The interview has expired. Reload the page to answer again.",
     edit: "Change",
     editAnswer: (question: string) => `Change your answer to: ${question}`,
     answerFailed: "Couldn't save that answer.",

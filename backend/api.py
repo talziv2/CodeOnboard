@@ -15,7 +15,9 @@
 #                  if yes  → returns (next_question, None)
 #                  if no   → calls Haiku, returns (None, GoalOutput)
 #              ← if not done: returns { done: false, question: { text, options } }
-#                if done:     deletes session, returns { done: true, goal: { ... } }
+#                if done:     returns { done: true, goal: { ... } } and KEEPS the
+#                             session, so the client's review step can still call
+#                             /goal/back to reopen an answer before starting
 #
 #   2b. Client calls POST /goal/back { session_id } to correct an earlier answer
 #      api.py  → calls agent.step_back(session), which un-answers the last
@@ -98,7 +100,28 @@ app.add_middleware(
 # In-memory session store: session_id → GoalSession (goal dialogue only).
 # Learning-graph sessions live in SQLite (learning_store) — different lifecycle:
 # the goal dialogue is ephemeral, the learning graph persists across requests.
+#
+# A completed dialogue is NOT dropped when the goal is synthesised. The client shows
+# the answers back and waits for the learner to confirm before anything starts, and
+# from that review they can reopen any answer — which is /goal/back, which needs the
+# session. Deleting on completion made every Back on the review step return 404
+# session_not_found.
+#
+# Retention is bounded rather than immediate. Insertion order is dict order, so the
+# oldest dialogues are evicted past _MAX_GOAL_SESSIONS. A GoalSession is a repo URL,
+# a handful of answers and a goal type, so the cap is about not leaking indefinitely
+# rather than about memory pressure — there is no "learner closed the tab" signal to
+# free them on.
 sessions: dict[str, GoalSession] = {}
+
+_MAX_GOAL_SESSIONS = 64
+
+
+def _remember_goal_session(session: GoalSession) -> None:
+    sessions[session.session_id] = session
+    while len(sessions) > _MAX_GOAL_SESSIONS:
+        del sessions[next(iter(sessions))]
+
 
 # Indirection so tests can point persistence at a temp DB.
 SESSIONS_DB_PATH = learning_store.DEFAULT_DB_PATH
@@ -171,7 +194,7 @@ def repo_check(body: RepoCheckRequest) -> dict:
 @app.post("/goal/start", response_model=StartResponse)
 def goal_start(body: StartRequest) -> StartResponse:
     session = start_session(body.repo_url)
-    sessions[session.session_id] = session
+    _remember_goal_session(session)
     first_q = CORE_QUESTIONS[0]
     index, total = question_progress(session)
     return StartResponse(
@@ -196,7 +219,8 @@ def goal_answer(body: AnswerRequest) -> AnswerResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if goal_output is not None:
-        del sessions[body.session_id]
+        # The session stays: the client shows these answers back for confirmation,
+        # and /goal/back has to keep working from that review step.
         return AnswerResponse(done=True, goal=goal_output.model_dump())
 
     index, total = question_progress(session)
