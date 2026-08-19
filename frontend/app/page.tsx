@@ -6,6 +6,7 @@ import GoalDialogue from "@/components/GoalDialogue";
 import SettingsMenu from "@/components/SettingsMenu";
 import StartingProgress from "@/components/StartingProgress";
 import { checkRepo, sessionStart } from "@/lib/api";
+import Button from "@/components/ui/Button";
 import { errorText, t } from "@/lib/strings";
 
 type Step = "repo" | "goal" | "starting" | "failed";
@@ -142,13 +143,12 @@ export default function Home() {
 
           {error && <p className="text-[calc(13rem/16)] text-rust">{error}</p>}
 
-          <button
+          <Button variant="primary" size="block" className="mt-1"
             type="submit"
             disabled={checking}
-            className="mt-1 rounded border border-signal-dim bg-signal/15 py-3 text-[calc(13.5rem/16)] font-medium text-signal transition hover:bg-signal/25"
           >
             {checking ? t.home.checking : t.home.start}
-          </button>
+          </Button>
         </form>
       )}
 
@@ -179,19 +179,17 @@ export default function Home() {
           )}
 
           <div className="flex flex-wrap gap-3">
-            <button
+            <Button variant="primary" size="md"
               onClick={() => goal && startSession(goal)}
               disabled={!goal}
-              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
             >
               {t.failed.tryAgain}
-            </button>
-            <button
+            </Button>
+            <Button variant="secondary" size="md"
               onClick={() => { setStep("repo"); setError(null); setGoal(null); }}
-              className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
             >
               {t.failed.differentRepo}
-            </button>
+            </Button>
           </div>
         </div>
       )}

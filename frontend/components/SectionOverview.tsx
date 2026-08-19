@@ -7,6 +7,7 @@ import { understandingLabel } from "@/lib/tags";
 import SectionLabel from "@/components/ui/SectionLabel";
 import ConceptTag from "@/components/ui/ConceptTag";
 import StatePin from "@/components/ui/StatePin";
+import Button from "@/components/ui/Button";
 import { t } from "@/lib/strings";
 
 interface Props {
@@ -182,28 +183,25 @@ export default function SectionOverview({
 
       <div className="flex flex-wrap items-center gap-3 border-t border-rule pt-4">
         {current ? (
-          <button
+          <Button variant="primary" size="md"
             onClick={onClose}
-            className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
           >
             {t.section.continue(current.node.title)}
-          </button>
+          </Button>
         ) : (
           entry && (
-            <button
+            <Button variant="primary" size="md"
               onClick={() => onJump(entry.node)}
-              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
             >
               {t.section.startHere(entry.node.title)}
-            </button>
+            </Button>
           )
         )}
-        <button
+        <Button variant="secondary" size="md"
           onClick={onClose}
-          className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
         >
           {t.section.close}
-        </button>
+        </Button>
         <span className="ms-auto font-mono text-[calc(10rem/16)] text-graphite">
           {t.section.reopenHint}
         </span>

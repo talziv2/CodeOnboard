@@ -7,6 +7,7 @@ import SettingsMenu from "@/components/SettingsMenu";
 import { getSession, getWelcome } from "@/lib/api";
 import type { Briefing, SessionGraph } from "@/lib/api";
 import SectionLabel from "@/components/ui/SectionLabel";
+import Button from "@/components/ui/Button";
 import { errorText, t } from "@/lib/strings";
 
 /**
@@ -172,12 +173,11 @@ export default function WelcomePage() {
             )}
 
             <div>
-              <button
+              <Button variant="primary" size="lg"
                 onClick={begin}
-                className="rounded border border-signal-dim bg-signal/15 px-5 py-2.5 text-[calc(13.5rem/16)] font-medium text-signal transition hover:bg-signal/25"
               >
                 {t.welcome.begin}
-              </button>
+              </Button>
             </div>
           </section>
 

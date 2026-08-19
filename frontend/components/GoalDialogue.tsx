@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { goalStart, goalAnswer, goalBack } from "@/lib/api";
 import type { Question } from "@/lib/api";
+import Button from "@/components/ui/Button";
 import { errorText, t } from "@/lib/strings";
 
 interface Props {
@@ -152,13 +153,12 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
             is worse than no control — it was the starkest case of the old
             opacity-based disabled state, rendering at roughly 1.5:1. */}
         {!atStart && (
-          <button
+          <Button variant="secondary" size="md"
             onClick={back}
             disabled={loading}
-            className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
           >
             {t.goal.back}
-          </button>
+          </Button>
         )}
         <button
           onClick={submit}

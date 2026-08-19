@@ -18,6 +18,7 @@ import type {
 } from "@/lib/api";
 import ConceptTag from "@/components/ui/ConceptTag";
 import SectionLabel from "@/components/ui/SectionLabel";
+import Button from "@/components/ui/Button";
 import { errorText, t } from "@/lib/strings";
 
 interface Props {
@@ -572,13 +573,12 @@ export default function LessonPanel({
             className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[calc(13rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim"
           />
           <div className="flex gap-2">
-            <button
+            <Button variant="primary" size="md"
               onClick={onSubmitVerification}
               disabled={loading || !answer.trim()}
-              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
             >
               {loading ? t.lesson.grading : t.lesson.submit}
-            </button>
+            </Button>
             <button
               onClick={() => setVerification(null)}
               disabled={loading}
@@ -628,20 +628,18 @@ export default function LessonPanel({
           />
           {error && <p className="text-sm text-rust">{error}</p>}
           <div className="flex items-center gap-3">
-            <button
+            <Button variant="primary" size="md"
               onClick={submitAnswer}
               disabled={loading || !answer.trim()}
-              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
             >
               {loading ? t.lesson.grading : t.lesson.submit}
-            </button>
-            <button
+            </Button>
+            <Button variant="secondary" size="md"
               onClick={handleAdvance}
               disabled={loading}
-              className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
             >
               {t.lesson.skipStop}
-            </button>
+            </Button>
             <span className="ms-auto font-mono text-[calc(10.5rem/16)] text-graphite">
               {t.lesson.submitHint}
             </span>
@@ -805,30 +803,27 @@ export default function LessonPanel({
             {isCheck && (
               <>
                 {openGaps.length > 0 ? (
-                  <button
+                  <Button variant="primary" size="md"
                     onClick={onCheckUnderstanding}
                     disabled={loading || verifying}
-                    className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
                   >
                     {verifying ? t.lesson.verifyCtaBusy : t.lesson.checkAnother}
-                  </button>
+                  </Button>
                 ) : (
-                  <button
+                  <Button variant="primary" size="md"
                     onClick={handleAdvance}
                     disabled={loading}
-                    className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
                   >
                     {loading ? t.lesson.loadingShort : t.lesson.nextStop}
-                  </button>
+                  </Button>
                 )}
                 {openGaps.length > 0 && (
-                  <button
+                  <Button variant="secondary" size="md"
                     onClick={handleAdvance}
                     disabled={loading}
-                    className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
                   >
                     {loading ? t.lesson.loadingShort : t.lesson.nextStop}
-                  </button>
+                  </Button>
                 )}
                 {/* Still reachable when something is unresolved, but never the
                     whole response to a correct answer. */}
@@ -845,25 +840,23 @@ export default function LessonPanel({
             )}
 
             {result.classification === "understood" && (
-              <button
+              <Button variant="primary" size="md"
                 onClick={handleAdvance}
                 disabled={loading}
-                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
               >
                 {loading ? t.lesson.loadingShort : t.lesson.nextStop}
-              </button>
+              </Button>
             )}
 
             {/* Partly there: moving on is the default. The warm-up offer is
                 shared with every other non-understood state, below. */}
             {result.classification === "partial" && (
-              <button
+              <Button variant="primary" size="md"
                 onClick={handleAdvance}
                 disabled={loading}
-                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
               >
                 {loading ? t.lesson.loadingShort : t.lesson.nextStop}
-              </button>
+              </Button>
             )}
 
             {canAnswerAgain && openGaps.length > 0 && (
@@ -871,28 +864,26 @@ export default function LessonPanel({
               // question whose answer `reveal` had just given away, so passing it
               // proved only that they had read the page. This asks a NEW question
               // about the same misconception (§18.7).
-              <button
+              <Button variant="primary" size="md"
                 onClick={onCheckUnderstanding}
                 disabled={loading || verifying}
-                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
               >
                 {verifying ? t.lesson.verifyCtaBusy : t.lesson.verifyCta}
-              </button>
+              </Button>
             )}
             {canAnswerAgain && openGaps.length === 0 && (
-              <button
+              <Button variant="primary" size="md"
                 onClick={() => { setResult(null); setAnswer(""); }}
                 disabled={loading}
-                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
               >
                 {t.lesson.tryAgain}
-              </button>
+              </Button>
             )}
 
             {FAILED.includes(result.classification) && (
               <>
                 {result.mutation?.kind === "prerequisite" && (
-                  <button
+                  <Button variant="primary" size="md"
                     onClick={async () => {
                       setLoading(true);
                       try {
@@ -902,32 +893,29 @@ export default function LessonPanel({
                       }
                     }}
                     disabled={loading}
-                    className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
                   >
                     {loading ? t.lesson.loadingShort : t.lesson.startWarmUp}
-                  </button>
+                  </Button>
                 )}
-                <button
+                <Button variant="secondary" size="md"
                   onClick={handleAdvance}
                   disabled={loading}
-                  className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
                 >
                   {result.mutation?.kind === "prerequisite"
                     ? t.lesson.skipItMoveOn
                     : t.lesson.moveOnAnyway}
-                </button>
+                </Button>
               </>
             )}
 
             {/* One offer, every state where the objective was not reached. */}
             {canRequestWarmUp && (
-              <button
+              <Button variant="secondary" size="md"
                 onClick={handleRetry}
                 disabled={loading}
-                className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
               >
                 {t.lesson.buildWarmUp}
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -1010,18 +998,16 @@ function CompletionScreen({
           )}
 
           <div className="flex gap-3">
-            <button
+            <Button variant="primary" size="md"
               onClick={onNewSession}
-              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
             >
               {t.completion.newSession}
-            </button>
-            <button
+            </Button>
+            <Button variant="secondary" size="md"
               onClick={onFinish}
-              className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
             >
               {t.completion.goHome}
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
