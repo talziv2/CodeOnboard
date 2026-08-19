@@ -6,6 +6,7 @@ import ProfileCard from "@/components/ProfileCard";
 import SettingsMenu from "@/components/SettingsMenu";
 import { getSession, getWelcome } from "@/lib/api";
 import type { Briefing, SessionGraph } from "@/lib/api";
+import SectionLabel from "@/components/ui/SectionLabel";
 import { errorText, t } from "@/lib/strings";
 
 /**
@@ -144,12 +145,7 @@ export default function WelcomePage() {
 
             {briefing && briefing.notes.length > 0 && (
               <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
-                    {t.welcome.notesLabel}
-                  </span>
-                  <span aria-hidden className="h-px flex-1 bg-rule" />
-                </div>
+                <SectionLabel>{t.welcome.notesLabel}</SectionLabel>
                 <ul className="flex flex-col gap-3.5">
                   {briefing.notes.map((note) => (
                     <li key={note.text} className="flex gap-2.5">

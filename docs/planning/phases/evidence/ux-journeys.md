@@ -268,3 +268,44 @@ No spacing tokens were added. Tailwind already derives every step from one
 `--spacing`, and the app's `gap-*` resolve off it; a second scale would just be a
 way to disagree with the first. What was missing is a convention, which is
 recorded as a comment beside the code that will follow it.
+
+### F2a — 2026-08-19 · SectionLabel and ConceptTag
+
+Two primitives, extracted at the current visual language. No typography, radius,
+elevation or colour decision is pulled forward from F3.
+
+| Route | before | after | verdict |
+|---|---|---|---|
+| Lesson dark | 274 · `1432160578` | 274 · `1432160578` | **identical** |
+| Lesson light | 274 · `-429470264` | 274 · `-429470264` | **identical** |
+| Chapter overview | 198 · `-1913074720` | 198 · `-1914201951` | 1 declared change |
+| Map | 602 · `1884929408` | 603 · — | 1 declared change |
+
+#### Intentional visual normalizations — the complete list
+
+**1. Concept tags in the chapter overview: horizontal padding 5px → 6px.**
+`SectionOverview` wrote `px-[5px]`; `LessonPanel` and `MapView` both wrote
+`px-1.5` (6px). One of the three had drifted, so the chip is now 2px wider in the
+overview only. Verified live: `paddingLeft` 5px before, 6px after. This is the only
+pixel that moves anywhere in F2a.
+
+#### Structural change with no visual consequence
+
+**2. The map's journey heading gains one wrapper element.** Its copy put the label
+text directly inside the `h3` with the font classes on the `h3` itself; the four
+other copies wrapped the text in a span. The primitive follows the majority, so the
+map's `h3` goes from one child plus a bare text node to two spans — hence 602 → 603
+elements.
+
+Measured after, against the `h3`'s own values before: font-size 10px, tracking
+1.6px, colour `rgb(123,141,153)`, `text-transform: uppercase` — all unchanged,
+because the properties simply moved from the `h3` to the span that now holds the
+text. Layout unchanged too: the label measures 85px and the rule starts at
+x=387 = 292 + 85 + the 10px flex gap, so the anonymous text item it replaced
+occupied exactly the same space.
+
+#### Not migrated, deliberately
+
+`tagStyle` / `tagLabel` remain imported by `MapView` and `SectionOverview` because
+both still use them outside chips — the by-concept breakdown rows, and the
+understanding labels. `LessonPanel` no longer imports from `lib/tags` at all.

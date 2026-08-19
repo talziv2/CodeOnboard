@@ -4,6 +4,8 @@ import type { GraphNode } from "@/lib/api";
 import { isStation } from "@/lib/graph-layout";
 import { isSettled, type RouteSection } from "@/lib/route-sections";
 import { understandingStyle, understandingLabel, tagStyle, tagLabel } from "@/lib/tags";
+import SectionLabel from "@/components/ui/SectionLabel";
+import ConceptTag from "@/components/ui/ConceptTag";
 import { t } from "@/lib/strings";
 
 interface Props {
@@ -93,12 +95,7 @@ export default function SectionOverview({
           show as "what you should be able to say". */}
       {stations.some((s) => s.node.objective) && (
         <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2.5">
-            <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
-              {t.section.byTheEnd}
-            </span>
-            <span aria-hidden className="h-px flex-1 bg-rule" />
-          </div>
+          <SectionLabel>{t.section.byTheEnd}</SectionLabel>
           <ul className="flex flex-col gap-2.5">
             {stations
               .filter((s) => s.node.objective)
@@ -120,12 +117,7 @@ export default function SectionOverview({
       {/* The contents of the chapter — and where the concept tags live now that
           the rail no longer carries them. */}
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2.5">
-          <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
-            {t.section.lessons}
-          </span>
-          <span aria-hidden className="h-px flex-1 bg-rule" />
-        </div>
+        <SectionLabel>{t.section.lessons}</SectionLabel>
 
         <ul className="flex flex-col gap-1">
           {section.stops.map((stop) => {
@@ -181,22 +173,9 @@ export default function SectionOverview({
 
                     {node.concept_tags.length > 0 && (
                       <span className="flex flex-wrap gap-1">
-                        {node.concept_tags.map((tag) => {
-                          const s = tagStyle(tag);
-                          return (
-                            <span
-                              key={tag}
-                              className="rounded-[2px] border px-[5px] py-px font-mono text-[calc(9.5rem/16)] tracking-[0.05em]"
-                              style={{
-                                color: s.text,
-                                borderColor: s.border,
-                                background: s.background,
-                              }}
-                            >
-                              {tagLabel(tag)}
-                            </span>
-                          );
-                        })}
+                        {node.concept_tags.map((tag) => (
+                          <ConceptTag key={tag} tag={tag} />
+                        ))}
                       </span>
                     )}
                   </span>

@@ -12,6 +12,8 @@ import { buildRoute } from "@/lib/graph-layout";
 import {
   tagStyle, tagLabel, stateStyle, stateLabel, isCanonicalTag, STATE_ORDER,
 } from "@/lib/tags";
+import SectionLabel from "@/components/ui/SectionLabel";
+import ConceptTag from "@/components/ui/ConceptTag";
 import { t } from "@/lib/strings";
 
 interface Props {
@@ -413,10 +415,7 @@ export default function MapView({
             route list describing the same units in two places is what made this
             screen a dashboard (M3a.3 AC6). Second section, not sixth. */}
         <section className="flex flex-col gap-4">
-          <h3 className="flex items-center gap-2.5 font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
-            {t.map.journeyTitle}
-            <span aria-hidden className="h-px flex-1 bg-rule" />
-          </h3>
+          <SectionLabel as="h3">{t.map.journeyTitle}</SectionLabel>
 
           <ol className="flex flex-col">
             {stops.map((stop, i) => {
@@ -499,22 +498,9 @@ export default function MapView({
                     </span>
 
                     <span className="flex flex-wrap items-center gap-1.5">
-                      {node.concept_tags.slice(0, 2).map((tag) => {
-                        const style = tagStyle(tag);
-                        return (
-                          <span
-                            key={tag}
-                            className="rounded-[2px] border px-1.5 py-px font-mono text-[calc(9.5rem/16)] tracking-[0.05em]"
-                            style={{
-                              color: style.text,
-                              borderColor: style.border,
-                              background: style.background,
-                            }}
-                          >
-                            {tagLabel(tag)}
-                          </span>
-                        );
-                      })}
+                      {node.concept_tags.slice(0, 2).map((tag) => (
+                        <ConceptTag key={tag} tag={tag} />
+                      ))}
                       {/* CURRENT state, not the sticky flag. `weak_spot` stays
                           true forever once set, so rendering it captioned a unit
                           the learner has since mastered as a weakness. */}

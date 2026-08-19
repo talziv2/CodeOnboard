@@ -16,7 +16,8 @@ import type {
   Anchor, Attempt, Classification, GraphNode, Lesson, NodeGap, RespondResult,
   SessionGraph, VerificationPrompt,
 } from "@/lib/api";
-import { tagStyle, tagLabel } from "@/lib/tags";
+import ConceptTag from "@/components/ui/ConceptTag";
+import SectionLabel from "@/components/ui/SectionLabel";
 import { errorText, t } from "@/lib/strings";
 
 interface Props {
@@ -45,17 +46,6 @@ const VERDICT_COLOR: Record<string, string> = {
 const NEUTRAL = "var(--color-chalk)";
 
 const FAILED: Classification[] = ["confused", "off-topic"];
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
-        {children}
-      </span>
-      <span aria-hidden className="h-px flex-1 bg-rule" />
-    </div>
-  );
-}
 
 /** Chevron that points right when closed, down when open. */
 function Chevron() {
@@ -468,18 +458,9 @@ export default function LessonPanel({
 
         {node.concept_tags.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1.5">
-            {node.concept_tags.map((tag) => {
-              const s = tagStyle(tag);
-              return (
-                <span
-                  key={tag}
-                  className="rounded-[2px] border px-1.5 py-px font-mono text-[calc(9.5rem/16)] tracking-[0.05em]"
-                  style={{ color: s.text, borderColor: s.border, background: s.background }}
-                >
-                  {tagLabel(tag)}
-                </span>
-              );
-            })}
+            {node.concept_tags.map((tag) => (
+              <ConceptTag key={tag} tag={tag} />
+            ))}
           </div>
         )}
       </div>
