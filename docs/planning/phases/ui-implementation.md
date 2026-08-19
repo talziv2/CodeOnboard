@@ -301,7 +301,7 @@ M0 ─┬─▶ D1 ─▶ D2 ─▶ D3                          defects — ship
     │
     └─▶ F1 ─▶ F2 ─▶ F3                          visual foundation
                      │
-                     ├─▶ P1 ─▶ P2               pre-session front half  ◀── moved up
+                     ├─▶ P1 ─▶ P2 ─▶ P2b        pre-session front half  ◀── moved up
                      │
                      ├─▶ S1 ─▶ S2               shell + responsive
                      │
@@ -477,6 +477,19 @@ Why this order:
 - **Gate.** All six goal-type paths complete; back-past-Q2 verified; interview completable by keyboard alone.
 - **Commit.** 2–3.
 - **Note.** Highest copy-sensitivity in the plan: the option strings are **parsed keys**, not labels. They must not be reworded.
+
+---
+
+### P2b — Review gate *(added after using P2)*
+- **Why.** Three things surfaced by walking the shipped interview. A selection you had not confirmed was **lost by going back** — it lived in `answer` and nowhere else, so the server never knew about it. The running transcript beside each live question turned every question into a re-read of everything already said. And the last answer handed straight off to the pipeline, so a wrong answer cost a multi-minute run before it could be discovered.
+- **Files.** `components/GoalDialogue.tsx`, new `components/goal/ReviewStep.tsx`, `components/goal/AnswerTranscript.tsx`, `lib/strings.ts`, **`backend/api.py`**.
+- **Behaviour.** Answers are retained per question in a `drafts` ref keyed on question **text**, not index — index 6 is a different question per goal type, so keying on position would drop one follow-up's answer into another. The transcript moves to a **review step** shown only after the last answer; `onDone` fires when the learner starts, not when the interview ends. Two ways backwards: `Back` reopens the last question, `Change` reopens a specific one, both through the same `/goal/back` unwinding. Call count derives from what the **server** holds — `index - 1` answers mid-interview, `index` on the review — so reopening the last question from the review is one call and question 1 from a six-question review is six.
+- **Backend change — outside what §1 anticipated.** `/goal/answer` did `del sessions[session_id]` the moment the goal was synthesised, because the client always started the pipeline immediately. With a gate in front, every `Back` and `Change` returned **404 `session_not_found`**. The delete is gone; retention is bounded at `_MAX_GOAL_SESSIONS` (64), evicted oldest-first, since there is no "learner closed the tab" signal to free them on. Four backend tests added.
+- **The dead end that follows from it.** A backend restart, or that cap, can take the dialogue while the review is on screen. Not fatal: `/session/start` needs only the goal, which the client already holds, so **starting still works and only editing is lost**. On `session_not_found` the gate stays usable, the ways backwards are *removed* rather than left to fail again, and the copy says what is still possible. Mid-interview the same failure gets a different sentence, because there is no goal yet.
+- **Cost.** Reopening and re-confirming re-runs the goal synthesis: one extra Haiku call per correction.
+- **Must NOT change.** As P2, plus: `/goal/back` remains the only way backwards, and the server keeps ownership of goal-type clearing.
+- **Gate.** Answers hidden at every question; gate reached without starting; every question and answer shown back; `Change` on the first row unwinding to question 1 with its answer restored; contrast clean in both themes.
+- **Commit.** 1.
 
 ---
 
@@ -797,15 +810,17 @@ D1  invisible surfaces        🔴    isolated + cherry-pickable   ✅ 276459c
 D2  one composer                    isolated + cherry-pickable   ✅ 9ca38ca
 D2b what a check reports            found in manual J4 testing   ✅ d9cc50d
 D3  focus + disabled                isolated + cherry-pickable   ✅ e731f90
-F1  tokens                          additive, zero visual diff   ✅ (this commit)
+F1  tokens                          additive, zero visual diff   ✅ be9ff00
 F2  primitives                      5 commits, gated each      ✅ ecd80ec..5333864
 F3a typography + measure      🔴    ✅ 30c142a
-F3b surfaces + practice well  🔴    ✅ (this commit)
-F3c action hierarchy          🔴    ← next
-F3d systematic contrast       🔴
+F3b surfaces + practice well  🔴    ✅ c6d3377
+F3c action hierarchy          🔴    ✅ 5446a85
+F3d systematic contrast       🔴    ✅ 397a07d   ← Foundation track approved
 P1  landing                    ◀── pre-session lands here, not at the end
-P2  interview                  ◀──
-S1  header
+                                    ✅ 1ceed6c
+P2  interview                  ◀──  ✅ c8a9182 (motion) + 5fa2207
+P2b review gate                     ✅ 0d6e946   added after using P2
+S1  header                          ← next
 S2  rail + source + responsive 🔴
 L1  phase logic (no render)
 L2  extract blocks (no visual)
@@ -821,3 +836,35 @@ optional:  B1 Grader headline (after L4)   ·   B2 progress facts (with P3)
 ```
 
 Base branch: **`master`** (verified — §7). Implementation begins at M0.
+
+### Where this stands
+
+Foundation (`F1`–`F3d`) is approved and closed. The pre-session front half
+(`P1`, `P2`, `P2b`) has shipped and been verified against the running backend.
+`S1` is next, with `S2` the first mandatory inspection stop after it.
+
+Three things are carried forward rather than fixed in place, each recorded with
+numbers in `evidence/ux-journeys.md`:
+
+1. **`goal_type` is re-invented by the model** — the highest-value item
+   outstanding, and a **backend correctness bug, not a UI one**.
+   `agent.py` derives it deterministically from `GOAL_TYPE_MAP` and routes the
+   follow-ups correctly, but the final goal JSON's `goal_type` comes from the
+   Haiku synthesis call, which is never given the value already derived.
+   Measured over all six paths: five came back `understand_architecture`,
+   including "Use it in my own project" and "Contribute code / open a PR". Same
+   class of defect `CLAUDE.md` records removing twice for `depth` and
+   `experience_level`, and higher-stakes — `goal_type` selects the investigation
+   strategy and decides whether the Reviewer runs. Fix mirrors how `code_depth`
+   is already handled: pass it into `_synthesize_goal` instead of asking for it.
+2. **Feedback information architecture** → `L1`/`L4`/`L5`, per §3a. Not to be
+   solved by styling inside `F3`.
+3. **The syntax palette** — two token colours in dark and three in light sit
+   under 4.5 on their own, punctuation among them at ~2640 glyphs. A
+   syntax-colour decision rather than a contrast tweak, so it was recorded
+   rather than silently repainted. Does not block progress.
+
+Two smaller carries: the header regression (goal text starved at 1280px) is
+`S1`'s to fix, and `t.starting.elapsed` still prints "usually two to four
+minutes" — the same unmeasured claim `P1` removed from the landing — which is
+`P3`'s screen.

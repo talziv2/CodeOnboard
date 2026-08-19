@@ -80,8 +80,14 @@ data/
 ```
 POST /goal/start            → { session_id, first_question }
 POST /goal/answer           → { next_question } | { goal: {...} }
+POST /goal/back             → { question, answer }   un-answers the last question
 POST /onboard               → { learning_path, module_map, confidence }
 ```
+
+`/goal/back` un-answers exactly one question, so stepping back N questions is N
+calls. It is the **only** way backwards, because the server owns the consequence:
+crossing Q2 clears `goal_type`, which is what makes the follow-up tail recompute
+instead of leaving the old goal type's questions queued.
 
 ---
 
@@ -269,6 +275,7 @@ ever grow. Decided in `learning-graph.md` §11 OQ-4.
 - **LangGraph orchestration.** `run_pipeline(repo_url, goal, client)` delegates to one compiled `StateGraph`: `repo_survey` → `documentation` → `goal_investigation` → (conditional) `reviewer` → `mentor`. Conditional edges end the run when the skeleton or the dossier is missing, rather than fabricating a graph (D15). `OnboardState.errors` uses an `operator.add` reducer. The Anthropic client rides on `OnboardState.client` because LangGraph nodes receive only state.
 - **No MCP yet.** Add it when 4+ agents share tools.
 - **Goal Agent runs first, always.** Its output JSON is the single source of truth for all downstream agents.
+- **The goal dialogue outlives its own completion.** `/goal/answer` used to delete the session the moment the goal was synthesised, because the client started the pipeline immediately. It no longer does: the UI shows the answers back and waits for the learner to confirm, and from that review any answer can be reopened — which is `/goal/back`, which needs the session. Retention is bounded (`_MAX_GOAL_SESSIONS`, oldest evicted first) because there is no "the learner closed the tab" signal to free them on. A dialogue lost to a restart or to that cap is **not** fatal: `/session/start` needs only the goal, which the client already holds, so starting still works and only editing is lost.
 - **Mentor Agent is the only Sonnet call.** Everything upstream uses Haiku.
 - **Curriculum size is decided by code, not by a prompt.** Under `CODEONBOARD_CURRICULUM=1` the planner is told to enumerate everything worth learning and is given no target number; `backend/agents/mentor/curriculum.py` then cuts by required-set closure, dependency closure, area coverage and a guard band. Overflow is demoted to `priority: optional` on the same spine, never discarded. Every sizing rule is a pure function, so it is testable without an API key — that is the point, not a side effect.
 - **No source, no lesson.** Grounding is verified at plan time but *read* at lesson time, and the two can disagree. If **some** of a unit's anchors fail to load, Teaching degrades and teaches from the rest. If **all** of them fail, Teaching must **fail the lesson** — never render one. With no source the model has only the objective, and it will write a fluent, confident, entirely ungrounded lesson from it; nothing in the output looks wrong, which is why this is refused at the point of reading. See `learning-engine.md` §4.1.2.
