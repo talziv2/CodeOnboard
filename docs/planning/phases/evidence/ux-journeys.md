@@ -354,3 +354,74 @@ MapView's `Pip` and EvidenceDrawer's inline dot. One is a button with its own
 hover-scale behaviour, the other sits inside a text row; both are half a dozen
 lines and both already read the shared encoding. Pulling them into a component
 whose every difference is a parameter would be abstraction for its own sake.
+
+### F2c — 2026-08-19 · Button
+
+36 of 56 `<button>` elements adopt it; 20 stay outside. Split into three commits
+so a bad group reverts alone, and ordered so that **any digest movement in the
+first two is unambiguously a bug rather than a normalization.**
+
+| Group | Sites | Result |
+|---|---|---|
+| 1 — `primary` md/lg/block, `secondary` md | 23 | **zero diff, 5 route states** |
+| 2 — `chrome` sm/xs, `ghost` | 7 | **zero diff** |
+| 3 — the drifted sites | 6 | exactly the 7 declared changes |
+
+Groups 1 and 2 are zero-diff **by construction**, not only by measurement: the
+migration tool rewrites a site only when its class list is an exact superset of a
+variant+size pair and preserves leftovers verbatim, so for a site with no leftover
+the emitted class string is a *permutation* of the original — and CSS resolves
+conflicts by stylesheet order, not class order. The digests confirm what the
+matching rule already guarantees.
+
+```
+lesson            274  1432160578    unchanged through groups 1 and 2
+map               603  1145766918    unchanged
+chapter overview  198  -1914201951   unchanged
+landing            12  1759883667    unchanged — and equal to the pre-F1 baseline
+welcome dark       67  -1757693035   unchanged — likewise
+```
+
+#### The complete normalization list — 6 sites, 7 property changes
+
+Every one measured live, before and after.
+
+| Site | Change | Verified |
+|---|---|---|
+| `session/[id]/page.tsx` `retryLoad` | `text-sm` 14px → **13px** | 13px, `8px/16px`, `mx-auto` kept |
+| `welcome/page.tsx` `retryLoad` | `text-sm` 14px → **13px** | same combination, same markup |
+| `LessonPanel` `notNow` | `px-3` → **`px-4`** | by shared combination (see below) |
+| `LessonPanel` `Set aside` | 11px → **10.5px** | 10.5px, `4px/8px`, sans, `shrink-0` kept |
+| `page.tsx` recents chip | `px-2.5` → **`px-2`**; 11px → **10.5px** | 10.5px, `4px/8px`, mono |
+| `GoalDialogue` `Continue` | `py-2` → **`py-2.5`**; 13px → **13.5px** | 13.5px, `10px/20px`, weight 500 |
+
+`notNow` is the one change not observed directly — reaching it needs an
+outstanding verification, which costs live grading calls. It is the same
+`secondary md` combination already verified rendering at 9 other sites, so its
+padding follows arithmetically (`px-3` 12px → `px-4` 16px). Recorded as inferred
+rather than presented as measured.
+
+#### No additional drift found
+
+The tool aborts a site if anything left over after subtracting the variant and
+size is not a layout utility, and reports it. Across all three groups it reported
+`UNRECOGNISED` only where expected — the chrome buttons refusing to be read as
+ghosts — and kept exactly two layout leftovers, `mt-1` on the landing `Start` and
+`shrink-0` on the header trio and `Set aside`. So the seven changes above are the
+complete set.
+
+#### The 20 controls that stay outside `Button`
+
+Nine **clickable regions** (rail stop rows, rail chevron and section title, rail
+optional toggle, trace-path steps, chapter-overview lesson rows, MapView unit rows
+and journey cards, `Pip`, the file·lines link), four **segmented or icon controls**
+(source pane `✕` and dock/float, settings gear and the theme/size `Choice`), two
+**tab strips**, one **micro chip** (numbered evidence refs), the **interview answer
+options** — which are answers, not buttons, and which P2 rewrites — and two that
+resemble `ghost` but are not:
+
+- `finishEarly` — `hover:text-chalk`, not `hover:text-signal`. Matching it would
+  assert that ending the session early is *the thing to do*.
+- `openMap` — base `text-signal`, not `text-graphite`. An accent link.
+
+Both stay explicit until S1 or F3 decides otherwise.

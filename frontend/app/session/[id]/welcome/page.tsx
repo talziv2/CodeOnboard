@@ -57,15 +57,15 @@ export default function WelcomePage() {
       <main className="flex min-h-screen items-center justify-center bg-ink px-6">
         <div className="flex max-w-sm flex-col gap-3 text-center">
           <p className="text-rust">{error}</p>
-          <button
+          <Button variant="secondary" size="md" className="mx-auto"
             onClick={() => {
               setError(null);
               load();
             }}
-            className="mx-auto rounded border border-rule px-4 py-2 text-sm text-graphite transition hover:border-signal-dim hover:text-signal"
+           
           >
             {t.session.retryLoad}
-          </button>
+          </Button>
         </div>
       </main>
     );

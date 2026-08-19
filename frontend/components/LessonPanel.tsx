@@ -540,13 +540,13 @@ export default function LessonPanel({
                     {gap.blocking ? t.lesson.gapBlocking : t.lesson.gapNonBlocking}
                   </span>
                 </div>
-                <button
+                <Button variant="secondary" size="xs" className="shrink-0"
                   onClick={() => onWaive(gap.id)}
                   disabled={loading}
-                  className="shrink-0 rounded border border-rule px-2 py-1 text-[calc(11rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
+                 
                 >
                   {t.lesson.waiveOne}
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -579,13 +579,13 @@ export default function LessonPanel({
             >
               {loading ? t.lesson.grading : t.lesson.submit}
             </Button>
-            <button
+            <Button variant="secondary" size="md"
               onClick={() => setVerification(null)}
               disabled={loading}
-              className="rounded border border-rule px-3 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
+             
             >
               {t.lesson.notNow}
-            </button>
+            </Button>
           </div>
         </div>
       )}

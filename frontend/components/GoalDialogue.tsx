@@ -160,13 +160,13 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
             {t.goal.back}
           </Button>
         )}
-        <button
+        <Button variant="primary" size="lg"
           onClick={submit}
           disabled={loading || !answered}
-          className="rounded border border-signal-dim bg-signal/15 px-5 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
+         
         >
           {loading ? t.goal.thinking : t.goal.continue}
-        </button>
+        </Button>
         {/* Says why Continue is dead rather than leaving the user to guess.
             The ↵ hint belongs only to the free-text box that honours it. */}
         <span className="font-mono text-[calc(10.5rem/16)] text-graphite">

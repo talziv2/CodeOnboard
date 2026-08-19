@@ -129,14 +129,14 @@ export default function Home() {
                 {t.home.recent}
               </span>
               {recent.map((url) => (
-                <button
+                <Button variant="chrome" size="xs"
                   key={url}
                   type="button"
                   onClick={() => { setRepoUrl(url); setError(null); }}
-                  className="rounded border border-rule px-2.5 py-1 font-mono text-[calc(11rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
+                 
                 >
                   {url.replace(/^https?:\/\/github\.com\//, "")}
-                </button>
+                </Button>
               ))}
             </div>
           )}
