@@ -1,6 +1,6 @@
 # UI Implementation Plan
 
-> **Status:** in progress on `ui-redesign`. **M0, D1, D2, D2b shipped; D3 next.**
+> **Status:** in progress on `ui-redesign`. **M0, D1, D2, D2b, D3 shipped; F1 next.**
 > Per-milestone commits and measurements: [`evidence/ux-journeys.md`](evidence/ux-journeys.md).
 > **Inputs:** [`ui-baseline.md`](ui-baseline.md) (evidence),
 > [`ui-direction.md`](ui-direction.md) (principles), [`ui-concept.md`](ui-concept.md) (visual concept).
@@ -728,8 +728,8 @@ M0  scaffolding                     1 commit, no visual change   ✅ 4679d4e
 D1  invisible surfaces        🔴    isolated + cherry-pickable   ✅ 276459c
 D2  one composer                    isolated + cherry-pickable   ✅ 9ca38ca
 D2b what a check reports            found in manual J4 testing   ✅ d9cc50d
-D3  focus + disabled                isolated + cherry-pickable   ← next
-F1  tokens                          additive, zero visual diff
+D3  focus + disabled                isolated + cherry-pickable   ✅ e731f90
+F1  tokens                          additive, zero visual diff   ← next
 F2  primitives
 F3  type / space / geometry   🔴    the "does it feel new" gate
 P1  landing                    ◀── pre-session lands here, not at the end
