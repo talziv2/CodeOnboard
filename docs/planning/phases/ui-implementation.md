@@ -181,6 +181,72 @@ isolated and reviewable.
 
 ---
 
+## 3a. Carried-forward UX issue: feedback information architecture
+
+**Raised 2026-08-19, after F3b was visually approved.** The practice surface fixed
+the *separation* problem — lesson content versus interaction area now reads clearly.
+It did not fix, and was never going to fix, **what is present immediately after an
+answer**.
+
+Recorded here as an explicit input to the L track rather than as a styling defect,
+because the remaining problem is conceptual: which information and which actions
+belong in the moment after an answer, what should be secondary or collapsed, and
+how feedback, gaps, retry, warm-up and verification relate to one another.
+
+**Do not solve this opportunistically in F3c or F3d.** Those milestones touch action
+weight and contrast; neither should quietly re-scope the feedback state. When the L
+track reaches it, revisit the feedback state **as a whole**.
+
+### What is actually present after an answer — source-derived, not impressionistic
+
+Inside the feedback branch of the practice well alone:
+
+| | |
+|---|---|
+| Independent conditional sub-blocks | **16** |
+| `<Button>` call sites (1–4 render at once) | **11** |
+| Distinct copy strings referenced | **21** |
+| Callouts | 2 |
+
+And simultaneously present in the column around it: the full setup prose
+(expanded), the trace-path anchor list, the gaps list with a per-gap `Set aside`
+control, the attempts history, and below the well the explanation plus its
+`takeaway` and `ownership` callouts.
+
+So the learner who answers once can face: a verdict word, a rationale, a
+consequence sentence, an adaptation callout, a re-taught notice, a pruned notice, a
+warm-up status line, up to four actions — and around all of it, five other blocks
+that were already on screen.
+
+### Why this is L-track work and not F3 work
+
+- The fix is **deciding what is primary**, which is what the phase model in `L1`
+  exists to express. Sixteen conditionals in one branch is the same failure mode
+  D2b exposed at a smaller scale: presentation keyed off many independent flags
+  rather than off one derived state.
+- The collapse discipline that would fix it — superseded artifacts to one line,
+  gaps and history behind counters — is `L4` and `L5`, already planned.
+- Restyling cannot reduce a count of sixteen.
+
+### Specific questions for the L track to answer
+
+1. After a *correct* answer, what should be on screen at all beyond the verdict and
+   `Next stop`?
+2. Should the adaptation notices (`retaught`, `pruned`, warm-up status) be part of
+   the feedback, or belong to the adaptation channel in `A1`?
+3. Should gaps remain visible during feedback, or collapse to the brief's counter
+   the moment a verdict arrives?
+4. Do `takeaway` and `ownership` belong beside the explanation, or are they a third
+   thing competing with both the verdict and the reveal?
+5. Is the attempts history ever wanted *during* feedback, as opposed to on demand?
+
+### Status
+
+Open. Blocks nothing; informs `L1`, `L4` and `L5`. F3b's practice surface is the
+frame this will be redesigned *inside*, and is approved as-is.
+
+---
+
 ## 4. Test strategy
 
 Given zero frontend tooling, the proposal is deliberately narrow — enough to protect
@@ -444,6 +510,7 @@ Why this order:
 ---
 
 ### L1 — Extract phase derivation (logic only)
+- **Reads §3a.** The phase model is what replaces sixteen independent conditionals with one derived state.
 - **Goal.** Introduce the phase concept with **zero render change**.
 - **Files.** new `frontend/lib/lessonPhase.ts`; `LessonPanel.tsx` (compute only)
 - **Behaviour.** None. The function derives `STUDY | FEEDBACK | VERIFY | RESOLVED` from existing state; nothing consumes it.
@@ -487,6 +554,7 @@ Why this order:
 ---
 
 ### L4 — Phase-driven rendering, inline actions, feedback key point 🔴🔴
+- **Owns §3a.** Revisit the feedback state as a whole here, not as styling.
 - **Goal.** The centrepiece. Behind `CODEONBOARD_UI=next`; legacy path untouched.
 - **Files.** `LessonWorkspace.tsx`, `FeedbackCard.tsx`, `AnswerComposer.tsx`, `lessonPhase.ts`, `lib/strings.ts`
 - **Behaviour.**
