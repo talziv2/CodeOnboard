@@ -14,6 +14,7 @@ import type { GraphNode, SessionGraph } from "@/lib/api";
 import { buildRoute, spineLength } from "@/lib/graph-layout";
 import { currentSection, splitJourney } from "@/lib/route-sections";
 import { useSourcePane } from "@/lib/source-pane";
+import Button from "@/components/ui/Button";
 import { errorText, t } from "@/lib/strings";
 
 export default function SessionPage() {
@@ -270,43 +271,39 @@ export default function SessionPage() {
           <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.13em] text-graphite">
             {t.scope.label(spineLength(stops))}
           </span>
-          <button
+          <Button variant="chrome" size="xs"
             onClick={() => adjustScope("shorter")}
             disabled={scoping}
-            className="rounded border border-rule px-2 py-1 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
           >
             {scoping ? t.scope.working : t.scope.shorter}
-          </button>
-          <button
+          </Button>
+          <Button variant="chrome" size="xs"
             onClick={() => adjustScope("deeper")}
             disabled={scoping}
-            className="rounded border border-rule px-2 py-1 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
           >
             {t.scope.deeper}
-          </button>
+          </Button>
           {scopeNote && (
             <span className="font-mono text-[calc(10rem/16)] text-signal">{scopeNote}</span>
           )}
         </span>
 
         {tab === "lesson" && (
-          <button
+          <Button variant="chrome" size="sm" className="shrink-0"
             onClick={() => setShowCode((v) => !v)}
-            className="shrink-0 rounded border border-rule px-3 py-1.5 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
           >
             {showCode ? t.session.hideSource : t.session.showSource}
-          </button>
+          </Button>
         )}
         {/* The briefing and the profile card stay reachable: what the system
             took the goal to be is worth re-reading mid-journey, and it is the
             page that explains why the lessons are pitched the way they are. */}
-        <button
+        <Button variant="chrome" size="sm" className="shrink-0"
           onClick={() => router.push(`/session/${id}/welcome`)}
-          className="shrink-0 rounded border border-rule px-3 py-1.5 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
         >
           {t.welcome.headerLink}
-        </button>
-        <button
+        </Button>
+        <Button variant="chrome" size="sm" className="shrink-0"
           onClick={async () => {
             setRestarting(true);
             try {
@@ -317,10 +314,9 @@ export default function SessionPage() {
             }
           }}
           disabled={restarting}
-          className="shrink-0 rounded border border-rule px-3 py-1.5 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
         >
           {restarting ? t.session.startingOver : t.session.startOver}
-        </button>
+        </Button>
 
         <SettingsMenu />
       </header>

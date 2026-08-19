@@ -828,13 +828,12 @@ export default function LessonPanel({
                 {/* Still reachable when something is unresolved, but never the
                     whole response to a correct answer. */}
                 {openGaps.length > 0 && !warmUpInserted && (
-                  <button
+                  <Button variant="ghost"
                     onClick={handleRetry}
                     disabled={loading}
-                    className="font-mono text-[calc(10.5rem/16)] text-graphite transition hover:text-signal"
                   >
                     {t.lesson.buildWarmUp}
-                  </button>
+                  </Button>
                 )}
               </>
             )}

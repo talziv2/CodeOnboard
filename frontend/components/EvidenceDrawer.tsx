@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { EvidenceChain } from "@/lib/api";
 import { getEvidence } from "@/lib/api";
 import { understandingLabel, understandingStyle } from "@/lib/tags";
+import Button from "@/components/ui/Button";
 import { t } from "@/lib/strings";
 
 /**
@@ -57,12 +58,11 @@ export default function EvidenceDrawer({
         <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
           {t.map.evidenceFor}
         </span>
-        <button
+        <Button variant="ghost"
           onClick={onClose}
-          className="font-mono text-[calc(10.5rem/16)] text-graphite transition hover:text-signal"
         >
           {t.map.close}
-        </button>
+        </Button>
       </div>
 
       {failed && <p className="text-[calc(12.5rem/16)] text-rust">{t.session.loadFailed}</p>}
