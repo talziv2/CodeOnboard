@@ -152,11 +152,20 @@ export const t = {
     continue: "Continue",
     back: "Back",
     enterHint: "↵ to continue",
+    // The options list is driven by the keyboard, so it says so — and it says
+    // what the two keys DO, because selecting and confirming are separate here
+    // and a hint that blurred them would undo the point of separating them.
+    optionHint: "↑↓ to choose · ↵ to continue",
+    answers: "Your answers",
+    edit: "Change",
+    editAnswer: (question: string) => `Change your answer to: ${question}`,
     answerFailed: "Couldn't save that answer.",
     backFailed: "Couldn't go back to the previous question.",
-    // Every question is required: the interview's five answers are the only
-    // input the whole pipeline has, so there is nothing sensible to infer from
-    // a skipped one.
+    // Every question is required: the interview's answers are the only input the
+    // whole pipeline has, so there is nothing sensible to infer from a skipped
+    // one. (Six or seven of them, not five — `total` on the wire is documented as
+    // a lower bound until `goal_type` is known, because two goal types add a
+    // second follow-up.)
     answerRequired: "Answer to continue",
   },
 

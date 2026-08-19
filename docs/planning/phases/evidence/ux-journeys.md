@@ -967,3 +967,190 @@ alone: `t.home.serverUnreachable` ("Couldn't reach the server.") and
 `t.errors.server_unreachable` (the same thing plus how to fix it) are two strings
 for one condition, and which one appears depends on whether the thrown value was
 an `Error`. Recorded, not merged — it is copy consolidation, not P1's job.
+
+---
+
+## P2 — Interview
+
+### What changed
+
+The interview was one question at a time with no record of the rest, so `Back` was
+the only way to check an earlier answer — and checking it meant leaving the
+question you were on. Now:
+
+- **`components/goal/OptionList.tsx`** — full-width 44px rows, driven by the
+  keyboard. Choosing and confirming are separate: click selects and nothing else,
+  arrow keys move the selection, Enter confirms. Semantics are a radio group rather
+  than a listbox, because exactly one answer is possible and arrow keys should both
+  move and select. Selection is carried by a filled-versus-hollow dot as well as by
+  colour, so it survives a monochrome reading.
+- **`components/goal/AnswerTranscript.tsx`** — answered questions collapse into an
+  editable list. `Change` steps back through `/goal/back` once per question; there
+  is no new endpoint and no new backend field.
+- **The tick bar is gone**, replaced by "Question N of M" as text plus the
+  transcript. Declared change: the ticks said the same thing as the counter, while
+  the transcript says it more usefully — it shows what the answers *were*.
+- **`Back` is tertiary** (`ghost`), not an outline. The transcript's `Change` is the
+  specific way back; this is the general one, and it should not carry Continue's
+  weight.
+
+### Why Change loops instead of jumping
+
+`goalBack` un-answers exactly one question, and the backend owns what that *means*:
+crossing question 2 clears `goal_type`, which is what makes the follow-ups
+recompute. A client that jumped straight to question 2 would leave the server
+believing in a goal type the user had abandoned, and the interview would finish
+with answers to questions that no longer applied. So stepping from question 4 to
+question 1 is three sequential calls. Verified live below.
+
+### The gate — all six goal-type paths
+
+Driven against the real backend at the API level rather than through the UI:
+completing an interview in the UI hands off to `sessionStart`, and six pipeline
+runs is real money and six sessions for no extra coverage of the thing under test.
+
+```
+goal type selected at Q2                questions   total       final goal_type
+Use it in my own project                    6        6           understand_architecture  X
+Understand the architecture ...             6        6           understand_architecture  ok
+Improve or extend the codebase safely       7        6 -> 7      understand_architecture  X
+Contribute code / open a PR                 6        6           understand_architecture  X
+Debug an issue I'm hitting                  7        6 -> 7      debug_issue              ok
+Understand how it works (reading/...)       6        6           understand_architecture  X
+```
+
+All six complete. The counts are **6, 6, 7, 6, 7, 6** — which is the independent
+confirmation of P1's copy, and `total` honestly moves 6 to 7 for exactly the two
+types with a second follow-up.
+
+The right-hand column is a **backend defect found by this walk, not fixed here** —
+see below.
+
+### The gate — back past question 2, live
+
+From question 4 of 7 (having chosen "Debug an issue I'm hitting"), pressing
+`Change` on the first transcript entry:
+
+```
+before                Question 4 of 7, transcript = 3 entries
+change controls       3, labelled "Change your answer to: How familiar..." etc.
+after                 Question 1 of 6      <- total reverted, so goal_type was cleared
+restored selection    "Starting fresh — never looked at it"   (the original answer)
+transcript            0 entries, section gone
+Back                  absent again on Q1
+focus                 landed on the restored option
+goalBack calls        3
+```
+
+The 7 to 6 revert is the observable proof that the server cleared `goal_type` on the
+way past question 2 — the thing the loop exists to preserve.
+
+### The gate — keyboard only
+
+Verified live to question 2 (focus lands on the first option on arrival, ArrowDown
+selects without advancing, Enter advances, transcript appears, `Back` appears), and
+end-to-end in tests: ArrowDown+Enter, then ArrowUp+Enter, then typed free text and
+Enter completes the interview and calls `onDone`.
+
+### Contrast — every interview state, both themes
+
+```
+                                    dark    light
+question prompt / options           10.97   8.50
+selected option (signal on 15%)      7.61   5.32
+Continue (ink on signal)             9.91   6.73
+progress text / key hint             5.57   5.18
+transcript: question, Change         5.57   5.18
+below 4.5, all four states              0       0
+option rows                         44px, full width, both themes
+```
+
+States measured: no selection, selection made, and transcript present.
+
+### The motion, and why it animates position only
+
+`rise` moves each question up 8px on arrival. It **does not touch opacity**, and
+that is the point. A fade has to start from `opacity: 0`, which makes the content
+invisible until the animation runs — and while an animation is in its active phase
+it owns the property regardless of `animation-fill-mode`, so there is no fill-mode
+setting that makes a stalled fade safe. First written with `both`, then with no
+fill mode, and measured both times: in this pane the animation sits at
+`currentTime: 0` indefinitely and the entire question rendered at `opacity: 0`.
+Animating only `translateY` makes the worst case "the question is 8px low".
+
+Note the honest limitation: this environment cannot show the animation *playing*,
+only its start and end states. What was verified is that a stalled animation leaves
+the content readable.
+
+### Two more measurement traps
+
+**A stalled animation poisons computed styles for its whole subtree.** Inside
+`div.rise`, Continue reported `background: transparent` and `color: muted` — an
+exact match for the `:disabled` treatment — while `button.disabled` was `false` and
+`matches(":disabled")` was `false`. It looked like a real styling bug for several
+rounds. What settled it: cloning the same button with the same classes onto `body`
+rendered it correctly. The fix for measurement is to freeze animations as well as
+transitions before reading — the earlier probes only froze transitions.
+
+**A dev server serves partial CSS if the page loads while Tailwind is compiling.**
+After clearing `.next` and restarting, the first page load got a sheet with 78
+rules; re-fetching the same href with `cache: "reload"` returned the full 49,698
+bytes containing every missing utility. The symptom is identical to "this class does
+not work". Check the loaded sheet against the served file before believing a styling
+failure.
+
+### Not changed
+
+The five core questions and their order, the option strings (they are parsed keys),
+the backend's rejection of out-of-vocabulary answers, and `goalBack`'s ownership of
+goal-type clearing. One test pins that a rejected answer never enters the
+transcript, because the vocabulary check lives on the server.
+
+Tests: 13 new in `components/GoalDialogue.test.tsx`; suite 57 passed, typecheck
+clean, production build succeeds.
+
+---
+
+## Found while doing P1/P2 — recorded, not fixed
+
+Three things outside the milestone that should not be silently absorbed.
+
+### 1. goal_type is re-invented by the model after being determined in Python
+
+**Severity: high.** `backend/agents/goal/agent.py:150` sets
+`session.goal_type = GOAL_TYPE_MAP[chosen]` from the user's own selection, and that
+value correctly routes the follow-up questions — the 7-question paths above prove
+it. But the final goal JSON's `goal_type` is produced by the Haiku synthesis call,
+which is given the raw Q&A text and a list of permitted values, and is **not given
+the value already derived**. Measured: five of six goal types came back as
+`understand_architecture`, including "Use it in my own project" (should be
+`use_library`) and "Contribute code / open a PR" (should be `contribute_code`).
+
+This is the pattern `CLAUDE.md` records having already removed twice: `depth` "was
+previously invented by Haiku from answers that never mentioned it", and
+`experience_level` "was the same kind of invention and has been removed". Note the
+contrast inside the same function — `code_depth` *is* passed into
+`_synthesize_goal` as a parameter, `goal_type` is not.
+
+It matters more than either of those did: `goal_type` selects the investigation
+strategy and decides whether the Reviewer runs. Suggested fix, matching how
+`code_depth` is already handled: pass `session.goal_type` into `_synthesize_goal`
+and set it on the result rather than asking the model for it.
+
+Not fixed here because P2's must-not-change list explicitly protects the backend's
+goal logic, and this wants its own change with its own tests.
+
+### 2. The generation screen still promises "two to four minutes"
+
+`t.starting.elapsed` renders "{n}s elapsed · usually two to four minutes". The
+elapsed seconds are real; the estimate is the exact unmeasured claim P1 removed from
+the landing, one screen later in the same flow. It belongs to **P3**, which owns the
+generation screen — flagged so P3 does not have to rediscover it.
+
+### 3. A next build in frontend/ broke the dev server on :3000
+
+Running `npx next build` while a `next dev` was serving the same `.next` left :3000
+returning HTTP 500. The build output itself is correct. Restarting that dev server
+clears it. This is the same class of collision the `.ui-audit-fe` copy exists to
+avoid — the lesson is that the copy has to be used for *builds* too, not just for
+serving.
