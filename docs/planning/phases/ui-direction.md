@@ -893,3 +893,88 @@ Stage 1 ──▶ Stage 2 ──┬──▶ Stage 3 ──┐
 It does not specify component APIs, file layout, exact token values in code, or
 copy. Those belong to the implementation plan, which should not start until this
 direction has been argued with.
+
+---
+
+## 13. Rejected for now: Lesson / Practice as two tabs
+
+Raised 2026-08-19, after F3a made the question 18px and that still did not feel
+categorically different from the prose around it. **Not rejected on principle —
+rejected on current evidence.** Recorded with the triggers that would justify
+revisiting.
+
+### The proposal
+
+Two tabs inside the lesson workspace: **Lesson** for the teaching content, and a
+practice tab for questions, answers, feedback, retries and verification. Its
+appeal: questions get their own intentional space instead of being distinguished
+from prose by font size, and the practice tab can retain history without the
+lesson tab growing without bound.
+
+### Why not now
+
+**1. What 723 real nodes contain.** The rich practice state the tab exists to
+house has essentially never occurred:
+
+| | |
+|---|---|
+| Nodes answered at all | 51 of 723 |
+| **Of those, exactly one attempt** | **40 (78%)** |
+| Two attempts · three | 9 · 2 |
+| Nodes that ever recorded a gap | **8** (max 2) |
+| Verifications ever taken | **2** |
+| Remediation rounds | **0** |
+
+Caveat: these are dev sessions, mostly abandoned, and `CODEONBOARD_GAPS` defaults
+off, so gaps are under-recorded. It is what the product has produced so far, not a
+forecast. But the cost of tabs falls on the common case — at least one forced
+switch per stop, ~15 a session — to benefit a case that is currently rare.
+
+**2. The withheld reveal makes the two tabs non-independent.** The reveal is
+lesson content whose *timing* is controlled by answering, so neither tab can own
+it cleanly. In Lesson, submitting an answer silently changes a tab the learner is
+not looking at — the "adaptation is invisible" failure in a new costume. In
+Practice, the Lesson tab is permanently less than what the learner needs. And a
+re-teach rewrites the setup itself, so "Lesson" is not a stable place to return
+to. Tabs promise two stable rooms; this content model does not have two.
+
+**3. Answers here are grounded, and grounding means referring.** Answering needs
+the prose, the objective and the code. Code is a separate column either way, but
+the prose and objective would be one tab away exactly when they are most needed.
+The single canvas can collapse prose to a line and expand it in place beside the
+composer.
+
+**4. It relocates accumulation rather than solving it.** Whatever discipline stops
+the practice tab accumulating — one primary artifact, superseded content collapsed
+to a line, history behind a counter — is the same discipline that stops the single
+canvas accumulating. Tabs add a navigation axis without adding the mechanism.
+Collapse is the mechanism.
+
+### What was done instead
+
+F3b gives the active question its own **practice surface**, with
+question → answer → feedback happening inside that one region, so the distinction
+is carried by surface, grouping and state transition rather than by 2px of type.
+
+### Triggers that would justify revisiting
+
+- **Multiple questions per objective.** If a stop ever asks three or four
+  questions, the practice tab becomes a genuine place and this decision flips.
+- **Materially richer gap and verification history** once `CODEONBOARD_GAPS=1` is
+  the default — the 8-nodes-ever figure is the weakest part of the case against.
+- **Testing showing the single canvas still fails** to separate reading from being
+  examined, after F3b's surface work has landed.
+
+### Naming, if it is ever revisited
+
+- **"Practice"** — reject. Implies drills and rehearsal; a stop asks once and the
+  result is evidence that moves goal readiness, not warm-up repetition.
+- **"Check understanding"** — reject. Already means two different things in the
+  product: the lesson's question section and the verification CTA.
+- **"Demonstrate"** — grounded in `demonstrated`, the header's own measure, and in
+  `objective` as "the claim the learner should be able to make". Names the act.
+- **"Evidence"** — grounded in the evidence drawer and the rule that every state be
+  explainable from persisted evidence. Names the record.
+
+Best pairing: `Demonstrate` for the act, `Evidence` for the history — which is
+close to what the single-canvas model already has as a counter and a panel.
