@@ -144,6 +144,15 @@ export default function LessonPanel({
   const [verifying, setVerifying] = useState(false);
   const [done, setDone] = useState(false);
   const verdictRef = useRef<HTMLDivElement>(null);
+  // What the last check was ABOUT, captured at submit time.
+  //
+  // Both halves are otherwise unrecoverable once the reply lands. The answer is
+  // cleared from the composer and a verification attempt is deliberately kept
+  // out of "Your answers", so without this the learner's own words vanish. And
+  // `result.gaps` is the still-OPEN list, so a gap that just closed is by
+  // definition absent from it — the claims have to come from the question that
+  // targeted them.
+  const [checked, setChecked] = useState<{ answer: string; targeted: NodeGap[] } | null>(null);
 
   useEffect(() => {
     setLesson(null);
@@ -159,6 +168,7 @@ export default function LessonPanel({
   useEffect(() => {
     setResult(null);
     setAnswer("");
+    setChecked(null);
   }, [sessionId, nodeId]);
 
   // Bring the verdict to the learner.
@@ -212,6 +222,8 @@ export default function LessonPanel({
     setError(null);
     try {
       const res = await respond(sessionId, answer, nodeId);
+      // A fresh assessment supersedes any check result on screen.
+      setChecked(null);
       setResult(res);
       // A re-teach replaced the cached lesson with one that names the
       // misconception. Pull it, so what is on screen is the corrected lesson
@@ -288,6 +300,8 @@ export default function LessonPanel({
     setError(null);
     try {
       const got = await respondToVerification(sessionId, answer, nodeId);
+      // Captured BEFORE the composer and the prompt are cleared — see `checked`.
+      setChecked({ answer, targeted: verification?.gaps ?? [] });
       setResult(got);
       setVerification(null);
       setAnswer("");
@@ -398,10 +412,35 @@ export default function LessonPanel({
   // reached, except when a warm-up was just spliced in: the Mutator caps them at
   // one per node, so offering there would promise something it would decline.
   const warmUpInserted = result?.mutation?.kind === "prerequisite";
+
+  // A CHECK, not an assessment. The backend deliberately returns
+  // `classification: null` here — a verification answer is evidence about named
+  // beliefs, not a re-grade of the objective — so every branch below that keys
+  // off `classification` is silent on this path, and the panel has to read
+  // `resolved` / `unresolved` instead.
+  const isCheck = result?.kind === "verification";
+  const closed = (checked?.targeted ?? []).filter((g) =>
+    (result?.resolved ?? []).includes(g.id)
+  );
+  const stillOpen = (checked?.targeted ?? []).filter((g) =>
+    (result?.unresolved ?? []).includes(g.id)
+  );
+  const checkOutcome =
+    closed.length === 0
+      ? { label: t.lesson.checkOpen, color: "var(--color-brass)" }
+      : stillOpen.length === 0
+      ? { label: t.lesson.checkCleared, color: "var(--color-jade)" }
+      : { label: t.lesson.checkPartly, color: "var(--color-brass)" };
+
   const canRequestWarmUp =
     result !== null &&
     result?.classification !== "understood" &&
-    !warmUpInserted;
+    !warmUpInserted &&
+    // On a check, `classification` is null, so this test passed by accident and
+    // "Build me a warm-up" became the ONLY button offered after a correct
+    // answer. A warm-up is still reachable here, but as a fallback rather than
+    // the whole response.
+    !isCheck;
   const recovered =
     warmUpTitle !== null &&
     attempts.some((a) => FAILED.includes(a.classification)) &&
@@ -673,13 +712,70 @@ export default function LessonPanel({
         >
           <p
             className="font-mono text-[calc(11rem/16)] uppercase tracking-[0.14em]"
-            style={{ color: VERDICT_COLOR[result.classification] ?? NEUTRAL }}
+            style={{
+              color: isCheck
+                ? checkOutcome.color
+                : VERDICT_COLOR[result.classification] ?? NEUTRAL,
+            }}
           >
-            {t.lesson.verdict[result.classification] ?? result.classification}
+            {isCheck
+              ? checkOutcome.label
+              : t.lesson.verdict[result.classification] ?? result.classification}
           </p>
           <p className="measure text-[calc(13rem/16)] leading-[1.65] text-paper">
             {result.rationale}
           </p>
+
+          {/* What the check actually did to the gap list, by name.
+              `resolved` and `unresolved` were on the wire from the start and
+              rendered nowhere, so a learner who answered correctly saw a card
+              with an empty headline and no statement that anything had closed —
+              while the gap silently disappeared from the list above. */}
+          {isCheck && closed.length > 0 && (
+            <div className="flex flex-col gap-1.5 rounded border border-jade/40 bg-jade/10 px-4 py-3">
+              <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-jade">
+                {t.lesson.checkClosedLabel}
+              </span>
+              <ul className="flex flex-col gap-1">
+                {closed.map((gap) => (
+                  <li
+                    key={gap.id}
+                    className="measure text-[calc(12.5rem/16)] leading-relaxed text-paper line-through decoration-jade/60"
+                  >
+                    {gap.claim}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Deliberately NOT re-listing what is still open. The gap list above
+              is already the authoritative, actionable copy of that, and naming
+              them twice on one screen is the accumulation this redesign exists
+              to remove. The card's job is what CHANGED — and a closed gap is the
+              half that is otherwise unrecoverable, because it has left the list
+              above by the time this renders. */}
+          {isCheck && closed.length === 0 && (
+            <p className="measure text-[calc(12.5rem/16)] leading-relaxed text-graphite">
+              {t.lesson.checkNothingClosed}
+            </p>
+          )}
+
+          {/* The learner's own words. A verification attempt is deliberately
+              excluded from "Your answers" — it carries no classification, so
+              including it would blank a row and corrupt `latest` — which left
+              the answer nowhere at all once the composer cleared. */}
+          {isCheck && checked?.answer && (
+            <div className="flex flex-col gap-1">
+              <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+                {t.lesson.youWrote}
+              </span>
+              <p className="measure whitespace-pre-wrap text-[calc(12.5rem/16)] leading-relaxed text-paper">
+                {checked.answer}
+              </p>
+            </div>
+          )}
+
           {error && <p className="text-sm text-rust">{error}</p>}
 
           {/* What the system did about the gap. Only a missing foundation
@@ -719,6 +815,54 @@ export default function LessonPanel({
             )}
 
           <div className="flex flex-wrap items-center gap-3">
+            {/* A check's own actions. Every branch below keys off
+                `classification`, which is null here, so without this the only
+                button reachable after a check was "Build me a warm-up" — offered
+                because `null !== "understood"` happened to be true. The primary
+                is whatever most directly closes what is left: another check
+                while gaps remain, otherwise moving on. */}
+            {isCheck && (
+              <>
+                {openGaps.length > 0 ? (
+                  <button
+                    onClick={onCheckUnderstanding}
+                    disabled={loading || verifying}
+                    className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+                  >
+                    {verifying ? t.lesson.verifyCtaBusy : t.lesson.checkAnother}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleAdvance}
+                    disabled={loading}
+                    className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+                  >
+                    {loading ? t.lesson.loadingShort : t.lesson.nextStop}
+                  </button>
+                )}
+                {openGaps.length > 0 && (
+                  <button
+                    onClick={handleAdvance}
+                    disabled={loading}
+                    className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+                  >
+                    {loading ? t.lesson.loadingShort : t.lesson.nextStop}
+                  </button>
+                )}
+                {/* Still reachable when something is unresolved, but never the
+                    whole response to a correct answer. */}
+                {openGaps.length > 0 && !warmUpInserted && (
+                  <button
+                    onClick={handleRetry}
+                    disabled={loading}
+                    className="font-mono text-[calc(10.5rem/16)] text-graphite transition hover:text-signal disabled:opacity-40"
+                  >
+                    {t.lesson.buildWarmUp}
+                  </button>
+                )}
+              </>
+            )}
+
             {result.classification === "understood" && (
               <button
                 onClick={handleAdvance}

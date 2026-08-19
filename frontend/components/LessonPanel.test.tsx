@@ -172,4 +172,91 @@ describe("requesting a verification", () => {
     // One call only — from the first submit, before the verification existed.
     expect(api.respond).toHaveBeenCalledTimes(1);
   });
+
+  /**
+   * The reply to a check carries `classification: null` on purpose — it is
+   * evidence about named beliefs, not a re-grade of the objective. Every action
+   * and label in the panel keyed off `classification`, so a learner who answered
+   * correctly got a card with an EMPTY headline, no statement that anything had
+   * closed, their own answer gone, and "Build me a warm-up" as the only button —
+   * offered because `null !== "understood"` happened to be true.
+   */
+  describe("after answering a check", () => {
+    const checkReply = (over: Partial<RespondResult> = {}): RespondResult => ({
+      kind: "verification",
+      classification: null as never,
+      rationale: "That settles the heuristic question.",
+      understanding_state: "understood",
+      mutation: { kind: "none" },
+      adaptation: { kind: "none" },
+      current_node_id: "n1",
+      resolved: ["g1"],
+      unresolved: [],
+      gaps: [],
+      ...over,
+    });
+
+    async function answerCheck(reply: RespondResult) {
+      const user = await reachVerification();
+      api.respondToVerification.mockResolvedValue(reply);
+      await user.type(textareas()[0], "My careful answer about np.inf.");
+      await user.click(submits()[0]);
+      await screen.findByText(reply.rationale);
+      return user;
+    }
+
+    test("says it cleared, and names what closed", async () => {
+      await answerCheck(checkReply());
+
+      expect(screen.getByText("Cleared")).toBeTruthy();
+      expect(screen.getByText(GAP.claim)).toBeTruthy();
+    });
+
+    test("keeps the learner's own answer on screen", async () => {
+      await answerCheck(checkReply());
+
+      // It is excluded from "Your answers" by design, so the card is the only
+      // place it can survive.
+      expect(screen.getByText("My careful answer about np.inf.")).toBeTruthy();
+    });
+
+    test("offers moving on — not a warm-up — when nothing is left open", async () => {
+      await answerCheck(checkReply());
+
+      expect(screen.getByRole("button", { name: /Next stop/ })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Build me a warm-up" })).toBeNull();
+    });
+
+    test("offers another check while a gap is still open", async () => {
+      await answerCheck(
+        checkReply({ resolved: [], unresolved: ["g1"], gaps: [GAP], understanding_state: "failed" })
+      );
+
+      expect(screen.getByText("Still open")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Check another" })).toBeTruthy();
+    });
+
+    test("distinguishes a partial close from a complete one", async () => {
+      const second = { ...GAP, id: "g2", claim: "Another false belief." };
+      api.requestVerification.mockResolvedValue({ ...PROMPT, targets: ["g1", "g2"], gaps: [GAP, second] });
+
+      await answerCheck(checkReply({ resolved: ["g1"], unresolved: ["g2"], gaps: [second] }));
+
+      const card = document.querySelector('div[tabindex="-1"]')!;
+      expect(screen.getByText("Partly cleared")).toBeTruthy();
+      // The card names only what CLOSED; what is still open stays in the gap
+      // list above rather than being printed twice.
+      expect(card.textContent).toContain(GAP.claim);
+      expect(card.textContent).not.toContain(second.claim);
+    });
+
+    test("never shows an empty verdict headline", async () => {
+      await answerCheck(checkReply());
+
+      const card = document.querySelector('div[tabindex="-1"]')!;
+      const headline = card.querySelector("p")!;
+      // The regression: this was "".
+      expect(headline.textContent?.trim()).not.toBe("");
+    });
+  });
 });

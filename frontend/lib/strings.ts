@@ -358,6 +358,17 @@ export const t = {
     verificationHeading: "A different angle on the same idea",
     verificationHelp:
       "Answering this is the only thing that clears the gap — moving on leaves it open.",
+    // The result of a check. A verification carries NO classification — it is
+    // evidence about specific beliefs, not a re-grade of the objective — so the
+    // headline has to come from what actually closed. Three outcomes, and the
+    // wording never claims the objective was reassessed.
+    checkCleared: "Cleared",
+    checkPartly: "Partly cleared",
+    checkOpen: "Still open",
+    checkClosedLabel: "What this closed",
+    checkNothingClosed:
+      "That did not settle it. You can try a different angle, or carry on and come back.",
+    checkAnother: "Check another",
     // The outstanding-gaps list: the most honest surface in the product. Named,
     // never counted, because "what you still do not know" is only useful specific.
     gapsHeading: "Still unresolved",

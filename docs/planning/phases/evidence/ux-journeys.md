@@ -127,3 +127,48 @@ Also confirmed: focus moves to the verdict panel after grading
 `scrollTop` assignment works, animated scrolling does not. The arithmetic and the
 focus move are verified; the smooth-scroll path needs one manual check in a real
 window. Recorded rather than assumed.
+
+### D2b — 2026-08-19 · what happens after you answer a check
+
+Found in manual testing of **J4**, which is exactly what J4 exists to catch:
+*wrong answer → check → correct answer → Submit* left the learner unable to tell
+whether anything had been processed.
+
+Root cause was not a bug in either half on its own. `_respond_to_verification`
+returns `classification: null` **by design** — a verification is evidence about
+named beliefs, not a re-grade of the objective — and every label and action in the
+panel keyed off `classification`.
+
+Measured before, after a **correct** check answer:
+
+```
+verdict headline   ""                        ← t.lesson.verdict[null] ?? null
+buttons            ["Build me a warm-up"]    ← the ONLY action, because
+                                               null !== "understood" was true
+learner's answer   absent                    ← cleared, and excluded from history
+gaps               2 → 1                     ← the backend HAD closed one
+resolved/unresolved never rendered anywhere
+```
+
+After:
+
+```
+headline           "Cleared"  in jade rgb(79,178,134)
+buttons            ["Next stop →"]
+WHAT THIS CLOSED   both gap claims, struck through
+YOU WROTE          the learner's full answer
+gaps               2 → 0
+```
+
+Verified live for the all-cleared path. The partly-cleared and nothing-closed
+branches are covered by unit tests against the real reply shape rather than live,
+because the session's gaps were exhausted by then — noted so it is not mistaken
+for full live coverage.
+
+No contrast regression in either theme; the new card introduces no failures.
+
+**Design note.** The card names only what *closed*. What is still open is
+deliberately not re-listed, because the gap list above is already the
+authoritative and actionable copy — printing both is the accumulation this
+redesign exists to remove. A closed gap is the half that is otherwise
+unrecoverable, since it has left that list by the time the card renders.
