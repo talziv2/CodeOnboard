@@ -1,6 +1,6 @@
 # UI Implementation Plan
 
-> **Status:** in progress on `ui-redesign`. **M0, D1, D2, D2b, D3, F1 shipped; F2 next.**
+> **Status:** in progress on `ui-redesign`. **M0, D1, D2, D2b, D3, F1, F2 shipped; F3 next.**
 > Per-milestone commits and measurements: [`evidence/ux-journeys.md`](evidence/ux-journeys.md).
 > **Inputs:** [`ui-baseline.md`](ui-baseline.md) (evidence),
 > [`ui-direction.md`](ui-direction.md) (principles), [`ui-concept.md`](ui-concept.md) (visual concept).
@@ -730,8 +730,8 @@ D2  one composer                    isolated + cherry-pickable   ✅ 9ca38ca
 D2b what a check reports            found in manual J4 testing   ✅ d9cc50d
 D3  focus + disabled                isolated + cherry-pickable   ✅ e731f90
 F1  tokens                          additive, zero visual diff   ✅ (this commit)
-F2  primitives                      ← next
-F3  type / space / geometry   🔴    the "does it feel new" gate
+F2  primitives                      5 commits, gated each      ✅ ecd80ec..5333864
+F3  type / space / geometry   🔴    the "does it feel new" gate   ← next
 P1  landing                    ◀── pre-session lands here, not at the end
 P2  interview                  ◀──
 S1  header

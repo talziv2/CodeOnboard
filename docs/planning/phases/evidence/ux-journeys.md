@@ -425,3 +425,94 @@ resemble `ghost` but are not:
 - `openMap` — base `text-signal`, not `text-graphite`. An accent link.
 
 Both stay explicit until S1 or F3 decides otherwise.
+
+### F2d — 2026-08-19 · Callout, and why Surface was dropped
+
+Five tinted boxes in the lesson, one shape, three semantic tones: `signal` for
+something the system wants noticed (takeaway, hint, follow-up), `jade` for
+something closed or recovered, `neutral` for an aside carrying no verdict
+(ownership). Only the eyebrow and the container are owned — the bodies differ
+genuinely (a struck-through list of closed gaps, and paragraphs at three sizes) so
+they stay as children.
+
+Four adopt it unchanged; the fifth is isolated in its own commit.
+
+Two confirmed live, since these boxes only render after an answer:
+
+```
+Take away      bg signal/0.06 · border signal-dim/0.4 · gap 6px · pad 12px/16px
+               radius 4px · mt 4px preserved · eyebrow 9.5px rgb(91,200,232)
+Yours to hold  bg slab · border rule · otherwise identical
+```
+
+#### Normalization — 1 site, 2 changes
+
+| Site | Change | Δ |
+|---|---|---|
+| `recovered` | `gap-1` → `gap-1.5` | +2px internal gap |
+| `recovered` | eyebrow 10px → 9.5px | −0.5px |
+
+The only one of the five that had drifted, and neither difference carries a story:
+four sites agree against one. **Declared but not observed** — this box renders only
+after a learner recovers from a failed stop via a warm-up, which the test session
+is not in. An A/B on identical data confirms the migration moves nothing else.
+
+#### Surface: proposed in the plan, dropped on the evidence
+
+Eight sites share `rounded border border-rule bg-slab`. They also sit on **five
+different element types** (`details`, `div`, `li`, `aside`, `button`) and disagree
+on every padding and gap — `p-4`, `p-5`, `px-3.5 py-3`, `px-3 py-2`, `px-4 py-3`,
+none — while one uses `rounded-md`, one flips its background on `open`, and one is
+a clickable region already excluded from `Button`.
+
+A component emitting three classes while taking element, padding, gap and layout
+as props would be barely shorter than the markup it replaces and no more
+consistent — the "component whose every difference is a parameter" that this
+milestone's own brief warns against.
+
+The real argument for it is that F3 will change the card treatment in one place
+instead of eight. That is an argument for a **token**, not for a component, and F3
+already has `--radius-card` and `--shadow-card` waiting. Recorded here so the
+reversal is visible rather than quietly dropped.
+
+---
+
+## F2 gate — closed
+
+New baselines, on **restored** session data (see the note below):
+
+```
+lesson dark        226  -1352415
+lesson light       226   540869114
+map                569  1329943391
+chapter overview   189   449407977
+```
+
+Probe, both themes:
+
+```
+PASS  contrast: 90 text runs >= 4.5:1
+PASS  answer inputs: 1
+PASS  no ambiguous duplicate button labels
+PASS  focus ring on all 38 interactive elements
+PASS  1 disabled control(s) >= 3:1
+FAIL  distinct font sizes: 11   — F3 owns this
+FAIL  header content zone 0px   — S1 owns this
+```
+
+Both remaining failures are the milestones' own targets, not regressions.
+
+**A measurement caveat worth recording.** The digests earlier in this log are not
+comparable across the whole of F2, because the session's *data* changed partway
+through: verifying the button normalizations meant submitting real answers, which
+added attempts and closed gaps. Element counts moved 274 → 348 on the lesson and
+603 → 594 on the map for that reason, not from any styling change. The database has
+since been restored from `data/sessions.db.uibaseline-backup` and verified back to
+its original shape — current node `58766f8b`, 20 attempts, 5 nodes with gaps,
+progress 7/12 — and the four numbers above are the baseline F3 should compare
+against. The post-F2 mutated state is kept at `data/sessions.db.post-f2` in case a
+state with more evidence is useful later.
+
+**Lesson for later gates:** a digest gate is only valid on fixed data. Any
+milestone whose verification needs live grading should re-baseline afterwards
+rather than comparing across the mutation.
