@@ -27,7 +27,12 @@
   --color-signal-dim: #2e7a91;
   --color-jade: #4fb286;
   --color-brass: #d9a441;
-  --color-rust: #d4634f;
+  /* F3d: was #d4634f, which was validated against `ink` only. On the two
+     surfaces a status label actually lands on it fell under the floor — 4.35 on
+     `signal-wash`, 4.21 as a chip on `slab`. Rust is text and border everywhere
+     and never a fill, so raising it can only raise contrast: now 4.54 at its
+     worst composite and 6.37 at its best. */
+  --color-rust: #e07762;
 
   /* Signal used as a *surface* rather than as ink: the halo around the current
      pin, and the fill of the card you are standing on. */
@@ -36,7 +41,14 @@
 
   /* The source pane. Deliberately quieter than body prose — code is there to be
      referred to, not read end to end, until a line is the one under discussion. */
-  --color-code-gutter: #3e4e58;
+  /* The gutter was 2.17 here and 3.54 in light. Quiet was the intent, but line
+     numbers are not decoration in this product: every citation is `file:line`,
+     so a learner reads them to find the thing the lesson is talking about. That
+     makes them content, and content meets 4.5. Set to the floor rather than
+     above it, which keeps three distinct tiers in the pane — hot 12.49, code
+     6.94, gutter 4.53 — so the numbers are legible when sought and still
+     plainly subordinate when not. */
+  --color-code-gutter: #6a808d;
   --color-code-line: #8fa0ac;
   --color-code-hot: #c8d5dd;
 
@@ -170,7 +182,15 @@
    relationship is `gap-6`, `gap-7` and `gap-9` in three different files. */
 
 /* Concept-tag chips. One fixed hue per tag so the colour becomes readable on
-   its own after a couple of encounters; `lib/tags.ts` reads these by name. */
+   its own after a couple of encounters; `lib/tags.ts` reads these by name.
+
+   Each `-text` value must clear 4.5 against its own `-bg` composited over EVERY
+   surface a chip lands on — `ink`, `trench`, `slab`, `well` and `signal-wash` —
+   not just the page. The chip's own translucent fill lightens the surface under
+   its ink in dark and darkens it in light, so the composite is always worse than
+   the bare pairing: dark `graphite` is 4.67 on `signal-wash` bare but was 4.21
+   inside a chip there. That gap is what F3d closed, and it is why the fill rgb
+   tracks the text value rather than being set independently. */
 :root {
   --tag-architecture-text: #8fb6d9;
   --tag-architecture-border: #33506b;
@@ -181,24 +201,24 @@
   --tag-extension_point-text: #c7a0dc;
   --tag-extension_point-border: #543e63;
   --tag-extension_point-bg: rgba(199, 160, 220, 0.09);
-  --tag-risk-text: #d4634f;
+  --tag-risk-text: #e07762;
   --tag-risk-border: #6b2f26;
-  --tag-risk-bg: rgba(212, 99, 79, 0.1);
+  --tag-risk-bg: rgba(224, 119, 98, 0.1);
   --tag-test_coverage-text: #d9a441;
   --tag-test_coverage-border: #6b5220;
   --tag-test_coverage-bg: rgba(217, 164, 65, 0.09);
-  --tag-component-text: #7b8d99;
+  --tag-component-text: #8899a5;
   --tag-component-border: #24333d;
-  --tag-component-bg: rgba(123, 141, 153, 0.08);
+  --tag-component-bg: rgba(136, 153, 165, 0.08);
   /* A unit that connects several earlier ones and introduces no new code —
      where the mental model consolidates rather than grows. Warm and distinct
      from the six "here is a new thing" kinds, because it is the opposite. */
   --tag-synthesis-text: #e0b088;
   --tag-synthesis-border: #6b4a2e;
   --tag-synthesis-bg: rgba(224, 176, 136, 0.09);
-  --tag-freeform-text: #7b8d99;
+  --tag-freeform-text: #8899a5;
   --tag-freeform-border: #24333d;
-  --tag-freeform-bg: rgba(123, 141, 153, 0.06);
+  --tag-freeform-bg: rgba(136, 153, 165, 0.06);
 
   color-scheme: dark;
 }
@@ -255,7 +275,8 @@
   --color-signal-halo: rgba(4, 89, 111, 0.2);
   --color-signal-wash: #cbe4ee;
 
-  --color-code-gutter: #5f7a8a;
+  /* 3.54 before; see the note beside the dark value for why this is content. */
+  --color-code-gutter: #4e6674;
   --color-code-line: #2f4f5f;
   --color-code-hot: #04202c;
 
@@ -284,15 +305,15 @@
   --tag-test_coverage-text: #6e4c02;
   --tag-test_coverage-border: #d0b164;
   --tag-test_coverage-bg: rgba(138, 96, 2, 0.12);
-  --tag-component-text: #445c6a;
+  --tag-component-text: #3f5764;
   --tag-component-border: #a7bbc8;
-  --tag-component-bg: rgba(75, 102, 117, 0.12);
+  --tag-component-bg: rgba(63, 87, 100, 0.12);
   --tag-synthesis-text: #7f400f;
   --tag-synthesis-border: #d7a679;
   --tag-synthesis-bg: rgba(145, 74, 18, 0.12);
-  --tag-freeform-text: #4b6675;
+  --tag-freeform-text: #3f5764;
   --tag-freeform-border: #a7bbc8;
-  --tag-freeform-bg: rgba(75, 102, 117, 0.08);
+  --tag-freeform-bg: rgba(63, 87, 100, 0.08);
 
   color-scheme: light;
 }
@@ -413,24 +434,27 @@ body {
   font-weight: var(--code-light-font-weight, inherit);
 }
 
-/* Code outside the band under discussion keeps its hue but steps back. The pane
-   used to say this with brightness alone — two flat greys — which syntax colour
-   would otherwise have flattened back out.
+/* Code outside the band under discussion steps back — but NOT by opacity.
+   `.code-cold` used to carry `opacity: 0.82` (0.9 in light), and the note here
+   claimed cold code held ~5.7:1 in dark and ~5:1 in light. That measured
+   `--color-code-line`, the colour a token inherits only when the grammar gave it
+   none. Measured against the palette that is actually rendered, the veil was the
+   sole cause of failure for 1110 glyphs in dark and ~1690 in light, and light had
+   no headroom for a veil at all: its tightest passing token sits at 4.75:1
+   unveiled, so any fade at all pushes it under the floor.
 
-   Deliberately a light touch. Colour is already doing most of the separating,
-   and the band has a tint and a rule of its own, so this only has to tip the
-   balance. Measured, not guessed: at these values cold code holds ~5.7:1 in
-   dark and ~5:1 in light, against the ~6.7:1 the flat treatment had. A heavier
-   veil looked right in isolation and was unreadable in a paragraph — light
-   suffers most, where dimming ink toward paper washes it out fastest, so it
-   gets the gentler value. */
-.code-cold {
-  opacity: 0.82;
-}
+   So the fade is gone, and the band is carried entirely by devices that cost no
+   legibility, measured on a real stop: the row's own `signal` tint (1.12 against
+   the pane), the 2px inset rule down its left edge in full `signal`, its line
+   number in full `signal` (2.14 against the cold gutter), and the brighter
+   `--color-code-hot` inherited by tokens the grammar left uncoloured (1.80
+   against `--color-code-line`). Four signals, none of them subtractive. The tint
+   alone is the weakest of the four and never carried the band by itself.
 
-:root[data-theme="light"] .code-cold {
-  opacity: 0.9;
-}
+   What remains is a palette problem rather than a veil problem: two token colours
+   in dark and three in light are below 4.5 on their own. Recorded with numbers in
+   evidence/ux-journeys.md under F3d; it needs a syntax-colour decision, not a
+   contrast tweak, so it is not silently repainted here. */
 
 @media (prefers-reduced-motion: reduce) {
   *,

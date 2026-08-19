@@ -103,9 +103,16 @@ function Stop({
               .join("; ")}`
           : `${node.title} · ${node.file} — ${state}`
       }
+      // A finished stop used to also carry `opacity-80`. It came out at 3.93:1 in
+      // dark and 3.28:1 in light — the worst text in the rail, and the fade was
+      // the whole cause. It was also the third signal for one fact: the pin
+      // already encodes state and the title is already `graphite` where a live
+      // stop is `paper`. Dropping it leaves done rows at 5.45 / 4.75, still
+      // plainly quieter than a live row, and stops the rail dimming its own text
+      // below the floor to say something it had already said twice.
       className={`group relative grid w-full grid-cols-[calc(18rem/16)_1fr] gap-3 py-[calc(5rem/16)] text-start ${
         stop.isPrerequisite ? "ms-[calc(22rem/16)] w-[calc(100%-22rem/16)]" : ""
-      } ${tone === "done" ? "opacity-80 transition-opacity hover:opacity-100" : ""}`}
+      }`}
     >
       {/* connector down to the next stop */}
       {!isLast && (

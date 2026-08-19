@@ -711,3 +711,155 @@ brief: the surface, the eyebrow that changes with state, and the in-place
 transition were implemented first, so the question of whether a stage indicator
 adds orientation or just makes the lesson feel like a wizard can be judged against
 a version that does not have one.
+
+---
+
+## F3d — systematic contrast cleanup
+
+The four map items F3b deferred turned out to be the small half of this. Resolving
+them properly meant computing every tag against every surface a chip actually
+lands on, and then measuring the rendered page rather than the stylesheet — which
+found three failures no amount of stylesheet reading could have.
+
+### The tag × surface matrix
+
+The deferred items were reported on one surface. Computing all eight tags against
+all five surfaces (`ink`, `trench`, `slab`, `well`, `signal-wash`) found more, and
+showed the deferred four were symptoms rather than the fault:
+
+```
+DARK  before   risk/signal-wash 3.92   risk/slab 4.21   component/signal-wash 4.21
+               freeform/signal-wash 4.33   rust(status)/signal-wash 4.35
+LIGHT before   freeform/signal-wash 4.17
+```
+
+`risk` failed on `slab` too, so `signal-wash` was not the cause. The cause is that
+a chip's own translucent fill lightens the surface under its ink in dark and
+darkens it in light, so the composite is always worse than the bare pairing —
+`graphite` is 4.67 bare on `signal-wash` but was 4.21 inside a chip there. The
+values had been validated against `ink` alone.
+
+Fixed at the token, not the surface: `signal-wash` was left alone (collapsing its
+tint to fix `risk` would have cost the "you are here" signal and still left it at
+4.23). Changed instead:
+
+```
+dark   --color-rust / --tag-risk-text   #d4634f -> #e07762    worst composite 4.54
+dark   --tag-component-text             #7b8d99 -> #8899a5    worst 4.71
+dark   --tag-freeform-text              #7b8d99 -> #8899a5    worst 4.85
+light  --tag-component-text             #445c6a -> #3f5764    worst 4.82
+light  --tag-freeform-text              #4b6675 -> #3f5764    worst 5.08
+```
+
+Each chip's `-bg` rgb was moved to track its new text value, since the fill and
+the ink are the same colour by convention here and my arithmetic assumed it.
+`--color-graphite` was NOT retuned: bare on `signal-wash` it is 4.67 and passes.
+Only the chip composites failed, so only the chip tokens moved — D3's grey tuning
+stands.
+
+Result, computed over the full matrix: **8 tags × 5 surfaces + 7 semantic inks +
+the gutter, zero below 4.5 in both themes.** Weakest is `risk`/well 4.54 dark and
+`graphite`/well 4.52 light.
+
+### The code gutter, decided rather than nudged
+
+It was 2.17 dark and 3.54 light. Quiet was the intent, but line numbers are not
+decoration in this product: every citation is `file:line`, so the learner reads
+them to find what the lesson refers to. That makes them content, and content
+meets 4.5. Set *to* the floor rather than above it, which preserves three distinct
+tiers in the pane:
+
+```
+dark    code-hot 12.49  >  code-line 6.94  >  gutter 4.53   (was 2.17)
+light   code-hot 13.16  >  code-line 6.83  >  gutter 4.73   (was 3.54)
+```
+
+### Three failures only the rendered page could show
+
+The stylesheet matrix was clean while the running app was not. Measuring computed
+colour against the *composited* ancestor chain, with ancestor `opacity` folded in:
+
+**1. The hot gutter number — 3.87 dark.** Raising the cold gutter to 4.53 left
+`signal-dim` on the tinted hot row *below* it: the line under discussion had the
+least legible number in the pane. Now `signal` — 8.62 dark, 5.56 light.
+
+**2. The rail's finished rows — 3.93 dark, 3.28 light.** `tone === "done"` carried
+`opacity-80`, which made them the worst text in the rail, and the fade was the
+entire cause. It was also the third signal for one fact: the pin already encodes
+state and the title is already `graphite` where a live stop is `paper`. Removed;
+done rows are 5.45 / 4.75 and still plainly quieter than a live row.
+
+**3. The `.code-cold` veil — the largest single defect in the app.** It carried
+`opacity: 0.82` (0.9 light), and its own note in `globals.css` claimed cold code
+held ~5.7:1 dark and ~5:1 light. That had measured `--color-code-line`, the colour
+a token inherits *only* when the grammar gave it none. Against the palette that
+actually renders:
+
+```
+dark   cold tokens  11 colours, 4 below 4.5  (4059 of 8040 glyphs)
+       worst 2.99 comments (3.88 unveiled) · 3.34 punctuation ×2640 (4.38 unveiled)
+light  cold tokens  11 colours, 5 below 4.5  (4326 of 8040 glyphs)
+       worst 3.13 comments (3.67 unveiled) · 3.28 punctuation ×2640 (3.85 unveiled)
+```
+
+Light had no headroom for a fade at all — its tightest *passing* token is 4.75
+unveiled, so any veil pushes it under. The fade is removed and the class dropped
+from the markup. The band is now carried by four devices, none subtractive,
+measured on a real stop:
+
+```
+row tint vs pane                 1.122
+2px inset rule                   full signal
+gutter number vs cold gutter     2.138
+code-hot vs code-line            1.799
+```
+
+### What remains, and why it is not fixed here
+
+The syntax palette itself is below floor for two colours in dark and three in
+light, independent of the veil:
+
+```
+dark    comments    #60757f  3.88   ×309     punctuation #6b7d88  4.38  ×2640
+light   comments    #5b7887  3.67   ×309     punctuation #5a7484  3.85  ×2640
+        strings     #2b7566  4.28   ×484
+```
+
+Punctuation is the most common token in the pane, so this is ~3000 glyphs dark and
+~3500 light. It is a **syntax-colour decision, not a contrast tweak** — the values
+come from Shiki's dual-theme output, and overriding them means choosing different
+token colours, which changes how code reads. Recorded rather than silently
+repainted. Open question for the next visual gate.
+
+### Probe — four views, both themes, after the fixes
+
+```
+                        UI CHROME below 4.5      SYNTAX TOKENS below 4.5
+lesson      dark        0                        4 combos / 3010 nodes
+lesson      light       0                        8 combos / 3519 nodes
+map overlay dark        0                        0
+map overlay light       0                        0
+welcome     dark        0                        0
+welcome     light       0                        0
+landing     dark        0                        0
+landing     light       0                        0
+```
+
+Every remaining failure is a syntax token. All UI chrome passes in both themes.
+
+### Two measurement traps, recorded so they are not re-hit
+
+**Flipping `data-theme` from the console does not re-resolve utilities under
+`next dev`.** Doing so reported 9 light "chrome failures" showing *dark* token
+values on light surfaces — `text-paper` was not matching at all and the element
+was inheriting. `--color-paper` read correctly as `#2c4653` on the very same
+element, which is what made it look like a product bug. The theme must be switched
+the way the app switches it: set `localStorage['codeonboard:prefs']` to
+`{"theme":"light"}` and reload, so the boot script applies it before paint. Re-run
+that way, light chrome is clean.
+
+**`bg-signal/[0.07]` computes to `oklab(... / 0.07)`.** Scraping it with a numeric
+regex yields the oklab components as if they were sRGB and reports the hot row as
+*darker* than the pane (1.009 separation, i.e. "the band is invisible"). Composite
+it through a 1×1 canvas instead — the same trap the earlier probe work hit, in a
+new place.
