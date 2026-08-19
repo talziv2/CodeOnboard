@@ -1,0 +1,736 @@
+# UI Implementation Plan
+
+> **Status:** proposed build order. **Nothing implemented.**
+> **Inputs:** [`ui-baseline.md`](ui-baseline.md) (evidence),
+> [`ui-direction.md`](ui-direction.md) (principles), [`ui-concept.md`](ui-concept.md) (visual concept).
+> **Purpose:** turn the concept into small, independently verifiable, independently
+> revertable milestones — and decide where we stop and look before continuing.
+> **Last updated:** 2026-08-19
+
+---
+
+## 0. Decisions locked before planning
+
+| # | Decision | Consequence for the plan |
+|---|---|---|
+| 1 | **Inline action model (Option B)** | No docked bar is built. Three rules become testable invariants: action adjacent to the state that produced it; never below a long-form explanation; phase changes anchor visual position. Conditional dock (Option C) is **not** in scope — it enters only if L4's manual scenarios show stranded actions |
+| 2 | **Auto-advance not assumed** | Resolved below in §1 from the real question set. Short answer: **no timed auto-advance anywhere**, and **no double-click path** — click selects, an adjacent confirm plus `Enter` commits, `↑`/`↓` navigate. Editable transcript stays |
+| 3 | **Feedback leads with a key point** | A one-line verdict + sticking-point above the rationale. Implemented with a three-level fallback ladder (§2) because the wire has no such field today. **This is the only summary layer** — no second key point above the explanation |
+| 4 | **No learning-engine semantics change** | §3 is a behaviour contract. Every milestone lists what must not change; the Python suite is the guard |
+| 5 | **Pre-session is not "later"** | Landing and interview (`P1`, `P2`) land **immediately after the visual foundation**, before the shell and flow work, so the first thing a learner sees reflects the new direction early. Generation and briefing (`P3`, `P4`) stay later because their data dependencies genuinely require it (§9) |
+| 6 | **Base branch is `master`** | Verified, not assumed — see §7. `main` is stale and is an ancestor of `master`. No new branching model is introduced |
+
+### Two discoveries that shape everything below
+
+**There is no frontend test tooling.** 49 Python test files; zero JS test
+infrastructure, no `test` script, no runner. So "tested" cannot mean what it means
+on the backend until we create the means. M0 addresses this narrowly (§4).
+
+**`RespondResult` carries no short headline.** Available today: `classification`,
+`gap_kind`, `rationale` (long prose), and `gaps[].claim` (the misconception in the
+learner's own words). The example `Not quite — Graph is directed by default` is a
+*correction*; what we store is the *misconception*. That gap is bridged in §2 rather
+than by inventing text in the UI.
+
+---
+
+## 1. Questionnaire confirmation — resolved from the real question set
+
+Read from `backend/agents/goal/questions.py`. There are exactly three option
+questions and they are not alike:
+
+| Question | Options | Length | Consequence of a mis-click |
+|---|---|---|---|
+| `familiarity` | 4 | 24–45 chars | Low — recalibrates pitch |
+| `goal_type_raw` | 6 | 25–52 chars | **Highest** — routes `goal_type`, decides which follow-ups appear; going back past it clears the goal type |
+| `code_depth` | 3 | **60–91 chars** | High — decides how much gets taught |
+
+Everything else is free text (`primary_goal`, `background`, and every follow-up).
+
+`code_depth`'s options are full outcome sentences — *"I'll be working in here — the
+map, plus what I'd need to change things safely"*. A learner must read all three and
+compare them. Advancing on first click is exactly wrong there. And `goal_type_raw`
+routes the entire remainder of the interview.
+
+**Proposal: no timed auto-advance on any question.** Instead, make selecting and
+confirming feel like a single gesture:
+
+- Clicking an option selects it with an unambiguous state, and the confirm affordance
+  appears **adjacent to the selected row** — never a trip to the other side of the
+  screen.
+- `Enter` confirms the current selection. `↑`/`↓` move it. So the keyboard path is
+  `↓ ↓ Enter` — two beats, faster than any timer.
+- Free-text keeps `Continue` plus `⌘↵`, as today.
+
+**Considered and rejected — auto-advance after a visible cancellable delay.** It
+introduces a timer the learner does not control and reintroduces exactly the
+jumpiness we want to avoid on the two consequential questions.
+
+**Considered and rejected — double-click as a fast path.** Not a discoverable or
+conventional interaction for a list of choices, and an undiscoverable shortcut earns
+nothing. The four explicit affordances above are the whole interaction.
+
+**Uniform across all three option questions** — deliberately. Making `familiarity`
+behave differently from `code_depth` because its options are shorter would be a
+worse experience than either behaviour applied consistently. If later testing shows
+people want it, `familiarity` alone is the safest candidate; that is a follow-up, not
+a launch decision.
+
+---
+
+## 2. Feedback key point — the fallback ladder
+
+The feedback card renders, top to bottom:
+
+```
+⬤ NOT QUITE — you're assuming h() falls back to np.inf when locations is missing
+   ↑ verdict word            ↑ the sticking point, one line
+
+<rationale — the Grader's full reasoning, always present, never collapsed>
+
+── <consequence sentence, when the system adapted>
+●━Primary━●   Secondary   tertiary
+```
+
+The key point resolves through three levels, best available first:
+
+1. **`headline`** — a short corrective sentence, if the Grader supplies one. Requires
+   the optional backend milestone **B1**. Produces exactly the requested form:
+   *"Not quite — `Graph` is directed by default."*
+2. **Composed from the leading gap** — `classification` label + the blocking gap's
+   `claim`, framed honestly as an assumption the learner is carrying rather than as a
+   correction we did not compute. Real data, no backend change, ships in **L4**.
+3. **Verdict word alone** — for pre-gap-model sessions with no gaps on the wire.
+
+This mirrors how the codebase already handles schema evolution (`objective()`
+falling back to `understand`), and it means L4 does not block on B1.
+
+**Guard against shallow skipping, as required:** the rationale sits immediately
+below the key point and is **never collapsed** in the `FEEDBACK` phase. Only the
+*explanation/reveal* — a separate, longer artifact — sits further down. The key point
+orients; it never substitutes.
+
+**One summary layer only.** The key point at the top of the feedback card is the
+single condensation in the flow. `ui-concept.md` §10.4 floated a second `Key point`
+above the explanation as well; that is **dropped** and is not scheduled. It would
+give the learner two places to feel finished, which is precisely the shallow-skipping
+risk this design is trying to avoid. It returns only if testing shows a concrete need.
+
+---
+
+## 3. Behaviour contract — what must survive
+
+This is the plan's most important table. Every one of these is live behaviour with a
+documented reason, and several are non-obvious workarounds that a redesign would
+plausibly delete by accident.
+
+| Behaviour | Where it lives now | Must be preserved |
+|---|---|---|
+| **Retry declined** | `handleRetry`: `retry()` returns `{inserted:false}` | Declining is a real answer. Show `warmUpUnavailable` and **keep the verdict visible** so other routes forward stay reachable. Never silently reset the form |
+| **Warm-up: refresh deliberately skipped** | `submitAnswer`: `if (res.mutation?.kind !== "prerequisite") onRespond()` | The graph refresh is skipped so the verdict stays readable. Do not "fix" this by always refreshing |
+| **Pending attempt** | Synthesized `pending` attempt object | Consequence of the skip above. The just-graded answer must still appear, and must not double up once the refresh does run |
+| **Warm-up cap** | `warmUpInserted` suppresses `canRequestWarmUp` | The Mutator caps one per node; never offer what would be declined |
+| **Warm-up offer gating** | `canRequestWarmUp`: any non-`understood`, not just `prerequisite` | §18.11 — a `confused` learner must not get *fewer* options than a `partial` one |
+| **Recovery detection** | `recovered` = failed attempt exists + latest is `understood` + warm-up title present | Drives the `RECOVERED` state. Recovery must never render in the failure colour |
+| **Gap source preference** | `openGaps = result?.gaps ?? node.gaps ?? []` | The graph lags by one refresh on the warm-up path |
+| **Verification answers excluded from history** | `.filter(a => (a.kind ?? "assessment") !== "verification")` | They carry no `classification`; including them blanks a row, inflates the count and corrupts `latest` |
+| **No model answer with a verification** | Nothing is sent, nothing rendered | §18.7 — showing the answer beside the question is what made re-asking meaningless |
+| **Re-teach refetch** | `if (res.adaptation?.retaught) getLesson()` | The on-screen lesson must become the corrected one |
+| **Pruning notice** | `adaptation.pruned > 0` | Removal must be reported, not silent |
+| **Reveal on revisit** | `revealed = Boolean(result) \|\| attempts.length > 0` | A returning learner is reading, not being tested |
+| **No source, no lesson** | Teaching fails the lesson when all anchors fail | Never render an ungrounded lesson |
+| **Chapter introduced once per visit** | `introduced` ref + `settled === 0` guard | Reload, resume mid-chapter and re-reading must not re-introduce |
+| **Focus counter** | `focusKey` increments on every location request | Re-opening the same anchor must still scroll the pane |
+| **Highlight file guard** | `highlightForOpenFile` only when `openFile === currentNode.file` | A node's range must never highlight lines in an unrelated file |
+| **Multi-anchor range** | `viewingRange` set only for a chosen anchor | Step 2 of a flow must open the right lines, not the display range |
+| **`optional` semantics** | Excluded from walk/counters, kept in graph | Still teaches and grades when reached from the rail |
+| **Two progress measures** | `goal_readiness` + `stops_settled` | Two grammars, never two percentages. Readiness may fall only when evidence changes |
+| **Scope adjust** | `setScope` → `{applied, changed}`, then reload | Must report "nothing to shorten/deepen" honestly |
+| **Briefing independence** | Loads separately, may fail alone | A failed briefing is a missing paragraph, never a blocked session. `personalized` vs `generic` must stay labelled |
+| **Real pipeline progress** | `sessionProgress` poll; `stages`/`done`/`activity`/`calls`/`seconds`; server elapsed preferred | No invented stages, no invented percentages, no timer-driven progress |
+| **Resume** | Server `resume_point()` skips optional | Landing stop on resume must not change |
+
+**Guard:** the existing Python suite covers the semantics — `test_adaptation*`,
+`test_gap_*`, `test_mutator`, `test_progress`, `test_attempt_history`, `test_history`,
+`test_pipeline_progress`, `test_briefing`, `test_grader_gaps`, `test_learning_graph`,
+`test_curriculum`. Any milestone that needs a backend change states it explicitly;
+most need none.
+
+**Recorded suite baseline, measured at M0 on untouched `backend/` and `tests/`:**
+
+```
+14 failed, 1276 passed      all 14 in tests/test_mentor_dossier.py
+```
+
+This is **pre-existing** and not caused by any work in this plan — verified by
+`git diff --stat master -- backend/ tests/` being empty at the time of measurement.
+Mechanism: `CODEONBOARD_CURRICULUM` leaks to `"1"` when `test_calibration_harness.py`
+is in the same run, which switches the planner and invalidates that module's fake wire
+responses. `test_mentor_dossier.py` passes 22/22 alone;
+`CODEONBOARD_CURRICULUM=1 pytest tests/test_mentor_dossier.py` reproduces exactly the
+same 14 failures. The raw assignment is `scripts/calibrate_bands.py:436`
+(`os.environ["CODEONBOARD_CURRICULUM"] = "1"` inside `main()`, which the harness test
+invokes); that module's autouse `_contain_the_flag` fixture exists to contain it and
+does not fully succeed.
+
+**So the gate is: no NEW failures against this baseline** — not "green" — until the
+leak is fixed. Fixing it is a one-file backend test-hygiene change, deliberately
+**not** folded into any UI milestone; it should be its own `fix:` commit so it stays
+isolated and reviewable.
+
+---
+
+## 4. Test strategy
+
+Given zero frontend tooling, the proposal is deliberately narrow — enough to protect
+the invariants, not a test pyramid.
+
+**Layer 1 — Vitest + React Testing Library** *(added in M0)*
+Covers what is pure logic and where regressions will actually happen:
+- the phase derivation function (`lessonPhase.ts`)
+- verdict → available-actions mapping (the branch table)
+- render-order invariants: exactly one composer per phase; primary action never
+  rendered after a long-form artifact; disclosures collapsed by default
+- the feedback key-point fallback ladder
+- `route-sections` / `graph-layout` pure functions (currently untested in JS)
+
+**Layer 2 — browser probe** *(documented in M0, run manually at gates)*
+A small script measuring what only a browser can: contrast ratios, geometry, the
+responsive bands. This productizes the technique from the baseline's live validation
+pass — it needs no browser driver and runs in the page.
+
+Asserted properties:
+- every text element ≥4.5:1 against its composited background
+- exactly one `textarea` in the workspace
+- primary action within one viewport of its phase artifact
+- workspace non-content chrome ≤25% of scroll height
+- header goal zone ≥240px at 1024px; no header overflow ≥960px
+
+**Layer 3 — canonical journeys** *(§6)* — run at the gates listed per milestone.
+
+**Hard scope limit on Layer 2.** The probe is a **single small measurement script** —
+it reads computed styles and geometry from an already-open page and prints
+pass/fail lines. It must not acquire: a driver, a browser launcher, fixtures, a
+runner, an assertion DSL, retries, or reporters. If it starts wanting any of those,
+that is the signal to adopt Playwright instead, not to keep building. Ceiling: one
+file, ~150 lines. Anything beyond that is scope creep dressed as dependency
+avoidance.
+
+**Deliberately deferred:** Playwright/Puppeteer. The natural home for Layer 3
+eventually, but a heavy dependency with no existing frontend e2e to extend. Revisit
+once Track L lands and the journeys have stopped changing shape.
+
+---
+
+## 5. Milestones
+
+Seven tracks. `D` defects · `F` foundation · `S` shell · `L` learning flow ·
+`P` pre-session · `A` adaptation · `X` polish · `B` optional backend.
+
+### Build order and dependencies
+
+```
+M0 ─┬─▶ D1 ─▶ D2 ─▶ D3                          defects — ship first, independent
+    │
+    └─▶ F1 ─▶ F2 ─▶ F3                          visual foundation
+                     │
+                     ├─▶ P1 ─▶ P2               pre-session front half  ◀── moved up
+                     │
+                     ├─▶ S1 ─▶ S2               shell + responsive
+                     │
+                     ├─▶ L1 ─▶ L2 ─▶ L3 ─▶ L4 ─▶ L5   learning flow
+                     │                           │
+                     └───────────────────────────┼─▶ P3 ─▶ P4   pre-session back half
+                                                 │
+                                                 └─▶ A1 ─▶ X1
+
+optional, unblocked, any time after their dependency:
+   B1 (Grader headline)      after L4
+   B2 (progress facts)       before or with P3
+```
+
+**Reading order below is build order.**
+
+Why this order:
+
+- `D1–D3` depend only on M0 and must not wait for anything cosmetic.
+- `P1`/`P2` sit **immediately after `F3`** so the landing page and interview — the
+  first thing any learner touches — reflect the new direction as soon as the
+  foundation exists, rather than trailing the entire session redesign. They depend
+  only on `F2`/`F3` and touch files (`app/page.tsx`, `GoalDialogue.tsx`) that no other
+  track modifies, so they carry no merge risk against `S*` or `L*`.
+- `P3`/`P4` stay late for a real reason, now verified (§9): `P3`'s concept needs
+  progress data the backend does not currently expose, and `P4`'s route→rail
+  transition needs the rail from `S2` and the `RouteItem` primitive to be settled.
+- `S1`/`S2` before `L1–L5` so the frame the flow work lands inside is already correct.
+- After `F3`, `P1→P2`, `S1→S2` and `L1→L5` are mutually independent and could be
+  interleaved if useful; the sequence above is simply the lowest-risk single ordering.
+
+🔴 = **stop and manually inspect before continuing.**
+
+---
+
+### M0 — Test and flag scaffolding
+- **Goal.** Make later milestones verifiable and reversible. No user-visible change.
+- **Files.** `frontend/package.json`, `vitest.config.ts`, `frontend/test/setup.ts`, `scripts/ux-probe.mjs`, `frontend/lib/flags.ts`
+- **Behaviour.** None. Adds `CODEONBOARD_UI` flag plumbing (`legacy` default / `next`), following the project's existing `CODEONBOARD_CURRICULUM` / `CODEONBOARD_GAPS` pattern.
+- **Visual.** None.
+- **Data deps.** None.
+- **Tests.** Runner installed; smoke test on `graph-layout` and `route-sections` pure functions.
+- **Manual.** `npm run dev` still boots; `npm test` runs.
+- **Must NOT change.** Any rendered output. Any Python.
+- **Gate.** `npm test` green, `pytest tests/` green, app visually identical.
+- **Commit.** 1.
+
+---
+
+### D1 — Fix the invisible gap and verification surfaces 🔴
+- **Goal.** Make a shipped, unusable feature usable. **Highest priority in the plan.**
+- **Files.** `frontend/components/LessonPanel.tsx` (lines ~468–518 only)
+- **Behaviour.** None. Pure token correction.
+- **Visual.** `bg-paper`→`bg-slab`; `text-ink`→`text-chalk`; `border-hairline`→`border-rule`; the verification question `text-ink`→`text-chalk`; the solid `bg-signal text-paper` submit → the standard primary treatment. Applies to both themes.
+- **Data deps.** None.
+- **Tests.** Probe assertion: every gap/verification text ≥4.5:1 in both themes.
+- **Manual.** Session `cff533a5…`, node with open gaps: gap card legible, `Set aside` legible; request verification, **the question is visible**; repeat in light theme.
+- **Must NOT change.** Gap ordering, `waive` behaviour, blocking/non-blocking labelling, verification request/submit semantics, the absence of a model answer.
+- **Gate.** Measured ratios: question ≥7:1 (was 1.00), submit label ≥4.5:1 (was 1.11), gap sublabel and `Set aside` ≥4.5:1 (was 1.97 dark / 1.64 light).
+- **Commit.** 1. **Cherry-pickable to `main` on its own.**
+- **Why inspect.** It is the one milestone that changes a broken thing into a working thing; confirm by eye in both themes before moving on.
+
+---
+
+### D2 — One composer, one Submit
+- **Goal.** Remove the duplicate-input defect without waiting for L4.
+- **Files.** `LessonPanel.tsx`
+- **Behaviour.** The original answer block no longer renders while a verification is outstanding — `{!result && !verification && …}`. `Not now` restores it. Interim: after grading, scroll the verdict into view and move focus to it.
+- **Visual.** Only one input and one `Submit` on screen. No restyling.
+- **Data deps.** None.
+- **Tests.** RTL: with `verification` set, exactly one `textarea` and exactly one button labelled `Submit`.
+- **Manual.** Wrong answer → `Check my understanding` → confirm one input, one `Submit`; `Not now` → original question returns with the answer field empty.
+- **Must NOT change.** `requestVerification` / `respondToVerification` payloads; the excluded-verification-attempts filter; `answer` clearing on node change.
+- **Gate.** RTL test passes; the mirroring behaviour is gone.
+- **Commit.** 1. Cherry-pickable.
+
+---
+
+### D3 — Focus and disabled states
+- **Goal.** Close the two remaining accessibility defects globally.
+- **Files.** `globals.css`, then every component with an interactive element
+- **Behaviour.** None.
+- **Visual.** `:focus-visible` ring (2px `signal`, 2px offset) on every button, link, input and disclosure. Disabled becomes muted surface + `graphite` ≥3:1 + `not-allowed`, replacing `opacity-30/40`. Interview `Back` becomes **absent** on Q1 rather than invisible.
+- **Data deps.** None.
+- **Tests.** Probe: no interactive element has `outline: none` without a replacement; no disabled control below 3:1.
+- **Manual.** Tab through landing, interview, session, map — the ring is always visible and never clipped.
+- **Must NOT change.** Any layout or spacing. Which controls are disabled and when.
+- **Gate.** Full keyboard traversal of all four routes with a visible ring throughout.
+- **Commit.** 1–2.
+
+---
+
+### F1 — Token layer
+- **Goal.** Add the new scales as tokens. Nothing consumes them yet.
+- **Files.** `frontend/app/globals.css`
+- **Behaviour.** None.
+- **Visual.** **None** — purely additive. Existing utilities keep resolving as before.
+- **Data deps.** None.
+- **Tests.** Probe: rendered output byte-identical to pre-milestone (spot-check colours and sizes on three screens).
+- **Manual.** Diff two screens before/after — no perceptible change.
+- **Must NOT change.** Any existing token *value*. `--ui-scale`, `calc(N rem/16)` authoring, the theme mechanism, tag hues, `understandingStyle`.
+- **Gate.** Zero visual diff.
+- **Commit.** 1.
+
+---
+
+### F2 — Primitives
+- **Goal.** Introduce the components and migrate call sites, **at current visual values**.
+- **Files.** new `frontend/components/ui/*` (`Button`, `Surface`, `Callout`, `StatusChip`, `ConceptTag`, `StatePin`, `SectionLabel`, `Disclosure`); call sites across 9 components
+- **Behaviour.** None.
+- **Visual.** Intentionally near-zero. Small normalisations are expected where a call site drifted (six button paddings → one per size); each is listed in the commit message.
+- **Data deps.** None.
+- **Tests.** RTL per primitive: variant → class/attribute mapping; `Button` disabled semantics; `StatePin` renders all four understanding classes with distinct border styles.
+- **Manual.** Every screen compared before/after; note deliberate normalisations.
+- **Must NOT change.** `understandingStyle`/`tagStyle` outputs, shape-plus-colour encoding (dashed `insufficient` especially), `strings.ts` copy.
+- **Gate.** No inline button class strings remain in `app/` or `components/` (excluding `ui/`); all screens inspected.
+- **Commit.** 3–4 (one per primitive group), so a single bad migration reverts alone.
+
+---
+
+### F3 — Typography, spacing and geometry 🔴
+- **Goal.** Apply the new type scale, spacing rhythm, radii and elevation ladder.
+- **Files.** `globals.css`, `ui/*`, all components
+- **Behaviour.** None.
+- **Visual.** Large and deliberate: prose 13.5px→**16px/1.70/62ch**; 11 sizes→8; micro-label reduced to one per zone; radii 4px→3/6/10/14; surface ladder replaces most 1px borders; solid primary button appears.
+- **Data deps.** None.
+- **Tests.** Probe: distinct font sizes in the session ≤9; body computed 16px, line-height ≥1.65; measure 540–580px.
+- **Manual.** All seven session states plus all four pre-session screens, both themes. Explicitly check the lesson is ~18–20% taller and that this reads as *calm*, not *sparse*.
+- **Must NOT change.** Any semantic colour. `--ui-scale` behaviour at all four steps. Contrast must not regress anywhere.
+- **Gate.** Side-by-side review of ≥8 screens in both themes; explicit sign-off that the prose size is right before Track L begins.
+- **Commit.** 2–3.
+- **Why inspect.** This is the milestone that decides whether the product *feels* new. If the prose size is wrong, we want to know here — before the flow work builds on it.
+
+---
+
+### P1 — Landing
+- **Goal.** Air, a real primary, and an honest expectation of the wait — **without a number**.
+- **Files.** `app/page.tsx`
+- **Behaviour.** None. Adds one static line setting expectation.
+- **Visual.** Per `ui-concept.md` §8.2, with one correction: **no fixed time promise.** We have no measured distribution across repository sizes or cached-vs-uncached runs, so "two to four minutes" would be exactly the kind of invented number the rest of this product refuses to print. Copy becomes *"Five short questions, then a few minutes while we read the repository — longer for large ones."* The one honest number is the question count, which is fixed at five core questions in `questions.py`.
+- **Data deps.** `checkRepo` unchanged; recents unchanged.
+- **Tests.** RTL: invalid repo shows the error; recents populate the field. Assert no hardcoded minute figure in the landing copy.
+- **Manual.** Unreachable repo, server down, recents click-through.
+- **Must NOT change.** Pre-interview `checkRepo` validation, recents persistence, `errorText` slug mapping.
+- **Gate.** Both error paths legible; no time estimate anywhere in the copy.
+- **Commit.** 1.
+
+---
+
+### P2 — Interview
+- **Goal.** Conversational, not form-like — with §1's confirmation model.
+- **Files.** `components/GoalDialogue.tsx`, new `components/goal/AnswerTranscript.tsx`, `components/goal/OptionList.tsx`
+- **Behaviour.** Answered questions collapse into an editable transcript; `✎` calls the existing `goalBack` (repeatedly if needed) rather than a new endpoint. Options become a keyboard-navigable list: **click selects, `↑`/`↓` move, `Enter` confirms, adjacent confirm button.** No timed auto-advance, **no double-click path**.
+- **Visual.** Full-width 44px option rows; unambiguous selected state; `Back` tertiary and absent on Q1; `2 of 6` as text plus the transcript; consistent upward transitions.
+- **Data deps.** `goalStart`/`goalAnswer`/`goalBack` unchanged. **The transcript is built from `goalBack`'s returned answer plus locally retained answers** — no new backend field.
+- **Tests.** RTL: click selects but does not advance; `Enter` confirms; `↑↓` move selection; `✎` on an earlier answer returns to it; going back past Q2 clears the goal type and the follow-ups change accordingly. Assert no `dblclick` handler exists.
+- **Manual.** All six goal types through their follow-ups. Back from Q5 to Q2 and pick a different goal type — confirm the follow-ups and the transcript both update. Free-text `⌘↵`. Keyboard-only completion of the whole interview.
+- **Must NOT change.** The five core questions and their order; option strings (`GOAL_TYPE_MAP` / `CODE_DEPTH_MAP` are keyed on them); the backend's rejection of out-of-vocabulary answers; `goalBack`'s ownership of goal-type clearing.
+- **Gate.** All six goal-type paths complete; back-past-Q2 verified; interview completable by keyboard alone.
+- **Commit.** 2–3.
+- **Note.** Highest copy-sensitivity in the plan: the option strings are **parsed keys**, not labels. They must not be reworded.
+
+---
+
+### S1 — Header
+- **Goal.** Four zones; end goal-text starvation.
+- **Files.** `app/session/[id]/page.tsx`, new `components/SessionHeader.tsx`, new `components/SessionMenu.tsx`
+- **Behaviour.** Scope, `Briefing`, `Start over`, `Finish session` move into a `⋯` menu. `Finish session` gains a confirmation. `Hide source` is removed (the pane owns its own close).
+- **Visual.** Goal zone gets `min-width: 240px` and wins over controls; journey measure becomes a compact track expanding on interaction.
+- **Data deps.** `setScope`, `sessionStart(restart)` unchanged — same calls from a new location.
+- **Tests.** RTL: menu contains all four actions; `Finish` requires confirmation. Probe: goal zone ≥240px at 1024px; no overflow ≥960px.
+- **Manual.** 1600/1440/1280/1150/1024/960px: goal text always legible. Scope shorter/deeper still reports applied/not-applied honestly.
+- **Must NOT change.** Both progress measures remain available with their two grammars. Scope semantics. Restart semantics.
+- **Gate.** Probe passes at all six widths; scope round-trip verified.
+- **Commit.** 1–2.
+
+---
+
+### S2 — Rail, source pane default, responsive bands 🔴
+- **Goal.** Restore rail density; make the source pane on-demand; add the four bands.
+- **Files.** `RouteRail.tsx`, `CodeViewer.tsx`, `lib/prefs.ts`, `app/session/[id]/page.tsx`, `globals.css`
+- **Behaviour.** **`showCode` defaults to false**; the pane opens on citation click. At `<960px` it becomes an overlay sheet. Rail collapses to an icon strip `<1180px`, to an overlay `<960px`. Lesson column floor 560px — a panel that would breach it becomes an overlay.
+- **Visual.** Chapter `why` moves out of the rail to the chapter overview and a tooltip.
+- **Data deps.** `prefs.source` gains a persisted open/closed state; existing stored prefs must migrate without error.
+- **Tests.** RTL: citation click opens the pane with the right file and range. Probe: lesson ≥560px at every band; rail/source obey the band rules.
+- **Manual.** Multi-anchor unit — each `Step n of m` opens the correct file **and lines** (the `viewingRange` guard). Same-anchor twice still scrolls (`focusKey`). Dock/float, drag, keyboard resize, viewport re-placement all still work. Resume a session at 1024px.
+- **Must NOT change.** `focusKey` semantics, `highlightForOpenFile` file guard, `viewingRange` behaviour, dock/float persistence, the short-hop-only smooth scroll rule.
+- **Gate.** All four bands inspected; anchor-precision scenario passes.
+- **Commit.** 2–3.
+- **Why inspect.** Changes the default layout everyone sees, and touches the most gesture-heavy component in the app.
+
+---
+
+### L1 — Extract phase derivation (logic only)
+- **Goal.** Introduce the phase concept with **zero render change**.
+- **Files.** new `frontend/lib/lessonPhase.ts`; `LessonPanel.tsx` (compute only)
+- **Behaviour.** None. The function derives `STUDY | FEEDBACK | VERIFY | RESOLVED` from existing state; nothing consumes it.
+- **Visual.** None.
+- **Data deps.** Reads existing `result`, `verification`, `attempts`, `node`, `graph`.
+- **Tests.** RTL/Vitest — the heart of this milestone. A case per branch: fresh, revisit, understood, partial+gaps, partial-no-gaps, confused+warm-up-inserted, confused+warm-up-declined, verification outstanding, verification answered, waived, re-taught, pruned, pending-attempt path. Each asserts the derived phase **and** that it matches what the current UI renders.
+- **Manual.** None needed — no visual change.
+- **Must NOT change.** Anything rendered.
+- **Gate.** Every branch in §3 has a passing test; zero visual diff.
+- **Commit.** 1.
+
+---
+
+### L2 — Extract blocks into components (no visual change)
+- **Goal.** Break up the 862-line file by *moving* code, not rewriting it.
+- **Files.** new `components/lesson/*` — `LessonBrief`, `SetupProse`, `TracePath`, `GapList`, `VerificationBlock`, `AttemptHistory`, `AnswerComposer`, `RevealBlock`, `FeedbackCard`, `CompletionScreen`; `LessonPanel.tsx` becomes composition
+- **Behaviour.** None.
+- **Visual.** None — same markup, same order.
+- **Data deps.** Props only; state stays in `LessonPanel`.
+- **Tests.** RTL smoke per component. `AnswerComposer` gets the single-input invariant test.
+- **Manual.** All seven states diffed before/after.
+- **Must NOT change.** Render order, the `pending` attempt synthesis, `openGaps` preference, the verification-attempts filter, `revealed` logic, `recovered` logic.
+- **Gate.** Zero visual diff across seven states; `LessonPanel.tsx` under ~250 lines.
+- **Commit.** 3–4, one per component group.
+
+---
+
+### L3 — The Brief / Canvas frame 🔴
+- **Goal.** Introduce the stable frame, still rendering today's blocks in today's order.
+- **Files.** new `components/lesson/LessonWorkspace.tsx`; `LessonPanel.tsx`; `app/session/[id]/page.tsx`
+- **Behaviour.** Brief becomes sticky. Gap and attempt counters appear in the brief as disclosure triggers **in addition to** the existing inline blocks — the inline blocks are not removed yet, so nothing is lost if the frame is wrong.
+- **Visual.** Sticky brief; canvas scrolls beneath it; canvas measure-capped and centred.
+- **Data deps.** None new.
+- **Tests.** RTL: brief renders position, title, objective, anchors, counters in every phase. Probe: brief stays fixed while the canvas scrolls.
+- **Manual.** All seven states; scroll behaviour with a long reveal; `--ui-scale` at `xlarge` (the sticky brief must not eat the viewport).
+- **Must NOT change.** Any block's content or availability.
+- **Gate.** Brief legible and stable in all seven states at all four text sizes.
+- **Commit.** 1–2.
+- **Why inspect.** First real layout change to the lesson; sticky elements interact badly with the text-size dial and need eyes.
+
+---
+
+### L4 — Phase-driven rendering, inline actions, feedback key point 🔴🔴
+- **Goal.** The centrepiece. Behind `CODEONBOARD_UI=next`; legacy path untouched.
+- **Files.** `LessonWorkspace.tsx`, `FeedbackCard.tsx`, `AnswerComposer.tsx`, `lessonPhase.ts`, `lib/strings.ts`
+- **Behaviour.**
+  - The canvas renders one primary artifact per phase; superseded artifacts become collapsed disclosures.
+  - The composer is **one instance**, bound to the current phase.
+  - The primary action sits **inside** the feedback card, above the explanation.
+  - Exactly one primary per phase, per the verdict branch table (`ui-direction.md` §2.4).
+  - Feedback leads with the key point (§2, levels 2–3).
+  - **Scroll anchoring**: the feedback card holds its visual position while the setup collapses above it.
+- **Visual.** The largest interaction change in the plan.
+- **Data deps.** All of §3. This is where the reconciliation workarounds must be carried across deliberately.
+- **Tests.** RTL, extensive: one composer per phase; one primary per phase; primary never after a long-form artifact; disclosures collapsed by default; key-point ladder at all three levels; every §3 behaviour asserted through the new path.
+- **Manual.** **All seven canonical journeys (§6), flag on and flag off**, both themes. Specifically: pending-attempt path (warm-up, no refresh); retry declined keeps the verdict up; re-teach swaps the prose; pruning is reported; verification excluded from history; reveal opens on revisit.
+- **Must NOT change.** Every row of §3. The legacy path must remain byte-identical with the flag off.
+- **Gate.** Journeys 1–7 pass on both paths; probe shows workspace non-content chrome ≤25%; no stranded primary action in any journey (this is the evidence that decides whether Option C is ever needed).
+- **Commit.** 4–6 small commits behind the flag.
+- **Why inspect twice.** Highest-risk milestone. Inspect after the phase switch lands, and again after the feedback card work.
+
+---
+
+### L5 — Gaps and history as panels; remove the legacy path
+- **Goal.** Complete the model; delete the old renderer.
+- **Files.** new `components/lesson/GapPanel.tsx`, `HistoryPanel.tsx`; remove legacy branches; `lib/flags.ts`
+- **Behaviour.** Inline gap list and inline attempt history are removed; counters open panels. Closed gaps are retained struck-through for the session. Flag removed; `next` becomes the only path.
+- **Visual.** The lesson column loses its two longest non-content blocks.
+- **Data deps.** `waive`, `requestVerification` per gap; `GapDetail.status` for closed rendering.
+- **Tests.** RTL: panel lists open gaps, `Set aside` calls `waive` with the right id, `Check this` enters `VERIFY` for that gap, closed gaps render struck-through.
+- **Manual.** Journeys 1–7 again with the flag gone. Waive a blocking gap and confirm readiness behaves as before.
+- **Must NOT change.** `waive` semantics (never evidence), blocking/non-blocking distinction, gap ordering, readiness rules.
+- **Gate.** Journeys pass; no legacy code remains; worst-case workspace measured against the pre-redesign 2845px.
+- **Commit.** 2–3.
+
+---
+
+### P3 — Generation 🔴
+- **Goal.** The wait becomes the thing the briefing grows out of.
+- **Files.** `components/StartingProgress.tsx`, `app/page.tsx`
+- **Behaviour.** The interview transcript stays visible above. Bar → discrete stage rows. **Explored file paths accumulate** into a persistent list. Past five minutes the copy changes to "taking longer than usual".
+- **Visual.** Per `ui-concept.md` §8.4, **reduced** — see the data note.
+- **Data deps.** ✅ **Resolved (§9).** `snapshot()` returns exactly `stages`, `stage`, `done`, `activity{tool,target}`, `turn`, `calls`, `seconds`, `finished`. So:
+  - **Ships in P3, no backend change:** transcript continuity; discrete stage rows from `stages`/`done`/`stage`; the real activity target; **the accumulating file list, derived client-side by collecting successive distinct `activity.target` values** (real streamed data that is currently displayed once and thrown away); `calls`; honest elapsed with the existing server-preference rule.
+  - **Deferred to B2:** survey shape ("84 files · 6 modules") and chapter titles appearing before completion. **Neither is on the wire and neither will be faked.** The concept's `84 files · 6 modules` line simply does not render until B2 exists.
+- **Tests.** Existing `test_pipeline_progress` must still pass. RTL: stage rows reflect `stages`/`done`; activity renders the real target; elapsed prefers `snapshot.seconds`.
+- **Manual.** A **full real run** on `psf/requests`. Then a second run to confirm the cached-survey path (a stage with nothing to stream). Hide the tab for 60s and confirm elapsed stays truthful. Force a pipeline failure and confirm the failure screen still works.
+- **Must NOT change.** Poll interval semantics, stage names from the backend, the never-invent-progress rule, the failure path with its retained goal for retry.
+- **Gate.** Two real runs inspected; hidden-tab elapsed correct; failure path works.
+- **Commit.** 1–2.
+- **Why inspect.** Only observable against a real multi-minute run, and the honesty rules here are the easiest in the project to violate by accident.
+
+---
+
+### P4 — Briefing and the route→rail transition 🔴
+- **Goal.** Confirm understanding, show the route, and enter the workspace continuously.
+- **Files.** `app/session/[id]/welcome/page.tsx`, `ProfileCard.tsx`, new `components/RouteOverview.tsx`
+- **Behaviour.** The briefing shows the route at chapter granularity using the same `RouteItem` primitive as the rail. Primary action names the first lesson. `✎` on the profile leads to restart-with-different-answers. On `Start`, the chapter list animates into the rail position.
+- **Visual.** Column widens 560→880px; two-card layout plus the route.
+- **Data deps.** `getWelcome` unchanged. **Note:** the running dev backend predates this endpoint — a current backend is required to see the success state at all.
+- **Tests.** `test_briefing` must still pass. RTL: briefing failure renders the fallback and the route/`Start` remain usable; `personalized` vs `generic` label renders from the flag.
+- **Manual.** Success state (needs a current backend), failure state, and a session with no areas (pre-B3 graph → ungrouped). Reduced-motion: the transition becomes a crossfade with the rail already placed.
+- **Must NOT change.** Briefing independence and failure isolation; the `personalized`/`generic` labelling; the route remaining reachable from the session menu.
+- **Gate.** All three data states inspected; transition verified with motion on and reduced.
+- **Why inspect.** A shared-element transition is the one thing in this plan that will look cheap if it is even slightly wrong.
+- **Commit.** 2.
+
+---
+
+### A1 — Adaptation made visible
+- **Goal.** The three-channel grammar.
+- **Files.** new `components/lesson/AdaptationNotice.tsx`, `components/SessionLog.tsx`; `RouteRail.tsx`, `FeedbackCard.tsx`
+- **Behaviour.** Every adaptation produces a composed consequence sentence, a rail mark with a `new` state until the rail is viewed, and a session-log entry. Multiple simultaneous adaptations compose into **one** sentence. Detour brief gains the persistent return affordance.
+- **Visual.** Per `ui-concept.md` §6.
+- **Data deps.** ✅ **Resolved (§9). No backend change needed.** `journey_events` is already returned by `LearningGraph.to_dict()` and already typed in the frontend as `SessionGraph.journey_events?: JourneyEvent[]`. Two sources compose the log:
+  - **Route-shape changes** from `journey_events` — exactly four kinds exist today (`prune_ahead`, `scope_shorter`, `scope_deeper`, `remediation_inserted`, frozen in `JOURNEY_EVENT_KINDS`), each carrying `nodes[]` and an optional `cause{node_id, attempt_index}`.
+  - **Gap lifecycle** from `GapDetail.opened_at` / `closed_at` / `status`, which the evidence drawer already reads.
+  - **Not journey events, and must not be invented as such:** gap-opened, gap-closed, verification-requested and re-teach. They are rendered from the gap/attempt data above, not by adding kinds to the frozen set. Extending `JOURNEY_EVENT_KINDS` is a learning-engine decision, out of scope here.
+- **Tests.** RTL: each adaptation kind produces exactly one notice; simultaneous kinds compose; rail marks appear and clear. `test_mutator`/`test_adaptation*` unchanged.
+- **Manual.** Warm-up insert→return round trip. Re-teach. Prune. Scope change. Gap open→verify→close. Confirm none feels alarming and none repeats a pulse.
+- **Must NOT change.** Any mutation semantics; warm-up cap; the deliberate refresh skip; pruning honesty.
+- **Gate.** All five adaptation types produce all three channels; round trip legible.
+- **Commit.** 2–3.
+
+---
+
+### X1 — Motion and final polish
+- **Goal.** Apply the motion language; close the loose ends.
+- **Files.** `globals.css`, most components
+- **Behaviour.** None.
+- **Visual.** The transitions in `ui-concept.md` §6.2; loading and empty states unified; refined `prefers-reduced-motion` (drop transform/height, keep ≤100ms opacity).
+- **Tests.** Probe: with reduced-motion, no transform/height transitions remain; information is still present.
+- **Manual.** Every transition with motion on and reduced. Confirm nothing loops.
+- **Must NOT change.** The code pane's short-hop-only scroll rule.
+- **Gate.** Full journey pass in both motion modes.
+- **Commit.** 2.
+
+---
+
+### B1 — Optional: Grader headline *(backend, strictly after L4)*
+- **Goal.** Upgrade the feedback key point from ladder level 2 to level 1.
+- **Decision point, not a scheduled milestone.** **L4 must ship and be judged good with the level-2 composed key point first.** Only then do we decide whether a real corrective headline improves the experience enough to justify a Grader prompt-and-schema change. B1 **must never block L4** and is not on the critical path.
+- **Files.** `backend/agents/grader/*`, `backend/api.py`, `frontend/lib/api.ts`
+- **Behaviour.** The Grader returns a short corrective `headline`. Additive and optional — the UI ladder already handles its absence, so no client change is required beyond reading the field.
+- **Tests.** `test_grader_agent`, `test_grader_gaps` extended; absence still renders level 2.
+- **Must NOT change.** `classification`, `gap_kind` derivation, `rationale`, gap semantics, the `CODEONBOARD_GAPS` contract.
+- **Gate.** Old sessions with no `headline` render identically to before.
+- **Commit.** 1–2.
+
+---
+
+### B2 — Optional: progress facts *(backend, before or alongside P3)*
+- **Goal.** Let the generation screen state real repository facts and chapter titles as they become known.
+- **Files.** `backend/pipeline/progress.py`, `backend/pipeline/explorer_nodes.py`, `backend/agents/mentor/agent.py`
+- **Behaviour.** Add a `facts: dict` to `_Run` plus a `fact(run_id, key, value)` setter, surfaced through `snapshot()`. `repo_survey` records file/module counts; the planner records chapter titles. Must inherit the module's existing contract: **best-effort, never able to fail a run, keys not prose.**
+- **Tests.** `test_pipeline_progress` extended: facts appear in the snapshot; a raising setter cannot break a run; a snapshot with no facts is unchanged in shape.
+- **Must NOT change.** Stage vocabulary or order, the no-percentage rule, the in-memory/process-local design, `MAX_RUNS` eviction.
+- **Gate.** A real run shows real counts; a run with the setter removed still renders P3 correctly.
+- **Commit.** 1–2.
+
+---
+
+## 6. Canonical journeys — the UX regression set
+
+Seven journeys, run at every 🔴 gate and before every merge to `main`. Each gets a
+row in a checklist committed at `docs/planning/phases/evidence/ux-journeys.md`, so
+results accumulate rather than being re-derived.
+
+| # | Journey | Asserts |
+|---|---|---|
+| **J1** | **Normal successful lesson** — arrive, read, answer correctly, advance | One primary (`Next stop`); readiness rises; stop marked settled; rail pin advances |
+| **J2** | **Incorrect → feedback → retry** — wrong answer, read feedback, answer again | Key point above rationale; primary adjacent to verdict; **no stranded action**; one composer throughout; attempts accumulate correctly |
+| **J3** | **Incorrect → warm-up → return** — accept the warm-up, complete it, return | Consequence sentence; rail row animates in marked; detour brief with return path; **pending attempt renders without doubling**; recovery state on return; warm-up excluded from journey progress |
+| **J4** | **Gap discovered → verification → resolved** | Gap named in prose; counter increments; verification is the sole canvas artifact; **exactly one `Submit`**; on success counter decrements and the closed gap is retained struck-through |
+| **J5** | **Route changes dynamically** — scope shorter/deeper, pruning, re-teach | Each reports honestly; "nothing to shorten" path works; readiness never falls because the plan changed; rail reflects the new route |
+| **J6** | **Questionnaire → generation → briefing → first lesson** — a full real run | All six goal-type paths reachable; back-past-Q2 clears goal type; real stages only; artifacts persist into the briefing; route→rail transition; first lesson loads |
+| **J7** | **Resume an existing session** | Lands on the server's `resume_point`; optional stops skipped; **no chapter re-introduction**; reveal open on already-answered stops; gaps and attempt counts restored |
+
+Two negative checks accompany every journey: **no text below 4.5:1**, and **no
+expanded superseded state** (one composer, disclosures collapsed).
+
+---
+
+## 7. Branching, commits and rollback
+
+**Verified topology** (`git branch -avv`, `git merge-base`), not assumed:
+
+| Fact | Consequence |
+|---|---|
+| `master` is at `1d78013`, tracking `origin/master`, and carries **all 137 commits** of current work | **`master` is the base.** |
+| `main` is at `7b7f1b0` and is an **ancestor** of `master` — 137 behind, 0 ahead | `main` is a stale historical branch. **Nothing targets it.** |
+| `origin/HEAD → origin/main` | A leftover GitHub default-branch setting, not the working default. Ignored |
+| Recent history is direct commits to `master`; the 15 merge commits are older PRs from other contributors | The working model is small commits on `master`. **No new branching model is introduced.** |
+
+- Work happens on a single branch off `master` (`ui-redesign`), so the whole redesign
+  can be abandoned or rewound without touching `master` — matching the user's
+  rollback requirement without inventing a `main`-based PR flow.
+- **`D1`, `D2` and `D3` are authored first, as isolated self-contained commits**,
+  each touching only its own concern. Because they depend on nothing from `F*`
+  onward, each cherry-picks cleanly onto `master` by SHA whenever wanted.
+- One commit per milestone sub-step, using the repo's existing conventional-commit
+  style (`feat:` / `fix:` / `refactor:` / `docs:`, lower-case subject, no trailing
+  period). Milestones with 3+ commits are split so a bad migration reverts alone.
+- Every commit: `pytest tests/` green and `npm test` green. No exceptions.
+- `CODEONBOARD_UI` keeps the legacy lesson renderer alive through L4, so the riskiest
+  milestone is revertable by an env var rather than a code revert. It is deleted in L5
+  once the journeys pass on the new path.
+- Milestones are ordered so behaviour stays testable throughout: L1 adds logic without
+  render, L2 moves code without changing output, L3 changes layout without changing
+  content, L4 changes rendering behind a flag, L5 removes the old path. **There is no
+  point at which `LessonPanel` is rewritten wholesale.**
+
+## 8. Risk register
+
+| Risk | Milestone | Mitigation |
+|---|---|---|
+| A reconciliation workaround silently deleted | L4 | §3 contract + a per-row RTL test written in L1, before any rendering changes |
+| Sticky brief + `xlarge` text eats the viewport | L3 | Explicit gate at all four text-size steps |
+| Prose at 16px feels sparse rather than calm | F3 | Dedicated inspection gate with option (a) 15px as the documented fallback |
+| Generation screen tempted into inventing data | P3 | Contract: render only what is on the wire; a follow-up adds fields properly |
+| Route→rail transition looks cheap | P4 | Inspection gate; reduced-motion path must be equally acceptable |
+| Interview option strings reworded | P2 | They are parsed keys — called out in the milestone and in the gate |
+| Source-pane default change breaks anchor precision | S2 | The multi-anchor scenario is an explicit manual gate |
+| Frontend test tooling becomes its own project | M0 | Two narrow layers only; Playwright explicitly deferred |
+
+## 9. Resolved from the codebase
+
+Both data questions are answered from source, not deferred to review.
+
+### Q1 — Does `sessionProgress` expose survey shape and planned chapters? **No.**
+
+`backend/pipeline/progress.py::snapshot()` returns exactly:
+
+```python
+{"stages", "stage", "done", "activity": {"tool", "target"} | None,
+ "turn", "calls", "seconds", "finished"}
+```
+
+`STAGES` is the fixed six-key vocabulary (`clone`, `structure`, `survey`,
+`documentation`, `investigation`, `plan`). The module's own docstring states its
+constraints: *"This module emits KEYS, not prose"*, a percentage *"is deliberately
+not computed here"*, and it is in-memory and process-local by design.
+
+**So:** P3 ships with the transcript, discrete stage rows, the real activity target,
+a **client-derived accumulating file list** from successive `activity.target` values,
+call count and honest elapsed. Survey shape and pre-completion chapter titles are
+**not available and are not faked** — they wait for B2.
+
+### Q2 — Is `journey_events` exposed on `/session/{id}`? **Yes.**
+
+`LearningGraph.to_dict()` includes `"journey_events": self.journey_events`
+(`backend/learning/graph.py:718`), commented *"Plan-scoped history. On the wire so M3
+can explain a journey…"*. The frontend already declares
+`SessionGraph.journey_events?: JourneyEvent[]` and a `JourneyEvent` interface with
+`kind`, `at`, `nodes`, `cause`, `origin`, `unlocks`.
+
+Four kinds exist, frozen in `JOURNEY_EVENT_KINDS`: `prune_ahead`, `scope_shorter`,
+`scope_deeper`, `remediation_inserted`.
+
+**So:** A1 needs **no backend change**. Route-shape changes come from
+`journey_events`; gap lifecycle comes from `GapDetail.opened_at`/`closed_at`/`status`.
+Gap-opened, gap-closed, verification and re-teach are **not** journey events and will
+not be added as such — extending that frozen set is a learning-engine decision,
+outside this plan.
+
+### Still genuinely open
+
+1. **Prose size** — start at **16px / 1.70 / 62ch** as planned. Not locked; F3's manual gate is the decision point, with 15px as the documented fallback if it reads sparse.
+2. **B1 in or out** — deliberately deferred until L4 has shipped and been judged with the level-2 key point. See B1.
+3. **B2 in or out** — decide when P3 is reached; P3 is designed to be correct without it.
+4. **Playwright after L5?** Recommended once the journeys stop changing shape. Not scheduled.
+
+*(The second `Key point` layer above the explanation, previously open, is now
+**dropped** — see §2.)*
+
+---
+
+## 10. Summary of the build order
+
+```
+M0  scaffolding                     1 commit, no visual change
+D1  invisible surfaces        🔴    isolated + cherry-pickable
+D2  one composer                    isolated + cherry-pickable
+D3  focus + disabled                isolated + cherry-pickable
+F1  tokens                          additive, zero visual diff
+F2  primitives
+F3  type / space / geometry   🔴    the "does it feel new" gate
+P1  landing                    ◀── pre-session lands here, not at the end
+P2  interview                  ◀──
+S1  header
+S2  rail + source + responsive 🔴
+L1  phase logic (no render)
+L2  extract blocks (no visual)
+L3  Brief / Canvas frame      🔴
+L4  phase rendering + feedback 🔴🔴 flagged; highest risk
+L5  panels + remove legacy
+P3  generation                🔴    (reduced scope — see §9 Q1)
+P4  briefing + route→rail     🔴
+A1  adaptation visible              (no backend change — see §9 Q2)
+X1  motion + polish
+
+optional:  B1 Grader headline (after L4)   ·   B2 progress facts (with P3)
+```
+
+Base branch: **`master`** (verified — §7). Implementation begins at M0.
