@@ -25,12 +25,12 @@ type Size = "xs" | "sm" | "md" | "lg" | "block";
 
 const VARIANT: Record<Variant, string> = {
   primary:
-    "rounded border border-signal-dim bg-signal/15 font-medium text-signal transition hover:bg-signal/25",
+    "rounded-field border border-signal-dim bg-signal/15 font-medium text-signal transition hover:bg-signal/25",
   secondary:
-    "rounded border border-rule text-graphite transition hover:border-signal-dim hover:text-signal",
+    "rounded-field border border-rule text-graphite transition hover:border-signal-dim hover:text-signal",
   // The secondary colours in mono. Session furniture rather than lesson actions.
   chrome:
-    "rounded border border-rule font-mono text-graphite transition hover:border-signal-dim hover:text-signal",
+    "rounded-field border border-rule font-mono text-graphite transition hover:border-signal-dim hover:text-signal",
   // No border, no background, no padding — so it also carries its own type size,
   // which is why `ghost` takes no `size`.
   ghost: "font-mono text-micro text-graphite transition hover:text-signal",

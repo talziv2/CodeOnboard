@@ -614,3 +614,100 @@ rather than 9.5px.
 carry five different `tracking-*` values (0.05 / 0.06 / 0.13 / 0.14 / 0.16em).
 That is a second axis, and folding it in would have made the size change
 impossible to judge on its own.
+
+### F3b — 2026-08-19 · surfaces, radius, elevation, and the practice surface
+
+The focal deliverable was not the radius ladder — it was giving the question a
+surface of its own, after F3a showed that 18px type distinguishes it only by
+degree.
+
+#### The practice surface
+
+Question, verification and feedback now live inside **one persistent region**. Only
+its contents and its eyebrow change. Measured across a real answer:
+
+```
+                    before submit                after submit
+eyebrow             "Check your understanding"   "Feedback"
+position in column  y = 1317                     y = 1398
+height              466px                        352px
+contents            composer + Submit            verdict + 3 actions
+```
+
+The 81px shift is the gap list above growing from one entry to three — not the
+feedback appearing somewhere else. Before F3b the verdict rendered at y=2027 while
+the composer sat near y=1400, on the far side of a 777px explanation.
+
+Getting there required reordering three top-level blocks so they are contiguous:
+`attempts · PRACTICE {verification | question | verdict} · reveal`. The verdict
+therefore now precedes the explanation, which also retires most of D2's interim
+scroll hack.
+
+#### Surfaces, chosen by measurement rather than feel
+
+The first attempt used `trench` for the well. Measured separation from the page:
+
+```
+                 dark    light
+trench           1.023   1.091     <- invisible in dark
+slab             1.110   1.095     <- also what content cards use
+raise            1.227   1.282     <- reads in both
+```
+
+`raise` read correctly but broke text on it: `graphite` measures **4.05:1** on
+light `raise`, and D3 had deliberately excluded `raise` when tuning `graphite` and
+`muted` "on the grounds that no control is ever drawn on it". The practice surface
+made that untrue, and the probe caught three consequences — `Skip this stop`,
+the `⌘↵` hint, and the disabled `Submit` at 2.63:1.
+
+**A real palette tension, recorded for F3d:** in the light theme separation and
+text contrast trade off directly, because any surface distinct enough to see
+against a near-white page is dark enough to hurt mid-grey text.
+
+```
+#c6d5df (raise)   separation 1.28   graphite 4.05   <- fails AA
+#d0dde4           separation 1.18   graphite 4.38
+#d4e0e7           separation 1.15   graphite 4.52   <- chosen
+#dbe5ec (trench)  separation 1.09   graphite 4.75   <- barely visible
+```
+
+Resolved with a purpose-made `--color-well` (dark `#1a252d`, light `#d4e0e7`),
+trading a little separation for text that passes, plus two follow-ons:
+`SectionLabel` gained a `raised` tone (paper: 8.94 / 6.63) and light `--color-muted`
+deepened `#6f838f → #6a7d88` so disabled controls clear 3:1 on the well too
+(3.7 / 3.4 / 4.0 / 3.2 on ink / trench / slab / well).
+
+Nesting confirmed live — the field steps against the well in both themes, in
+opposite directions, which is inherent to a palette that swaps values:
+
+```
+dark    page 10,16,20   ->  well 26,37,45    ->  field 12,19,24
+light   page 231,238,243 -> well 212,224,231 ->  field 219,229,236
+```
+
+#### Radius and elevation
+
+The universal 4px is gone. Live census: `3px ×5` chips, `6px ×10` fields and
+buttons, `10px` cards and callouts, `14px` the practice well, plus full-round pins.
+
+Elevation is applied **selectively**, not to everything: `shadow-card` on things
+that are genuinely standalone panels (the profile card, the map's panels), and
+deliberately **not** on list items — gap rows, attempt cards, unit rows — because
+elevating every row is the card-soup failure the brief warned about. Overlays use
+`shadow-overlay`, replacing two hardcoded shadow values.
+
+#### Probe
+
+```
+lesson, both themes   PASS contrast · focus 40/40 · disabled · 6 type sizes
+                      FAIL header content zone 110px      -> S1
+map                   FAIL 4 tag/status items 4.20-4.35:1 -> F3d
+```
+
+#### Not built, deliberately
+
+**The `Read · Answer · Understand` stage indicator.** Treated as optional per the
+brief: the surface, the eyebrow that changes with state, and the in-place
+transition were implemented first, so the question of whether a stage indicator
+adds orientation or just makes the lesson feel like a wizard can be judged against
+a version that does not have one.

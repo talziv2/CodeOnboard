@@ -18,6 +18,7 @@ import type {
 } from "@/lib/api";
 import Callout from "@/components/ui/Callout";
 import ConceptTag from "@/components/ui/ConceptTag";
+import PracticeSurface from "@/components/ui/PracticeSurface";
 import SectionLabel from "@/components/ui/SectionLabel";
 import Button from "@/components/ui/Button";
 import { errorText, t } from "@/lib/strings";
@@ -79,7 +80,7 @@ function AttemptCard({ attempt, index }: { attempt: Attempt; index: number }) {
   const color = VERDICT_COLOR[attempt.classification] ?? NEUTRAL;
 
   return (
-    <details className="group rounded border border-rule bg-slab open:bg-trench">
+    <details className="group rounded-card border border-rule bg-slab open:bg-trench">
       <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2">
         <span aria-hidden className="font-mono text-micro text-graphite">
           {String(index + 1).padStart(2, "0")}
@@ -389,6 +390,13 @@ export default function LessonPanel({
   // over the graph, which lags by one refresh on the warm-up path.
   const openGaps: NodeGap[] = result?.gaps ?? node.gaps ?? [];
 
+  // One region, three contents — the eyebrow is what says which.
+  const practiceLabel = verification
+    ? t.lesson.verificationHeading
+    : result
+      ? t.lesson.feedback
+      : t.lesson.checkUnderstanding;
+
   const anchors: Anchor[] = node.anchors ?? [];
   const adaptation = result?.adaptation;
   // A hint, a follow-up or a corrected lesson is an invitation to answer again
@@ -500,7 +508,7 @@ export default function LessonPanel({
               <li key={`${a.file}-${a.line_start}-${i}`}>
                 <button
                   onClick={() => onFileClick(a.file, a.line_start, a.line_end)}
-                  className="group flex w-full items-baseline gap-2.5 rounded px-2 py-1 text-start transition hover:bg-slab"
+                  className="group flex w-full items-baseline gap-2.5 rounded-field px-2 py-1 text-start transition hover:bg-slab"
                 >
                   <span className="font-mono text-micro uppercase tracking-[0.13em] text-graphite">
                     {t.lesson.anchorStep(i + 1, anchors.length)}
@@ -530,7 +538,7 @@ export default function LessonPanel({
             {openGaps.map((gap) => (
               <li
                 key={gap.id}
-                className="flex items-start justify-between gap-3 rounded border border-rule bg-slab px-3 py-2"
+                className="flex items-start justify-between gap-3 rounded-card border border-rule bg-slab px-3 py-2"
               >
                 <div className="flex flex-col gap-1">
                   <span className="text-aside text-chalk">{gap.claim}</span>
@@ -554,9 +562,27 @@ export default function LessonPanel({
       {/* The verification question. No reveal and no model answer are rendered
           because none is sent — showing the answer beside the question is what
           made re-asking meaningless in the first place (§18.7). */}
+
+
+      {attempts.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <SectionLabel>{t.lesson.yourAnswers(attempts.length)}</SectionLabel>
+          <div className="flex flex-col gap-2">
+            {attempts.map((attempt, i) => (
+              <AttemptCard key={`${attempt.at}-${i}`} attempt={attempt} index={i} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* The lesson's own question. Hidden while a verification is outstanding:
+          both blocks bind the SAME `answer` state, so rendering them together
+          put two textareas on screen that mirrored each other's text, under two
+          buttons both labelled "Submit" that did different things. `Not now`
+          clears the verification and brings this back. */}
+      <PracticeSurface label={practiceLabel}>
       {verification && (
         <div className="flex flex-col gap-3">
-          <SectionLabel>{t.lesson.verificationHeading}</SectionLabel>
           <p className="measure text-lede text-chalk">
             {verification.question}
           </p>
@@ -568,7 +594,7 @@ export default function LessonPanel({
             onChange={(e) => setAnswer(e.target.value)}
             placeholder={t.lesson.answerPlaceholder}
             rows={4}
-            className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
+            className="w-full resize-none rounded-field border border-rule bg-trench p-3 text-start text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
           />
           <div className="flex gap-2">
             <Button variant="primary" size="md"
@@ -587,32 +613,14 @@ export default function LessonPanel({
           </div>
         </div>
       )}
-
-      {attempts.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <SectionLabel>{t.lesson.yourAnswers(attempts.length)}</SectionLabel>
-          <div className="flex flex-col gap-2">
-            {attempts.map((attempt, i) => (
-              <AttemptCard key={`${attempt.at}-${i}`} attempt={attempt} index={i} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* The lesson's own question. Hidden while a verification is outstanding:
-          both blocks bind the SAME `answer` state, so rendering them together
-          put two textareas on screen that mirrored each other's text, under two
-          buttons both labelled "Submit" that did different things. `Not now`
-          clears the verification and brings this back. */}
       {!result && !verification && (
         <div className="flex flex-col gap-3">
-          <SectionLabel>{t.lesson.checkUnderstanding}</SectionLabel>
           <p className="measure text-lede text-chalk">
             {lesson.lesson.prompt}
           </p>
           <textarea
             rows={4}
-            className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
+            className="w-full resize-none rounded-field border border-rule bg-trench p-3 text-start text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
             placeholder={t.lesson.answerPlaceholder}
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
@@ -644,42 +652,13 @@ export default function LessonPanel({
           </div>
         </div>
       )}
-
-      {/* The reveal. Held back until the learner has answered, which is the
-          whole point of the split — then shown with the verdict rather than
-          before it, so the explanation lands against what they actually said. */}
-      {isSplit && revealed && lesson.lesson.reveal && (
-        <div className="flex flex-col gap-3">
-          <SectionLabel>{t.lesson.reveal}</SectionLabel>
-          <p className="measure whitespace-pre-wrap text-body text-paper">
-            {lesson.lesson.reveal}
-          </p>
-
-          {lesson.lesson.takeaway && (
-            <Callout tone="signal" label={t.lesson.takeaway} className="mt-1">
-              <p className="measure text-aside text-chalk">
-                {lesson.lesson.takeaway}
-              </p>
-            </Callout>
-          )}
-
-          {lesson.lesson.ownership && (
-            <Callout tone="neutral" label={t.lesson.ownership}>
-              <p className="measure text-meta text-paper">
-                {lesson.lesson.ownership}
-              </p>
-            </Callout>
-          )}
-        </div>
-      )}
-
       {result && (
         <div
           ref={verdictRef}
           // Focused after grading so the verdict is what a keyboard or screen
           // reader lands on, not just what the viewport moved to.
           tabIndex={-1}
-          className="flex flex-col gap-3 rounded border border-rule bg-slab p-4"
+          className="flex flex-col gap-3 rounded-card border border-rule bg-slab p-4"
         >
           <p
             className="font-mono text-micro uppercase tracking-[0.14em]"
@@ -908,6 +887,34 @@ export default function LessonPanel({
           </div>
         </div>
       )}
+      </PracticeSurface>
+
+      {isSplit && revealed && lesson.lesson.reveal && (
+        <div className="flex flex-col gap-3">
+          <SectionLabel>{t.lesson.reveal}</SectionLabel>
+          <p className="measure whitespace-pre-wrap text-body text-paper">
+            {lesson.lesson.reveal}
+          </p>
+
+          {lesson.lesson.takeaway && (
+            <Callout tone="signal" label={t.lesson.takeaway} className="mt-1">
+              <p className="measure text-aside text-chalk">
+                {lesson.lesson.takeaway}
+              </p>
+            </Callout>
+          )}
+
+          {lesson.lesson.ownership && (
+            <Callout tone="neutral" label={t.lesson.ownership}>
+              <p className="measure text-meta text-paper">
+                {lesson.lesson.ownership}
+              </p>
+            </Callout>
+          )}
+        </div>
+      )}
+
+
 
       <div className="border-t border-rule pt-4">
         <button
@@ -966,7 +973,7 @@ function CompletionScreen({
           </div>
 
           {weak.length > 0 && (
-            <div className="flex flex-col gap-3 rounded border border-rule bg-slab p-4">
+            <div className="flex flex-col gap-3 rounded-card border border-rule bg-slab p-4">
               <span className="font-mono text-micro uppercase tracking-[0.14em] text-rust">
                 {t.completion.anotherPass(weak.length)}
               </span>
@@ -999,7 +1006,7 @@ function CompletionScreen({
           </div>
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-hidden rounded border border-rule">
+        <div className="min-h-0 flex-1 overflow-hidden rounded-card border border-rule">
           <MapView
             nodes={graph.nodes}
             edges={graph.edges}

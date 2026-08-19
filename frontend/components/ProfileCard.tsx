@@ -50,7 +50,7 @@ export default function ProfileCard({ goal, stops, areas }: Props) {
   }
 
   return (
-    <aside className="flex flex-col gap-4 rounded border border-rule bg-slab p-5">
+    <aside className="flex flex-col gap-4 rounded-card border border-rule bg-slab p-5 shadow-card">
       <div className="flex flex-col gap-1">
         <span className="font-mono text-micro uppercase tracking-[0.16em] text-signal">
           {t.welcome.profileLabel}
@@ -66,7 +66,7 @@ export default function ProfileCard({ goal, stops, areas }: Props) {
         {[goalType, familiarity, depth].filter(Boolean).map((chip) => (
           <span
             key={chip}
-            className="rounded border border-signal-dim bg-signal-halo px-2 py-1 font-mono text-micro text-signal"
+            className="rounded-field border border-signal-dim bg-signal-halo px-2 py-1 font-mono text-micro text-signal"
           >
             {chip}
           </span>

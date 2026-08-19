@@ -211,7 +211,7 @@ export default function EvidenceDrawer({
                   </span>
 
                   {step.intervention_text && (
-                    <p className="rounded border border-rule bg-raise px-2.5 py-1.5 text-meta text-paper">
+                    <p className="rounded-field border border-rule bg-raise px-2.5 py-1.5 text-meta text-paper">
                       {step.intervention_text}
                     </p>
                   )}

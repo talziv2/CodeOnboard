@@ -140,7 +140,7 @@ function PaneHeader({
         </span>
       )}
 
-      <span className="flex shrink-0 items-center rounded border border-rule">
+      <span className="flex shrink-0 items-center rounded-field border border-rule">
         <ModeButton
           active={mode === "dock"}
           label={t.source.dock}
@@ -372,7 +372,7 @@ function FloatShell({
       onPointerMove={move}
       onPointerUp={end}
       onPointerCancel={end}
-      className="fixed z-40 flex min-h-0 flex-col overflow-hidden rounded-md border border-rule bg-trench shadow-[0_18px_50px_rgba(0,0,0,0.45)]"
+      className="fixed z-40 flex min-h-0 flex-col overflow-hidden rounded-panel border border-rule bg-trench shadow-overlay"
     >
       {children}
 

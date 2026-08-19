@@ -130,7 +130,7 @@ export default function SectionOverview({
                 <button
                   onClick={() => onJump(node)}
                   aria-current={isCurrent ? "step" : undefined}
-                  className="group grid w-full grid-cols-[calc(15rem/16)_1fr] gap-3 rounded px-2 py-2 text-start transition hover:bg-slab"
+                  className="group grid w-full grid-cols-[calc(15rem/16)_1fr] gap-3 rounded-field px-2 py-2 text-start transition hover:bg-slab"
                 >
                   <StatePin
                     understanding={node.understanding}

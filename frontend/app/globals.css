@@ -89,6 +89,23 @@
   --text-display: calc(36rem / 16);
   --text-display--line-height: 1.15;
 
+  /* --- the practice surface ------------------------------------------------
+
+     The well needed its own token rather than reusing `raise`. Two constraints
+     pull against each other in the light theme:
+     a surface distinct enough to see against a very light page is dark enough to
+     hurt mid-grey text. Measured, light:
+
+       #c6d5df (raise)  separation 1.28   graphite 4.05  <- fails AA
+       #d0dde4          separation 1.18   graphite 4.38
+       #d4e0e7          separation 1.15   graphite 4.52  <- chosen
+       #dbe5ec (trench) separation 1.09   graphite 4.75  <- barely visible
+
+     There is no value that gives strong separation AND comfortable mid-grey text
+     on a near-white ground; this trades a little separation for text that passes.
+     Dark has no such tension — 1.23 separation with graphite at 4.54. */
+  --color-well: #1a252d;
+
   /* --- radii ---------------------------------------------------------------
 
      Today there is one radius in practice: 4px on 68 elements, plus circles.
@@ -206,9 +223,12 @@
   --color-chalk: #0c1f2a;
   --color-paper: #2c4653;
   /* Same role, opposite direction: on paper a disabled control goes LIGHTER, and
-     the ceiling is what still clears 3:1 against the lightest surface it lands
-     on. Measured on ink / trench / slab: 3.4 / 3.1 / 3.7. */
-  --color-muted: #6f838f;
+     the ceiling is what still clears 3:1 against every surface it lands on.
+     Deepened from #6f838f when the practice well arrived: that value measured
+     2.94 on `well`, just under the floor, because D3 chose it against ink, trench
+     and slab only. Measured now on ink / trench / slab / well:
+     3.7 / 3.4 / 4.0 / 3.2. */
+  --color-muted: #6a7d88;
   /* Chosen so every one of these clears 4.5:1 against the *darkest* surface
      they land on (trench, the rail), not just against the page ground. */
   --color-graphite: #4b6675;
@@ -238,6 +258,9 @@
   --color-code-gutter: #5f7a8a;
   --color-code-line: #2f4f5f;
   --color-code-hot: #04202c;
+
+  /* Lighter than `raise` on purpose — see the note beside the dark value. */
+  --color-well: #d4e0e7;
 
   /* Stronger than their dark counterparts on purpose: on paper a surface step
      alone barely separates two panels, so light leans on the shadow where dark

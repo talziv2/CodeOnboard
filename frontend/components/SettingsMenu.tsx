@@ -77,7 +77,7 @@ export default function SettingsMenu({ className = "" }: { className?: string })
         aria-label={t.settings.open}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className={`flex h-[1.75rem] w-[1.75rem] shrink-0 items-center justify-center rounded border transition ${
+        className={`flex h-[1.75rem] w-[1.75rem] shrink-0 items-center justify-center rounded-field border transition ${
           open
             ? "border-signal-dim bg-signal/15 text-signal"
             : "border-rule bg-slab text-graphite hover:border-signal-dim hover:text-signal"
@@ -90,7 +90,7 @@ export default function SettingsMenu({ className = "" }: { className?: string })
         <div
           role="dialog"
           aria-label={t.settings.title}
-          className="absolute end-0 top-[calc(100%+0.5rem)] z-50 flex w-[15rem] flex-col gap-4 rounded-md border border-rule bg-slab p-3.5 shadow-[0_10px_30px_rgba(0,0,0,0.35)]"
+          className="absolute end-0 top-[calc(100%+0.5rem)] z-50 flex w-[15rem] flex-col gap-4 rounded-panel border border-rule bg-slab p-3.5 shadow-overlay"
         >
           <Field label={t.settings.theme}>
             <div className="grid grid-cols-3 gap-1">
@@ -165,7 +165,7 @@ function Choice({
       onClick={onSelect}
       aria-pressed={selected}
       aria-label={label}
-      className={`flex h-[1.9rem] items-center justify-center rounded border text-micro transition ${
+      className={`flex h-[1.9rem] items-center justify-center rounded-field border text-micro transition ${
         selected
           ? "border-signal-dim bg-signal/15 font-medium text-signal"
           : "border-rule text-graphite hover:border-signal-dim hover:text-chalk"

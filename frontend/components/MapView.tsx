@@ -113,7 +113,7 @@ function areaTitle(areas: Area[] | undefined, areaId: string): string {
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-3.5 rounded-md border border-rule bg-slab p-4">
+    <section className="flex flex-col gap-3.5 rounded-card border border-rule bg-slab p-4 shadow-card">
       <h3 className="font-mono text-micro uppercase tracking-[0.16em] text-graphite">{title}</h3>
       {children}
     </section>
@@ -153,7 +153,7 @@ function UnitList({
         <li key={row.node_id}>
           <button
             onClick={() => onOpen(row.node_id)}
-            className="flex w-full flex-col gap-0.5 rounded border border-rule bg-slab px-3 py-2 text-start transition hover:border-signal-dim"
+            className="flex w-full flex-col gap-0.5 rounded-card border border-rule bg-slab px-3 py-2 text-start transition hover:border-signal-dim"
           >
             <span
               className="text-meta font-medium"
@@ -233,7 +233,7 @@ function PatternCard({
   const exhausted = Number(pattern.detail.exhausted ?? 0);
   const retried = Number(pattern.detail.retried ?? 0);
   return (
-    <li className="flex flex-col gap-2 rounded border border-rule bg-slab px-3.5 py-3">
+    <li className="flex flex-col gap-2 rounded-card border border-rule bg-slab px-3.5 py-3">
       <p className="text-meta text-paper">
         {patternSentence(pattern)}
         {/* Keeps the aggregate from reading as outstanding work when part of it
@@ -261,7 +261,7 @@ function PatternCard({
             // A bare "1" is the whole accessible name otherwise — a screen
             // reader hears "button 1, button 2" with no idea what opens (AC10).
             aria-label={t.map.evidenceRef(i + 1, pattern.evidence.length)}
-            className="rounded-[2px] border border-rule px-1.5 py-px font-mono text-micro text-graphite transition hover:border-signal-dim hover:text-signal"
+            className="rounded-chip border border-rule px-1.5 py-px font-mono text-micro text-graphite transition hover:border-signal-dim hover:text-signal"
           >
             {i + 1}
           </button>
@@ -460,7 +460,7 @@ export default function MapView({
 
                   <button
                     onClick={() => onNodeClick(node)}
-                    className="flex flex-col gap-2 rounded-md border-2 px-4 py-3.5 text-start transition hover:border-signal-dim"
+                    className="flex flex-col gap-2 rounded-card border-2 px-4 py-3.5 text-start transition hover:border-signal-dim"
                     style={{
                       background: isCurrent ? "var(--color-signal-wash)" : "var(--color-slab)",
                       borderColor: isCurrent ? "var(--color-signal)" : "var(--color-rule)",
@@ -602,7 +602,7 @@ export default function MapView({
                     <span
                       key={tag}
                       title={t.map.understoodOfTotal(tally.understood, total)}
-                      className="rounded-[2px] border border-rule px-1.5 py-px font-mono text-micro tracking-[0.05em] text-graphite"
+                      className="rounded-chip border border-rule px-1.5 py-px font-mono text-micro tracking-[0.05em] text-graphite"
                     >
                       {tagLabel(tag)}
                       {total > 1 && <span className="text-paper"> ×{total}</span>}

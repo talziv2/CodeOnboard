@@ -117,7 +117,7 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
               key={opt}
               onClick={() => setAnswer(opt)}
               disabled={loading}
-              className={`rounded border px-3 py-1.5 text-start text-aside transition ${
+              className={`rounded-field border px-3 py-1.5 text-start text-aside transition ${
                 answer === opt
                   ? "border-signal-dim bg-signal/15 text-signal"
                   : "border-rule text-graphite hover:border-signal-dim hover:text-chalk"
@@ -129,7 +129,7 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
         </div>
       ) : (
         <textarea
-          className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
+          className="w-full resize-none rounded-field border border-rule bg-trench p-3 text-start text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
           rows={3}
           placeholder={t.goal.answerPlaceholder}
           value={answer}

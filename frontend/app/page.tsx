@@ -116,7 +116,7 @@ export default function Home() {
           <input
             id="repo"
             type="url"
-            className="rounded border border-rule bg-trench px-3.5 py-3 text-start font-mono text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
+            className="rounded-field border border-rule bg-trench px-3.5 py-3 text-start font-mono text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
             placeholder={t.home.repoPlaceholder}
             value={repoUrl}
             onChange={(e) => { setRepoUrl(e.target.value); setError(null); }}
@@ -173,7 +173,7 @@ export default function Home() {
           </div>
 
           {error && (
-            <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded border border-rule bg-trench p-3 font-mono text-micro text-rust">
+            <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded-field border border-rule bg-trench p-3 font-mono text-micro text-rust">
               {error}
             </pre>
           )}

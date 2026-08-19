@@ -37,7 +37,7 @@ export default function Callout({
 }) {
   const t = TONE[tone];
   return (
-    <div className={`flex flex-col gap-1.5 rounded border px-4 py-3 ${t.box} ${className}`}>
+    <div className={`flex flex-col gap-1.5 rounded-card border px-4 py-3 ${t.box} ${className}`}>
       <span
         className={`font-mono text-micro uppercase tracking-[0.14em] ${t.label}`}
       >
