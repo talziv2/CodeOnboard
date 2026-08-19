@@ -16,6 +16,7 @@ import type {
   Anchor, Attempt, Classification, GraphNode, Lesson, NodeGap, RespondResult,
   SessionGraph, VerificationPrompt,
 } from "@/lib/api";
+import Callout from "@/components/ui/Callout";
 import ConceptTag from "@/components/ui/ConceptTag";
 import SectionLabel from "@/components/ui/SectionLabel";
 import Button from "@/components/ui/Button";
@@ -658,25 +659,19 @@ export default function LessonPanel({
           </p>
 
           {lesson.lesson.takeaway && (
-            <div className="mt-1 flex flex-col gap-1.5 rounded border border-signal-dim/40 bg-signal/[0.06] px-4 py-3">
-              <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-signal">
-                {t.lesson.takeaway}
-              </span>
+            <Callout tone="signal" label={t.lesson.takeaway} className="mt-1">
               <p className="measure text-[calc(13rem/16)] leading-[1.65] text-chalk">
                 {lesson.lesson.takeaway}
               </p>
-            </div>
+            </Callout>
           )}
 
           {lesson.lesson.ownership && (
-            <div className="flex flex-col gap-1.5 rounded border border-rule bg-slab px-4 py-3">
-              <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
-                {t.lesson.ownership}
-              </span>
+            <Callout tone="neutral" label={t.lesson.ownership}>
               <p className="measure text-[calc(12.5rem/16)] leading-[1.65] text-paper">
                 {lesson.lesson.ownership}
               </p>
-            </div>
+            </Callout>
           )}
         </div>
       )}
@@ -711,10 +706,7 @@ export default function LessonPanel({
               with an empty headline and no statement that anything had closed —
               while the gap silently disappeared from the list above. */}
           {isCheck && closed.length > 0 && (
-            <div className="flex flex-col gap-1.5 rounded border border-jade/40 bg-jade/10 px-4 py-3">
-              <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-jade">
-                {t.lesson.checkClosedLabel}
-              </span>
+            <Callout tone="jade" label={t.lesson.checkClosedLabel}>
               <ul className="flex flex-col gap-1">
                 {closed.map((gap) => (
                   <li
@@ -725,7 +717,7 @@ export default function LessonPanel({
                   </li>
                 ))}
               </ul>
-            </div>
+            </Callout>
           )}
 
           {/* Deliberately NOT re-listing what is still open. The gap list above
@@ -760,14 +752,14 @@ export default function LessonPanel({
           {/* What the system did about the gap. Only a missing foundation
               grows the journey; the rest answer the learner where they are. */}
           {adaptation?.text && (
-            <div className="flex flex-col gap-1.5 rounded border border-signal-dim/40 bg-signal/[0.06] px-4 py-3">
-              <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-signal">
-                {adaptation.kind === "hint" ? t.lesson.hint : t.lesson.followup}
-              </span>
+            <Callout
+              tone="signal"
+              label={adaptation.kind === "hint" ? t.lesson.hint : t.lesson.followup}
+            >
               <p className="measure text-[calc(13rem/16)] leading-[1.65] text-chalk">
                 {adaptation.text}
               </p>
-            </div>
+            </Callout>
           )}
 
           {adaptation?.retaught && (
