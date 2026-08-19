@@ -456,6 +456,38 @@ body {
    evidence/ux-journeys.md under F3d; it needs a syntax-colour decision, not a
    contrast tweak, so it is not silently repainted here. */
 
+/* The interview's one motion. Each question arrives from slightly below where
+   the last one sat, so the sequence reads as moving forward through a list rather
+   than as unrelated screens replacing each other — and going back reads as the
+   same movement, because the direction is a property of "a new question is here",
+   not of which way you travelled.
+
+   IT ANIMATES POSITION ONLY, NEVER OPACITY, and that is the important part. A
+   fade-in has to start from `opacity: 0`, which means the content is invisible
+   until the animation runs — and while an animation is in its active phase it
+   owns the property no matter what `animation-fill-mode` says, so there is no
+   fill-mode setting that makes a stalled fade safe. Measured: in a pane without
+   compositing the animation sits at `currentTime: 0` indefinitely and the entire
+   question renders at `opacity: 0`. Animating only `translateY` makes the worst
+   case "the question is 8px low", which nobody will ever notice, instead of "the
+   question is not there".
+
+   8px and `--motion-layout`: far enough to register as motion, short enough that
+   it is over before it can be waited on. The reduced-motion block below already
+   collapses every animation to 0.01ms, so this needs no guard of its own. */
+@keyframes rise {
+  from {
+    transform: translateY(calc(8rem / 16));
+  }
+  to {
+    transform: none;
+  }
+}
+
+.rise {
+  animation: rise var(--motion-layout) var(--ease-emphasis);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
