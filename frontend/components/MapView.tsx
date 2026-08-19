@@ -14,6 +14,7 @@ import {
 } from "@/lib/tags";
 import SectionLabel from "@/components/ui/SectionLabel";
 import ConceptTag from "@/components/ui/ConceptTag";
+import StatePin from "@/components/ui/StatePin";
 import { t } from "@/lib/strings";
 
 interface Props {
@@ -421,9 +422,6 @@ export default function MapView({
             {stops.map((stop, i) => {
               const { node } = stop;
               const isCurrent = node.id === currentNodeId;
-              // The unit's understanding class — the SAME encoding the rail
-              // and the drawer use (AC2).
-              const s = understandingStyle(node.understanding ?? "insufficient");
               const isLast = i === stops.length - 1;
               // A prerequisite connects to the node it unlocks, so the segment
               // below it is the adaptive one.
@@ -452,18 +450,12 @@ export default function MapView({
                   )}
 
                   <span className="flex justify-center pt-2.5">
-                    <span
-                      aria-hidden
-                      className="relative z-10 h-[calc(15rem/16)] w-[calc(15rem/16)] rounded-full border-2 bg-ink"
-                      style={{
-                        borderColor: isCurrent ? "var(--color-signal)" : s.stroke,
-                        background: isCurrent ? "var(--color-ink)" : s.fill,
-                        borderStyle: s.borderStyle,
-                        boxShadow: isCurrent ? "0 0 0 4px var(--color-signal-halo)" : undefined,
-                      }}
-                    >
-                      {isCurrent && <span className="absolute inset-[calc(3rem/16)] rounded-full bg-signal" />}
-                    </span>
+                    <StatePin
+                      understanding={node.understanding}
+                      isCurrent={isCurrent}
+                      role="map"
+                      className="z-10"
+                    />
                   </span>
 
                   <button

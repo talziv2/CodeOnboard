@@ -4,7 +4,8 @@ import { useState } from "react";
 import type { GraphNode } from "@/lib/api";
 import type { RouteStop } from "@/lib/graph-layout";
 import { isComplete, isSettled, type RouteSection } from "@/lib/route-sections";
-import { understandingStyle, understandingLabel } from "@/lib/tags";
+import { understandingLabel } from "@/lib/tags";
+import StatePin from "@/components/ui/StatePin";
 import { t } from "@/lib/strings";
 
 interface Props {
@@ -61,30 +62,6 @@ function Check() {
   );
 }
 
-/** Pin shape encodes state so the rail stays readable without colour. */
-function Pin({ node, isCurrent }: { node: GraphNode; isCurrent: boolean }) {
-  // ONE encoding, shared with the map (M3a.3 AC2). The pin used to be coloured
-  // by raw `understanding_state` while the map coloured the same unit by its
-  // understanding class, so a stop could be amber here and "Needs work" there.
-  const style = understandingStyle(node.understanding ?? "insufficient");
-  return (
-    <span
-      aria-hidden
-      className="relative z-10 mt-0.5 block h-[calc(17rem/16)] w-[calc(17rem/16)] shrink-0 rounded-full border-[1.5px] bg-ink"
-      style={{
-        borderColor: isCurrent ? "var(--color-signal)" : style.stroke,
-        borderStyle: style.borderStyle,
-        background: isCurrent ? "var(--color-ink)" : style.fill,
-        boxShadow: isCurrent ? "0 0 0 3px var(--color-signal-halo)" : undefined,
-      }}
-    >
-      {isCurrent && (
-        <span className="absolute inset-[calc(3.5rem/16)] rounded-full bg-signal" />
-      )}
-    </span>
-  );
-}
-
 const TITLE_TONE: Record<Tone, string> = {
   current: "text-[calc(12.5rem/16)] font-semibold text-signal",
   done: "text-[calc(12rem/16)] font-medium text-graphite group-hover:text-signal",
@@ -138,7 +115,12 @@ function Stop({
         />
       )}
 
-      <Pin node={node} isCurrent={isCurrent} />
+      <StatePin
+        understanding={node.understanding}
+        isCurrent={isCurrent}
+        role="rail"
+        className="z-10 mt-0.5 block"
+      />
 
       <span className="flex min-w-0 flex-col gap-[2px]">
         {stop.isPrerequisite && (

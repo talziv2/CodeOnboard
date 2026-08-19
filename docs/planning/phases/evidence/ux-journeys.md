@@ -309,3 +309,48 @@ occupied exactly the same space.
 `tagStyle` / `tagLabel` remain imported by `MapView` and `SectionOverview` because
 both still use them outside chips — the by-concept breakdown rows, and the
 understanding labels. `LessonPanel` no longer imports from `lib/tags` at all.
+
+### F2b — 2026-08-19 · StatePin
+
+| Route | before | after | verdict |
+|---|---|---|---|
+| Lesson (contains the rail) | 274 · `1432160578` | 274 · `1432160578` | **identical** |
+| Map | 603 · `1145766918` | 603 · `1145766918` | **identical** |
+| Chapter overview | 198 · `-1914201951` | 198 · `-1914201951` | **identical** |
+
+**No normalizations. Zero pixels moved.**
+
+Spot-checked live as well as by digest: the current pin carries
+`rgba(91,200,232,0.16) 0 0 0 3px` and one child (the filled centre), non-current
+pins carry neither, and border colours come through from `understandingStyle` —
+rust for unresolved, jade for demonstrated, signal for current.
+
+#### What the three copies disagreed about, preserved verbatim
+
+`understandingStyle` was already shared — M3a.3 fixed that, after a stop could
+read amber in the rail and "Needs work" on the map. The twenty lines wrapping it
+were not, and they had drifted in every dimension the encoding does not cover:
+
+| role | size | border | halo | inner dot |
+|---|---|---|---|---|
+| `rail` | 17px | 1.5px | 3px | yes, inset 3.5px |
+| `map` | 15px | 2px | 4px | yes, inset 3px |
+| `list` (chapter overview) | 13px | 1.5px | 3px | **none** |
+
+The rail's pin being *larger* than the map's, two border widths, two halo widths,
+and the chapter overview alone omitting the filled centre that marks where you are
+all look like drift rather than intent — the last one arguably a bug in the
+encoding, since "you are here" is shown two ways out of three.
+
+None of it is reconciled here. That is a geometry decision and it belongs to F3.
+What this milestone buys is that the values now sit in one table keyed by role, so
+reconciling them later is an edit in one place rather than a hunt through three
+files. `relative` is applied only to the two roles whose original had it, because
+it exists to position the inner dot and the third role has no dot.
+
+#### Not folded in, deliberately
+
+MapView's `Pip` and EvidenceDrawer's inline dot. One is a button with its own
+hover-scale behaviour, the other sits inside a text row; both are half a dozen
+lines and both already read the shared encoding. Pulling them into a component
+whose every difference is a parameter would be abstraction for its own sake.

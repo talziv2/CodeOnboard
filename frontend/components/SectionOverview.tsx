@@ -3,9 +3,10 @@
 import type { GraphNode } from "@/lib/api";
 import { isStation } from "@/lib/graph-layout";
 import { isSettled, type RouteSection } from "@/lib/route-sections";
-import { understandingStyle, understandingLabel, tagStyle, tagLabel } from "@/lib/tags";
+import { understandingLabel } from "@/lib/tags";
 import SectionLabel from "@/components/ui/SectionLabel";
 import ConceptTag from "@/components/ui/ConceptTag";
+import StatePin from "@/components/ui/StatePin";
 import { t } from "@/lib/strings";
 
 interface Props {
@@ -123,7 +124,6 @@ export default function SectionOverview({
           {section.stops.map((stop) => {
             const { node } = stop;
             const isCurrent = node.id === currentNodeId;
-            const style = understandingStyle(node.understanding ?? "insufficient");
             return (
               <li key={node.id}>
                 <button
@@ -131,17 +131,11 @@ export default function SectionOverview({
                   aria-current={isCurrent ? "step" : undefined}
                   className="group grid w-full grid-cols-[calc(15rem/16)_1fr] gap-3 rounded px-2 py-2 text-start transition hover:bg-slab"
                 >
-                  <span
-                    aria-hidden
-                    className="mt-[calc(4rem/16)] h-[calc(13rem/16)] w-[calc(13rem/16)] shrink-0 rounded-full border-[1.5px] bg-ink"
-                    style={{
-                      borderColor: isCurrent ? "var(--color-signal)" : style.stroke,
-                      borderStyle: style.borderStyle,
-                      background: isCurrent ? "var(--color-ink)" : style.fill,
-                      boxShadow: isCurrent
-                        ? "0 0 0 3px var(--color-signal-halo)"
-                        : undefined,
-                    }}
+                  <StatePin
+                    understanding={node.understanding}
+                    isCurrent={isCurrent}
+                    role="list"
+                    className="mt-[calc(4rem/16)]"
                   />
                   <span className="flex min-w-0 flex-col gap-1">
                     <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
