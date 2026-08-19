@@ -465,10 +465,10 @@ export default function LessonPanel({
             {openGaps.map((gap) => (
               <li
                 key={gap.id}
-                className="flex items-start justify-between gap-3 rounded border border-hairline bg-paper px-3 py-2"
+                className="flex items-start justify-between gap-3 rounded border border-rule bg-slab px-3 py-2"
               >
                 <div className="flex flex-col gap-1">
-                  <span className="text-[calc(13rem/16)] text-ink">{gap.claim}</span>
+                  <span className="text-[calc(13rem/16)] text-chalk">{gap.claim}</span>
                   <span className="text-[calc(11rem/16)] uppercase tracking-wide text-graphite">
                     {gap.blocking ? t.lesson.gapBlocking : t.lesson.gapNonBlocking}
                   </span>
@@ -476,7 +476,7 @@ export default function LessonPanel({
                 <button
                   onClick={() => onWaive(gap.id)}
                   disabled={loading}
-                  className="shrink-0 rounded border border-hairline px-2 py-1 text-[calc(11rem/16)] text-graphite transition hover:text-ink disabled:opacity-40"
+                  className="shrink-0 rounded border border-rule px-2 py-1 text-[calc(11rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
                 >
                   {t.lesson.waiveOne}
                 </button>
@@ -492,7 +492,9 @@ export default function LessonPanel({
       {verification && (
         <div className="flex flex-col gap-3">
           <SectionLabel>{t.lesson.verificationHeading}</SectionLabel>
-          <p className="text-[calc(14rem/16)] text-ink">{verification.question}</p>
+          <p className="measure text-[calc(14rem/16)] leading-[1.6] text-chalk">
+            {verification.question}
+          </p>
           <p className="text-[calc(12rem/16)] text-graphite">
             {t.lesson.verificationHelp}
           </p>
@@ -501,20 +503,20 @@ export default function LessonPanel({
             onChange={(e) => setAnswer(e.target.value)}
             placeholder={t.lesson.answerPlaceholder}
             rows={4}
-            className="w-full rounded border border-hairline bg-paper p-3 text-[calc(14rem/16)] text-ink"
+            className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[calc(13rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
           />
           <div className="flex gap-2">
             <button
               onClick={onSubmitVerification}
               disabled={loading || !answer.trim()}
-              className="rounded bg-signal px-4 py-2 text-[calc(13rem/16)] font-medium text-paper transition disabled:opacity-40"
+              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
             >
               {loading ? t.lesson.grading : t.lesson.submit}
             </button>
             <button
               onClick={() => setVerification(null)}
               disabled={loading}
-              className="rounded border border-hairline px-3 py-2 text-[calc(13rem/16)] text-graphite transition hover:text-ink disabled:opacity-40"
+              className="rounded border border-rule px-3 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
             >
               {t.lesson.notNow}
             </button>
