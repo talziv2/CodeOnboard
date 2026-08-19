@@ -172,3 +172,60 @@ deliberately not re-listed, because the gap list above is already the
 authoritative and actionable copy — printing both is the accumulation this
 redesign exists to remove. A closed gap is the half that is otherwise
 unrecoverable, since it has left that list by the time the card renders.
+
+### D3 — 2026-08-19 · focus and disabled, everywhere
+
+Probe run on all four routes, both themes.
+
+| Route | Contrast | Focus ring | Disabled |
+|---|---|---|---|
+| Landing | PASS | PASS 6/6 | PASS |
+| Interview Q1 | PASS | PASS 6/6 | PASS |
+| Interview Q2 | PASS | PASS 9/9 | PASS |
+| Session · lesson | **PASS** both themes | **PASS 41/41** | PASS ≥3:1 |
+| Session · map | 5 dark / 1 light remaining | **PASS 92/92** | PASS |
+| Welcome | **PASS** both themes | PASS 2/2 | PASS |
+
+Before D3 the app had **one** focus style in total — the source pane's drag
+divider — and three inputs actively removed the browser's default. Now every
+interactive element is covered by one root rule, with a single documented opt-out
+(the divider, which fills instead; a full-height 8px handle sitting outside the
+pane's bounds would have its outline half-clipped by the grid track).
+
+Disabled measured live: `opacity: 1`, `cursor: not-allowed`, accent removed,
+foreground on the new `--color-muted`. Previously `opacity: .3`–`.4` over
+`graphite`, composited to roughly 1.5:1 — "absent" rather than "unavailable".
+
+Cleared in this milestone: the rail's chapter description (3.56 dark / 2.98 light
+→ 5.45 / 4.75, by dropping an alpha rather than changing the colour) and the source
+pane's line range (3.84 → 9.69, `signal-dim` → `signal`, which is also the
+semantically correct one since it marks the band under discussion).
+
+**One token change.** Light `--color-signal` deepened `#056782` → `#04596f`, with
+`--color-signal-halo` tracking it. Signal is used as ink **on a 15% signal tint**
+— the primary button and the profile chips — and because the tint is made from
+signal, foreground and background moved together, pinning that pairing at 4.44:1
+on the first screen a learner sees. Only a darker signal separates them: 4.44 →
+5.35 on the tint, 4.11 → 4.92 on the halo, 5.48 → 6.73 bare. This follows the
+light theme's own documented rule that signal deepens rather than brightens.
+
+**Deferred to F3, with numbers** — five items on the map's *current* stop card,
+whose `signal-wash` background is lighter than `slab`:
+
+```
+4.20:1  9.5px  tag "risk"            (×2)
+4.21:1  9.5px  tag "component"
+4.33:1  9.5px  tag "graph-problem"
+4.35:1  9.5px  status "Needs work"
+```
+
+All marginal, all on one surface, and all caused by the tag/status palette
+meeting a background it was not validated against. The fix is systematic —
+validate every tag and status hue against every surface it can land on — which is
+F3's work, not an accessibility side-effect to be slipped in here. Light theme has
+one such item left (4.17:1) after the signal change.
+
+**Also recorded, not fixed:** the code pane's gutter line numbers measure 2.17:1
+dark / 3.54:1 light. They sit inside the source pane, which `globals.css` treats
+as a deliberately quieter tonal zone and which the probe excludes for that reason.
+Changing them is a decision about the pane's character, so it belongs to F3.

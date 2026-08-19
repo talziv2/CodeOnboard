@@ -273,14 +273,14 @@ export default function SessionPage() {
           <button
             onClick={() => adjustScope("shorter")}
             disabled={scoping}
-            className="rounded border border-rule px-2 py-1 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+            className="rounded border border-rule px-2 py-1 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
           >
             {scoping ? t.scope.working : t.scope.shorter}
           </button>
           <button
             onClick={() => adjustScope("deeper")}
             disabled={scoping}
-            className="rounded border border-rule px-2 py-1 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+            className="rounded border border-rule px-2 py-1 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
           >
             {t.scope.deeper}
           </button>
@@ -317,7 +317,7 @@ export default function SessionPage() {
             }
           }}
           disabled={restarting}
-          className="shrink-0 rounded border border-rule px-3 py-1.5 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+          className="shrink-0 rounded border border-rule px-3 py-1.5 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
         >
           {restarting ? t.session.startingOver : t.session.startOver}
         </button>

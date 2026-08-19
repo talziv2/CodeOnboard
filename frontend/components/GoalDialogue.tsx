@@ -116,7 +116,7 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
               key={opt}
               onClick={() => setAnswer(opt)}
               disabled={loading}
-              className={`rounded border px-3 py-1.5 text-start text-[calc(13rem/16)] transition disabled:opacity-50 ${
+              className={`rounded border px-3 py-1.5 text-start text-[calc(13rem/16)] transition ${
                 answer === opt
                   ? "border-signal-dim bg-signal/15 text-signal"
                   : "border-rule text-graphite hover:border-signal-dim hover:text-chalk"
@@ -128,7 +128,7 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
         </div>
       ) : (
         <textarea
-          className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[calc(13.5rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
+          className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[calc(13.5rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim"
           rows={3}
           placeholder={t.goal.answerPlaceholder}
           value={answer}
@@ -147,17 +147,23 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
       {error && <p className="text-sm text-rust">{error}</p>}
 
       <div className="flex items-center gap-3">
-        <button
-          onClick={back}
-          disabled={loading || atStart}
-          className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-30 disabled:hover:border-rule disabled:hover:text-graphite"
-        >
-          {t.goal.back}
-        </button>
+        {/* Absent on the first question rather than present-and-disabled. There
+            is nowhere to go back TO, and a control that occupies space to say so
+            is worse than no control — it was the starkest case of the old
+            opacity-based disabled state, rendering at roughly 1.5:1. */}
+        {!atStart && (
+          <button
+            onClick={back}
+            disabled={loading}
+            className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
+          >
+            {t.goal.back}
+          </button>
+        )}
         <button
           onClick={submit}
           disabled={loading || !answered}
-          className="rounded border border-signal-dim bg-signal/15 px-5 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+          className="rounded border border-signal-dim bg-signal/15 px-5 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
         >
           {loading ? t.goal.thinking : t.goal.continue}
         </button>

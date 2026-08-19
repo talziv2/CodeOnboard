@@ -89,7 +89,17 @@
     out.push((ok ? "PASS  " : "FAIL  ") + label + (detail ? "  — " + detail : ""));
 
   // 1. contrast
+  //
+  // Disabled controls are excluded and checked separately at 3:1 below. WCAG
+  // 1.4.3 exempts inactive components from the 4.5:1 floor, and holding them to
+  // it would make a correct disabled treatment permanently "fail" — which is how
+  // a check stops being read.
+  const isInactive = (el) => {
+    const b = el.closest("button, input, textarea, select");
+    return Boolean(b && b.disabled);
+  };
   const bad = texts
+    .filter((el) => !isInactive(el))
     .map((el) => {
       const cs = getComputedStyle(el);
       const fg = parse(cs.color), bg = bgOf(el);
@@ -115,7 +125,41 @@
   const dupes = [...new Set(labels.filter((l, i) => labels.indexOf(l) !== i))];
   say(dupes.length === 0, "no ambiguous duplicate button labels", dupes.join(", "));
 
-  // 3. type scale
+  // 3. focus and disabled
+  //
+  // Focus is checked by asking the browser what a control WOULD look like when
+  // focus-visible applies, which cannot be read from a static style declaration.
+  // Cheapest reliable proxy: every interactive element must be matched by the
+  // global rule, i.e. no computed `outline-style: none` left over from an
+  // element-level override.
+  const interactive = [...document.querySelectorAll(
+    "main a, main button, main input, main textarea, main select, main summary, main [tabindex]," +
+    "header a, header button, header input, header select"
+  )].filter(visible);
+  const noRing = interactive.filter((el) => {
+    if (el.hasAttribute("data-focus-exempt")) return false;
+    const cs = getComputedStyle(el, ":focus-visible");
+    return cs.outlineStyle === "none" || cs.outlineWidth === "0px";
+  });
+  say(noRing.length === 0, "focus ring on all " + interactive.length + " interactive elements",
+      noRing.length ? noRing.length + " with no ring: "
+        + noRing.slice(0, 4).map((e) => (e.textContent || e.tagName).trim().slice(0, 22)).join(" / ") : "");
+
+  const disabled = interactive.filter((el) => el.disabled);
+  const dimDisabled = disabled.filter((el) => {
+    const cs = getComputedStyle(el);
+    const fg = parse(cs.color), bg = bgOf(el);
+    const eff = fg.a < 1 ? fg.rgb.map((v, i) => fg.a * v + (1 - fg.a) * bg[i]) : fg.rgb;
+    // opacity is inherited by the whole subtree, so fold it in
+    const o = parseFloat(cs.opacity);
+    const shown = o < 1 ? eff.map((v, i) => o * v + (1 - o) * bg[i]) : eff;
+    return ratio(shown, bg) < 3;
+  });
+  say(dimDisabled.length === 0, disabled.length + " disabled control(s) >= 3:1",
+      dimDisabled.map((e) => e.textContent.trim().slice(0, 20) + " "
+        + ratio(((c) => c)(parse(getComputedStyle(e).color).rgb), bgOf(e)) + ":1").join(", "));
+
+  // 4. type scale
   const sizes = [...new Set(texts.map(
     (el) => Math.round(parseFloat(getComputedStyle(el).fontSize) * 10) / 10))]
     .sort((a, b) => a - b);
@@ -126,7 +170,7 @@
       + small[0] + "-" + small[small.length - 1] + "px)");
   }
 
-  // 4. radius census
+  // 5. radius census
   const radii = {};
   scope.filter(visible).forEach((el) => {
     const r = getComputedStyle(el).borderRadius;
@@ -143,7 +187,7 @@
     out.push("SKIP  geometry: viewport reports " + innerWidth + "x" + innerHeight
       + " — page is not laid out (background tab?). Colour checks above are still valid.");
   } else {
-    // 5. header
+    // 6. header
     const h = document.querySelector("header");
     if (h) {
       const over = h.scrollWidth - h.clientWidth;
@@ -156,7 +200,7 @@
       }
     }
 
-    // 6. workspace scroll
+    // 7. workspace scroll
     const sc = [...document.querySelectorAll("main .overflow-y-auto")].filter(visible)
       .sort((a, b) => b.scrollHeight - a.scrollHeight)[0];
     if (sc && sc.clientHeight > 200) {

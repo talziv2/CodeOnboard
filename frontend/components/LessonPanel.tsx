@@ -561,7 +561,7 @@ export default function LessonPanel({
                 <button
                   onClick={() => onWaive(gap.id)}
                   disabled={loading}
-                  className="shrink-0 rounded border border-rule px-2 py-1 text-[calc(11rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+                  className="shrink-0 rounded border border-rule px-2 py-1 text-[calc(11rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
                 >
                   {t.lesson.waiveOne}
                 </button>
@@ -588,20 +588,20 @@ export default function LessonPanel({
             onChange={(e) => setAnswer(e.target.value)}
             placeholder={t.lesson.answerPlaceholder}
             rows={4}
-            className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[calc(13rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
+            className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[calc(13rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim"
           />
           <div className="flex gap-2">
             <button
               onClick={onSubmitVerification}
               disabled={loading || !answer.trim()}
-              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
             >
               {loading ? t.lesson.grading : t.lesson.submit}
             </button>
             <button
               onClick={() => setVerification(null)}
               disabled={loading}
-              className="rounded border border-rule px-3 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+              className="rounded border border-rule px-3 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
             >
               {t.lesson.notNow}
             </button>
@@ -633,7 +633,7 @@ export default function LessonPanel({
           </p>
           <textarea
             rows={4}
-            className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[calc(13rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
+            className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[calc(13rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim"
             placeholder={t.lesson.answerPlaceholder}
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
@@ -650,14 +650,14 @@ export default function LessonPanel({
             <button
               onClick={submitAnswer}
               disabled={loading || !answer.trim()}
-              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
             >
               {loading ? t.lesson.grading : t.lesson.submit}
             </button>
             <button
               onClick={handleAdvance}
               disabled={loading}
-              className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+              className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
             >
               {t.lesson.skipStop}
             </button>
@@ -708,7 +708,7 @@ export default function LessonPanel({
           // Focused after grading so the verdict is what a keyboard or screen
           // reader lands on, not just what the viewport moved to.
           tabIndex={-1}
-          className="flex flex-col gap-3 rounded border border-rule bg-slab p-4 focus:outline-none"
+          className="flex flex-col gap-3 rounded border border-rule bg-slab p-4"
         >
           <p
             className="font-mono text-[calc(11rem/16)] uppercase tracking-[0.14em]"
@@ -827,7 +827,7 @@ export default function LessonPanel({
                   <button
                     onClick={onCheckUnderstanding}
                     disabled={loading || verifying}
-                    className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+                    className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
                   >
                     {verifying ? t.lesson.verifyCtaBusy : t.lesson.checkAnother}
                   </button>
@@ -835,7 +835,7 @@ export default function LessonPanel({
                   <button
                     onClick={handleAdvance}
                     disabled={loading}
-                    className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+                    className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
                   >
                     {loading ? t.lesson.loadingShort : t.lesson.nextStop}
                   </button>
@@ -844,7 +844,7 @@ export default function LessonPanel({
                   <button
                     onClick={handleAdvance}
                     disabled={loading}
-                    className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+                    className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
                   >
                     {loading ? t.lesson.loadingShort : t.lesson.nextStop}
                   </button>
@@ -855,7 +855,7 @@ export default function LessonPanel({
                   <button
                     onClick={handleRetry}
                     disabled={loading}
-                    className="font-mono text-[calc(10.5rem/16)] text-graphite transition hover:text-signal disabled:opacity-40"
+                    className="font-mono text-[calc(10.5rem/16)] text-graphite transition hover:text-signal"
                   >
                     {t.lesson.buildWarmUp}
                   </button>
@@ -867,7 +867,7 @@ export default function LessonPanel({
               <button
                 onClick={handleAdvance}
                 disabled={loading}
-                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
               >
                 {loading ? t.lesson.loadingShort : t.lesson.nextStop}
               </button>
@@ -879,7 +879,7 @@ export default function LessonPanel({
               <button
                 onClick={handleAdvance}
                 disabled={loading}
-                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
               >
                 {loading ? t.lesson.loadingShort : t.lesson.nextStop}
               </button>
@@ -893,7 +893,7 @@ export default function LessonPanel({
               <button
                 onClick={onCheckUnderstanding}
                 disabled={loading || verifying}
-                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
               >
                 {verifying ? t.lesson.verifyCtaBusy : t.lesson.verifyCta}
               </button>
@@ -902,7 +902,7 @@ export default function LessonPanel({
               <button
                 onClick={() => { setResult(null); setAnswer(""); }}
                 disabled={loading}
-                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
               >
                 {t.lesson.tryAgain}
               </button>
@@ -921,7 +921,7 @@ export default function LessonPanel({
                       }
                     }}
                     disabled={loading}
-                    className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+                    className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
                   >
                     {loading ? t.lesson.loadingShort : t.lesson.startWarmUp}
                   </button>
@@ -929,7 +929,7 @@ export default function LessonPanel({
                 <button
                   onClick={handleAdvance}
                   disabled={loading}
-                  className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+                  className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
                 >
                   {result.mutation?.kind === "prerequisite"
                     ? t.lesson.skipItMoveOn
@@ -943,7 +943,7 @@ export default function LessonPanel({
               <button
                 onClick={handleRetry}
                 disabled={loading}
-                className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
+                className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
               >
                 {t.lesson.buildWarmUp}
               </button>

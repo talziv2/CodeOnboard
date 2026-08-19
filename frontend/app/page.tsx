@@ -115,7 +115,7 @@ export default function Home() {
           <input
             id="repo"
             type="url"
-            className="rounded border border-rule bg-trench px-3.5 py-3 text-start font-mono text-[calc(13rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
+            className="rounded border border-rule bg-trench px-3.5 py-3 text-start font-mono text-[calc(13rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim"
             placeholder={t.home.repoPlaceholder}
             value={repoUrl}
             onChange={(e) => { setRepoUrl(e.target.value); setError(null); }}
@@ -145,7 +145,7 @@ export default function Home() {
           <button
             type="submit"
             disabled={checking}
-            className="mt-1 rounded border border-signal-dim bg-signal/15 py-3 text-[calc(13.5rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+            className="mt-1 rounded border border-signal-dim bg-signal/15 py-3 text-[calc(13.5rem/16)] font-medium text-signal transition hover:bg-signal/25"
           >
             {checking ? t.home.checking : t.home.start}
           </button>
@@ -182,7 +182,7 @@ export default function Home() {
             <button
               onClick={() => goal && startSession(goal)}
               disabled={!goal}
-              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
+              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
             >
               {t.failed.tryAgain}
             </button>

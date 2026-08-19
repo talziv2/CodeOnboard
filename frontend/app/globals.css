@@ -17,6 +17,12 @@
   --color-chalk: #dde5ea;
   --color-paper: #b9c6ce;
   --color-graphite: #7b8d99;
+  /* Disabled foreground. A step below `graphite` so "unavailable" reads as
+     unavailable, but chosen to clear 3:1 on every surface a control actually
+     sits on — ink, trench and slab. Measured: 3.9 / 3.8 / 3.5.
+     `raise` is excluded deliberately; it is a progress-track fill and no
+     control is ever drawn on it. */
+  --color-muted: #63737e;
   --color-signal: #5bc8e8;
   --color-signal-dim: #2e7a91;
   --color-jade: #4fb286;
@@ -90,10 +96,22 @@
   --color-rule: #a7bbc8;
   --color-chalk: #0c1f2a;
   --color-paper: #2c4653;
+  /* Same role, opposite direction: on paper a disabled control goes LIGHTER, and
+     the ceiling is what still clears 3:1 against the lightest surface it lands
+     on. Measured on ink / trench / slab: 3.4 / 3.1 / 3.7. */
+  --color-muted: #6f838f;
   /* Chosen so every one of these clears 4.5:1 against the *darkest* surface
      they land on (trench, the rail), not just against the page ground. */
   --color-graphite: #4b6675;
-  --color-signal: #056782;
+  /* Deepened from #056782. Signal is used as ink ON a 15% signal tint — the
+     primary button, the profile chips — and at the old value that pairing
+     measured 4.44:1, just under AA, on the first screen a learner sees. Because
+     the tint is made FROM signal, foreground and background moved together, so
+     only a darker signal separates them: 4.44 → 5.35 on the tint, 4.11 → 4.92
+     on the halo, and 5.48 → 6.73 bare. Consistent with this theme's own rule
+     that signal deepens rather than brightens, since on paper contrast comes
+     from going darker. */
+  --color-signal: #04596f;
   /* signal-dim does double duty — hover/focus borders AND dim label text (area
      headings, line ranges). On a dark ground one value serves both; on a light
      one a border tint is far too pale to read, so this is set from the text
@@ -103,7 +121,9 @@
   --color-brass: #7d5602;
   --color-rust: #b1301a;
 
-  --color-signal-halo: rgba(5, 103, 130, 0.2);
+  /* Tracks --color-signal above; the halo is the same hue at low alpha, and
+     leaving it on the old rgb would quietly desynchronise the two. */
+  --color-signal-halo: rgba(4, 89, 111, 0.2);
   --color-signal-wash: #cbe4ee;
 
   --color-code-gutter: #5f7a8a;
@@ -167,6 +187,46 @@ body {
 /* The lesson column holds long-form prose; cap the measure for readability. */
 .measure {
   max-width: 62ch;
+}
+
+/* --- focus -----------------------------------------------------------------
+
+   One rule at the root, because a focus ring that has to be remembered per
+   component is one that will be forgotten. Before this exactly one control in
+   the app had a focus style — the source pane's divider — while three inputs
+   actively removed the browser's default and substituted a border tint too
+   faint to locate. Every other button, on every screen, was unfocusable to the
+   eye.
+
+   `:focus-visible`, not `:focus`, so a pointer click never leaves a ring behind.
+   Wrapped in `:where()` to keep specificity at zero, which is what lets a
+   component opt out on purpose (the drag divider does) without !important. */
+:where(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-signal);
+  outline-offset: 2px;
+}
+
+/* --- disabled --------------------------------------------------------------
+
+   Disabled was `opacity: .3`–`.4` applied to text that is already `graphite`.
+   Composited, that landed around 1.5:1 — so a disabled control did not read as
+   unavailable, it read as absent. `Back` on the interview's first question was
+   the clearest case: present, occupying space, and effectively invisible.
+
+   Opacity is the wrong channel for this. It scales the gap to the background
+   rather than setting it, so the result depends on whatever surface the control
+   happens to sit on. An explicit foreground does not.
+
+   The accent also has to go: a disabled primary that keeps its signal tint still
+   looks like the thing to press. */
+:where(button, input, textarea, select):disabled {
+  cursor: not-allowed;
+  color: var(--color-muted);
+  border-color: var(--color-rule);
+}
+
+:where(button):disabled {
+  background-color: transparent;
 }
 
 /* --- the source pane -------------------------------------------------------

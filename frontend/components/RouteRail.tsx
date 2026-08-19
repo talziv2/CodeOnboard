@@ -256,8 +256,13 @@ function SectionHead({
         </span>
         {area.why && (
           <span
+            // Plain `graphite`, not `graphite/75`. The alpha made this 3.56:1 in
+            // dark and 2.98:1 in light — the only body text in the app below AA
+            // that a learner is expected to read. It was quiet by being dimmed;
+            // it is quiet now by being small and set back, which is the channel
+            // that does not cost legibility.
             className={`line-clamp-2 text-[calc(10.5rem/16)] leading-snug ${
-              isCurrent ? "text-paper" : "text-graphite/75"
+              isCurrent ? "text-paper" : "text-graphite"
             }`}
           >
             {area.why}
@@ -358,7 +363,7 @@ export default function RouteRail({
               onClick={() => setShowOptional((v) => !v)}
               disabled={currentIsOptional}
               aria-expanded={optionalOpen}
-              className="flex w-full items-center gap-2 py-1 font-mono text-[calc(10rem/16)] uppercase tracking-[0.13em] text-graphite transition hover:text-signal disabled:opacity-60"
+              className="flex w-full items-center gap-2 py-1 font-mono text-[calc(10rem/16)] uppercase tracking-[0.13em] text-graphite transition hover:text-signal"
             >
               <Chevron open={optionalOpen} />
               {optionalOpen && !currentIsOptional
