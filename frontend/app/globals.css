@@ -43,6 +43,115 @@
   --font-display: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
 }
 
+/* `static`, so these are emitted even while nothing consumes them yet. Tailwind
+   tree-shakes unused theme variables by default, which for a milestone whose
+   whole point is to land the scale ahead of its adoption would mean shipping a
+   file whose values cannot be inspected in the browser or referenced from plain
+   CSS. The cost is a few unused custom properties in `:root`, which render
+   nothing. */
+@theme static {
+  /* --- the type scale ------------------------------------------------------
+
+     ADDITIVE. Nothing consumes these yet; the milestone that applies them is a
+     separate one, so this file can be reviewed on its own and the change to how
+     the product looks can be reviewed on its own.
+
+     Named by ROLE, not by t-shirt size, for two reasons. The design work talks
+     in roles — "the mono eyebrow", "lesson prose" — and role names make a wrong
+     choice obvious at the call site in a way `text-lg` does not. And, more
+     practically, `--text-xs` / `--text-sm` / `--text-md` are Tailwind's own keys
+     and are in live use here (12 × `text-sm`, 2 × `text-xs`); redefining them
+     would silently move existing type, which is exactly what this milestone must
+     not do.
+
+     The problem being fixed is not variety, it is flatness. Measured on one
+     session screen: 11 distinct sizes, 10 of them inside a 6.5px band, and 99%
+     of text at or below 16px. Adjacent steps below 20px therefore differ by at
+     least 2px, so a level change is actually visible.
+
+     Line height travels with the size — Tailwind's `--text-*--line-height`
+     pairing — because the two are one decision. Prose is set at 16/1.7 in a 62ch
+     measure, which lands 66–70 characters per line. */
+  --text-micro: calc(11rem / 16);
+  --text-micro--line-height: 1.4;
+  --text-meta: calc(12.5rem / 16);
+  --text-meta--line-height: 1.5;
+  --text-aside: calc(14rem / 16);
+  --text-aside--line-height: 1.55;
+  --text-body: calc(16rem / 16);
+  --text-body--line-height: 1.7;
+  --text-lede: calc(18rem / 16);
+  --text-lede--line-height: 1.5;
+  --text-head: calc(22rem / 16);
+  --text-head--line-height: 1.35;
+  --text-chapter: calc(28rem / 16);
+  --text-chapter--line-height: 1.25;
+  --text-display: calc(36rem / 16);
+  --text-display--line-height: 1.15;
+
+  /* --- radii ---------------------------------------------------------------
+
+     Today there is one radius in practice: 4px on 68 elements, plus circles.
+     That single value is the strongest "drawn in 2015" signal the product gives
+     off, and it is the cheapest thing on this list to change.
+
+     Role-named again, and for the same collision reason: `rounded` (4px) and
+     `rounded-md` (6px) are both in use, so `--radius-sm` and `--radius-md` are
+     not available to redefine. */
+  --radius-chip: 3px;
+  --radius-field: 6px;
+  --radius-card: 10px;
+  --radius-panel: 14px;
+
+  /* --- elevation -----------------------------------------------------------
+
+     The session view currently contains ZERO elevation: its only two box-shadows
+     are semantic state markers — the halo on the current pin and the inset bar on
+     the highlighted code line — and the two real shadows in the app are on
+     overlays that are closed by default.
+
+     Depth is meant to come from the surface ladder (ink → trench → slab → raise)
+     with shadow only at the top two levels. Dark separates by lightness, light by
+     shadow, because that is how each medium actually reads; the light values
+     below are correspondingly stronger. Re-pointed in the light block. */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.42);
+
+  /* --- motion --------------------------------------------------------------
+
+     Durations proportional to the distance travelled. The app's entire motion
+     language today is Tailwind's default 150ms on hover colour; nothing animates
+     when content changes, which is the main reason state transitions read as
+     instantaneous repaints.
+
+     `--ease-emphasis` is a new key rather than a redefinition of `--ease-out`,
+     which is in use. */
+  --ease-emphasis: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Durations live outside `@theme` deliberately: as plain custom properties they
+   generate no utilities and so cannot collide with Tailwind's transition keys,
+   and they are consumed as `duration-[var(--motion-state)]` where needed. */
+:root {
+  --motion-micro: 120ms;   /* hover, focus, chip state */
+  --motion-state: 200ms;   /* crossfades, phase swaps */
+  --motion-layout: 320ms;  /* insertion, height, panel open */
+  --motion-route: 450ms;   /* the rail's current-pin travelling */
+}
+
+/* --- spacing ---------------------------------------------------------------
+
+   No tokens added on purpose. Tailwind already derives every step from a single
+   `--spacing` (0.25rem), and the app's `gap-1`…`gap-9` resolve off it — a second
+   parallel scale would be a way to disagree with the first.
+
+   What is missing is not values but a CONVENTION, and a convention belongs with
+   the code that follows it rather than in a variable. The intended rhythm, for
+   the milestone that applies it: zone padding 5–6 (24–32px), card padding 4–5
+   (16–24px), between sibling blocks 5 (24px), within a group 2–3 (8–12px), and
+   around the canvas's one primary artifact 6–7 (32–48px). Today the same
+   relationship is `gap-6`, `gap-7` and `gap-9` in three different files. */
+
 /* Concept-tag chips. One fixed hue per tag so the colour becomes readable on
    its own after a couple of encounters; `lib/tags.ts` reads these by name. */
 :root {
@@ -129,6 +238,13 @@
   --color-code-gutter: #5f7a8a;
   --color-code-line: #2f4f5f;
   --color-code-hot: #04202c;
+
+  /* Stronger than their dark counterparts on purpose: on paper a surface step
+     alone barely separates two panels, so light leans on the shadow where dark
+     leans on lightness. Cool-tinted rather than neutral black, to sit in the
+     blueprint palette instead of greying it. */
+  --shadow-card: 0 1px 3px rgba(16, 42, 58, 0.1);
+  --shadow-overlay: 0 12px 28px rgba(16, 42, 58, 0.16);
 
   --tag-architecture-text: #16558c;
   --tag-architecture-border: #7ba7cb;

@@ -229,3 +229,42 @@ one such item left (4.17:1) after the signal change.
 dark / 3.54:1 light. They sit inside the source pane, which `globals.css` treats
 as a deliberately quieter tonal zone and which the probe excludes for that reason.
 Changing them is a decision about the pane's character, so it belongs to F3.
+
+### F1 — 2026-08-19 · token layer, zero visual diff
+
+The gate for this milestone is that nothing changes, so it was measured rather
+than asserted. `public/snapshot.txt` digests sixteen computed properties per
+element — size, weight, line-height, tracking, colour, background, border, radius,
+shadow, opacity, padding, margin, gap — across `main` and `header`, excluding the
+source-pane code table because its DOM varies with whichever file is open.
+
+Captured on the session route with `globals.css` at HEAD, then with F1 applied:
+
+```
+                elements   dark digest   light digest
+before             274     1432160578    -429470264
+after              274     1432160578    -429470264
+                            identical      identical
+```
+
+The before-capture also asserts `--text-body` is absent, so the two runs are
+genuinely pre- and post-F1 rather than the same state twice.
+
+**Two things this milestone taught, both recorded in the file itself.**
+
+Tailwind's own keys were the hazard, not the new values. `--text-xs`, `--text-sm`,
+`--radius-sm` and `--radius-md` all have defaults that are in live use here —
+12 × `text-sm`, 2 × `text-xs`, 68 × `rounded` (4px), 4 × `rounded-md` (6px) — so
+defining the scale under those names would have silently moved existing type and
+geometry. The scale is therefore role-named (`--text-micro` … `--text-display`,
+`--radius-chip` … `--radius-panel`), which also reads better at the call site.
+
+And `@theme` tree-shakes variables nothing consumes: the first attempt emitted
+literally none of them, so they could not be inspected in the browser or
+referenced from plain CSS. `@theme static` fixes that at the cost of a few unused
+custom properties, which render nothing.
+
+No spacing tokens were added. Tailwind already derives every step from one
+`--spacing`, and the app's `gap-*` resolve off it; a second scale would just be a
+way to disagree with the first. What was missing is a convention, which is
+recorded as a comment beside the code that will follow it.
