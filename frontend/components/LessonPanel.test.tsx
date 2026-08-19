@@ -262,3 +262,91 @@ describe("requesting a verification", () => {
     });
   });
 });
+
+describe("citations open the source at the right place", () => {
+  /**
+   * The anchor-precision guard. A unit whose flow crosses three files is anchored
+   * on all three, and each `Step n of m` has to open ITS file at ITS lines. The
+   * failure this pins is subtle and was real: opening the right file at the
+   * node's own display range, so step 2 of a flow landed in the correct file at
+   * the wrong lines. `viewingRange` exists for exactly this, and it is only ever
+   * set from the range the citation carries.
+   */
+  const MULTI = node("n1", {
+    file: "requests/sessions.py",
+    line_start: 1,
+    line_end: 20,
+    anchors: [
+      { file: "requests/api.py", symbol: "request", line_start: 14, line_end: 60 },
+      { file: "requests/sessions.py", symbol: "Session.request", line_start: 502, line_end: 590 },
+      { file: "requests/adapters.py", symbol: "HTTPAdapter.send", line_start: 434, line_end: 538 },
+    ],
+  });
+
+  const renderMulti = async (onFileClick: ReturnType<typeof vi.fn>) => {
+    const { default: LessonPanel } = await import("@/components/LessonPanel");
+    const g = { ...graph(), nodes: [MULTI] };
+    api.getLesson.mockResolvedValue(LESSON);
+    render(
+      <LessonPanel
+        sessionId="s1"
+        nodeId="n1"
+        node={MULTI}
+        position={1}
+        total={1}
+        isPrerequisite={false}
+        graph={g}
+        onFileClick={onFileClick}
+        onAdvance={vi.fn()}
+        onRespond={vi.fn()}
+        finished={false}
+        onFinish={vi.fn()}
+        onLeave={vi.fn()}
+      />
+    );
+    await screen.findByText(LESSON.lesson.prompt);
+  };
+
+  test("each step opens its own file at its own lines", async () => {
+    const onFileClick = vi.fn();
+    await renderMulti(onFileClick);
+
+    const steps = screen.getAllByRole("button", { name: /Step \d of 3/ });
+    expect(steps).toHaveLength(3);
+
+    await userEvent.click(steps[1]);
+    expect(onFileClick).toHaveBeenCalledWith("requests/sessions.py", 502, 590);
+
+    await userEvent.click(steps[2]);
+    expect(onFileClick).toHaveBeenCalledWith("requests/adapters.py", 434, 538);
+
+    await userEvent.click(steps[0]);
+    expect(onFileClick).toHaveBeenCalledWith("requests/api.py", 14, 60);
+  });
+
+  test("a step never falls back to the node's own display range", async () => {
+    const onFileClick = vi.fn();
+    await renderMulti(onFileClick);
+
+    const steps = screen.getAllByRole("button", { name: /Step \d of 3/ });
+    await userEvent.click(steps[1]);
+
+    // The node's own range is 1–20; the anchor's is 502–590. Handing over the
+    // node's range here is the exact bug `viewingRange` was added to prevent.
+    const [, start, end] = onFileClick.mock.calls[0];
+    expect([start, end]).not.toEqual([MULTI.line_start, MULTI.line_end]);
+  });
+
+  test("clicking the same step twice asks twice, so the pane can re-scroll", async () => {
+    const onFileClick = vi.fn();
+    await renderMulti(onFileClick);
+
+    const steps = screen.getAllByRole("button", { name: /Step \d of 3/ });
+    await userEvent.click(steps[0]);
+    await userEvent.click(steps[0]);
+
+    // Asking for a location the pane already shows still has to move it there —
+    // which is what `focusKey` is counting on the page side.
+    expect(onFileClick).toHaveBeenCalledTimes(2);
+  });
+});

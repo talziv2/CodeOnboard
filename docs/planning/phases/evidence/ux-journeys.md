@@ -1385,3 +1385,120 @@ Frontend suite 80 passed (12 new in `SessionMenu.test.tsx`), typecheck clean.
 The two progress numbers keep their `title` sentences, which is what carries the
 measure for anyone who never hovers or tabs — the labels collapsing is a density
 decision, not a decision to hide what the numbers mean.
+
+---
+
+## S2 — Rail, source pane default, responsive bands
+
+### The source pane is no longer a default
+
+`showCode` started `true`, so every session opened with a file beside it whether
+or not the lesson had sent anyone there — roughly a third of the width spent on
+something nobody had asked for. It now opens **on a citation click**, and its
+state is a persisted preference rather than page state: the learner who works
+with code beside them keeps it, the learner who does not never sees it.
+
+`SourcePrefs` gains `open: boolean`, default `false`. Migration is by
+construction — `readSource` already resolves each field independently, and the
+new one is read as `s.open === true`, so an older prefs blob (or a corrupt one)
+resolves to closed rather than to `undefined`. Verified against a real stored
+preference: the key appears alongside `mode`, `dockWidth` and `float`, and
+survives a reload in both directions (closed stayed closed; a stored `true`
+reopened the pane on load).
+
+### Three bands
+
+```
+wide    >= 1180   full rail (16.75rem), source docked
+medium  >=  960   rail collapses to a 3.5rem icon strip, source still docked
+narrow   <  960   both become overlays; the lesson has the whole window
+```
+
+Measured, with the source open:
+
+```
+viewport   rail    lesson   source    rail form      source form
+1440px     268px   1172px   —         full           closed by default
+1180px     268px    572px   340px     full           docked   <- tightest case
+1100px      56px    704px   340px     icon strip     docked
+1024px      56px    628px   340px     icon strip     docked
+ 900px       —      900px   544px     overlay        sheet
+```
+
+The 1180px row is the tightest the layout gets: 268 + 572 + 340 = 1180 exactly,
+and 572 clears the 560px lesson floor by 12px. Below 1180 the rail collapses
+first, which is what buys the lesson its room back — 704px at 1100.
+
+### Why the floor rule is a pure function
+
+`sourceMustOverlay(band, viewportWidth, dockWidthRem, rootFontPx)` decides from
+the inputs, never from the lesson's measured width. Measuring the lesson and
+reacting to it is the obvious implementation and it oscillates: pane pops out,
+lesson grows past the floor, pane docks again, lesson shrinks. Nine unit tests
+cover the boundaries, the dragged-wide pane pushing itself out at a width that
+was fine, the collapsed rail buying room the full rail did not, the text-size
+dial moving the thresholds (the columns are in `rem`), and the stability property
+stated directly.
+
+### The rail
+
+**Compact strip** in the medium band: one pin per stop in order, each carrying
+the stop's title and state as its accessible name and tooltip, chapters divided
+by a rule rather than a heading — at 56px a heading is a truncated word. Its own
+control opens the map.
+
+**Overlay** in the narrow band, opened from a `Your route` control in the tab
+strip. It is the *full* rail, not the strip, with a backdrop; jumping closes it,
+because the thing it navigates to is underneath it. Verified: opens at 272px,
+backdrop present, closes on jump.
+
+**Chapter `why` removed** from the rail. Two clamped lines under every section
+heading was the largest block of prose there, and it repeated text the chapter
+overview already opens with. It is a tooltip on the section title here and a
+paragraph there — the same information at the density each surface is for.
+Nothing is lost: `SectionOverview` already rendered `area.why`, and the rail's
+title button is what opens it.
+
+### Anchor precision — the scenario that had to keep working
+
+Verified live at 1440px on a multi-anchor unit. Clicking *Step 2 of 4 —
+`GraphProblem`, lines 1179–1215* opened the pane, added the third grid track, and
+highlighted **exactly 1179–1215** — the anchor's range, not the node's display
+range. That is the `viewingRange` guard, and it is now pinned by three tests:
+each step opens its own file at its own lines, a step never falls back to the
+node's range, and clicking the same step twice fires twice so `focusKey` can
+still re-scroll.
+
+### Gate
+
+```
+all four bands inspected                 yes — 1440 / 1180 / 1100 / 1024 / 900
+lesson >= 560px at every band            yes, tightest 572px at 1180
+rail obeys the band rules                full / strip / overlay, all confirmed
+source obeys the band rules              docked / docked / sheet, all confirmed
+citation opens the right file AND lines  yes, 1179–1215 on step 2 of 4
+same anchor twice still asks twice       yes (focusKey preserved)
+prefs migrate without error              yes, both directions
+contrast, whole page, both themes        0 chrome failures (9832 nodes)
+```
+
+Frontend suite 92 passed — 9 new for the band rules, 3 for anchor precision.
+
+### A measurement trap, recorded
+
+**`resize_window` does not fire a `resize` event.** It sets the viewport through
+the devtools metrics override, so `window.innerWidth` reports the new width
+immediately while every React listener still holds the old one. The first
+medium-band reading showed a full 268px rail and a 492px lesson — an apparent
+failure of the whole band system — and dispatching `new Event('resize')` by hand
+produced the correct 56 / 704 / 340 straight away. A real window drag fires the
+event normally, so this is instrumentation only; probes that resize must dispatch
+it before reading.
+
+### Not changed
+
+`focusKey` semantics, the `highlightForOpenFile` file guard, `viewingRange`
+behaviour, dock/float persistence and the short-hop-only smooth scroll rule are
+all untouched. The overlay sheet forces `mode: "dock"` for its render only — a
+floating window inside a full-width overlay is two ways of being out of flow at
+once — and does not write that back to the stored preference.

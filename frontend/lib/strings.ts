@@ -327,6 +327,7 @@ export const t = {
     setAside: "◦ set aside",
     setAsideHint: "You chose to stop being asked about this",
     title: "Your route",
+    close: "Close the route",
     openMap: "Open map",
     addedAfterConfusion: "added after confusion",
     optionalStops: (count: number) =>

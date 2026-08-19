@@ -19,6 +19,11 @@ interface Props {
   onJump: (node: GraphNode) => void;
   onOpenSection: (areaId: string) => void;
   onExpand: () => void;
+  /**
+   * Collapse to a strip of pins. Used in the medium band, where the full rail
+   * would be taking 268px from a lesson already close to its floor.
+   */
+  compact?: boolean;
 }
 
 /**
@@ -28,6 +33,11 @@ interface Props {
  * ranges and the state legend are all deliberately absent here. Density was the
  * problem: everything on screen carried the same weight, and the current stop
  * did not stand out from the fifteen around it.
+ *
+ * The chapter's `why` went the same way. Two clamped lines under every section
+ * heading was the largest block of prose in the rail, and it repeated text the
+ * chapter overview already opens with — so it is a tooltip here and a paragraph
+ * there, which is the same information at the density each surface is for.
  *
  * The timeline stays. It is what makes the route read as a journey rather than a
  * menu, and it is the only element that shows the order of things.
@@ -227,6 +237,10 @@ function SectionHead({
       <button
         onClick={onOpen}
         aria-label={t.rail.openSection(area.title)}
+        // The chapter's `why` is one hover away rather than two lines of the
+        // rail. It is not lost: the same text is the first thing on the chapter
+        // overview, which is what this button opens.
+        title={area.why ? `${area.title} — ${area.why}` : area.title}
         className="group flex min-w-0 flex-1 flex-col gap-[3px] text-start"
       >
         <span className="flex items-baseline gap-2">
@@ -243,20 +257,6 @@ function SectionHead({
             {t.rail.sectionProgress(section.settled, section.total)}
           </span>
         </span>
-        {area.why && (
-          <span
-            // Plain `graphite`, not `graphite/75`. The alpha made this 3.56:1 in
-            // dark and 2.98:1 in light — the only body text in the app below AA
-            // that a learner is expected to read. It was quiet by being dimmed;
-            // it is quiet now by being small and set back, which is the channel
-            // that does not cost legibility.
-            className={`line-clamp-2 text-micro ${
-              isCurrent ? "text-paper" : "text-graphite"
-            }`}
-          >
-            {area.why}
-          </span>
-        )}
       </button>
     </div>
   );
@@ -264,6 +264,7 @@ function SectionHead({
 
 export default function RouteRail({
   sections, optional, currentNodeId, openSectionId, onJump, onOpenSection, onExpand,
+  compact = false,
 }: Props) {
   const [showOptional, setShowOptional] = useState(false);
   // Only the sections the learner has actually toggled. Everything else follows
@@ -285,8 +286,61 @@ export default function RouteRail({
     return "ahead";
   };
 
+  if (compact) {
+    /**
+     * The same route at the density of a scrollbar: one pin per stop, in order,
+     * each carrying the stop's title as its accessible name and its tooltip. It
+     * answers "where am I, how much is left" — the part of the rail worth 56px —
+     * and defers the rest to the map, which the strip's own control opens.
+     *
+     * Section headings are not drawn here: at this width a heading is a truncated
+     * word. The boundary between chapters is a rule instead.
+     */
+    return (
+      <aside
+        aria-label={t.rail.title}
+        className="flex h-full min-h-0 flex-col items-center gap-2 overflow-y-auto border-e border-rule bg-trench py-4"
+      >
+        {sections.map((section, si) => (
+          <div key={section.area?.id ?? si} className="flex flex-col items-center gap-2">
+            {si > 0 && <span aria-hidden className="my-1 h-px w-4 bg-rule" />}
+            {section.stops.map((stop) => (
+              <button
+                key={stop.node.id}
+                onClick={() => onJump(stop.node)}
+                aria-current={stop.node.id === currentNodeId ? "step" : undefined}
+                // Same fallback the full rail uses: a node with no recorded
+                // understanding is "insufficient", not an empty label.
+                aria-label={`${stop.node.title} — ${understandingLabel(stop.node.understanding ?? "insufficient")}`}
+                title={`${stop.node.title} — ${understandingLabel(stop.node.understanding ?? "insufficient")}`}
+                className="flex h-6 w-6 shrink-0 items-center justify-center"
+              >
+                <StatePin
+                  understanding={stop.node.understanding}
+                  isCurrent={stop.node.id === currentNodeId}
+                  role="rail"
+                />
+              </button>
+            ))}
+          </div>
+        ))}
+        <button
+          onClick={onExpand}
+          aria-label={t.rail.openMap}
+          title={t.rail.openMap}
+          className="mt-auto shrink-0 font-mono text-micro text-graphite transition hover:text-signal"
+        >
+          ⤢
+        </button>
+      </aside>
+    );
+  }
+
   return (
-    <aside className="flex h-full min-h-0 flex-col gap-3 border-e border-rule bg-trench py-4">
+    <aside
+      aria-label={t.rail.title}
+      className="flex h-full min-h-0 flex-col gap-3 border-e border-rule bg-trench py-4"
+    >
       <div className="flex items-baseline justify-between px-4">
         <span className="font-mono text-micro uppercase tracking-[0.16em] text-graphite">
           {t.rail.title}

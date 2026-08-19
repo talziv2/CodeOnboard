@@ -820,9 +820,9 @@ P1  landing                    ◀── pre-session lands here, not at the end
                                     ✅ 1ceed6c
 P2  interview                  ◀──  ✅ c8a9182 (motion) + 5fa2207
 P2b review gate                     ✅ 0d6e946   added after using P2
-S1  header                          ✅ (this commit)  goal 110px -> 843px
-S2  rail + source + responsive 🔴    ← next, and the first mandatory stop
-L1  phase logic (no render)
+S1  header                          ✅ 5f75d88  goal 110px -> 843px
+S2  rail + source + responsive 🔴    ✅ (this commit)  source now on demand
+L1  phase logic (no render)          ← next, first of the L track
 L2  extract blocks (no visual)
 L3  Brief / Canvas frame      🔴
 L4  phase rendering + feedback 🔴🔴 flagged; highest risk
@@ -841,9 +841,11 @@ Base branch: **`master`** (verified — §7). Implementation begins at M0.
 
 Foundation (`F1`–`F3d`) is approved and closed. The pre-session front half
 (`P1`, `P2`, `P2b`) has shipped and been verified against the running backend.
-`S1` has shipped — the header regression is closed, with the goal zone going from
-110px to 843px at 1280px and the overflow floor from 1150px to 657px. `S2` is next
-and is the first mandatory inspection stop.
+`S1` and `S2` have shipped. The header regression is closed (goal zone 110px ->
+843px at 1280px, overflow floor 1150px -> 657px), the source pane is on demand
+rather than a default, and the layout has three named bands with a 560px floor
+under the reading column. The L track is next, and it is where the carried-forward
+feedback information architecture (§3a) gets resolved.
 
 Three things are carried forward rather than fixed in place, each recorded with
 numbers in `evidence/ux-journeys.md`:

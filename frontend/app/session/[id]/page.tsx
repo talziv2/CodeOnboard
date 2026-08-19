@@ -14,6 +14,7 @@ import type { GraphNode, SessionGraph } from "@/lib/api";
 import { buildRoute, spineLength } from "@/lib/graph-layout";
 import { currentSection, splitJourney } from "@/lib/route-sections";
 import { useSourcePane } from "@/lib/source-pane";
+import { RAIL_REM, useBand, useRootFontPx, sourceMustOverlay } from "@/lib/layout-bands";
 import Button from "@/components/ui/Button";
 import { errorText, t } from "@/lib/strings";
 
@@ -26,12 +27,27 @@ export default function SessionPage() {
   // Without it the pane highlighted the node's display range in whatever file
   // was opened, so step 2 of a flow opened the right file at the wrong lines.
   const [viewingRange, setViewingRange] = useState<[number, number] | null>(null);
-  const [showCode, setShowCode] = useState(true);
+  // The pane's visibility is a persisted PREFERENCE, not page state: it now
+  // defaults to closed and opens on a citation, so "was it open last time" is
+  // the only thing worth carrying between sessions. `useSourcePane` reads it in
+  // an effect, which is why the server-rendered markup matches — closed is both
+  // the default and the first paint.
   // A counter, not a flag: asking for a location the pane is *already* showing
   // still has to move it there. Nothing else changes when the same anchor is
   // clicked twice, so without this the pane would just sit where it was.
   const [focusKey, setFocusKey] = useState(0);
   const { source, patch: patchSource } = useSourcePane();
+  const showCode = source.open;
+  const setShowCode = (open: boolean) => patchSource({ open });
+  const { width: viewportWidth, band } = useBand();
+  const rootFontPx = useRootFontPx();
+  // The pane leaves the grid and becomes a sheet when the window cannot hold
+  // three columns without starving the middle one. Decided from the viewport and
+  // the pane's own width, never from the lesson's measured width — see
+  // `sourceMustOverlay` for why that distinction matters.
+  const sourceOverlay = sourceMustOverlay(band, viewportWidth, source.dockWidth, rootFontPx);
+  // The rail has no track of its own in the narrow band; it opens over the page.
+  const [railOpen, setRailOpen] = useState(false);
   const [tab, setTab] = useState<"lesson" | "map">("lesson");
   // Which unit's evidence chain is open, if any. Null = closed.
   const [evidenceNodeId, setEvidenceNodeId] = useState<string | null>(null);
@@ -238,24 +254,35 @@ export default function SessionPage() {
           // A floating pane is out of flow, so it claims no track — only the
           // docked one reserves a column, and its width is the variable the
           // divider drags (see `globals.css`).
-          gridTemplateColumns:
-            tab === "lesson" && showCode && openFile && source.mode === "dock"
-              ? "16.75rem minmax(0,1fr) var(--source-width)"
-              : "16.75rem minmax(0,1fr)",
+          // Three bands, three rail tracks, and a source column only when the
+          // pane is genuinely docked in the layout — a floating pane and an
+          // overlay sheet are both out of flow and claim no track.
+          gridTemplateColumns: [
+            band === "narrow" ? null : `${RAIL_REM[band]}rem`,
+            "minmax(0,1fr)",
+            tab === "lesson" && showCode && openFile && source.mode === "dock" && !sourceOverlay
+              ? "var(--source-width)"
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" "),
         }}
       >
-        <RouteRail
-          sections={journey.sections}
-          optional={journey.optional}
-          currentNodeId={currentNodeId}
-          openSectionId={overviewAreaId}
-          onJump={handleJump}
-          onOpenSection={(areaId) => {
-            setTab("lesson");
-            setOverviewAreaId(areaId);
-          }}
-          onExpand={() => setTab("map")}
-        />
+        {band !== "narrow" && (
+          <RouteRail
+            sections={journey.sections}
+            optional={journey.optional}
+            currentNodeId={currentNodeId}
+            openSectionId={overviewAreaId}
+            onJump={handleJump}
+            onOpenSection={(areaId) => {
+              setTab("lesson");
+              setOverviewAreaId(areaId);
+            }}
+            onExpand={() => setTab("map")}
+            compact={band === "medium"}
+          />
+        )}
 
         <div className="flex min-h-0 flex-col border-e border-rule">
           <div className="flex shrink-0 items-center gap-1 border-b border-rule px-5">
@@ -276,7 +303,15 @@ export default function SessionPage() {
                 {label}
               </button>
             ))}
-            {tab === "map" && (
+            {band === "narrow" && (
+              <button
+                onClick={() => setRailOpen(true)}
+                className="ms-auto font-mono text-micro uppercase tracking-[0.13em] text-graphite transition hover:text-signal"
+              >
+                {t.rail.title}
+              </button>
+            )}
+            {tab === "map" && band !== "narrow" && (
               <span className="ms-auto font-mono text-micro text-graphite">
                 {t.session.mapHint(graph.nodes.length)}
               </span>
@@ -349,19 +384,82 @@ export default function SessionPage() {
         </div>
 
         {tab === "lesson" && showCode && openFile && (
-          <CodeViewer
-            sessionId={id}
-            filePath={openFile}
-            // A chosen anchor wins; otherwise the node's display range, as
-            // before. CodeViewer itself is unchanged — this is which range it
-            // is handed, not how it renders one.
-            highlightStart={viewingRange?.[0] ?? highlightForOpenFile?.start}
-            highlightEnd={viewingRange?.[1] ?? highlightForOpenFile?.end}
-            focusKey={focusKey}
-            source={source}
-            onSourceChange={patchSource}
-            onClose={() => setShowCode(false)}
-          />
+          sourceOverlay ? (
+            /**
+             * A sheet over the page rather than a third column. The pane keeps
+             * its own dock/float controls and its own close — this changes where
+             * it sits, not what it is — but it is forced to `dock` while it is a
+             * sheet, because a floating window inside a full-width overlay is two
+             * ways of being out of flow at once.
+             */
+            <div className="fixed inset-0 z-40 flex justify-end">
+              <button
+                aria-label={t.session.hideSource}
+                onClick={() => setShowCode(false)}
+                className="absolute inset-0 bg-ink/70"
+              />
+              <div className="relative flex h-full w-full max-w-[34rem] flex-col border-s border-rule bg-trench shadow-overlay">
+                <CodeViewer
+                  sessionId={id}
+                  filePath={openFile}
+                  highlightStart={viewingRange?.[0] ?? highlightForOpenFile?.start}
+                  highlightEnd={viewingRange?.[1] ?? highlightForOpenFile?.end}
+                  focusKey={focusKey}
+                  source={{ ...source, mode: "dock" }}
+                  onSourceChange={patchSource}
+                  onClose={() => setShowCode(false)}
+                />
+              </div>
+            </div>
+          ) : (
+            <CodeViewer
+              sessionId={id}
+              filePath={openFile}
+              // A chosen anchor wins; otherwise the node's display range, as
+              // before. CodeViewer itself is unchanged — this is which range it
+              // is handed, not how it renders one.
+              highlightStart={viewingRange?.[0] ?? highlightForOpenFile?.start}
+              highlightEnd={viewingRange?.[1] ?? highlightForOpenFile?.end}
+              focusKey={focusKey}
+              source={source}
+              onSourceChange={patchSource}
+              onClose={() => setShowCode(false)}
+            />
+          )
+        )}
+
+        {/* The route, in the band where it has no column of its own. Same
+            component and the same handlers — jumping closes it, because the
+            thing it navigates to is underneath it. */}
+        {band === "narrow" && railOpen && (
+          <div className="fixed inset-0 z-40 flex">
+            <button
+              aria-label={t.rail.close}
+              onClick={() => setRailOpen(false)}
+              className="absolute inset-0 bg-ink/70"
+            />
+            <div className="relative flex h-full w-[17rem] max-w-[85vw] flex-col bg-trench shadow-overlay">
+              <RouteRail
+                sections={journey.sections}
+                optional={journey.optional}
+                currentNodeId={currentNodeId}
+                openSectionId={overviewAreaId}
+                onJump={(node) => {
+                  setRailOpen(false);
+                  handleJump(node);
+                }}
+                onOpenSection={(areaId) => {
+                  setRailOpen(false);
+                  setTab("lesson");
+                  setOverviewAreaId(areaId);
+                }}
+                onExpand={() => {
+                  setRailOpen(false);
+                  setTab("map");
+                }}
+              />
+            </div>
+          </div>
         )}
       </div>
     </main>
