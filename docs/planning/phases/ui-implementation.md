@@ -942,7 +942,43 @@ optional:  B1 Grader headline (after L4)   ·   B2 progress facts (with P3)
 
 Base branch: **`master`** (verified — §7). Implementation begins at M0.
 
-### Where this stands
+### Where this stands — the plan is complete
+
+Every milestone in §5 has shipped. `L5`, `P3`, `P4`, `A1` and `X1` closed on branch
+`ui-surfaces-l5`; everything before them is on `master` as of `ec00d54`.
+
+Three things shipped narrower than written, each for a stated reason rather than for
+lack of time:
+
+1. **`L5`'s panels** were not built — S3 had already moved the gap list and the
+   history into Understanding as disclosures, so a panel would have been a third
+   home for material that had just found its second.
+2. **`P4`'s shared-element transition** is deferred. The milestone says it "will look
+   cheap if it is even slightly wrong", and doing it properly across a route change
+   needs the View Transitions API; what ships is a directional exit plus the
+   continuity that actually mattered — the rail arrives with the chapter containing
+   the first stop already expanded.
+3. **`P3`'s "interview transcript"** is the synthesised goal, because `onDone` hands
+   the page a goal and not an answer list, and the review gate had already shown the
+   answers and required the learner to confirm them.
+
+Two things are built but currently inert on real data, which is worth knowing before
+either is trusted:
+
+- **`A1`'s gap rows.** The log renders route-shape changes from `journey_events`
+  (verified live: two warm-up insertions, each naming the stop it unblocks) but
+  contributes no gap rows, because `NodeGap` on the node wire carries no
+  `opened_at`/`closed_at` — those live on `GapDetail`, which only the evidence
+  drawer fetches. The code declines to guess a position in the chronology rather
+  than inventing one, and a test pins that. Putting the timestamps on the node wire
+  is R9/F101 work.
+- **`P3`'s files-read list** is unit-tested but its live confirmation is still
+  outstanding — see the note under P3.
+
+The optional backend items `B1` (Grader headline) and `B2` (progress facts) remain
+decision points, not scheduled work, exactly as written.
+
+### How it stood at the L-track gate
 
 Foundation (`F1`–`F3d`) is approved and closed. The pre-session front half
 (`P1`, `P2`, `P2b`) has shipped and been verified against the running backend.
