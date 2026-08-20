@@ -18,6 +18,10 @@ cd "$(dirname "$0")/.."
 # product no longer has. L5 deleted `FeedbackCard.tsx` and it sat in the rig until
 # it was noticed by hand. Only these three directories are cleared: node_modules,
 # .next, the config and the env file all have to survive.
+# STOP THE RIG'S DEV SERVER BEFORE RUNNING THIS. Removing directories under a live
+# Next watcher makes its compiler workers die — "Jest worker encountered 2 child
+# process exceptions, exceeding retry limit" — and the page then serves a 500 that
+# looks like an application error. Observed immediately after this prune was added.
 rm -rf .ui-audit-fe/app .ui-audit-fe/components .ui-audit-fe/lib
 tar cf - --exclude=node_modules --exclude=.next --exclude=next.config.ts --exclude=.env.local -C frontend . \
   | (cd .ui-audit-fe && tar xf -)

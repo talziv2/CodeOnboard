@@ -630,6 +630,14 @@ Why this order:
   what ships is the *synthesised goal*, because `onDone` hands the page the goal and
   not the answer list, and the review gate had already shown the answers and made
   the learner confirm them. The goal is the version they agreed to.
+- **Verification status.** Two real runs on `psf/requests`, both completing to the
+  briefing. Goal continuity and the server-preferred elapsed line confirmed on
+  screen. The files-read list is unit-tested (accumulation across polls,
+  distinctness, and `read_file`-only) but its LIVE check is still outstanding: the
+  in-page watcher matched `files read` case-sensitively while the label renders
+  through `text-transform: uppercase`, and `innerText` returns rendered text — so a
+  list that was there could not have been seen. Same class of error as the
+  runtime theme flip. Folded into P4's run rather than paying for a third.
 - **Goal.** The wait becomes the thing the briefing grows out of.
 - **Files.** `components/StartingProgress.tsx`, `app/page.tsx`
 - **Behaviour.** The interview transcript stays visible above. Bar → discrete stage rows. **Explored file paths accumulate** into a persistent list. Past five minutes the copy changes to "taking longer than usual".
