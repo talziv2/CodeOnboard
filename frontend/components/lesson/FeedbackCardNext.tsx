@@ -63,6 +63,7 @@ export default function FeedbackCardNext({
   onBuildWarmUp,
   onAnswerAgain,
   onStartWarmUp,
+  onReadInLesson,
 }: {
   result: RespondResult;
   isCheck: boolean;
@@ -85,6 +86,16 @@ export default function FeedbackCardNext({
   onBuildWarmUp: () => void;
   onAnswerAgain: () => void;
   onStartWarmUp: () => void;
+  /**
+   * Take the learner to the rewritten material. Present only under `surfaces`,
+   * where the thing the consequence line names is on the other tab.
+   *
+   * R1's second signal. The dot on the tab says "something changed over there"; this
+   * says WHAT changed and offers the one click, from the card that caused it. Both
+   * exist because either alone is missable: the dot is small, and a learner who
+   * never opens the verdict never sees this.
+   */
+  onReadInLesson?: () => void;
 }) {
   const verdictWord = isCheck
     ? checkOutcome.label
@@ -173,9 +184,20 @@ export default function FeedbackCardNext({
       )}
 
       {consequence && (
-        <p className="measure border-s-2 border-rule ps-3 text-meta text-graphite">
-          {consequence}
-        </p>
+        <div className="flex flex-wrap items-baseline gap-x-2 border-s-2 border-rule ps-3">
+          <p className="measure text-meta text-graphite">{consequence}</p>
+          {/* Offered only for the consequence that is ABOUT the other surface. A
+              pruned journey and a declined warm-up changed nothing in Lesson, so
+              sending the learner there would be sending them to look at nothing. */}
+          {onReadInLesson && result.adaptation?.retaught && (
+            <button
+              onClick={onReadInLesson}
+              className="font-mono text-micro uppercase tracking-[0.13em] text-signal transition hover:text-chalk"
+            >
+              {t.lesson.readIt}
+            </button>
+          )}
+        </div>
       )}
 
       {/* A closed gap is the half that is otherwise unrecoverable: by the time this

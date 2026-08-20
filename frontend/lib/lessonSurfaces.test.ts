@@ -219,6 +219,8 @@ describe("phase by phase, surface by surface", () => {
       setup: "open",
       tracePath: "collapsed",
       reveal: "absent",
+      // Nothing has been re-taught, so there is nothing to have replaced.
+      earlier: "absent",
     });
     expect(surfaceBlocks(blocks, "understanding")).toEqual({
       setup: "collapsed",

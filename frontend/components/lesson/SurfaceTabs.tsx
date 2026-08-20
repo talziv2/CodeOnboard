@@ -72,21 +72,26 @@ export default function SurfaceTabs({
             }`}
           >
             {label(tab)}
-            {hasDot && (
-              <>
-                <span
-                  aria-hidden
-                  className="size-1.5 rounded-full bg-rust"
-                />
-                {/* The dot's meaning, for anyone not seeing it. Named per tab
-                    because "something changed" without saying where is worse
-                    than silence. */}
-                <span className="sr-only">{t.session.tabChanged(label(tab))}</span>
-              </>
-            )}
+            {hasDot && <span aria-hidden className="size-1.5 rounded-full bg-rust" />}
           </button>
         );
       })}
+
+      {/* The dot's meaning, for anyone not seeing it — and deliberately OUTSIDE the
+          buttons.
+          Inside, the text became part of each tab's accessible name ("Lesson Lesson
+          has changed since you last looked"), which is both a worse name and only
+          reaches someone who has already focused the tab. A polite live region
+          announces it at the moment it appears instead, which is what R1 actually
+          asks for: told where you are, about something you cannot see. Named per tab,
+          because "something changed" without saying where is worse than silence. */}
+      <span aria-live="polite" className="sr-only">
+        {tabs
+          .filter((tab) => tab !== active && (changed?.includes(tab) ?? false))
+          .map((tab) => t.session.tabChanged(label(tab)))
+          .join(" ")}
+      </span>
+
       {trailing && <span className="ms-auto flex items-center gap-3">{trailing}</span>}
     </div>
   );

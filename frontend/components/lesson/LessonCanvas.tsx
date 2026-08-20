@@ -48,6 +48,7 @@ export default function LessonCanvas({
   question,
   feedback,
   reveal,
+  earlier,
 }: {
   blocks: LessonBlocks;
   /** Omit for the single canvas (`next`). Pass one to render that surface only. */
@@ -63,6 +64,7 @@ export default function LessonCanvas({
     gapsCount?: number;
     attempts: string;
     attemptsCount?: number;
+    earlier?: string;
   };
   setup: ReactNode;
   tracePath: ReactNode;
@@ -71,6 +73,8 @@ export default function LessonCanvas({
   question: ReactNode;
   feedback: ReactNode;
   reveal: ReactNode;
+  /** Replaced explanations. Absent on the single canvas — see `lessonBlocks`. */
+  earlier?: ReactNode;
 }) {
   // `surfaceBlocks` applies the surface's own supersession — the setup is open in
   // Lesson until the explanation exists, and never open in Understanding, where it
@@ -114,6 +118,13 @@ export default function LessonCanvas({
           the explanation can be as long as it needs to be without pushing the
           thing the learner is meant to do next off the screen. */}
       {at("reveal") !== "absent" && reveal}
+
+      {/* Last, and never expanded. Below the current explanation because it is
+          older than it, and because a record belongs after the thing it is a record
+          of. R3's third mitigation. */}
+      {at("earlier") !== "absent" &&
+        earlier &&
+        show("earlier", earlier, labels.earlier ?? "", undefined)}
     </>
   );
 }

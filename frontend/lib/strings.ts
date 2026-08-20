@@ -497,6 +497,22 @@ export const t = {
     // survived and the reason this mirror exists at all. Calling it "Before you
     // answer" there would suggest the material had moved.
     setupMirror: "The setup",
+    // R3's third mitigation. Counted, because the number is the whole point: it
+    // says how many times this stop has been rewritten for you, which is a fact
+    // about your own history with it.
+    earlierExplanations: (count: number) =>
+      count === 1 ? "Earlier explanation (1)" : `Earlier explanations (${count})`,
+    earlierVersion: (n: number) => `Version ${n}`,
+    earlierBecause: "Replaced after you answered:",
+    // Shown on Lesson when the material changed because of the last answer. The
+    // consequence line says it on the Understanding side at the moment it happens;
+    // this is what makes the claim good for a learner who arrives later, and it is
+    // why it reads from the attempt history rather than from the live result.
+    newMaterialLabel: "Rewritten",
+    newMaterialBody: "This stop was rewritten after your last answer.",
+    // The control on the consequence line. Deliberately not "Go to Lesson": it
+    // names what the learner would DO there, and the tab it lands on is visible.
+    readIt: "Read it",
     hint: "A way in",
     followup: "One more, from another angle",
     retaught: "Rewritten around what you said",

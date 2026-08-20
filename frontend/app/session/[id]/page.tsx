@@ -423,6 +423,19 @@ export default function SessionPage() {
                   // Which surface the active tab means. Null under `next`, where
                   // there is one column and the panel draws all of it.
                   surface={surfaceForTab(tab)}
+                  // R1. The panel reports where something landed; this decides
+                  // whether that is news. A change in the surface the learner is
+                  // looking at is not news, and marking it would leave a stale dot
+                  // waiting to appear the moment they switched away.
+                  onSurfaceChanged={(changed) => {
+                    if (changed === tab) return;
+                    setUnseen((current) =>
+                      current.includes(changed) ? current : [...current, changed]
+                    );
+                  }}
+                  // The consequence line's `Read it`. A learner click, so R5 is
+                  // satisfied by the same reducer everything else goes through.
+                  onGoToSurface={(target) => dispatchTab({ kind: "picked", tab: target })}
                 />
               ) : (
                 <p className="font-mono text-aside text-graphite">{t.session.firstLesson}</p>

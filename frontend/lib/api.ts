@@ -162,6 +162,28 @@ export interface Attempt {
    * guess.
    */
   kind?: string;
+  /**
+   * What the system DID about this answer.
+   *
+   * Already on the wire — `to_dict` ships `n.attempts` as recorded, and
+   * `record_response` has written this since M2; the type simply did not declare
+   * it. The half that matters here is `superseded_lesson`: a re-teach overwrites
+   * `cached_lesson`, so without this the version that misled the learner is gone
+   * and "how their understanding moved" loses one side.
+   */
+  response?: {
+    action?: string;
+    retaught?: boolean;
+    text?: string;
+    superseded_lesson?: {
+      setup?: string | null;
+      walkthrough?: string | null;
+      prompt?: string | null;
+      reveal?: string | null;
+      takeaway?: string | null;
+    } | null;
+    at?: string;
+  };
   /** ISO-8601, UTC. */
   at: string;
 }

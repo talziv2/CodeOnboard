@@ -69,6 +69,15 @@ export interface LessonBlocks {
   feedback: BlockState;
   /** The explanation, with its takeaway and ownership callouts. */
   reveal: BlockState;
+  /**
+   * Explanations a re-teach replaced, grouped behind one disclosure.
+   *
+   * Absent unless the caller passes a count, which is how the single canvas stays
+   * exactly as it was: `next` passes nothing and gets nothing. The group belongs to
+   * the surface split — it is R3's third mitigation, and R3 is about Lesson being a
+   * surface of its own — so it is not something `next` was ever missing.
+   */
+  earlier: BlockState;
 }
 
 export interface ViewInput {
@@ -81,6 +90,8 @@ export interface ViewInput {
   revealed: boolean;
   /** This lesson actually has a withheld explanation to show. */
   hasReveal: boolean;
+  /** How many explanations a re-teach has replaced. Omit for the single canvas. */
+  supersededCount?: number;
 }
 
 export function lessonBlocks({
@@ -90,6 +101,7 @@ export function lessonBlocks({
   attemptCount,
   revealed,
   hasReveal,
+  supersededCount = 0,
 }: ViewInput): LessonBlocks {
   const asking = phase === "STUDY" || phase === "VERIFY";
   const reporting = phase === "FEEDBACK" || phase === "RESOLVED";
@@ -124,6 +136,12 @@ export function lessonBlocks({
     // Earned, and open once earned — including on a revisit, where the learner is
     // reading rather than being tested.
     reveal: !hasReveal || !revealed ? "absent" : "open",
+
+    // Never open, in any phase. The versions that were replaced are evidence of
+    // how the learner's understanding moved, not material to read now — and
+    // expanding them is precisely how Lesson would become the accumulating
+    // document R3 warns about.
+    earlier: supersededCount === 0 ? "absent" : "collapsed",
   };
 }
 

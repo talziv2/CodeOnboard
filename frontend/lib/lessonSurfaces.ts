@@ -44,6 +44,13 @@ export const SURFACE_OF: Record<BlockName, Surface> = {
   tracePath: "lesson",
   /** The explanation, once earned. The newest thing Lesson has to offer. */
   reveal: "lesson",
+  /**
+   * The explanations a re-teach replaced. Material, therefore Lesson — and the
+   * exhaustive `Record` above is what forced this line to exist: adding the block
+   * to the view model failed the build until it was given a surface, which is the
+   * whole reason the map is total rather than a function with a default.
+   */
+  earlier: "lesson",
 
   // ── Understanding: what the learner has shown, and what is outstanding ─────
   /** The question and composer — the act of being examined, not of reading. */

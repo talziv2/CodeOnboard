@@ -35,6 +35,8 @@ import { isPhaseDriven, lessonUi } from "@/lib/flags";
 import { lessonPhase } from "@/lib/lessonPhase";
 import { lessonBlocks } from "@/lib/lessonView";
 import type { Surface } from "@/lib/lessonSurfaces";
+import EarlierExplanations from "@/components/lesson/EarlierExplanations";
+import { materialIsNew, supersededExplanations } from "@/lib/lessonHistory";
 import { FAILED } from "@/lib/verdict";
 import { errorText, t } from "@/lib/strings";
 
@@ -68,11 +70,23 @@ interface Props {
    * phase. It receives the consequence of a navigation decision, never makes one.
    */
   surface?: Surface | null;
+  /**
+   * Something landed in a surface. The page decides whether that is news — it owns
+   * the tab, and a change in the surface the learner is looking at is not news.
+   *
+   * R1's mitigation, and the reason the panel reports rather than decides: a change
+   * announced only inside the surface that changed is announced to nobody, and this
+   * component cannot see which surface is on screen.
+   */
+  onSurfaceChanged?: (surface: Surface) => void;
+  /** Take the learner to a surface. Always from an explicit control of theirs. */
+  onGoToSurface?: (surface: Surface) => void;
 }
 
 export default function LessonPanel({
   sessionId, nodeId, node, position, total, isPrerequisite,
   graph, onFileClick, onAdvance, onRespond, finished, onFinish, onLeave, surface,
+  onSurfaceChanged, onGoToSurface,
 }: Props) {
   const router = useRouter();
   const [lesson, setLesson] = useState<Lesson | null>(null);
@@ -185,11 +199,22 @@ export default function LessonPanel({
       // A fresh assessment supersedes any check result on screen.
       setChecked(null);
       setResult(res);
+      // A verdict, a rationale, and possibly a new gap: all of it lands in
+      // Understanding. Reported even when the learner is looking at it — the page
+      // is what knows whether that makes it news.
+      onSurfaceChanged?.("understanding");
+      // The explanation unlocks on the first graded answer, which is material
+      // appearing in Lesson while the learner is somewhere else.
+      if (!revealed && lesson?.lesson.reveal) onSurfaceChanged?.("lesson");
       // A re-teach replaced the cached lesson with one that names the
       // misconception. Pull it, so what is on screen is the corrected lesson
       // rather than the one that misled them.
       if (res.adaptation?.retaught) {
         getLesson(sessionId).then(setLesson).catch(() => {});
+        // The prose itself changed. This is the case R1 was written for: it happens
+        // in Lesson, it happens because of something done in Understanding, and
+        // nothing about the verdict card would tell the learner unless we say so.
+        onSurfaceChanged?.("lesson");
       }
       // A warm-up moves the session pointer, and refreshing now would swap this
       // panel out before the verdict could be read. Follow on the user's click.
@@ -257,6 +282,7 @@ export default function LessonPanel({
     setError(null);
     try {
       setVerification(await requestVerification(sessionId, nodeId));
+      onSurfaceChanged?.("understanding");
       setAnswer("");
       setResult(null);
     } catch (e: unknown) {
@@ -272,6 +298,7 @@ export default function LessonPanel({
     setError(null);
     try {
       const got = await respondToVerification(sessionId, answer, nodeId);
+      onSurfaceChanged?.("understanding");
       // Captured BEFORE the composer and the prompt are cleared — see `checked`.
       setChecked({ answer, targeted: verification?.gaps ?? [] });
       setResult(got);
@@ -449,6 +476,14 @@ export default function LessonPanel({
   // one column and `undefined` is what tells `LessonCanvas` to draw all of it.
   const drawing: Surface | undefined =
     ui === "surfaces" ? surface ?? "lesson" : undefined;
+  // R3's third mitigation, read from the attempt history so it survives a reload.
+  // Only offered on the split: the group is Lesson's, and `next` has no Lesson to
+  // be a document of.
+  const superseded = drawing ? supersededExplanations(attempts) : [];
+  // Did the last answer rewrite what is on this surface? The consequence line says
+  // so on the Understanding side at the moment it happens; this is what makes the
+  // claim good for a learner who arrives at Lesson later, or after a reload.
+  const rewritten = drawing === "lesson" && materialIsNew(attempts);
   const blocks = lessonBlocks({
     phase,
     multiAnchor: anchors.length > 1,
@@ -456,6 +491,9 @@ export default function LessonPanel({
     attemptCount: attempts.length,
     revealed,
     hasReveal: isSplit && Boolean(lesson.lesson.reveal),
+    // Zero on the single canvas, which is how `next` stays exactly as it was: the
+    // block is `absent` and nothing renders.
+    supersededCount: superseded.length,
   });
 
   // The two handlers that used to be inline in the feedback branch, named so the
@@ -546,6 +584,15 @@ export default function LessonPanel({
           {/* "You came back and got it" is evidence about the LEARNER, so it
               belongs with the rest of that on Understanding. On the single canvas
               there was nowhere else for it to be. */}
+          {/* S5's `new` marking. On Lesson, above the material, because that is
+              what it is about — and only there: on Understanding the consequence
+              line already said it, in the card that caused it. */}
+          {rewritten && (
+            <Callout tone="signal" label={t.lesson.newMaterialLabel}>
+              <p className="text-meta text-chalk">{t.lesson.newMaterialBody}</p>
+            </Callout>
+          )}
+
           {recovered && drawing !== "lesson" && (
             <Callout tone="jade" label={t.lesson.recoveredLabel}>
               <p className="text-meta text-paper">
@@ -567,7 +614,9 @@ export default function LessonPanel({
               gaps: t.lesson.gapsHeading,
               gapsCount: openGaps.length,
               attempts: t.lesson.yourAnswers(attempts.length),
+              earlier: t.lesson.earlierExplanations(superseded.length),
             }}
+            earlier={<EarlierExplanations versions={superseded} />}
             setup={
               <div className="flex flex-col gap-3">
                 {isSplit && lesson.lesson.why_now && (
@@ -653,6 +702,13 @@ export default function LessonPanel({
                     onBuildWarmUp={handleRetry}
                     onAnswerAgain={answerAgain}
                     onStartWarmUp={startWarmUp}
+                    // The consequence line's control, under `surfaces` only: the
+                    // line says the stop was rewritten, and on the split the
+                    // rewritten thing is one tab away. Passing a callback rather
+                    // than a tab name keeps navigation the page's business (R5).
+                    onReadInLesson={
+                      drawing && onGoToSurface ? () => onGoToSurface("lesson") : undefined
+                    }
                   />
                 </PracticeSurface>
               )
