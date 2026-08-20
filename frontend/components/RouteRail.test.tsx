@@ -149,6 +149,49 @@ describe("the chapter heading says whether it is open (note 6)", () => {
   });
 });
 
+describe("chapters are actually separated (note 3, second pass)", () => {
+  /**
+   * The first attempt put `mt-7 … first:mt-0` on the heading row. That row is
+   * always the first child of its own section wrapper, so `first:` matched every
+   * chapter and zeroed the gap for all of them — measured live at **0px** between
+   * collapsed chapters. The stop rows were supplying the only visible spacing,
+   * which is why an expanded rail looked fine and hid it.
+   *
+   * So the claim is not the size. It is that whatever carries the gap has siblings,
+   * because a `first:` variant on an only-child cancels itself.
+   */
+  const gapCarrier = (title: string) => {
+    let el: HTMLElement | null = heading(title);
+    while (el && !/(^|\s)mt-\d/.test(el.className)) el = el.parentElement;
+    return el;
+  };
+
+  test("the element carrying the chapter gap is not an only child", () => {
+    rail("n2");
+    const carrier = gapCarrier("Connection pooling");
+    expect(carrier).toBeTruthy();
+    // If this is the first child, `first:mt-0` applies and the gap is nothing.
+    expect(carrier!.previousElementSibling).toBeTruthy();
+  });
+
+  test("the heading row itself carries no top margin", () => {
+    rail("n2");
+    const row = heading("Connection pooling").parentElement!;
+    expect(row.className).not.toMatch(/(^|\s)mt-\d/);
+  });
+
+  test("the first chapter has no gap above it, later ones do", () => {
+    rail("n2");
+    const first = gapCarrier("Session–Adapter contract")!;
+    const second = gapCarrier("Connection pooling")!;
+    expect(first.previousElementSibling).toBeNull();
+    expect(second.className).toMatch(/(^|\s)mt-\d/);
+    // Same element type carrying it in both cases — the `first:` variant is what
+    // distinguishes them, not two different structures.
+    expect(first.className).toBe(second.className);
+  });
+});
+
 describe("the route scrolls rather than growing past the viewport (note 3)", () => {
   test("the list is its own scroll region inside a fixed-height rail", () => {
     const { container } = rail("n2");

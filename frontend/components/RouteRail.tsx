@@ -219,7 +219,11 @@ function SectionHead({
   const isCurrent = section.status === "current";
 
   return (
-    <div className="mt-7 flex items-start gap-1.5 first:mt-0">
+    // NO margin here. This div is always the first child of its own section
+    // wrapper, so a `first:mt-0` on it matched every chapter and zeroed the gap
+    // for all of them — the separation between chapters belongs to the wrapper
+    // that actually has siblings. See the `mt-9 first:mt-0` below.
+    <div className="flex items-start gap-1.5">
       <button
         onClick={onToggle}
         aria-expanded={open}
@@ -378,7 +382,11 @@ export default function RouteRail({
           const visible = open ? section.stops : [];
 
           return (
-            <div key={key}>
+            // The chapter separation lives here, on the element that has
+            // siblings, so `first:` means "the first chapter" rather than
+            // "every heading". A collapsed rail is six headings in a column and
+            // the gap is the only thing telling them apart.
+            <div key={key} className="mt-9 first:mt-0">
               {area && (
                 <SectionHead
                   section={section}

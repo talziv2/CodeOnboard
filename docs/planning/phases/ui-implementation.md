@@ -988,7 +988,7 @@ at `127.0.0.1:3100`. Six were the rail; one was the source pane.
 |---|------|--------------|
 | 1 | The current stop repeated its file path | Caption removed. The path is already in the lesson header and the source pane; three copies of `requests/adapters.py` on one screen was the complaint. Measured: the current row is now 37px against 52px for a two-line neighbour. |
 | 2 | The rail is too narrow | `RAIL_REM.wide` 16.75 → 19.5. Measured live at **312px**. |
-| 3 | Stops are too tight; chapters do not separate; no scrolling | Stop padding `py-[calc(5rem/16)]` → `py-[calc(9rem/16)]` (measured 9px), connector re-anchored to `bottom-[calc(-11rem/16)]` to keep the line joining the new spacing, chapter gap `mt-4` → `mt-7`. The list is its own scroll region: with every chapter expanded, `clientHeight` 612 against `scrollHeight` 1064. |
+| 3 | Stops are too tight; chapters do not separate; no scrolling | Stop padding `py-[calc(5rem/16)]` → `py-[calc(9rem/16)]` (measured 9px), connector re-anchored to `bottom-[calc(-11rem/16)]` to keep the line joining the new spacing, and the chapter gap **fixed twice** — see below. The list is its own scroll region: with every chapter expanded, `clientHeight` 612 against `scrollHeight` 1244. |
 | 4 | No way to hide the rail | `Hide route` / `Show route` in the session bar, hidden in the narrow band where there is no track to give back. Persisted under `codeonboard:rail-hidden` (verified `0` → `1` → `0` across toggles) and deliberately **not** in `prefs`, which is display settings the learner sets from a menu. |
 | 5 | **Bug** — collapsing the chapter you are in still showed your stop | `const visible = open ? section.stops : []`. This reverses an earlier deliberate decision ("show that one stop rather than hiding where the learner is"); the note is right and the old behaviour was wrong, because the chevron said closed while a row sat there, so the control looked broken. Where you are stays legible from the marked heading and its counter. |
 | 6 | Open chapters are not distinguishable from closed ones | The heading tone became three levels rather than two: `text-signal` for the chapter being read, `text-chalk` for open-but-not-current, `text-graphite` for collapsed. |
@@ -1011,6 +1011,26 @@ present, and all eight resize grips (four edges, four corners).
 behavioural guards were mutation-tested — restoring the old
 `filter(s => s.node.id === currentNodeId)` and the old file caption fails exactly
 those two tests and nothing else.
+
+#### The chapter gap had to be fixed twice, and the first fix did nothing
+
+The first attempt put `mt-7 … first:mt-0` on the heading row. That row is **always
+the first child of its own section wrapper**, so `first:` matched every chapter and
+zeroed the margin for all of them: measured live at **0px** between collapsed
+chapters, with `marginTop: 0px` on all six headings. The stop rows were supplying
+the only visible spacing, which is why an expanded rail looked correctly spaced and
+hid it completely — and why the first live check passed.
+
+The gap now lives on the per-section wrapper, which actually has siblings, so
+`first:` means "the first chapter" rather than "every heading": `mt-9 first:mt-0`,
+measured **36px** between chapters and 0 above the first.
+
+The lesson is that the number was never the problem. Three tests pin the structure
+rather than the value — the element carrying the gap has a previous sibling, the
+heading row carries no top margin, and both the first and later chapters carry the
+same class so the `first:` variant is what distinguishes them. Restoring the old
+structure fails exactly those tests. A test asserting `mt-9` would have passed
+against the broken version.
 
 #### One defect found in passing
 
