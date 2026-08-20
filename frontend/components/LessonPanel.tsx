@@ -22,6 +22,7 @@ import AnswerComposer from "@/components/lesson/AnswerComposer";
 import AttemptHistory from "@/components/lesson/AttemptHistory";
 import GapList from "@/components/lesson/GapList";
 import LessonBrief from "@/components/lesson/LessonBrief";
+import LessonCanvas from "@/components/lesson/LessonCanvas";
 import LessonWorkspace from "@/components/lesson/LessonWorkspace";
 import RevealBlock from "@/components/lesson/RevealBlock";
 import SetupProse from "@/components/lesson/SetupProse";
@@ -29,7 +30,9 @@ import TracePath from "@/components/lesson/TracePath";
 import VerificationBlock from "@/components/lesson/VerificationBlock";
 import PracticeSurface from "@/components/ui/PracticeSurface";
 import Button from "@/components/ui/Button";
+import { lessonUi } from "@/lib/flags";
 import { lessonPhase } from "@/lib/lessonPhase";
+import { lessonBlocks } from "@/lib/lessonView";
 import { FAILED } from "@/lib/verdict";
 import { errorText, t } from "@/lib/strings";
 
@@ -393,6 +396,21 @@ export default function LessonPanel({
    */
   const phase = lessonPhase({ result, verification });
 
+  /**
+   * Which blocks the canvas shows, and at what weight — see `lib/lessonView.ts`,
+   * where §3a is answered. Computed on both paths so the numbers are measurable
+   * either way; only the `next` path renders from it.
+   */
+  const ui = lessonUi();
+  const blocks = lessonBlocks({
+    phase,
+    multiAnchor: anchors.length > 1,
+    openGapCount: openGaps.length,
+    attemptCount: attempts.length,
+    revealed,
+    hasReveal: isSplit && Boolean(lesson.lesson.reveal),
+  });
+
   // The two handlers that used to be inline in the feedback branch, named so the
   // card can take callbacks instead of state setters. Same bodies, same effects.
   const answerAgain = () => {
@@ -464,6 +482,130 @@ export default function LessonPanel({
         )}
       >
 
+      {/* Two canvases. The `next` one places blocks by phase; the legacy one is
+          the stack exactly as it shipped, kept reachable with the flag off so the
+          new information architecture can be proven before it is the only path.
+          Both render the SAME block components — what differs is placement and
+          weight, which is the whole of §3a's answer. */}
+      {ui === "next" ? (
+        <>
+          {recovered && (
+            <Callout tone="jade" label={t.lesson.recoveredLabel}>
+              <p className="text-meta text-paper">
+                {t.lesson.recoveredBody}{" "}
+                <span className="text-chalk">“{warmUpTitle}”</span>
+                {t.lesson.recoveredBodyEnd}
+              </p>
+            </Callout>
+          )}
+
+          <LessonCanvas
+            blocks={blocks}
+            labels={{
+              setup: isSplit ? t.lesson.setup : t.lesson.walkthrough,
+              tracePath: t.lesson.tracePath,
+              tracePathCount: anchors.length,
+              gaps: t.lesson.gapsHeading,
+              gapsCount: openGaps.length,
+              attempts: t.lesson.yourAnswers(attempts.length),
+            }}
+            setup={
+              <div className="flex flex-col gap-3">
+                {isSplit && lesson.lesson.why_now && (
+                  <p className="measure border-s-2 border-rule ps-3 text-meta italic text-graphite">
+                    {lesson.lesson.why_now}
+                  </p>
+                )}
+                <SetupProse
+                  isSplit={isSplit}
+                  body={isSplit ? lesson.lesson.setup : lesson.lesson.walkthrough}
+                />
+              </div>
+            }
+            tracePath={<TracePath anchors={anchors} onFileClick={onFileClick} />}
+            gaps={
+              <div id="lesson-gaps">
+                <GapList gaps={openGaps} onWaive={onWaive} disabled={loading} />
+              </div>
+            }
+            attempts={
+              <div id="lesson-attempts">
+                <AttemptHistory attempts={attempts} />
+              </div>
+            }
+            question={
+              <PracticeSurface label={practiceLabel}>
+                {verification ? (
+                  <VerificationBlock
+                    question={verification.question}
+                    answer={answer}
+                    onAnswerChange={setAnswer}
+                    onSubmit={onSubmitVerification}
+                    onDismiss={() => setVerification(null)}
+                    loading={loading}
+                  />
+                ) : (
+                  <AnswerComposer
+                    prompt={lesson.lesson.prompt}
+                    answer={answer}
+                    onAnswerChange={setAnswer}
+                    onSubmit={submitAnswer}
+                    onSkip={handleAdvance}
+                    loading={loading}
+                    error={error}
+                  />
+                )}
+              </PracticeSurface>
+            }
+            feedback={
+              result && (
+                <PracticeSurface label={practiceLabel}>
+                  <FeedbackCard
+                    result={result}
+                    isCheck={isCheck}
+                    checkOutcome={checkOutcome}
+                    closed={closed}
+                    checkedAnswer={checked?.answer}
+                    adaptation={adaptation}
+                    openGaps={openGaps}
+                    warmUpInserted={warmUpInserted}
+                    canRequestWarmUp={canRequestWarmUp}
+                    canAnswerAgain={canAnswerAgain}
+                    loading={loading}
+                    verifying={verifying}
+                    error={error}
+                    verdictRef={verdictRef}
+                    onAdvanceStop={handleAdvance}
+                    onCheckUnderstanding={onCheckUnderstanding}
+                    onBuildWarmUp={handleRetry}
+                    onAnswerAgain={answerAgain}
+                    onStartWarmUp={startWarmUp}
+                  />
+                </PracticeSurface>
+              )
+            }
+            reveal={
+              lesson.lesson.reveal ? (
+                <RevealBlock
+                  reveal={lesson.lesson.reveal}
+                  takeaway={lesson.lesson.takeaway}
+                  ownership={lesson.lesson.ownership}
+                />
+              ) : null
+            }
+          />
+
+          <div className="border-t border-rule pt-4">
+            <button
+              onClick={onFinish}
+              className="font-mono text-micro text-graphite transition hover:text-chalk"
+            >
+              {t.lesson.finishEarly}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
       {recovered && (
         <Callout tone="jade" label={t.lesson.recoveredLabel}>
           <p className="text-meta text-paper">
@@ -584,6 +726,8 @@ export default function LessonPanel({
           {t.lesson.finishEarly}
         </button>
       </div>
+        </>
+      )}
       </LessonWorkspace>
     </div>
   );
