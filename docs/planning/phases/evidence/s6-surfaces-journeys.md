@@ -127,5 +127,11 @@ through the attribute.**
   during S0 and is untouched by the surfaces layer, which sees a warm-up as an
   ordinary stop. What was re-checked here is that it renders on both surfaces and
   that arriving at it resets the tab.
-- **The Shiki syntax palette**, still 3.46–4.40 on `.tok` spans in the source pane,
-  excluded from these counts and still deferred.
+- ~~**The Shiki syntax palette**~~ — **fixed.** Five colours were below the floor
+  (dark comment 3.88 and punctuation 4.38; light comment 3.67, punctuation 3.85 and
+  string-punctuation 4.28). All five lifted hue-preserving, the recession ordering
+  preserved in both themes, and measured on the rendered pane: **4337 tokens, 11
+  distinct colours, 0 failing** in dark and in light. Pinned by
+  `lib/code-theme.test.ts`, which asserts the floor *and* the ordering — because the
+  cheapest way to pass a contrast floor is to flatten everything toward the
+  foreground, which would pass and destroy the palette.
