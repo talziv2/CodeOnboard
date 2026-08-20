@@ -17,6 +17,8 @@ import type {
   SessionGraph, VerificationPrompt,
 } from "@/lib/api";
 import Callout from "@/components/ui/Callout";
+import AttemptHistory from "@/components/lesson/AttemptHistory";
+import GapList from "@/components/lesson/GapList";
 import LessonBrief from "@/components/lesson/LessonBrief";
 import SetupProse from "@/components/lesson/SetupProse";
 import TracePath from "@/components/lesson/TracePath";
@@ -24,6 +26,7 @@ import PracticeSurface from "@/components/ui/PracticeSurface";
 import SectionLabel from "@/components/ui/SectionLabel";
 import Button from "@/components/ui/Button";
 import { lessonPhase } from "@/lib/lessonPhase";
+import { NEUTRAL, VERDICT_COLOR } from "@/lib/verdict";
 import { errorText, t } from "@/lib/strings";
 
 interface Props {
@@ -50,87 +53,13 @@ interface Props {
   onLeave: () => void;
 }
 
-/** Keyed by the classification value the Grader returns. */
-const VERDICT_COLOR: Record<string, string> = {
-  understood: "var(--color-jade)",
-  partial: "var(--color-brass)",
-  confused: "var(--color-rust)",
-  "off-topic": "var(--color-rust)",
-};
-
-const NEUTRAL = "var(--color-chalk)";
-
+/**
+ * The two classifications that count as not reaching the objective.
+ *
+ * Kept here rather than moved out with the colour table: this drives the warm-up
+ * offer and the recovery test, which are the panel's decisions, not a renderer's.
+ */
 const FAILED: Classification[] = ["confused", "off-topic"];
-
-/** Chevron that points right when closed, down when open. */
-function Chevron() {
-  return (
-    <svg
-      aria-hidden
-      viewBox="0 0 10 10"
-      className="h-2.5 w-2.5 shrink-0 fill-none stroke-graphite stroke-[1.5] transition-transform group-open:rotate-90"
-    >
-      <path d="M3.5 1.5 L7 5 L3.5 8.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function whenLabel(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "";
-  const mins = Math.round((Date.now() - then) / 60000);
-  if (mins < 1) return t.lesson.when.justNow;
-  if (mins < 60) return t.lesson.when.minutes(mins);
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return t.lesson.when.hours(hrs);
-  return new Date(iso).toLocaleDateString();
-}
-
-/** One graded answer, collapsed to its verdict until opened. */
-function AttemptCard({ attempt, index }: { attempt: Attempt; index: number }) {
-  const label = t.lesson.verdict[attempt.classification] ?? attempt.classification;
-  const color = VERDICT_COLOR[attempt.classification] ?? NEUTRAL;
-
-  return (
-    <details className="group rounded-card border border-rule bg-slab open:bg-trench">
-      <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2">
-        <span aria-hidden className="font-mono text-micro text-graphite">
-          {String(index + 1).padStart(2, "0")}
-        </span>
-        <span
-          className="font-mono text-micro uppercase tracking-[0.13em]"
-          style={{ color }}
-        >
-          {label}
-        </span>
-        <span className="ms-auto font-mono text-micro text-graphite">
-          {whenLabel(attempt.at)}
-        </span>
-        <Chevron />
-      </summary>
-      <div className="flex flex-col gap-2.5 border-t border-rule px-3 py-3">
-        <div className="flex flex-col gap-1">
-          <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
-            {t.lesson.youWrote}
-          </span>
-          <p className="measure whitespace-pre-wrap text-meta text-paper">
-            {attempt.answer}
-          </p>
-        </div>
-        {attempt.rationale && (
-          <div className="flex flex-col gap-1">
-            <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
-              {t.lesson.feedback}
-            </span>
-            <p className="measure text-meta text-graphite">
-              {attempt.rationale}
-            </p>
-          </div>
-        )}
-      </div>
-    </details>
-  );
-}
 
 export default function LessonPanel({
   sessionId, nodeId, node, position, total, isPrerequisite,
@@ -510,32 +439,7 @@ export default function LessonPanel({
           name". Named rather than counted — a count says how much is wrong, and
           only the claim says what. */}
       {openGaps.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <SectionLabel>{t.lesson.gapsHeading}</SectionLabel>
-          <p className="text-meta text-graphite">{t.lesson.gapsHelp}</p>
-          <ul className="flex flex-col gap-2">
-            {openGaps.map((gap) => (
-              <li
-                key={gap.id}
-                className="flex items-start justify-between gap-3 rounded-card border border-rule bg-slab px-3 py-2"
-              >
-                <div className="flex flex-col gap-1">
-                  <span className="text-aside text-chalk">{gap.claim}</span>
-                  <span className="text-micro uppercase tracking-wide text-graphite">
-                    {gap.blocking ? t.lesson.gapBlocking : t.lesson.gapNonBlocking}
-                  </span>
-                </div>
-                <Button variant="secondary" size="xs" className="shrink-0"
-                  onClick={() => onWaive(gap.id)}
-                  disabled={loading}
-                 
-                >
-                  {t.lesson.waiveOne}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <GapList gaps={openGaps} onWaive={onWaive} disabled={loading} />
       )}
 
       {/* The verification question. No reveal and no model answer are rendered
@@ -543,16 +447,7 @@ export default function LessonPanel({
           made re-asking meaningless in the first place (§18.7). */}
 
 
-      {attempts.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <SectionLabel>{t.lesson.yourAnswers(attempts.length)}</SectionLabel>
-          <div className="flex flex-col gap-2">
-            {attempts.map((attempt, i) => (
-              <AttemptCard key={`${attempt.at}-${i}`} attempt={attempt} index={i} />
-            ))}
-          </div>
-        </div>
-      )}
+      {attempts.length > 0 && <AttemptHistory attempts={attempts} />}
 
       {/* The lesson's own question. Hidden while a verification is outstanding:
           both blocks bind the SAME `answer` state, so rendering them together
