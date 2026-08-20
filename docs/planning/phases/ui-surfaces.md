@@ -430,6 +430,17 @@ NEXT_PUBLIC_CODEONBOARD_UI = legacy | next | surfaces
 | **S5** | Lesson's adaptive sections | `new` marking, `Earlier explanation (N)` grouping | Expanded sections never exceed two (R3) |
 | **S6** | Journeys on `surfaces` | All seven again, both themes, all four text sizes | Compared against S0's baseline |
 
+**S1–S6 are complete.** S0's baseline and S6's comparison are recorded in
+`evidence/s0-live-journeys.md` and `evidence/s6-surfaces-journeys.md`. The headline:
+on the same stop in the same state, what is on screen at once fell from **1747px in
+one column to 1031px (Lesson) and 806px (Understanding)** — 54% less while
+answering, 41% less while reading — with **zero contrast failures and zero expanded
+disclosures across sixteen configurations** (both themes, all four text sizes, both
+surfaces).
+
+`L5` remains blocked and the legacy renderer stays, per the rule below: it comes out
+only once the flag comparison has been made by a human, not by a measurement.
+
 **S0 is the first thing to do, and it is not optional.** L4's gate — "journeys 1–7
 pass on both paths" — has never been met, because the model calls were unaffordable
 at the time. Building a third architecture on top of two unvalidated ones would be
