@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import MapView from "@/components/MapView";
+import SessionLog from "@/components/SessionLog";
 import EvidenceDrawer from "@/components/EvidenceDrawer";
 import RouteRail from "@/components/RouteRail";
 import SectionOverview from "@/components/SectionOverview";
@@ -21,6 +22,7 @@ import { lessonUi } from "@/lib/flags";
 import {
   nextTab, surfaceForTab, tabsFor, type SessionTab, type TabEvent,
 } from "@/lib/surfaceTabs";
+import { unseenRouteChanges } from "@/lib/sessionLog";
 import { errorText, t } from "@/lib/strings";
 
 export default function SessionPage() {
@@ -150,6 +152,31 @@ export default function SessionPage() {
     if (!arrivedAt) return;
     dispatchTab({ kind: "arrivedAtStop" });
   }, [arrivedAt, dispatchTab]);
+
+  // ── A1's rail mark ──────────────────────────────────────────────────────────
+  //
+  // Route-shape changes the learner has not looked at the rail since. Only the four
+  // kinds that MOVED something count: a mark on the rail is a claim that the rail
+  // looks different, and a gap opening changes what is outstanding rather than what
+  // the route is.
+  //
+  // Stored per session so it survives a reload — a change announced once and
+  // forgotten on refresh is a change the learner never saw. `localStorage` rather
+  // than the server: this is "have I looked", which is about this browser and this
+  // person, not about the graph.
+  const [railSeenAt, setRailSeenAt] = useState<string | null>(null);
+  useEffect(() => {
+    setRailSeenAt(window.localStorage.getItem(`codeonboard:rail-seen:${id}`));
+  }, [id]);
+  const routeChanges = graph ? unseenRouteChanges(graph, railSeenAt) : [];
+  // Looking at the rail is what clears it. The rail is always on screen in the wide
+  // band, so "viewed" means the map tab — the place the whole route is legible.
+  useEffect(() => {
+    if (tab !== "map") return;
+    const now = new Date().toISOString();
+    window.localStorage.setItem(`codeonboard:rail-seen:${id}`, now);
+    setRailSeenAt(now);
+  }, [tab, id]);
 
   // Looking at a tab is what makes "you have not seen this" false, so visiting
   // clears its dot. Never on a timer: a dot that expires unseen is a change the
@@ -339,7 +366,13 @@ export default function SessionPage() {
           <SurfaceTabs
             tabs={tabs}
             active={tab}
-            changed={unseen}
+            // Two independent signals on one bar: `changed` is the surface dot
+            // from S4 (something landed where you were not looking), and the Map
+            // tab additionally carries A1's route mark when the SHAPE of the
+            // journey changed. Different claims, so they are not merged.
+            changed={
+              routeChanges.length > 0 && tab !== "map" ? [...unseen, "map" as SessionTab] : unseen
+            }
             onPick={(picked) => dispatchTab({ kind: "picked", tab: picked })}
             /* The right side of the lesson bar, as one group rather than three
                things competing for `ms-auto`. */
@@ -455,6 +488,12 @@ export default function SessionPage() {
                   onNodeClick={handleJump}
                   onOpenEvidence={setEvidenceNodeId}
                 />
+              </div>
+              {/* A1's third channel, beside the map rather than behind a menu: the
+                  map is already the session-level peer view, and "what changed"
+                  should not be something you have to suspect before you can find. */}
+              <div className="w-72 shrink-0 overflow-y-auto border-s border-rule px-5 py-4">
+                <SessionLog graph={graph} />
               </div>
               {/* Progressive disclosure: the profile states a classification,
                   and this is where the learner sees what produced it. */}

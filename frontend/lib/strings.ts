@@ -448,6 +448,48 @@ export const t = {
     failed: "Couldn't adjust the journey.",
   },
 
+  // --- the session log (A1) ---
+  //
+  // One sentence per thing the system did, each naming the stop it was about where
+  // the graph still knows it. The consequence line says these once, at the moment
+  // they happen, inside the verdict card; this is the record for a learner who was
+  // reading something else, or who came back tomorrow.
+  log: {
+    label: "What changed",
+    empty: "Nothing has changed your route yet.",
+    // The rail's mark. Cleared by looking at the rail, because looking is what
+    // makes "you have not seen this" false.
+    routeChanged: (count: number) =>
+      count === 1 ? "1 change to your route" : `${count} changes to your route`,
+    // ONE SIGNATURE for every kind, so the component can index by kind instead of
+    // switching on it — a switch in a render body is a decision nobody can test.
+    // Some ignore `subject`; that is cheaper than two shapes.
+    kinds: {
+      // The only one the system does unprompted, so it says why. The others were
+      // asked for, and a learner does not need telling why they did something.
+      prune_ahead: (count, subject) =>
+        `${count === 1 ? "1 later stop" : `${count} later stops`} became optional` +
+        (subject ? ` after you demonstrated ${subject}` : ""),
+      scope_shorter: (count) =>
+        count === 1
+          ? "You made the journey shorter — 1 stop moved to optional"
+          : `You made the journey shorter — ${count} stops moved to optional`,
+      scope_deeper: (count) =>
+        count === 1
+          ? "You asked for more depth — 1 stop added back"
+          : `You asked for more depth — ${count} stops added back`,
+      remediation_inserted: (_count, subject) =>
+        subject ? `A warm-up was added before ${subject}` : "A warm-up was added",
+      // Gap lifecycle, rendered from the gaps themselves and never as journey
+      // events: extending the frozen kind set from a screen would be a
+      // learning-engine decision made in the wrong place.
+      gap_opened: (_count, subject) =>
+        subject ? `A misconception was named on ${subject}` : "A misconception was named",
+      gap_closed: (_count, subject) =>
+        subject ? `You cleared a misconception on ${subject}` : "You cleared a misconception",
+    } as Record<string, (count: number, subject: string | null) => string>,
+  },
+
   // --- lesson panel ---
   lesson: {
     writing: "Writing this lesson…",

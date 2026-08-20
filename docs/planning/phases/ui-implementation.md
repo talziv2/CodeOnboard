@@ -691,7 +691,32 @@ Why this order:
 
 ---
 
-### A1 — Adaptation made visible
+### A1 — Adaptation made visible ✅
+- **Shipped, and one channel was already done.** The composed consequence sentence
+  is L4's `consequenceLine` — one line, ordered by how much it changed the journey,
+  and already asserted to be exactly one where several adaptations coincide. So A1
+  added the other two: a **session log** on the Map tab, and a **rail mark** on the
+  Map tab when the route's shape changed and the learner has not looked since.
+- **The log is a pure function** (`lib/sessionLog.ts`) and the component only draws.
+  Two sources, as §9 Q2 resolved: `journey_events` for route shape (the four frozen
+  kinds) and the gaps themselves for the gap lifecycle. Gap-opened and gap-closed
+  are rendered from gap data and deliberately NOT added to `JOURNEY_EVENT_KINDS` —
+  a set called frozen that grows whenever a screen wants a row is not frozen.
+- **Refusals, each tested.** An unknown kind is dropped rather than rendered as
+  itself (it means this client is older than the server, and a row the learner
+  cannot distinguish from a bug is worse than no row). An id the graph no longer
+  knows gives a null subject, never a UUID. A gap with no timestamps contributes
+  nothing rather than a guessed position in the chronology. A **waived** gap is not
+  reported as cleared, because waiving is a decision and never evidence — saying
+  "you cleared it" would contradict `understanding_of`.
+- **The rail mark counts only shape changes**, because a mark on the rail claims the
+  rail looks different; a gap opening changes what is outstanding. Stored per
+  session in `localStorage`, so a change announced once is not forgotten on reload,
+  and cleared by looking at the Map — which is where the whole route is legible.
+- **Not done:** the detour brief's persistent return affordance. The warm-up already
+  labels itself in the brief and `Next stop →` returns to the stop it unblocks
+  (verified in S6's J3), so what is missing is a *persistent* control rather than a
+  route back. Recorded rather than added late.
 - **Goal.** The three-channel grammar.
 - **Files.** new `components/lesson/AdaptationNotice.tsx`, `components/SessionLog.tsx`; `RouteRail.tsx`, `FeedbackCard.tsx`
 - **Behaviour.** Every adaptation produces a composed consequence sentence, a rail mark with a `new` state until the rail is viewed, and a session-log entry. Multiple simultaneous adaptations compose into **one** sentence. Detour brief gains the persistent return affordance.
@@ -890,7 +915,7 @@ L4  phase rendering + feedback 🔴🔴   ✅ 3411ec0  §3a answered
 L5  panels + remove legacy             ✅  7adf9ec  legacy deleted, -594 lines
 P3  generation                🔴    ✅  goal continuity + files-read list + long-wait copy
 P4  briefing + route→rail     🔴    ✅  route overview + named primary + Change
-A1  adaptation visible              (no backend change — see §9 Q2)
+A1  adaptation visible              ✅  session log + rail mark (sentence was L4)
 X1  motion + polish
 
 optional:  B1 Grader headline (after L4)   ·   B2 progress facts (with P3)
