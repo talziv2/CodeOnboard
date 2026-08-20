@@ -17,7 +17,9 @@ import type {
   SessionGraph, VerificationPrompt,
 } from "@/lib/api";
 import Callout from "@/components/ui/Callout";
-import ConceptTag from "@/components/ui/ConceptTag";
+import LessonBrief from "@/components/lesson/LessonBrief";
+import SetupProse from "@/components/lesson/SetupProse";
+import TracePath from "@/components/lesson/TracePath";
 import PracticeSurface from "@/components/ui/PracticeSurface";
 import SectionLabel from "@/components/ui/SectionLabel";
 import Button from "@/components/ui/Button";
@@ -472,32 +474,13 @@ export default function LessonPanel({
     // re-testing the pure function against itself. Zero visual diff, and it stays
     // useful as the hook L3 and L4's tests key off.
     <div className="flex flex-col gap-6" data-lesson-phase={phase}>
-      <div className="flex flex-col gap-2">
-        <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
-          {isPrerequisite ? t.lesson.warmUpHeading : t.lesson.stopOf(position, total)}
-        </span>
-
-        <h2 className="font-display text-head font-medium tracking-tight text-chalk text-balance">
-          {node.title}
-        </h2>
-
-        <button
-          onClick={() => onFileClick(node.file)}
-          className="w-fit border-b border-dashed border-signal-dim pb-px font-mono text-micro text-signal transition hover:border-signal"
-        >
-          {node.file}
-          {" · "}
-          {t.lesson.lines(node.line_start, node.line_end)}
-        </button>
-
-        {node.concept_tags.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {node.concept_tags.map((tag) => (
-              <ConceptTag key={tag} tag={tag} />
-            ))}
-          </div>
-        )}
-      </div>
+      <LessonBrief
+        node={node}
+        position={position}
+        total={total}
+        isPrerequisite={isPrerequisite}
+        onFileClick={onFileClick}
+      />
 
       {recovered && (
         <Callout tone="jade" label={t.lesson.recoveredLabel}>
@@ -515,40 +498,12 @@ export default function LessonPanel({
         </p>
       )}
 
-      <div className="flex flex-col gap-3">
-        {/* A pre-B4 lesson has no halves to withhold, so it renders exactly as
-            it always did, under the label it always had. */}
-        <SectionLabel>{isSplit ? t.lesson.setup : t.lesson.walkthrough}</SectionLabel>
-        <p className="measure whitespace-pre-wrap text-body text-paper">
-          {isSplit ? lesson.lesson.setup : lesson.lesson.walkthrough}
-        </p>
-      </div>
+      <SetupProse
+        isSplit={isSplit}
+        body={isSplit ? lesson.lesson.setup : lesson.lesson.walkthrough}
+      />
 
-      {anchors.length > 1 && (
-        <div className="flex flex-col gap-2">
-          <SectionLabel>{t.lesson.tracePath}</SectionLabel>
-          <ol className="flex flex-col gap-1">
-            {anchors.map((a, i) => (
-              <li key={`${a.file}-${a.line_start}-${i}`}>
-                <button
-                  onClick={() => onFileClick(a.file, a.line_start, a.line_end)}
-                  className="group flex w-full items-baseline gap-2.5 rounded-field px-2 py-1 text-start transition hover:bg-slab"
-                >
-                  <span className="font-mono text-micro uppercase tracking-[0.13em] text-graphite">
-                    {t.lesson.anchorStep(i + 1, anchors.length)}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate font-mono text-micro text-signal transition group-hover:text-chalk">
-                    {a.symbol ?? a.file}
-                  </span>
-                  <span className="shrink-0 font-mono text-micro text-graphite">
-                    {t.lesson.lines(a.line_start, a.line_end)}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
+      {anchors.length > 1 && <TracePath anchors={anchors} onFileClick={onFileClick} />}
 
       {/* The outstanding-gaps list. §18.10 calls this "the product's most
           honest surface: it tells the learner what they still do not know, by
