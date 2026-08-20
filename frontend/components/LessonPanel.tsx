@@ -22,6 +22,7 @@ import AnswerComposer from "@/components/lesson/AnswerComposer";
 import AttemptHistory from "@/components/lesson/AttemptHistory";
 import GapList from "@/components/lesson/GapList";
 import LessonBrief from "@/components/lesson/LessonBrief";
+import LessonWorkspace from "@/components/lesson/LessonWorkspace";
 import RevealBlock from "@/components/lesson/RevealBlock";
 import SetupProse from "@/components/lesson/SetupProse";
 import TracePath from "@/components/lesson/TracePath";
@@ -398,6 +399,39 @@ export default function LessonPanel({
     setResult(null);
     setAnswer("");
   };
+  /**
+   * Take the learner to a block the brief only counted.
+   *
+   * Rect arithmetic rather than `scrollIntoView`, for two measured reasons. It did
+   * not move at all with `behavior: "smooth"` — that needs an animation frame loop
+   * — and even `block: "center"` cannot know about the PINNED BRIEF, so any
+   * alignment that puts the target near the top of the scrollport puts it
+   * underneath the header instead. The offset here subtracts the brief's real
+   * height, read at call time so the text-size dial cannot stale it.
+   *
+   * Same lesson as the source pane, arrived at from the other direction: there it
+   * was `offsetTop` measuring against the wrong ancestor, here it is a scroll API
+   * that has no idea part of the scrollport is covered.
+   */
+  const revealBlock = (id: string) => {
+    const target = document.getElementById(id);
+    if (!target) return;
+    let box: HTMLElement | null = target.parentElement;
+    while (box && box.scrollHeight <= box.clientHeight) box = box.parentElement;
+    if (!box) return;
+    const brief = box.querySelector("[data-lesson-brief]");
+    const clearance = (brief?.getBoundingClientRect().height ?? 0) + 12;
+    const top =
+      box.scrollTop + target.getBoundingClientRect().top - box.getBoundingClientRect().top - clearance;
+    // The same short-hop-only rule the source pane uses: animate a jump the eye
+    // can follow, and cut straight to a long one rather than making the learner
+    // watch the whole column go past.
+    const goal = Math.max(0, top);
+    const near = Math.abs(goal - box.scrollTop) < box.clientHeight * 1.5;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    box.scrollTo({ top: goal, behavior: near && !still ? "smooth" : "auto" });
+  };
+
   const startWarmUp = async () => {
     setLoading(true);
     try {
@@ -412,14 +446,22 @@ export default function LessonPanel({
     // the derived phase agrees with the blocks actually on screen rather than
     // re-testing the pure function against itself. Zero visual diff, and it stays
     // useful as the hook L3 and L4's tests key off.
-    <div className="flex flex-col gap-6" data-lesson-phase={phase}>
-      <LessonBrief
-        node={node}
-        position={position}
-        total={total}
-        isPrerequisite={isPrerequisite}
-        onFileClick={onFileClick}
-      />
+    <div data-lesson-phase={phase}>
+      <LessonWorkspace
+        brief={
+          <LessonBrief
+            node={node}
+            position={position}
+            total={total}
+            isPrerequisite={isPrerequisite}
+            onFileClick={onFileClick}
+            openGapCount={openGaps.length}
+            attemptCount={attempts.length}
+            onShowGaps={() => revealBlock("lesson-gaps")}
+            onShowAttempts={() => revealBlock("lesson-attempts")}
+          />
+        }
+      >
 
       {recovered && (
         <Callout tone="jade" label={t.lesson.recoveredLabel}>
@@ -449,7 +491,9 @@ export default function LessonPanel({
           name". Named rather than counted — a count says how much is wrong, and
           only the claim says what. */}
       {openGaps.length > 0 && (
-        <GapList gaps={openGaps} onWaive={onWaive} disabled={loading} />
+        <div id="lesson-gaps">
+          <GapList gaps={openGaps} onWaive={onWaive} disabled={loading} />
+        </div>
       )}
 
       {/* The verification question. No reveal and no model answer are rendered
@@ -457,7 +501,11 @@ export default function LessonPanel({
           made re-asking meaningless in the first place (§18.7). */}
 
 
-      {attempts.length > 0 && <AttemptHistory attempts={attempts} />}
+      {attempts.length > 0 && (
+        <div id="lesson-attempts">
+          <AttemptHistory attempts={attempts} />
+        </div>
+      )}
 
       {/* The lesson's own question. Hidden while a verification is outstanding:
           both blocks bind the SAME `answer` state, so rendering them together
@@ -535,6 +583,7 @@ export default function LessonPanel({
           {t.lesson.finishEarly}
         </button>
       </div>
+      </LessonWorkspace>
     </div>
   );
 }

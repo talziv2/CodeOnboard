@@ -422,6 +422,12 @@ export const t = {
     checkAnother: "Check another",
     // The outstanding-gaps list: the most honest surface in the product. Named,
     // never counted, because "what you still do not know" is only useful specific.
+    // The brief's counters. Named by what they are, not by a bare number: "2" in
+    // a pinned header says nothing, and the point of the counter is to say that
+    // something is still open without listing it again.
+    briefGaps: (count: number) => (count === 1 ? "1 unresolved" : `${count} unresolved`),
+    briefAttempts: (count: number) =>
+      count === 1 ? "1 answer" : `${count} answers`,
     gapsHeading: "Still unresolved",
     gapsHelp: "You can check these now, or carry on and come back.",
     gapBlocking: "Holding this stop back",

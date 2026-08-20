@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { Lesson, RespondResult, SessionGraph, VerificationPrompt } from "@/lib/api";
 import { node } from "@/test/factories";
+import { t } from "@/lib/strings";
 
 /**
  * The single-composer invariant.
@@ -436,5 +437,152 @@ describe("the derived phase agrees with what is on screen", () => {
     await renderPanel();
     const seen = phaseOnScreen();
     expect(["STUDY", "FEEDBACK", "VERIFY", "RESOLVED"]).toContain(seen);
+  });
+});
+
+describe("the brief survives every phase", () => {
+  /**
+   * L3's gate. The brief is pinned, so it is the one part of the lesson that must
+   * be right in all four phases — its whole purpose is to still be there when the
+   * canvas has scrolled past everything else. The objective matters most: it is the
+   * standard the answer is marked against, and it used to scroll away first.
+   */
+  const RICH = node("n1", {
+    title: "Understand the Graph",
+    objective: "Explain what Graph owns and why a missing edge is silent.",
+    file: "search.py",
+    line_start: 1006,
+    line_end: 1058,
+    gaps: [GAP],
+    anchors: [
+      { file: "search.py", symbol: "Graph", line_start: 1006, line_end: 1058 },
+      { file: "search.py", symbol: "Graph.get", line_start: 1100, line_end: 1110 },
+    ],
+  });
+
+  const renderRich = async () => {
+    const g = { ...graph(), nodes: [RICH] };
+    api.getLesson.mockResolvedValue(LESSON);
+    const { default: LessonPanel } = await import("@/components/LessonPanel");
+    render(
+      <LessonPanel
+        sessionId="s1"
+        nodeId="n1"
+        node={RICH}
+        position={2}
+        total={16}
+        isPrerequisite={false}
+        graph={g}
+        onFileClick={vi.fn()}
+        onAdvance={vi.fn()}
+        onRespond={vi.fn()}
+        finished={false}
+        onFinish={vi.fn()}
+        onLeave={vi.fn()}
+      />
+    );
+    await screen.findByText(LESSON.lesson.prompt);
+  };
+
+  const briefHas = () => {
+    const brief = document.querySelector("[data-lesson-brief]")!;
+    return {
+      position: brief.textContent!.includes(t.lesson.stopOf(2, 16)),
+      title: brief.textContent!.includes("Understand the Graph"),
+      objective: brief.textContent!.includes("Explain what Graph owns"),
+      anchors: brief.textContent!.includes("search.py"),
+      extraAnchor: brief.textContent!.includes("Graph.get"),
+    };
+  };
+
+  test("STUDY: all five parts are in the brief", async () => {
+    await renderRich();
+
+    expect(document.querySelector("[data-lesson-brief]")).toBeTruthy();
+    expect(briefHas()).toEqual({
+      position: true,
+      title: true,
+      objective: true,
+      anchors: true,
+      extraAnchor: true,
+    });
+  });
+
+  test("FEEDBACK: the brief is still there once a verdict lands", async () => {
+    const user = userEvent.setup();
+    await renderRich();
+
+    await user.type(textareas()[0], "A wrong answer.");
+    await user.click(submits()[0]);
+    await screen.findByText(CONFUSED.rationale!);
+
+    expect(briefHas()).toEqual({
+      position: true,
+      title: true,
+      objective: true,
+      anchors: true,
+      extraAnchor: true,
+    });
+  });
+
+  test("VERIFY: and while a check is outstanding", async () => {
+    const user = userEvent.setup();
+    await renderRich();
+
+    await user.type(textareas()[0], "A wrong answer.");
+    await user.click(submits()[0]);
+    await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
+    await screen.findByText(PROMPT.question);
+
+    expect(briefHas().objective).toBe(true);
+    expect(briefHas().title).toBe(true);
+  });
+
+  test("the counters report what is open, and lead to the inline blocks", async () => {
+    const user = userEvent.setup();
+    await renderRich();
+
+    await user.type(textareas()[0], "A wrong answer.");
+    await user.click(submits()[0]);
+    await screen.findByText(CONFUSED.rationale!);
+
+    const brief = document.querySelector("[data-lesson-brief]")!;
+    const counter = [...brief.querySelectorAll("button")].find((b) =>
+      b.textContent!.includes("unresolved")
+    );
+    expect(counter).toBeTruthy();
+    // The counter is a trigger, not a replacement: the block it points at is
+    // still rendered inline, which is what makes L3 safe to be wrong about.
+    expect(document.getElementById("lesson-gaps")).toBeTruthy();
+    expect(screen.getByText(GAP.claim)).toBeTruthy();
+  });
+
+  test("nothing is counted when nothing is open", async () => {
+    const clean = node("n1", { title: "Clean", objective: "Say the thing.", gaps: [] });
+    const g = { ...graph(), nodes: [clean] };
+    api.getLesson.mockResolvedValue(LESSON);
+    const { default: LessonPanel } = await import("@/components/LessonPanel");
+    render(
+      <LessonPanel
+        sessionId="s1"
+        nodeId="n1"
+        node={clean}
+        position={1}
+        total={1}
+        isPrerequisite={false}
+        graph={g}
+        onFileClick={vi.fn()}
+        onAdvance={vi.fn()}
+        onRespond={vi.fn()}
+        finished={false}
+        onFinish={vi.fn()}
+        onLeave={vi.fn()}
+      />
+    );
+    await screen.findByText(LESSON.lesson.prompt);
+
+    const brief = document.querySelector("[data-lesson-brief]")!;
+    expect(brief.textContent).not.toMatch(/unresolved/);
+    expect(document.getElementById("lesson-gaps")).toBeNull();
   });
 });

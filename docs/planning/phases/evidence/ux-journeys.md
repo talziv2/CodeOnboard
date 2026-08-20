@@ -1662,3 +1662,136 @@ composer and no verdict, FEEDBACK has the verdict and no composer, VERIFY has th
 question and still exactly one composer, RESOLVED reports without being mistaken
 for a re-grade.
 
+---
+
+## L2 — The blocks become components
+
+Ten components moved out of `LessonPanel`, in four commits, by relocating markup
+rather than rewriting it. 133 tests passed throughout with no existing assertion
+changed, which is the check that "moved" is true.
+
+```
+LessonPanel.tsx      1057 -> 540 lines   (JSX: 130)
+LessonBrief            55   SetupProse       29   TracePath        47
+GapList                58   AttemptHistory  102   AnswerComposer   67
+VerificationBlock      59   RevealBlock      48   CompletionScreen 115
+FeedbackCard          311
+lib/verdict.ts         —    the verdict colours and FAILED, shared
+```
+
+### Not reaching the ~250-line target, and why
+
+The plan's target assumed the file was mostly JSX. It was not: of the remaining
+540 lines, 60 are imports and **350 are the state machine** — three effects, six
+async handlers and the derivations. Only 130 lines are markup, and every block in
+it is now a named component.
+
+Turning that state machine into a hook is a rewrite, not a move, and it is exactly
+what L4's phase-driven rendering will restructure. Doing it here would have
+obscured that diff for no gain, so it was not done.
+
+### Where the knowledge went
+
+Each component's doc carries the rule that block exists to protect, so the next
+person reads it where the code is rather than in a plan:
+
+- `AnswerComposer` — the single-composer invariant, and that it shares `answer`
+  state with `VerificationBlock`, which is why rendering both put two mirrored
+  textareas under two Submits that did different things (D2).
+- `VerificationBlock` — nothing sent, nothing revealed (§18.7); `Not now` clears
+  the verification rather than cancelling into a two-composer state; its reply
+  carries `classification: null`, which is why it lands in RESOLVED.
+- `TracePath` — each step hands over ITS file and ITS range, because before
+  `viewingRange` step 2 of a flow opened the right file at the node's range.
+- `AttemptHistory` / `GapList` — both render what they are handed and know none of
+  the assembly rules (the verification filter, the `pending` synthesis, the
+  gap-source preference), which stay in the panel where the sharp edges are.
+- `FeedbackCard` — the two scars: a check is not a re-grade, and "Try again" is
+  not offered while a gap is open.
+
+`FeedbackCard` takes **nineteen props**. That is not a design; it is the same
+finding as sixteen conditionals, stated a second way. Its doc carries §3a's five
+questions so L4 finds them at the code.
+
+---
+
+## L3 — The Brief / Canvas frame
+
+### What it is
+
+`LessonWorkspace` pins the brief and lets the canvas scroll under it. `sticky`
+inside the existing scrollport rather than a second scroll container — two nested
+scrollers is what made the source pane's `scrollIntoView` and `offsetTop` both
+lie, and one scrollport with a pinned child has neither problem.
+
+The brief now carries the four things worth keeping on screen: position, title,
+**objective**, and counters. The objective is the point of the change — it is the
+standard the answer is marked against, and being at the top of a long column it
+scrolled away first.
+
+### Two measured corrections
+
+**The sticky brief pinned 24px too low, and content scrolled through the gap.**
+With a plain `top-0` it pinned at y=110 while the scrollport top was 86, leaving a
+transparent 24px strip; padding does not clip, so canvas content really was
+visible above the pinned header. The cause is that Chrome resolves sticky offsets
+against the scroll container's **content** box, so `top: 0` means "24px down"
+whenever the container has top padding. Fixed with `-top-6` to move the pin plus
+`-mt-6 pt-6` to extend the box over the strip. Verified pinned flush at 86 at
+scroll positions 0, 400, 1200 and the bottom, with the title on screen at all of
+them.
+
+**The counters did not scroll anywhere.** `scrollIntoView({behavior:"smooth"})`
+moved nothing — it needs an animation frame loop — and no alignment option can
+know that part of the scrollport is covered by a pinned header, so even
+`block:"center"` would have been wrong. Replaced with rect arithmetic that
+subtracts the brief's real height, read at call time so the text-size dial cannot
+stale it, and carrying the same short-hop-only smooth rule the source pane uses
+(a rule that is on §3's must-not-change list). Verified through the
+reduced-motion path, which is instant and therefore measurable here: both
+counters land their block 12px below the pinned brief, which is exactly the
+clearance set.
+
+### Nothing was removed
+
+The counters are triggers, not replacements: the gap list and attempt history are
+still inline exactly where they were, and the counters scroll to them. That is
+deliberate — if the frame is wrong, nothing has been lost, and L4 is where the
+inline copies give way. §3a's questions 3 and 5 (should gaps collapse to a counter
+when a verdict lands; is history ever wanted during feedback) stay open.
+
+### Measurements
+
+```
+lesson column 1171px at 1440 viewport
+canvas         736px, centred, 182px margins either side
+brief pins at  86px = the scrollport top, at every scroll position
+
+brief height vs the lesson viewport, all four text sizes:
+  small    167px / 822px   20.3%
+  medium   184px / 814px   22.6%
+  large    207px / 803px   25.7%
+  xlarge   229px / 793px   28.8%
+
+brief rows at medium: position 19 · title 37 · objective 47 · anchors 21 ·
+                      tags 23 · padding 36
+```
+
+The objective is clamped to two lines at every size, which is what stops it being
+the row that grows.
+
+### The open question for the gate
+
+**28.8% of the reading area at `xlarge` is the number to judge.** On a 900px-tall
+window that is 229px of 793px; on a 768px laptop the same brief would be about a
+third of the column. The plan flagged this milestone for inspection precisely
+because "sticky elements interact badly with the text-size dial", so it is put
+forward rather than decided unilaterally.
+
+If it reads as too heavy, the fix that costs no content is to collapse the brief
+once it is pinned — position and title only while scrolled, the full brief when
+at the top. That is a scroll listener and a second layout state, which is why it
+is not in L3 on spec.
+
+Tests: 138 passing — 14 block smoke tests, 5 brief-across-phases tests, and the
+existing 119 unchanged.
