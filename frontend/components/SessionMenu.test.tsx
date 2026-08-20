@@ -20,8 +20,6 @@ const props = () => ({
   scoping: false,
   scopeNote: null as string | null,
   onScope: vi.fn(),
-  sourceHidden: false,
-  onShowSource: vi.fn(),
   onBriefing: vi.fn(),
   onStartOver: vi.fn(),
   restarting: false,
@@ -46,7 +44,7 @@ describe("what the menu holds", () => {
     expect(screen.queryByText(t.welcome.headerLink)).toBeNull();
   });
 
-  test("all four session actions are present", async () => {
+  test("all four session actions are present, and nothing else", async () => {
     await open();
 
     expect(screen.getByRole("button", { name: t.scope.shorter })).toBeTruthy();
@@ -72,19 +70,13 @@ describe("what the menu holds", () => {
     expect(screen.getByText(t.scope.nothingShorter)).toBeTruthy();
   });
 
-  test("Show source appears only while the pane is closed", async () => {
-    await open({ sourceHidden: false });
-    expect(screen.queryByRole("button", { name: t.session.showSource })).toBeNull();
-  });
-
-  test("and closing the pane leaves a way back to it", async () => {
-    await open({ sourceHidden: true });
-    await userEvent.click(screen.getByRole("button", { name: t.session.showSource }));
-    expect(p.onShowSource).toHaveBeenCalled();
-  });
-
-  test("there is no Hide source: the pane owns its own close", async () => {
-    await open({ sourceHidden: false });
+  test("opening the source is not in here, in either direction", async () => {
+    // Neither half. Opening the code beside a lesson is part of reading the
+    // lesson, not session management, so its control is in the lesson bar where
+    // it can be found without knowing this menu exists. And the pane owns its
+    // own close, so there is no Hide half anywhere.
+    await open();
+    expect(screen.queryByText(t.session.showSource)).toBeNull();
     expect(screen.queryByText(t.session.hideSource)).toBeNull();
   });
 });

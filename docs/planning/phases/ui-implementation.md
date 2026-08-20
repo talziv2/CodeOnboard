@@ -821,7 +821,8 @@ P1  landing                    ◀── pre-session lands here, not at the end
 P2  interview                  ◀──  ✅ c8a9182 (motion) + 5fa2207
 P2b review gate                     ✅ 0d6e946   added after using P2
 S1  header                          ✅ 5f75d88  goal 110px -> 843px
-S2  rail + source + responsive 🔴    ✅ (this commit)  source now on demand
+S2  rail + source + responsive 🔴    ✅ 6b45da8  source now on demand
+S2b Show source made visible        ✅ (this commit)  asked for at S2's gate
 L1  phase logic (no render)          ← next, first of the L track
 L2  extract blocks (no visual)
 L3  Brief / Canvas frame      🔴

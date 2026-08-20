@@ -39,8 +39,6 @@ export default function SessionHeader({
   scoping,
   scopeNote,
   onScope,
-  sourceHidden,
-  onShowSource,
   onBriefing,
   onStartOver,
   restarting,
@@ -53,8 +51,6 @@ export default function SessionHeader({
   scoping: boolean;
   scopeNote: string | null;
   onScope: (direction: "shorter" | "deeper") => void;
-  sourceHidden?: boolean;
-  onShowSource?: () => void;
   onBriefing: () => void;
   onStartOver: () => void;
   restarting: boolean;
@@ -139,8 +135,6 @@ export default function SessionHeader({
           scoping={scoping}
           scopeNote={scopeNote}
           onScope={onScope}
-          sourceHidden={sourceHidden}
-          onShowSource={onShowSource}
           onBriefing={onBriefing}
           onStartOver={onStartOver}
           restarting={restarting}

@@ -229,8 +229,6 @@ export default function SessionPage() {
         scoping={scoping}
         scopeNote={scopeNote}
         onScope={adjustScope}
-        sourceHidden={tab === "lesson" ? !showCode : undefined}
-        onShowSource={() => setShowCode(true)}
         onBriefing={() => router.push(`/session/${id}/welcome`)}
         restarting={restarting}
         onStartOver={async () => {
@@ -303,19 +301,44 @@ export default function SessionPage() {
                 {label}
               </button>
             ))}
-            {band === "narrow" && (
-              <button
-                onClick={() => setRailOpen(true)}
-                className="ms-auto font-mono text-micro uppercase tracking-[0.13em] text-graphite transition hover:text-signal"
-              >
-                {t.rail.title}
-              </button>
-            )}
-            {tab === "map" && band !== "narrow" && (
-              <span className="ms-auto font-mono text-micro text-graphite">
-                {t.session.mapHint(graph.nodes.length)}
-              </span>
-            )}
+            {/* The right side of the lesson bar, as one group rather than three
+                things competing for `ms-auto`. */}
+            <span className="ms-auto flex items-center gap-3">
+              {tab === "map" && band !== "narrow" && (
+                <span className="font-mono text-micro text-graphite">
+                  {t.session.mapHint(graph.nodes.length)}
+                </span>
+              )}
+              {/* Opening the source is not session management, so it does not
+                  belong behind the overflow menu with Start over and Finish.
+                  Lessons cite code throughout and the pane now starts closed, so
+                  the way to open it has to be findable without already knowing
+                  it exists.
+
+                  It lives here rather than in the header for a measured reason:
+                  the header is fully allocated — the goal zone is what is left
+                  after the other three, and adding a ~109px control took it from
+                  844px to ~735px at 1280 and raised S1's overflow floor from
+                  657px to ~766px. This bar had 829px of empty space at the same
+                  width. Right-aligned, because that is the edge the pane opens
+                  against.
+
+                  There is no matching Hide: the pane owns its own close, and this
+                  disappears while it is open. */}
+              {tab === "lesson" && !showCode && openFile && (
+                <Button variant="chrome" size="xs" onClick={() => setShowCode(true)}>
+                  {t.session.showSource}
+                </Button>
+              )}
+              {band === "narrow" && (
+                <button
+                  onClick={() => setRailOpen(true)}
+                  className="font-mono text-micro uppercase tracking-[0.13em] text-graphite transition hover:text-signal"
+                >
+                  {t.rail.title}
+                </button>
+              )}
+            </span>
           </div>
 
           {tab === "lesson" ? (

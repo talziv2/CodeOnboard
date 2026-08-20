@@ -1502,3 +1502,84 @@ behaviour, dock/float persistence and the short-hop-only smooth scroll rule are
 all untouched. The overlay sheet forces `mode: "dock"` for its render only — a
 floating window inside a full-width overlay is two ways of being out of flow at
 once — and does not write that back to the stored preference.
+
+---
+
+## S2b — `Show source` becomes a visible control
+
+Requested after inspecting S2: opening the source should not be behind the
+overflow menu. Agreed, and for the reason given — lessons cite code throughout,
+the pane now starts closed, so the way to open it has to be findable without
+already knowing the menu holds it. It was also the wrong category: everything else
+in that menu is session management (scope, briefing, start over, finish), while
+opening the code beside a lesson is part of reading the lesson.
+
+### Where it went, and why not the header
+
+The brief said "upper lesson/session bar". Measured both candidates at 1280px
+before choosing:
+
+```
+                     available space        cost of a ~109px control
+session header       0px — fully allocated  goal 844px -> ~735px, and S1's
+                     (goal is what is left  overflow floor 657px -> ~766px
+                      after the other three)
+lesson bar           829px empty            none
+```
+
+The header has no slack by construction: its context zone is `flex-1` with a
+240px floor, so anything added there comes straight off the goal — the exact
+metric S1 existed to fix. The lesson bar had 829px doing nothing, sits directly
+above the prose that does the citing, and its right edge is the edge the pane
+opens against. So the control is right-aligned there.
+
+### Behaviour
+
+- Visible whenever the pane is closed, on the lesson tab, with a file to show.
+- **No `Hide` counterpart.** The pane owns its own close, and this disappears
+  while the pane is open.
+- Removed from the `⋯` menu entirely — one control per action, not two. The menu
+  is back to exactly four session actions.
+- Citation → source is untouched.
+
+### Verified live
+
+```
+pane closed        Show source visible, 84px, right-aligned in the lesson bar
+click it           pane opens, tracks 268 / 672 / 340, control disappears
+pane's own close   control returns
+menu contents      Make it shorter | Go deeper | Briefing | Start over |
+                   Finish session          (no Show source, no Hide source)
+citation           "search.py · lines 1006–1058" -> pane opens, highlights
+                   exactly 1006–1058, control hidden while open
+```
+
+### The header-width check S1 earned
+
+```
+viewport   goal zone   header overflows   Show source   lesson bar overflows
+1280px       844px          no              visible          no
+1180px       744px          no              visible          no
+1100px       664px          no              visible          no
+ 900px       464px          no              visible          no   (beside "Your route")
+ 700px       264px          no              visible          no   (353px of 700 used)
+```
+
+Goal zone at 1280 is 844px — the same as before this change, because the control
+costs the header nothing. S1's 657px overflow floor is unchanged: at 700px the
+lesson bar is using 353 of 700 and the header still does not overflow. In the
+narrow band `Show source` and `Your route` coexist in the same bar without
+crowding it.
+
+Contrast: 5.57 dark, 5.18 light, both clear of 4.5.
+
+### One pre-existing observation, not introduced here
+
+The control's border measures 1.47 against the bar. That is `--color-rule`, which
+every `chrome` button in the app uses, and the token was tuned as a *divider*
+rather than as a control outline — so the same figure applies to the `⋯` button
+and every other bordered control, and has since F2. The text carries the control
+at 5.57 / 5.18 and the button sits among same-size siblings in the same bar, so it
+reads as a peer control. Raising `--color-rule` as a component boundary would
+touch every bordered control in the app and belongs in a deliberate pass, not in
+this adjustment.

@@ -21,18 +21,18 @@ import { t } from "@/lib/strings";
  * `window.confirm` — a native dialog cannot say what will happen to the work
  * already done, which is the only question worth asking here.
  *
- * `Show source` appears only when the pane is closed. The pane owns its own
- * close, so a `Hide source` here would be a second control for something the
- * thing itself already does; without the `Show` half, though, closing the pane
- * would be one-way whenever the lesson has no citation to click.
+ * Opening the source is NOT in here, deliberately. It was, briefly, and it was
+ * the wrong category: everything in this menu is session management — adjust the
+ * scope, re-read the briefing, start over, finish — while opening the code beside
+ * a lesson is part of reading the lesson. Lessons cite code throughout and the
+ * pane now starts closed, so its control has to be findable without already
+ * knowing the menu holds it. It sits in the lesson bar instead.
  */
 export default function SessionMenu({
   stopCount,
   scoping,
   scopeNote,
   onScope,
-  sourceHidden,
-  onShowSource,
   onBriefing,
   onStartOver,
   restarting,
@@ -43,9 +43,6 @@ export default function SessionMenu({
   scoping: boolean;
   scopeNote: string | null;
   onScope: (direction: "shorter" | "deeper") => void;
-  /** Undefined when there is no source pane to speak of (the map tab). */
-  sourceHidden?: boolean;
-  onShowSource?: () => void;
   onBriefing: () => void;
   onStartOver: () => void;
   restarting: boolean;
@@ -140,16 +137,6 @@ export default function SessionMenu({
           </section>
 
           <div className="flex flex-col gap-1 border-t border-rule pt-3">
-            {sourceHidden && onShowSource && (
-              <MenuItem
-                onClick={() => {
-                  onShowSource();
-                  setOpen(false);
-                }}
-              >
-                {t.session.showSource}
-              </MenuItem>
-            )}
             <MenuItem
               onClick={() => {
                 onBriefing();
