@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import MapView from "@/components/MapView";
 import {
   getLesson,
   respond,
@@ -13,22 +12,24 @@ import {
   waive,
 } from "@/lib/api";
 import type {
-  Anchor, Attempt, Classification, GraphNode, Lesson, NodeGap, RespondResult,
+  Anchor, Attempt, GraphNode, Lesson, NodeGap, RespondResult,
   SessionGraph, VerificationPrompt,
 } from "@/lib/api";
 import Callout from "@/components/ui/Callout";
+import FeedbackCard from "@/components/lesson/FeedbackCard";
+import CompletionScreen from "@/components/lesson/CompletionScreen";
 import AnswerComposer from "@/components/lesson/AnswerComposer";
 import AttemptHistory from "@/components/lesson/AttemptHistory";
 import GapList from "@/components/lesson/GapList";
 import LessonBrief from "@/components/lesson/LessonBrief";
+import RevealBlock from "@/components/lesson/RevealBlock";
 import SetupProse from "@/components/lesson/SetupProse";
 import TracePath from "@/components/lesson/TracePath";
 import VerificationBlock from "@/components/lesson/VerificationBlock";
 import PracticeSurface from "@/components/ui/PracticeSurface";
-import SectionLabel from "@/components/ui/SectionLabel";
 import Button from "@/components/ui/Button";
 import { lessonPhase } from "@/lib/lessonPhase";
-import { NEUTRAL, VERDICT_COLOR } from "@/lib/verdict";
+import { FAILED } from "@/lib/verdict";
 import { errorText, t } from "@/lib/strings";
 
 interface Props {
@@ -54,14 +55,6 @@ interface Props {
   /** Leave the session entirely, from the completion screen. */
   onLeave: () => void;
 }
-
-/**
- * The two classifications that count as not reaching the objective.
- *
- * Kept here rather than moved out with the colour table: this drives the warm-up
- * offer and the recovery test, which are the panel's decisions, not a renderer's.
- */
-const FAILED: Classification[] = ["confused", "off-topic"];
 
 export default function LessonPanel({
   sessionId, nodeId, node, position, total, isPrerequisite,
@@ -399,6 +392,21 @@ export default function LessonPanel({
    */
   const phase = lessonPhase({ result, verification });
 
+  // The two handlers that used to be inline in the feedback branch, named so the
+  // card can take callbacks instead of state setters. Same bodies, same effects.
+  const answerAgain = () => {
+    setResult(null);
+    setAnswer("");
+  };
+  const startWarmUp = async () => {
+    setLoading(true);
+    try {
+      await onAdvance();
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     // The one thing L1 renders: an invisible attribute, so a test can assert that
     // the derived phase agrees with the blocks actually on screen rather than
@@ -479,265 +487,36 @@ export default function LessonPanel({
         />
       )}
       {result && (
-        <div
-          ref={verdictRef}
-          // Focused after grading so the verdict is what a keyboard or screen
-          // reader lands on, not just what the viewport moved to.
-          tabIndex={-1}
-          className="flex flex-col gap-3 rounded-card border border-rule bg-slab p-4"
-        >
-          <p
-            className="font-mono text-micro uppercase tracking-[0.14em]"
-            style={{
-              color: isCheck
-                ? checkOutcome.color
-                : VERDICT_COLOR[result.classification] ?? NEUTRAL,
-            }}
-          >
-            {isCheck
-              ? checkOutcome.label
-              : t.lesson.verdict[result.classification] ?? result.classification}
-          </p>
-          <p className="measure text-aside text-paper">
-            {result.rationale}
-          </p>
-
-          {/* What the check actually did to the gap list, by name.
-              `resolved` and `unresolved` were on the wire from the start and
-              rendered nowhere, so a learner who answered correctly saw a card
-              with an empty headline and no statement that anything had closed —
-              while the gap silently disappeared from the list above. */}
-          {isCheck && closed.length > 0 && (
-            <Callout tone="jade" label={t.lesson.checkClosedLabel}>
-              <ul className="flex flex-col gap-1">
-                {closed.map((gap) => (
-                  <li
-                    key={gap.id}
-                    className="measure text-meta text-paper line-through decoration-jade/60"
-                  >
-                    {gap.claim}
-                  </li>
-                ))}
-              </ul>
-            </Callout>
-          )}
-
-          {/* Deliberately NOT re-listing what is still open. The gap list above
-              is already the authoritative, actionable copy of that, and naming
-              them twice on one screen is the accumulation this redesign exists
-              to remove. The card's job is what CHANGED — and a closed gap is the
-              half that is otherwise unrecoverable, because it has left the list
-              above by the time this renders. */}
-          {isCheck && closed.length === 0 && (
-            <p className="measure text-meta text-graphite">
-              {t.lesson.checkNothingClosed}
-            </p>
-          )}
-
-          {/* The learner's own words. A verification attempt is deliberately
-              excluded from "Your answers" — it carries no classification, so
-              including it would blank a row and corrupt `latest` — which left
-              the answer nowhere at all once the composer cleared. */}
-          {isCheck && checked?.answer && (
-            <div className="flex flex-col gap-1">
-              <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
-                {t.lesson.youWrote}
-              </span>
-              <p className="measure whitespace-pre-wrap text-meta text-paper">
-                {checked.answer}
-              </p>
-            </div>
-          )}
-
-          {error && <p className="text-aside text-rust">{error}</p>}
-
-          {/* What the system did about the gap. Only a missing foundation
-              grows the journey; the rest answer the learner where they are. */}
-          {adaptation?.text && (
-            <Callout
-              tone="signal"
-              label={adaptation.kind === "hint" ? t.lesson.hint : t.lesson.followup}
-            >
-              <p className="measure text-aside text-chalk">
-                {adaptation.text}
-              </p>
-            </Callout>
-          )}
-
-          {adaptation?.retaught && (
-            <p className="font-mono text-micro uppercase tracking-[0.13em] text-signal">
-              {t.lesson.retaught}
-            </p>
-          )}
-
-          {typeof adaptation?.pruned === "number" && adaptation.pruned > 0 && (
-            <p className="font-mono text-micro uppercase tracking-[0.13em] text-jade">
-              {t.lesson.pruned(adaptation.pruned)}
-            </p>
-          )}
-
-          {FAILED.includes(result.classification) &&
-            adaptation?.kind === "prerequisite" && (
-              <p className="text-meta text-paper">
-                {result.mutation?.kind === "prerequisite"
-                  ? t.lesson.warmUpAdded
-                  : result.mutation?.reason === "prerequisite_exists"
-                  ? t.lesson.warmUpExists
-                  : t.lesson.warmUpUnavailable}
-              </p>
-            )}
-
-          <div className="flex flex-wrap items-center gap-3">
-            {/* A check's own actions. Every branch below keys off
-                `classification`, which is null here, so without this the only
-                button reachable after a check was "Build me a warm-up" — offered
-                because `null !== "understood"` happened to be true. The primary
-                is whatever most directly closes what is left: another check
-                while gaps remain, otherwise moving on. */}
-            {isCheck && (
-              <>
-                {openGaps.length > 0 ? (
-                  <Button variant="primary" size="md"
-                    onClick={onCheckUnderstanding}
-                    disabled={loading || verifying}
-                  >
-                    {verifying ? t.lesson.verifyCtaBusy : t.lesson.checkAnother}
-                  </Button>
-                ) : (
-                  <Button variant="primary" size="md"
-                    onClick={handleAdvance}
-                    disabled={loading}
-                  >
-                    {loading ? t.lesson.loadingShort : t.lesson.nextStop}
-                  </Button>
-                )}
-                {openGaps.length > 0 && (
-                  <Button variant="secondary" size="md"
-                    onClick={handleAdvance}
-                    disabled={loading}
-                  >
-                    {loading ? t.lesson.loadingShort : t.lesson.nextStop}
-                  </Button>
-                )}
-                {/* Still reachable when something is unresolved, but never the
-                    whole response to a correct answer. */}
-                {openGaps.length > 0 && !warmUpInserted && (
-                  <Button variant="ghost"
-                    onClick={handleRetry}
-                    disabled={loading}
-                  >
-                    {t.lesson.buildWarmUp}
-                  </Button>
-                )}
-              </>
-            )}
-
-            {result.classification === "understood" && (
-              <Button variant="primary" size="md"
-                onClick={handleAdvance}
-                disabled={loading}
-              >
-                {loading ? t.lesson.loadingShort : t.lesson.nextStop}
-              </Button>
-            )}
-
-            {/* Partly there: moving on is the default. The warm-up offer is
-                shared with every other non-understood state, below. */}
-            {result.classification === "partial" && (
-              <Button variant="primary" size="md"
-                onClick={handleAdvance}
-                disabled={loading}
-              >
-                {loading ? t.lesson.loadingShort : t.lesson.nextStop}
-              </Button>
-            )}
-
-            {canAnswerAgain && openGaps.length > 0 && (
-              // NOT "Try again". That cleared the form and re-showed the very
-              // question whose answer `reveal` had just given away, so passing it
-              // proved only that they had read the page. This asks a NEW question
-              // about the same misconception (§18.7).
-              <Button variant="primary" size="md"
-                onClick={onCheckUnderstanding}
-                disabled={loading || verifying}
-              >
-                {verifying ? t.lesson.verifyCtaBusy : t.lesson.verifyCta}
-              </Button>
-            )}
-            {canAnswerAgain && openGaps.length === 0 && (
-              <Button variant="primary" size="md"
-                onClick={() => { setResult(null); setAnswer(""); }}
-                disabled={loading}
-              >
-                {t.lesson.tryAgain}
-              </Button>
-            )}
-
-            {FAILED.includes(result.classification) && (
-              <>
-                {result.mutation?.kind === "prerequisite" && (
-                  <Button variant="primary" size="md"
-                    onClick={async () => {
-                      setLoading(true);
-                      try {
-                        await onAdvance();
-                      } finally {
-                        setLoading(false);
-                      }
-                    }}
-                    disabled={loading}
-                  >
-                    {loading ? t.lesson.loadingShort : t.lesson.startWarmUp}
-                  </Button>
-                )}
-                <Button variant="secondary" size="md"
-                  onClick={handleAdvance}
-                  disabled={loading}
-                >
-                  {result.mutation?.kind === "prerequisite"
-                    ? t.lesson.skipItMoveOn
-                    : t.lesson.moveOnAnyway}
-                </Button>
-              </>
-            )}
-
-            {/* One offer, every state where the objective was not reached. */}
-            {canRequestWarmUp && (
-              <Button variant="secondary" size="md"
-                onClick={handleRetry}
-                disabled={loading}
-              >
-                {t.lesson.buildWarmUp}
-              </Button>
-            )}
-          </div>
-        </div>
+        <FeedbackCard
+          result={result}
+          isCheck={isCheck}
+          checkOutcome={checkOutcome}
+          closed={closed}
+          checkedAnswer={checked?.answer}
+          adaptation={adaptation}
+          openGaps={openGaps}
+          warmUpInserted={warmUpInserted}
+          canRequestWarmUp={canRequestWarmUp}
+          canAnswerAgain={canAnswerAgain}
+          loading={loading}
+          verifying={verifying}
+          error={error}
+          verdictRef={verdictRef}
+          onAdvanceStop={handleAdvance}
+          onCheckUnderstanding={onCheckUnderstanding}
+          onBuildWarmUp={handleRetry}
+          onAnswerAgain={answerAgain}
+          onStartWarmUp={startWarmUp}
+        />
       )}
       </PracticeSurface>
 
       {isSplit && revealed && lesson.lesson.reveal && (
-        <div className="flex flex-col gap-3">
-          <SectionLabel>{t.lesson.reveal}</SectionLabel>
-          <p className="measure whitespace-pre-wrap text-body text-paper">
-            {lesson.lesson.reveal}
-          </p>
-
-          {lesson.lesson.takeaway && (
-            <Callout tone="signal" label={t.lesson.takeaway} className="mt-1">
-              <p className="measure text-aside text-chalk">
-                {lesson.lesson.takeaway}
-              </p>
-            </Callout>
-          )}
-
-          {lesson.lesson.ownership && (
-            <Callout tone="neutral" label={t.lesson.ownership}>
-              <p className="measure text-meta text-paper">
-                {lesson.lesson.ownership}
-              </p>
-            </Callout>
-          )}
-        </div>
+        <RevealBlock
+          reveal={lesson.lesson.reveal}
+          takeaway={lesson.lesson.takeaway}
+          ownership={lesson.lesson.ownership}
+        />
       )}
 
 
@@ -756,104 +535,6 @@ export default function LessonPanel({
           {t.lesson.finishEarly}
         </button>
       </div>
-    </div>
-  );
-}
-
-// ── Completion ───────────────────────────────────────────────────────────────
-
-function CompletionScreen({
-  graph, onNewSession, onFinish,
-}: { graph: SessionGraph; onNewSession: () => void; onFinish: () => void }) {
-  const [tab, setTab] = useState<"summary" | "map">("summary");
-  // "Another pass" must list what is STILL unresolved — not everything the
-  // learner ever stumbled on. `weak_spot` is sticky, so it kept offering a
-  // second pass over units already mastered.
-  const weak = graph.nodes.filter((n) => n.understanding === "unresolved");
-  const understood = graph.nodes.filter((n) => n.understanding_state === "understood").length;
-
-  return (
-    <div className="flex h-full flex-col gap-5">
-      <div className="flex shrink-0 gap-1 border-b border-rule">
-        {(["summary", "map"] as const).map((key) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`-mb-px border-b-2 px-4 py-2 font-mono text-micro uppercase tracking-[0.12em] transition ${
-              tab === key
-                ? "border-signal text-signal"
-                : "border-transparent text-graphite hover:text-chalk"
-            }`}
-          >
-            {key === "map" ? t.completion.tabMap : t.completion.tabSummary}
-          </button>
-        ))}
-      </div>
-
-      {tab === "summary" ? (
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-2">
-            <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
-              {t.completion.label}
-            </span>
-            <h2 className="font-display text-chapter font-medium tracking-tight text-chalk">
-              {t.completion.heading(understood, graph.nodes.length)}
-            </h2>
-            <p className="measure text-body text-paper">
-              {t.completion.body}
-            </p>
-          </div>
-
-          {weak.length > 0 && (
-            <div className="flex flex-col gap-3 rounded-card border border-rule bg-slab p-4">
-              <span className="font-mono text-micro uppercase tracking-[0.14em] text-rust">
-                {t.completion.anotherPass(weak.length)}
-              </span>
-              <ul className="flex flex-col gap-2.5">
-                {weak.map((n) => (
-                  <li key={n.id} className="flex flex-col gap-0.5">
-                    <span className="text-aside font-medium text-chalk">{n.title}</span>
-                    <span className="font-mono text-micro text-graphite">
-                      {n.file}
-                      {" · "}
-                      {t.lesson.lines(n.line_start, n.line_end)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="flex gap-3">
-            <Button variant="primary" size="md"
-              onClick={onNewSession}
-            >
-              {t.completion.newSession}
-            </Button>
-            <Button variant="secondary" size="md"
-              onClick={onFinish}
-            >
-              {t.completion.goHome}
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <div className="min-h-0 flex-1 overflow-hidden rounded-card border border-rule">
-          <MapView
-            nodes={graph.nodes}
-            edges={graph.edges}
-            currentNodeId={graph.current_node_id}
-            progress={graph.progress}
-            understanding={graph.understanding}
-            areas={graph.areas}
-            repoUrl={graph.repo_url}
-            onNodeClick={() => {}}
-            // The completion screen is a read-only recap; drilling into evidence
-            // belongs to the live session, where the drawer has room.
-            onOpenEvidence={() => {}}
-          />
-        </div>
-      )}
     </div>
   );
 }
