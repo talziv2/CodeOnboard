@@ -114,15 +114,35 @@ through the attribute.**
 
 ---
 
-## Still open, unchanged from S3
+## Closed after S6
 
-- **The brief renders inside each surface** rather than above the tab bar. It shows
-  on both, so the objective is available while answering as §1 requires; promoting
-  it physically means touching L3's sticky-collapse machinery and is worth its own
-  step.
-- **§4's row for collapsing the superseded question** is not implemented. Rendering
-  it collapsed needs a question-text-only node, since re-rendering the composer
-  would break the one-composer invariant.
+- ~~**The brief renders inside each surface**~~ — **closed as not needed.** Both
+  surfaces render into one scroll container that React reuses, so the brief is not
+  remounted by a tab switch: its collapsed state survives and the scroller is the
+  same DOM node either side. All three of §2's reasons are satisfied where it is,
+  and lifting it would cost L3's collapse-on-scroll, which the brief only has
+  because it lives inside the scrollport. The check did find a real bug, though —
+  `scrollTop` carried across switches and clamped, so leaving Lesson at 500px landed
+  on Understanding at 190px, below its composer. Both surfaces now start at the top.
+- ~~**§4's row for collapsing the superseded question**~~ — **implemented.** The
+  question-text-only node exists (`questionEcho`), so `The question you answered`
+  collapses beneath the verdict and the composer still renders only while the
+  question is open. Understanding stayed 776px: collapsing something changes nothing
+  about the count this milestone is measured on.
+
+## Still open
+
+- **The warm-up's transition prose names the previous stop**, not the confusion that
+  caused the insertion. A Teaching/Mutator prompt matter, and verifying a prompt
+  change costs live model calls.
+- **`off-topic` leaves `understanding_state = not_started`** while an attempt is
+  recorded, so the brief shows `1 answer` on a stop the system reports as never
+  started. Documented as deliberate (`agents/grader/agent.py`): an off-topic answer
+  is evidence of neither understanding nor misunderstanding.
+- **Nothing re-assesses an objective with a fresh question.** A verification closes a
+  gap without crediting the stop, and the UI now says so — but the mechanism that
+  would let the stop be re-credited does not exist, and re-asking the original
+  question after the explanation has been shown is the memory test §18.7 removed.
 - **J3's remediation path** — insertion and decline — was exercised live on `next`
   during S0 and is untouched by the surfaces layer, which sees a warm-up as an
   ordinary stop. What was re-checked here is that it renders on both surfaces and
