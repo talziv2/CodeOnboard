@@ -17,11 +17,13 @@ import type {
   SessionGraph, VerificationPrompt,
 } from "@/lib/api";
 import Callout from "@/components/ui/Callout";
+import AnswerComposer from "@/components/lesson/AnswerComposer";
 import AttemptHistory from "@/components/lesson/AttemptHistory";
 import GapList from "@/components/lesson/GapList";
 import LessonBrief from "@/components/lesson/LessonBrief";
 import SetupProse from "@/components/lesson/SetupProse";
 import TracePath from "@/components/lesson/TracePath";
+import VerificationBlock from "@/components/lesson/VerificationBlock";
 import PracticeSurface from "@/components/ui/PracticeSurface";
 import SectionLabel from "@/components/ui/SectionLabel";
 import Button from "@/components/ui/Button";
@@ -456,75 +458,25 @@ export default function LessonPanel({
           clears the verification and brings this back. */}
       <PracticeSurface label={practiceLabel}>
       {verification && (
-        <div className="flex flex-col gap-3">
-          <p className="measure text-lede text-chalk">
-            {verification.question}
-          </p>
-          <p className="text-meta text-graphite">
-            {t.lesson.verificationHelp}
-          </p>
-          <textarea
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            placeholder={t.lesson.answerPlaceholder}
-            rows={4}
-            className="w-full resize-none rounded-field border border-rule bg-trench p-3 text-start text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
-          />
-          <div className="flex gap-2">
-            <Button variant="primary" size="md"
-              onClick={onSubmitVerification}
-              disabled={loading || !answer.trim()}
-            >
-              {loading ? t.lesson.grading : t.lesson.submit}
-            </Button>
-            <Button variant="secondary" size="md"
-              onClick={() => setVerification(null)}
-              disabled={loading}
-             
-            >
-              {t.lesson.notNow}
-            </Button>
-          </div>
-        </div>
+        <VerificationBlock
+          question={verification.question}
+          answer={answer}
+          onAnswerChange={setAnswer}
+          onSubmit={onSubmitVerification}
+          onDismiss={() => setVerification(null)}
+          loading={loading}
+        />
       )}
       {!result && !verification && (
-        <div className="flex flex-col gap-3">
-          <p className="measure text-lede text-chalk">
-            {lesson.lesson.prompt}
-          </p>
-          <textarea
-            rows={4}
-            className="w-full resize-none rounded-field border border-rule bg-trench p-3 text-start text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
-            placeholder={t.lesson.answerPlaceholder}
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                submitAnswer();
-              }
-            }}
-            disabled={loading}
-          />
-          {error && <p className="text-aside text-rust">{error}</p>}
-          <div className="flex items-center gap-3">
-            <Button variant="primary" size="md"
-              onClick={submitAnswer}
-              disabled={loading || !answer.trim()}
-            >
-              {loading ? t.lesson.grading : t.lesson.submit}
-            </Button>
-            <Button variant="secondary" size="md"
-              onClick={handleAdvance}
-              disabled={loading}
-            >
-              {t.lesson.skipStop}
-            </Button>
-            <span className="ms-auto font-mono text-micro text-graphite">
-              {t.lesson.submitHint}
-            </span>
-          </div>
-        </div>
+        <AnswerComposer
+          prompt={lesson.lesson.prompt}
+          answer={answer}
+          onAnswerChange={setAnswer}
+          onSubmit={submitAnswer}
+          onSkip={handleAdvance}
+          loading={loading}
+          error={error}
+        />
       )}
       {result && (
         <div
