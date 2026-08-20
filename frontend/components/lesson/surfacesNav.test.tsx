@@ -134,6 +134,9 @@ function Harness({
       />
       <Panel
         surface={surfaceForTab(tab)}
+        // The brief's counters need it: they cross to the surface that holds what
+        // they name, which is a navigation the page owns.
+        onGoToSurface={(target) => dispatchTab({ kind: "picked", tab: target })}
         sessionId="s1"
         nodeId={nodeId}
         node={NODE}
@@ -245,6 +248,35 @@ describe("R5 · phase transitions never move the tab", () => {
     expect(activeTab()).toBe("Understanding");
     // And the verdict survived the round trip, because the tab never owned it.
     expect(screen.getByText(RETAUGHT.rationale!)).toBeTruthy();
+  });
+});
+
+describe("the brief's counters cross to the surface that holds what they name", () => {
+  test("clicking `unresolved` from Lesson lands on Understanding", async () => {
+    // L5. The counters live in the brief, the brief renders on BOTH surfaces, and
+    // the gap list belongs to Understanding — so on Lesson the counter used to find
+    // nothing by id and return silently. A live-looking button that did nothing.
+    const user = userEvent.setup();
+    render(<Harness Panel={await panel()} />);
+    await screen.findByText(LESSON.lesson.setup!);
+    expect(activeTab()).toBe("Lesson");
+
+    await user.click(screen.getByRole("button", { name: t.lesson.briefGaps(1) }));
+
+    // A learner click, so the tab moves — through the same reducer as every other
+    // navigation, which is what keeps R5 true while the counter becomes useful.
+    await waitFor(() => expect(activeTab()).toBe("Understanding"));
+    expect(screen.getByText(GAP.claim)).toBeTruthy();
+  });
+
+  test("from Understanding it does not navigate, because it is already there", async () => {
+    const user = userEvent.setup();
+    render(<Harness Panel={await panel()} />);
+    await screen.findByText(LESSON.lesson.setup!);
+    await user.click(screen.getByRole("button", { name: "Understanding" }));
+
+    await user.click(screen.getByRole("button", { name: t.lesson.briefGaps(1) }));
+    expect(activeTab()).toBe("Understanding");
   });
 });
 

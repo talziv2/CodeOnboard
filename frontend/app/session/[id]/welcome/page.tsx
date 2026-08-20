@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import ProfileCard from "@/components/ProfileCard";
+import RouteOverview from "@/components/RouteOverview";
 import SettingsMenu from "@/components/SettingsMenu";
 import { getSession, getWelcome } from "@/lib/api";
 import type { Briefing, SessionGraph } from "@/lib/api";
 import SectionLabel from "@/components/ui/SectionLabel";
 import Button from "@/components/ui/Button";
+import { buildRoute } from "@/lib/graph-layout";
+import { splitJourney } from "@/lib/route-sections";
 import { errorText, t } from "@/lib/strings";
 
 /**
@@ -50,7 +53,41 @@ export default function WelcomePage() {
     load();
   }, [load]);
 
-  const begin = () => router.push(`/session/${id}`);
+  /**
+   * Leave for the workspace (P4).
+   *
+   * NOT a shared-element transition, and deliberately not an imitation of one. The
+   * milestone asks for the chapter list to animate into the rail's position, and
+   * says a shared-element transition "will look cheap if it is even slightly
+   * wrong" — which is exactly right, and doing it properly across a route change
+   * needs the View Transitions API to hold both DOMs at once. Deferred with that
+   * reason rather than approximated with a translate that lands somewhere near the
+   * rail and hopes.
+   *
+   * WHAT IT DOES INSTEAD is carry the eye in the right direction and make the
+   * arrival continuous, which is what the animation was for:
+   *
+   *   - the page leaves toward the leading edge, where the rail is about to be;
+   *   - the rail arrives with the chapter containing the first stop ALREADY
+   *     expanded, because `RouteRail` opens `section.containsCurrent` by default.
+   *     So the chapter the learner just read about is the chapter they land in —
+   *     the continuity is structural, and it holds whether or not anything moved.
+   *
+   * Reduced motion navigates immediately: there is nothing to see, and a 200ms
+   * pause with no motion in it is just a slower button.
+   */
+  const [leaving, setLeaving] = useState(false);
+  const begin = () => {
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (still) {
+      router.push(`/session/${id}`);
+      return;
+    }
+    setLeaving(true);
+    // One `--motion-state`. Long enough to read as leaving, short enough that it
+    // never becomes the reason the workspace felt slow to open.
+    window.setTimeout(() => router.push(`/session/${id}`), 200);
+  };
 
   if (error) {
     return (
@@ -83,6 +120,20 @@ export default function WelcomePage() {
 
   const repo = graph.repo_url.replace(/^https?:\/\/github\.com\//, "");
   const areas = graph.areas?.length ?? 0;
+  // The SAME derivation the session page and the rail use. Two renderings of one
+  // route; computing the grouping twice is how they would come to disagree.
+  const journey = splitJourney(
+    buildRoute(graph.nodes, graph.edges),
+    graph.areas ?? [],
+    graph.current_node_id
+  );
+  // What `Start` actually opens. `resume_point` is the server's answer to "where
+  // does this learner belong now", and on a first visit it is the first stop — so
+  // naming it is naming the room the door opens onto, not guessing at it.
+  const firstStop =
+    journey.sections.flatMap((section) => section.stops).find(
+      (stop) => stop.node.id === graph.current_node_id
+    ) ?? journey.sections[0]?.stops[0];
 
   return (
     <main className="flex min-h-screen flex-col bg-ink">
@@ -96,7 +147,18 @@ export default function WelcomePage() {
         <SettingsMenu />
       </header>
 
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-9 px-7 py-10">
+      {/* Leaves toward the leading edge, which is where the rail is about to be.
+          `ps` rather than `translate-x` so it reads correctly in both writing
+          directions, and opacity carries the rest — a page that only slid would
+          look like it had been pushed rather than handed over. */}
+      <div
+        className="mx-auto flex w-full max-w-5xl flex-col gap-9 px-7 py-10 transition-[opacity,transform] ease-[var(--ease-emphasis)]"
+        style={{
+          transitionDuration: "var(--motion-state)",
+          opacity: leaving ? 0 : 1,
+          transform: leaving ? "translateX(-2rem)" : "none",
+        }}
+      >
         <div className="flex flex-col gap-2.5">
           <span className="font-mono text-micro uppercase tracking-[0.16em] text-signal">
             {t.welcome.label}
@@ -172,11 +234,15 @@ export default function WelcomePage() {
               </div>
             )}
 
+            {/* The route, before the button that commits to it. A learner asked to
+                start should have seen what they are starting. */}
+            {journey.sections.length > 0 && (
+              <RouteOverview sections={journey.sections} optional={journey.optional.length} />
+            )}
+
             <div>
-              <Button variant="primary" size="lg"
-                onClick={begin}
-              >
-                {t.welcome.begin}
+              <Button variant="primary" size="lg" onClick={begin}>
+                {firstStop ? t.welcome.beginNamed(firstStop.node.title) : t.welcome.begin}
               </Button>
             </div>
           </section>
@@ -185,6 +251,12 @@ export default function WelcomePage() {
             goal={graph.goal}
             stops={graph.progress.stops_total}
             areas={areas}
+            // A NEW interview for the same repository, not `Start over`'s rerun of
+            // the same answers. The repo rides in the URL so the learner lands on
+            // the first question rather than on the address bar.
+            onChangeAnswers={() =>
+              router.push(`/?repo=${encodeURIComponent(graph.repo_url)}`)
+            }
           />
         </div>
       </div>

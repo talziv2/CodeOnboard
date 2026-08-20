@@ -16,7 +16,6 @@ import type {
   SessionGraph, VerificationPrompt,
 } from "@/lib/api";
 import Callout from "@/components/ui/Callout";
-import FeedbackCard from "@/components/lesson/FeedbackCard";
 import FeedbackCardNext from "@/components/lesson/FeedbackCardNext";
 import CompletionScreen from "@/components/lesson/CompletionScreen";
 import AnswerComposer from "@/components/lesson/AnswerComposer";
@@ -31,7 +30,7 @@ import TracePath from "@/components/lesson/TracePath";
 import VerificationBlock from "@/components/lesson/VerificationBlock";
 import PracticeSurface from "@/components/ui/PracticeSurface";
 import Button from "@/components/ui/Button";
-import { isPhaseDriven, lessonUi } from "@/lib/flags";
+import { isSplitSurfaces, lessonUi } from "@/lib/flags";
 import { lessonPhase } from "@/lib/lessonPhase";
 import { lessonBlocks } from "@/lib/lessonView";
 import type { Surface } from "@/lib/lessonSurfaces";
@@ -404,6 +403,22 @@ export default function LessonPanel({
       : t.lesson.checkUnderstanding;
 
   const anchors: Anchor[] = node.anchors ?? [];
+  /**
+   * Where this unit lives in the code — always at least one row where the unit
+   * has a file at all.
+   *
+   * `anchors` is the semantic truth and can be EMPTY: on graphs planned before
+   * anchors existed, and wherever the planner emitted none, the only thing left is
+   * the display projection on the node. That projection is by construction one of
+   * the anchors when there are any (CLAUDE.md), so falling back to it adds no new
+   * claim — it just stops the list disappearing on the units that need it most.
+   */
+  const locations: Anchor[] =
+    anchors.length > 0
+      ? anchors
+      : node.file
+        ? [{ file: node.file, line_start: node.line_start, line_end: node.line_end } as Anchor]
+        : [];
   const adaptation = result?.adaptation;
   // A hint, a follow-up or a corrected lesson is an invitation to answer again
   // — the node is still ahead of them, not behind them.
@@ -474,8 +489,9 @@ export default function LessonPanel({
   const ui = lessonUi();
   // Under `surfaces` the page tells us which surface to draw; under `next` there is
   // one column and `undefined` is what tells `LessonCanvas` to draw all of it.
-  const drawing: Surface | undefined =
-    ui === "surfaces" ? surface ?? "lesson" : undefined;
+  const drawing: Surface | undefined = isSplitSurfaces(ui)
+    ? surface ?? "lesson"
+    : undefined;
   // R3's third mitigation, read from the attempt history so it survives a reload.
   // Only offered on the split: the group is Lesson's, and `next` has no Lesson to
   // be a document of.
@@ -486,7 +502,7 @@ export default function LessonPanel({
   const rewritten = drawing === "lesson" && materialIsNew(attempts);
   const blocks = lessonBlocks({
     phase,
-    multiAnchor: anchors.length > 1,
+    locationCount: locations.length,
     openGapCount: openGaps.length,
     attemptCount: attempts.length,
     revealed,
@@ -516,7 +532,28 @@ export default function LessonPanel({
    * was `offsetTop` measuring against the wrong ancestor, here it is a scroll API
    * that has no idea part of the scrollport is covered.
    */
+  /**
+   * Take the learner to a block the brief's counters name.
+   *
+   * L5, adapted to the split. The counters live in the brief, the brief renders on
+   * BOTH surfaces, and the blocks they point at — the gap list, the attempt history
+   * — belong to Understanding. So on the Lesson tab `document.getElementById` found
+   * nothing and this returned silently: a button that looked live, said
+   * "3 unresolved", and did nothing at all.
+   *
+   * Now it crosses first. Switching surface is a learner action — they clicked a
+   * counter — so it goes through the same tab reducer as everything else and R5 is
+   * untouched. The scroll then happens on the next frame, because the surface it is
+   * scrolling within has not rendered yet at the moment of the click.
+   */
   const revealBlock = (id: string) => {
+    if (!document.getElementById(id) && drawing === "lesson" && onGoToSurface) {
+      onGoToSurface("understanding");
+      // One frame, not a timeout: the block exists as soon as the other surface
+      // commits, and waiting longer than that would let the eye arrive first.
+      requestAnimationFrame(() => requestAnimationFrame(() => revealBlock(id)));
+      return;
+    }
     const target = document.getElementById(id);
     if (!target) return;
     let box: HTMLElement | null = target.parentElement;
@@ -570,20 +607,19 @@ export default function LessonPanel({
         )}
       >
 
-      {/* Two canvases. The phase-driven one places blocks by phase; the legacy one
-          is the stack exactly as it shipped, kept reachable with the flag off so the
-          new information architecture can be proven before it is the only path.
-          Both render the SAME block components — what differs is placement and
-          weight, which is the whole of §3a's answer.
+      {/* ONE canvas model now (L5). The pre-redesign renderer used to sit in an
+          else branch here — the stack exactly as it shipped, kept reachable so the
+          new information architecture could be proven before it was the only path.
+          It has been proven twice over: by L4's measurements against it, and by
+          S6's against L4. Keeping a third arrangement alive meant every behaviour
+          change had to be made twice or consciously not made twice, which is how
+          `warmUpDeclined` came to be inferred two different ways.
 
-          `surfaces` enters here too, and today renders identically to `next`: it is
-          a re-PLACEMENT of these blocks across two surfaces, not a different set of
-          them (§6). Starting it as an exact copy is what makes S2 and S3 reviewable
-          — each step is a visible divergence from a known-good arrangement rather
-          than a new page appearing all at once. No existing configuration changes
-          behaviour: `legacy` and `next` are untouched. */}
-      {isPhaseDriven(ui) ? (
-        <>
+          `next` and `surfaces` both render from here and differ only in PLACEMENT —
+          `surfaces` draws one surface at a time, `next` draws the column. Same
+          blocks, same view model, same phase. `next` stays because it is the
+          baseline S6 measured against and the thing a human has not yet chosen
+          between. */}
           {/* "You came back and got it" is evidence about the LEARNER, so it
               belongs with the rest of that on Understanding. On the single canvas
               there was nowhere else for it to be. */}
@@ -612,8 +648,10 @@ export default function LessonPanel({
             labels={{
               setup: isSplit ? t.lesson.setup : t.lesson.walkthrough,
               setupMirror: t.lesson.setupMirror,
-              tracePath: t.lesson.tracePath,
-              tracePathCount: anchors.length,
+              tracePath:
+                locations.length > 1 ? t.lesson.tracePath : t.lesson.codeLocation,
+              // A count on "Where this lives in the code" would always read "(1)".
+              tracePathCount: locations.length > 1 ? locations.length : undefined,
               gaps: t.lesson.gapsHeading,
               gapsCount: openGaps.length,
               attempts: t.lesson.yourAnswers(attempts.length),
@@ -642,7 +680,7 @@ export default function LessonPanel({
                 />
               </div>
             }
-            tracePath={<TracePath anchors={anchors} onFileClick={onFileClick} />}
+            tracePath={<TracePath anchors={locations} onFileClick={onFileClick} />}
             gaps={
               <div id="lesson-gaps">
                 <GapList gaps={openGaps} onWaive={onWaive} disabled={loading} />
@@ -744,131 +782,6 @@ export default function LessonPanel({
               {t.lesson.finishEarly}
             </button>
           </div>
-        </>
-      ) : (
-        <>
-      {recovered && (
-        <Callout tone="jade" label={t.lesson.recoveredLabel}>
-          <p className="text-meta text-paper">
-            {t.lesson.recoveredBody}{" "}
-            <span className="text-chalk">“{warmUpTitle}”</span>
-            {t.lesson.recoveredBodyEnd}
-          </p>
-        </Callout>
-      )}
-
-      {isSplit && lesson.lesson.why_now && (
-        <p className="measure border-s-2 border-rule ps-3 text-meta italic text-graphite">
-          {lesson.lesson.why_now}
-        </p>
-      )}
-
-      <SetupProse
-        isSplit={isSplit}
-        body={isSplit ? lesson.lesson.setup : lesson.lesson.walkthrough}
-      />
-
-      {anchors.length > 1 && <TracePath anchors={anchors} onFileClick={onFileClick} />}
-
-      {/* The outstanding-gaps list. §18.10 calls this "the product's most
-          honest surface: it tells the learner what they still do not know, by
-          name". Named rather than counted — a count says how much is wrong, and
-          only the claim says what. */}
-      {openGaps.length > 0 && (
-        <div id="lesson-gaps">
-          <GapList gaps={openGaps} onWaive={onWaive} disabled={loading} />
-        </div>
-      )}
-
-      {/* The verification question. No reveal and no model answer are rendered
-          because none is sent — showing the answer beside the question is what
-          made re-asking meaningless in the first place (§18.7). */}
-
-
-      {attempts.length > 0 && (
-        <div id="lesson-attempts">
-          <AttemptHistory attempts={attempts} />
-        </div>
-      )}
-
-      {/* The lesson's own question. Hidden while a verification is outstanding:
-          both blocks bind the SAME `answer` state, so rendering them together
-          put two textareas on screen that mirrored each other's text, under two
-          buttons both labelled "Submit" that did different things. `Not now`
-          clears the verification and brings this back. */}
-      <PracticeSurface label={practiceLabel}>
-      {verification && (
-        <VerificationBlock
-          question={verification.question}
-          answer={answer}
-          onAnswerChange={setAnswer}
-          onSubmit={onSubmitVerification}
-          onDismiss={() => setVerification(null)}
-          loading={loading}
-        />
-      )}
-      {!result && !verification && (
-        <AnswerComposer
-          prompt={lesson.lesson.prompt}
-          answer={answer}
-          onAnswerChange={setAnswer}
-          onSubmit={submitAnswer}
-          onSkip={handleAdvance}
-          loading={loading}
-          error={error}
-        />
-      )}
-      {result && (
-        <FeedbackCard
-          result={result}
-          isCheck={isCheck}
-          checkOutcome={checkOutcome}
-          closed={closed}
-          checkedAnswer={checked?.answer}
-          adaptation={adaptation}
-          openGaps={openGaps}
-          warmUpInserted={warmUpInserted}
-          canRequestWarmUp={canRequestWarmUp}
-          canAnswerAgain={canAnswerAgain}
-          loading={loading}
-          verifying={verifying}
-          error={error}
-          verdictRef={verdictRef}
-          onAdvanceStop={handleAdvance}
-          onCheckUnderstanding={onCheckUnderstanding}
-          onBuildWarmUp={handleRetry}
-          onAnswerAgain={answerAgain}
-          onStartWarmUp={startWarmUp}
-        />
-      )}
-      </PracticeSurface>
-
-      {isSplit && revealed && lesson.lesson.reveal && (
-        <RevealBlock
-          reveal={lesson.lesson.reveal}
-          takeaway={lesson.lesson.takeaway}
-          ownership={lesson.lesson.ownership}
-        />
-      )}
-
-
-
-      <div className="border-t border-rule pt-4">
-        {/* Kept where it is. `Finish session` in the header menu is the same
-            action reached from the session level; this one is reached in context,
-            at the end of a lesson, which is a different moment and a different
-            question ("I have what I need from this") — so it is not a duplicate
-            to be removed. Restructuring the lesson's own affordances is L-track
-            work, not the header's. */}
-        <button
-          onClick={onFinish}
-          className="font-mono text-micro text-graphite transition hover:text-chalk"
-        >
-          {t.lesson.finishEarly}
-        </button>
-      </div>
-        </>
-      )}
       </LessonWorkspace>
     </div>
   );

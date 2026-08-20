@@ -488,11 +488,40 @@ body {
   animation: rise var(--motion-layout) var(--ease-emphasis);
 }
 
+/* Reduced motion means less MOVEMENT, not less feedback (X1).
+
+   This was a blanket `transition-duration: 0.01ms` on everything, which is the
+   common recipe and is too broad: `prefers-reduced-motion` exists for vestibular
+   discomfort, which is caused by things travelling and resizing — not by a colour
+   settling or a panel fading. Killing every transition also took out the crossfades
+   that carry meaning here (the brief collapsing, a phase swapping), so the result
+   was not calmer, it was abrupt: state changed with no indication that it had.
+
+   So the rule now names what goes and what stays.
+
+   GONE: every animation, and every transition of a property that moves or resizes
+   something. Listing `transition-property` rather than zeroing the duration is what
+   makes this selective — an element transitioning `opacity, transform` keeps the
+   first and loses the second, which a duration override cannot express.
+
+   STAYS: opacity and the colour properties, capped at 100ms. Long enough to read as
+   a change rather than a flicker, short enough that nobody is waiting for it. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+    animation: none !important;
+    transition-property: opacity, color, background-color, border-color,
+      text-decoration-color, fill, stroke !important;
+    transition-duration: 100ms !important;
+  }
+
+  /* The one place a transform is load-bearing rather than decorative: the source
+     pane's scroll position. `scroll-behavior` is motion the learner asked for by
+     clicking a citation, and removing it means the pane jumps with no indication
+     that it moved — so it becomes instant rather than animated, which is the
+     existing short-hop rule's own fallback. */
+  * {
+    scroll-behavior: auto !important;
   }
 }

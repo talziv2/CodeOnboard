@@ -82,8 +82,15 @@ export interface LessonBlocks {
 
 export interface ViewInput {
   phase: LessonPhase;
-  /** More than one anchor: there is a trace path to show. */
-  multiAnchor: boolean;
+  /**
+   * How many places in the code this unit is anchored on. Zero means there is
+   * nothing to link to and the block cannot render; one is still worth showing.
+   *
+   * A count rather than the old `multiAnchor` boolean: the label depends on it
+   * too — one place is not "a path crossing several places" — so a boolean was
+   * throwing away the number the renderer needed anyway.
+   */
+  locationCount: number;
   openGapCount: number;
   attemptCount: number;
   /** The reveal is unlocked — a graded answer exists, or this is a revisit. */
@@ -96,7 +103,7 @@ export interface ViewInput {
 
 export function lessonBlocks({
   phase,
-  multiAnchor,
+  locationCount,
   openGapCount,
   attemptCount,
   revealed,
@@ -118,7 +125,19 @@ export function lessonBlocks({
     // open it was the third place the learner could read where this unit lives.
     // Leaving it open in STUDY put five blocks on screen at once on a revisit,
     // which is the crowding §3a is about wearing a different phase.
-    tracePath: !multiAnchor ? "absent" : "collapsed",
+    // WHERE THIS LIVES IN THE CODE, on every unit that has a file.
+    //
+    // This was `absent` for anything but a multi-anchor unit, which meant that on
+    // the graphs most units are — one anchor, or none and only the display
+    // projection — the list never appeared at all. "Almost never" is not a
+    // disclosure decision, it is an accident of the data.
+    //
+    // A DISCLOSURE, never open. Opening it in STUDY was tried and reverted the
+    // same hour: it takes STUDY to five open blocks, which is exactly the crowding
+    // §3a exists to prevent, and the older reasoning still stands — L3 already puts
+    // the same location in the brief, so an open list is the third place on screen
+    // saying where this unit lives. Collapsed it is one labelled row and one click.
+    tracePath: locationCount === 0 ? "absent" : "collapsed",
 
     // Open where they are the subject, collapsed where the key point has already
     // named the leading one.

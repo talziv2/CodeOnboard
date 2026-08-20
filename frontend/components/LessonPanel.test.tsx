@@ -17,6 +17,19 @@ import { t } from "@/lib/strings";
  */
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+// PINNED TO `next`, the single-column arrangement.
+//
+// These are the D-track tests, written when `legacy` was the default and every
+// block sat in one column. L5 deleted `legacy` and made `surfaces` the default, so
+// unpinned they would render one surface at a time and half the assertions would be
+// looking at the other tab. Pinning keeps them testing what they were written to
+// test — the composer/Submit/reveal invariants within a single column — and the
+// surface-split versions of the same claims live in `surfacesCanvas.test.tsx`,
+// which asserts them per surface.
+vi.mock("@/lib/flags", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/flags")>()),
+  lessonUi: () => "next",
+}));
 
 const LESSON: Lesson = {
   node_id: "n1",

@@ -28,7 +28,7 @@ export const BAND_NARROW = 960;
 export const LESSON_FLOOR = 560;
 
 /** Rail track widths per band, in rem, matching the grid template. */
-export const RAIL_REM = { wide: 16.75, medium: 3.5, narrow: 0 } as const;
+export const RAIL_REM = { wide: 19.5, medium: 3.5, narrow: 0 } as const;
 
 export function bandFor(width: number): Band {
   if (width < BAND_NARROW) return "narrow";

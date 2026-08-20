@@ -37,9 +37,10 @@ describe("which tabs a build offers", () => {
     expect(tabsFor("surfaces")).toEqual(["lesson", "understanding", "map"]);
   });
 
-  test("next and legacy keep the two they had", () => {
+  test("next keeps the two it had", () => {
+    // `legacy` used to be asserted here too. The renderer is gone (L5), so the
+    // value no longer exists to ask about.
     expect(tabsFor("next")).toEqual(["lesson", "map"]);
-    expect(tabsFor("legacy")).toEqual(["lesson", "map"]);
   });
 });
 

@@ -34,12 +34,12 @@ const SURFACES: Surface[] = ["lesson", "understanding"];
 /** Every input combination the view model distinguishes. */
 const every: ViewInput[] = [];
 for (const phase of PHASES) {
-  for (const multiAnchor of [true, false]) {
+  for (const locationCount of [0, 1, 3]) {
     for (const openGapCount of [0, 2]) {
       for (const attemptCount of [0, 3]) {
         for (const revealed of [true, false]) {
           for (const hasReveal of [true, false]) {
-            every.push({ phase, multiAnchor, openGapCount, attemptCount, revealed, hasReveal });
+            every.push({ phase, locationCount, openGapCount, attemptCount, revealed, hasReveal });
           }
         }
       }
@@ -58,7 +58,7 @@ describe("every block has exactly one owning surface", () => {
     // everything is present at once.
     const blocks = blocksFor({
       phase: "STUDY",
-      multiAnchor: true,
+      locationCount: 3,
       openGapCount: 2,
       attemptCount: 3,
       revealed: true,
@@ -115,7 +115,7 @@ describe("the setup's mirror, which is the only duplication allowed", () => {
   test("STUDY: expanded in Lesson, collapsed in Understanding, same moment", () => {
     const blocks = blocksFor({
       phase: "STUDY",
-      multiAnchor: false,
+      locationCount: 0,
       openGapCount: 0,
       attemptCount: 0,
       revealed: false,
@@ -127,7 +127,7 @@ describe("the setup's mirror, which is the only duplication allowed", () => {
 });
 
 describe("the question the verdict superseded", () => {
-  const base = { multiAnchor: true, openGapCount: 2, attemptCount: 3, hasReveal: true };
+  const base = { locationCount: 3, openGapCount: 2, attemptCount: 3, hasReveal: true };
 
   test("collapsed once a verdict is up, in both reporting phases", () => {
     for (const phase of ["FEEDBACK", "RESOLVED"] as LessonPhase[]) {
@@ -235,7 +235,7 @@ describe("R3 · Lesson never becomes an accumulating document", () => {
     // supersede each other once they are on the same surface.
     const worst: ViewInput = {
       phase: "STUDY",
-      multiAnchor: true,
+      locationCount: 3,
       openGapCount: 2,
       attemptCount: 3,
       revealed: true,
@@ -249,7 +249,7 @@ describe("R3 · Lesson never becomes an accumulating document", () => {
 });
 
 describe("phase by phase, surface by surface", () => {
-  const base = { multiAnchor: true, openGapCount: 2, attemptCount: 3, hasReveal: true };
+  const base = { locationCount: 3, openGapCount: 2, attemptCount: 3, hasReveal: true };
 
   test("STUDY, first visit: Lesson is the prose, Understanding is the question", () => {
     const blocks = blocksFor({ ...base, phase: "STUDY", revealed: false });
@@ -304,7 +304,7 @@ describe("phase by phase, surface by surface", () => {
   });
 
   test("a single-anchor unit has no trace path in either surface", () => {
-    const blocks = blocksFor({ ...base, multiAnchor: false, phase: "STUDY", revealed: false });
+    const blocks = blocksFor({ ...base, locationCount: 0, phase: "STUDY", revealed: false });
     expect(surfaceBlocks(blocks, "lesson").tracePath).toBe("absent");
     expect(surfaceBlocks(blocks, "understanding").tracePath).toBeUndefined();
   });
@@ -312,7 +312,7 @@ describe("phase by phase, surface by surface", () => {
   test("a stop with no gaps and no attempts still gives Understanding its question", () => {
     const blocks = blocksFor({
       phase: "STUDY",
-      multiAnchor: false,
+      locationCount: 0,
       openGapCount: 0,
       attemptCount: 0,
       revealed: false,

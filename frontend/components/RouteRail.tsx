@@ -24,6 +24,12 @@ interface Props {
    * would be taking 268px from a lesson already close to its floor.
    */
   compact?: boolean;
+  /**
+   * Give the track back. Lives here rather than in the session bar because it is
+   * a control for this column — the bar keeps only the way back in, since once
+   * the rail is hidden there is no rail to hold a button.
+   */
+  onHide?: () => void;
 }
 
 /**
@@ -120,7 +126,7 @@ function Stop({
       // stop is `paper`. Dropping it leaves done rows at 5.45 / 4.75, still
       // plainly quieter than a live row, and stops the rail dimming its own text
       // below the floor to say something it had already said twice.
-      className={`group relative grid w-full grid-cols-[calc(18rem/16)_1fr] gap-3 py-[calc(5rem/16)] text-start ${
+      className={`group relative grid w-full grid-cols-[calc(18rem/16)_1fr] gap-3 py-[calc(9rem/16)] text-start ${
         stop.isPrerequisite ? "ms-[calc(22rem/16)] w-[calc(100%-22rem/16)]" : ""
       }`}
     >
@@ -128,7 +134,7 @@ function Stop({
       {!isLast && (
         <span
           aria-hidden
-          className="absolute start-2 top-[calc(22rem/16)] bottom-[calc(-7rem/16)] w-px bg-rule"
+          className="absolute start-2 top-[calc(22rem/16)] bottom-[calc(-11rem/16)] w-px bg-rule"
         />
       )}
 
@@ -155,11 +161,11 @@ function Stop({
             anyone reading the rail with a screen reader or a tooltip. */}
         <span className="sr-only">{t.rail.stopState(state)}</span>
 
-        {isCurrent && (
-          <span className="truncate font-mono text-micro text-graphite">
-            {node.file}
-          </span>
-        )}
+        {/* The current stop used to caption itself with its file path. It came
+            out: the path is already above the lesson, in the brief, and beside the
+            source pane when that is open — so in the rail it was a third copy of
+            one fact, and the longest line in the column. The tooltip still carries
+            it for anyone who wants it from here. */}
 
         {/* CURRENT difficulty only. `weak_spot` is sticky — true forever once
             the learner failed here — so rendering it kept a unit they have
@@ -219,7 +225,11 @@ function SectionHead({
   const isCurrent = section.status === "current";
 
   return (
-    <div className="mt-4 flex items-start gap-1.5 first:mt-0">
+    // NO margin here. This div is always the first child of its own section
+    // wrapper, so a `first:mt-0` on it matched every chapter and zeroed the gap
+    // for all of them — the separation between chapters belongs to the wrapper
+    // that actually has siblings. See the `mt-9 first:mt-0` below.
+    <div className="flex items-start gap-1.5">
       <button
         onClick={onToggle}
         aria-expanded={open}
@@ -245,10 +255,19 @@ function SectionHead({
       >
         <span className="flex items-baseline gap-2">
           <span
+            // Open is a state worth seeing (UI note 6). Three levels rather than
+            // two: the chapter you are IN or whose overview is showing is `signal`;
+            // a chapter merely expanded is `chalk`, which reads as attended without
+            // competing with where you actually are; everything closed stays
+            // `graphite`. Without the middle level, expanding a chapter you are not
+            // in changed nothing about its heading, so the list of headings gave no
+            // clue which one the visible stops belonged to.
             className={`min-w-0 flex-1 font-mono text-micro uppercase tracking-[0.15em] transition ${
               isCurrent || isOverviewOpen
                 ? "text-signal"
-                : "text-graphite group-hover:text-signal"
+                : open
+                  ? "text-chalk group-hover:text-signal"
+                  : "text-graphite group-hover:text-signal"
             }`}
           >
             {area.title}
@@ -265,6 +284,7 @@ function SectionHead({
 export default function RouteRail({
   sections, optional, currentNodeId, openSectionId, onJump, onOpenSection, onExpand,
   compact = false,
+  onHide,
 }: Props) {
   const [showOptional, setShowOptional] = useState(false);
   // Only the sections the learner has actually toggled. Everything else follows
@@ -285,6 +305,22 @@ export default function RouteRail({
     if (isSettled(stop.node) || section.status === "past") return "done";
     return "ahead";
   };
+
+  /**
+   * `«` rather than the words: the header already carries "Your route" and "Open
+   * map", and a third label at 312px pushes the row to two lines. The accessible
+   * name and the tooltip both say it in full.
+   */
+  const hideControl = onHide ? (
+    <button
+      onClick={onHide}
+      aria-label={t.session.hideRail}
+      title={t.session.hideRail}
+      className="shrink-0 font-mono text-micro text-graphite transition hover:text-signal"
+    >
+      «
+    </button>
+  ) : null;
 
   if (compact) {
     /**
@@ -324,14 +360,17 @@ export default function RouteRail({
             ))}
           </div>
         ))}
-        <button
-          onClick={onExpand}
-          aria-label={t.rail.openMap}
-          title={t.rail.openMap}
-          className="mt-auto shrink-0 font-mono text-micro text-graphite transition hover:text-signal"
-        >
-          ⤢
-        </button>
+        <span className="mt-auto flex shrink-0 flex-col items-center gap-2">
+          {hideControl}
+          <button
+            onClick={onExpand}
+            aria-label={t.rail.openMap}
+            title={t.rail.openMap}
+            className="shrink-0 font-mono text-micro text-graphite transition hover:text-signal"
+          >
+            ⤢
+          </button>
+        </span>
       </aside>
     );
   }
@@ -341,16 +380,17 @@ export default function RouteRail({
       aria-label={t.rail.title}
       className="flex h-full min-h-0 flex-col gap-3 border-e border-rule bg-trench py-4"
     >
-      <div className="flex items-baseline justify-between px-4">
-        <span className="font-mono text-micro uppercase tracking-[0.16em] text-graphite">
+      <div className="flex items-baseline gap-3 px-4">
+        <span className="min-w-0 flex-1 truncate font-mono text-micro uppercase tracking-[0.16em] text-graphite">
           {t.rail.title}
         </span>
         <button
           onClick={onExpand}
-          className="font-mono text-micro text-signal transition hover:text-chalk"
+          className="shrink-0 font-mono text-micro text-signal transition hover:text-chalk"
         >
           {t.rail.openMap}
         </button>
+        {hideControl}
       </div>
 
       <nav className="min-h-0 flex-1 overflow-y-auto px-4 pb-2">
@@ -360,14 +400,20 @@ export default function RouteRail({
           // An ungrouped bucket has no chapter to introduce and no heading to
           // click, so it is always shown — as it was before grouping existed.
           const open = area ? toggled[area.id] ?? section.containsCurrent : true;
-          // Collapsed, but you are standing in it: show that one stop rather
-          // than hiding where the learner is.
-          const visible = open
-            ? section.stops
-            : section.stops.filter((s) => s.node.id === currentNodeId);
+          // COLLAPSED MEANS COLLAPSED. This used to keep the current stop visible
+          // inside a closed section — "show that one stop rather than hiding where
+          // the learner is" — and it read as a bug, because it is: the chevron says
+          // closed and a row is still there, so the control appears not to have
+          // worked. Where the learner is stays legible without it: the heading of
+          // the section they are in is marked, and its counter still moves.
+          const visible = open ? section.stops : [];
 
           return (
-            <div key={key}>
+            // The chapter separation lives here, on the element that has
+            // siblings, so `first:` means "the first chapter" rather than
+            // "every heading". A collapsed rail is six headings in a column and
+            // the gap is the only thing telling them apart.
+            <div key={key} className="mt-9 first:mt-0">
               {area && (
                 <SectionHead
                   section={section}

@@ -36,9 +36,21 @@ export default function Home() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("repo");
   const [repoUrl, setRepoUrl] = useState("");
+  // Arriving from the briefing's "change your answers" (P4): the repository is
+  // already known, so it is carried in the URL and the learner starts at the
+  // question they wanted to change rather than at the address bar.
+  //
+  // Prefill only. It does NOT auto-submit: a learner who followed that link may
+  // have wanted a different repository too, and skipping the step they are looking
+  // at would take the decision away from them.
+  useEffect(() => {
+    const carried = new URLSearchParams(window.location.search).get("repo");
+    if (carried) setRepoUrl(carried);
+  }, []);
   const [recent, setRecent] = useState<string[]>([]);
   // Invented per run and sent with /session/start, so the progress screen can
   // poll what that call is doing while it blocks.
+  const [startedGoal, setStartedGoal] = useState<Record<string, string> | null>(null);
   const [progressId, setProgressId] = useState("");
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +82,10 @@ export default function Home() {
   const startSession = async (forGoal: Record<string, string>) => {
     const runId = crypto.randomUUID();
     setProgressId(runId);
+    // Kept so the generation screen can show what the wait is for (P3). The
+    // interview unmounts the moment the step changes, so without this the goal
+    // exists only inside the request that is in flight.
+    setStartedGoal(forGoal);
     setStep("starting");
     setError(null);
     try {
@@ -185,7 +201,7 @@ export default function Home() {
       {step === "goal" && <GoalDialogue repoUrl={repoUrl} onDone={handleGoalDone} />}
 
       {step === "starting" && (
-        <StartingProgress repoUrl={repoUrl} progressId={progressId} />
+        <StartingProgress repoUrl={repoUrl} progressId={progressId} goal={startedGoal} />
       )}
 
       {step === "failed" && (

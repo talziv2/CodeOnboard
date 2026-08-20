@@ -104,6 +104,23 @@ export const t = {
       `${count} lookup${count === 1 ? "" : "s"} so far`,
     elapsed: (seconds: number) =>
       `${seconds}s elapsed · usually two to four minutes`,
+    // Past the span the line above promises, that line stops being reassurance and
+    // starts being a thing the screen is getting wrong. Measured runs land around
+    // 2m40s, so five minutes is outside normal rather than at its edge.
+    elapsedLong: (seconds: number) =>
+      `${Math.floor(seconds / 60)}m ${seconds % 60}s elapsed · taking longer than usual`,
+    // The files the exploration has actually opened, accumulated from activity the
+    // backend already streams and the screen currently shows once and discards.
+    //
+    // Named for exactly what it is: `read_file` targets. A list called "explored"
+    // that quietly folded in search patterns and symbol names would be a list the
+    // learner cannot check against their own repository, which is the only thing
+    // this list is for.
+    filesRead: (count: number) => (count === 1 ? "1 file read" : `${count} files read`),
+    // The goal, kept on screen through the wait — the synthesised version rather
+    // than the raw transcript, because the review gate already showed the answers
+    // and the learner confirmed them. This is what they confirmed.
+    goalHeading: "What you asked for",
   },
 
   // --- home: failure ---
@@ -220,6 +237,10 @@ export const t = {
       "End the journey here? Everything you have answered is kept, and you'll see the summary of what you covered.",
     finishYes: "Finish it",
     finishNo: "Keep going",
+    // The rail's own toggle (UI note 4). Says which way it goes rather than
+    // naming the thing — "Route" alone would read as a link to the map.
+    hideRail: "Hide route",
+    showRail: "Show route",
     tabLesson: "Lesson",
     tabMap: "Progress map",
     /**
@@ -289,12 +310,32 @@ export const t = {
     familiarityLabel: "Starting point",
     depthLabel: "Depth",
     backgroundLabel: "You already know",
+    // The way out of a profile the learner disagrees with (P4). `Start over` in
+    // the session menu re-runs the pipeline with the SAME answers, which is the one
+    // thing someone who dislikes their profile does not want.
+    changeAnswers: "Change",
+    changeAnswersHint: "Answer the questions again for this repository",
     routeLabel: "Your route",
     routeCount: (stops: number, areas: number) =>
       areas > 0
         ? `${stops} stops across ${areas} ${areas === 1 ? "chapter" : "chapters"}`
         : `${stops} ${stops === 1 ? "stop" : "stops"}`,
+    // Per chapter, in the route overview (P4).
+    routeStops: (n: number) => (n === 1 ? "1 stop" : `${n} stops`),
+    // A pre-B3 graph has no chapters, so `splitJourney` returns one unnamed
+    // section. It still has a route; it just has nothing to call the parts.
+    routeUngrouped: "The route",
+    // Said on the briefing because the counts above exclude them, and a learner who
+    // later finds extra stops in the rail should have been told they existed.
+    routeOptional: (n: number) =>
+      n === 1
+        ? "1 more stop is optional — off the default walk, still reachable"
+        : `${n} more stops are optional — off the default walk, still reachable`,
     begin: "Start learning",
+    // The primary names where it goes (P4). "Start learning" labels a door; this
+    // labels the room behind it, which is the difference between being asked to
+    // commit and being told what to.
+    beginNamed: (title: string) => `Start: ${title}`,
     // The interview answers are fixed strings and fixed keys; these are the
     // short forms that fit on a card. An unrecognised value falls back to
     // itself, so a new option shows up as its own wording rather than blank.
@@ -409,6 +450,48 @@ export const t = {
     nothingShorter: "Everything left is required",
     nothingDeeper: "Nothing further in this journey",
     failed: "Couldn't adjust the journey.",
+  },
+
+  // --- the session log (A1) ---
+  //
+  // One sentence per thing the system did, each naming the stop it was about where
+  // the graph still knows it. The consequence line says these once, at the moment
+  // they happen, inside the verdict card; this is the record for a learner who was
+  // reading something else, or who came back tomorrow.
+  log: {
+    label: "What changed",
+    empty: "Nothing has changed your route yet.",
+    // The rail's mark. Cleared by looking at the rail, because looking is what
+    // makes "you have not seen this" false.
+    routeChanged: (count: number) =>
+      count === 1 ? "1 change to your route" : `${count} changes to your route`,
+    // ONE SIGNATURE for every kind, so the component can index by kind instead of
+    // switching on it — a switch in a render body is a decision nobody can test.
+    // Some ignore `subject`; that is cheaper than two shapes.
+    kinds: {
+      // The only one the system does unprompted, so it says why. The others were
+      // asked for, and a learner does not need telling why they did something.
+      prune_ahead: (count, subject) =>
+        `${count === 1 ? "1 later stop" : `${count} later stops`} became optional` +
+        (subject ? ` after you demonstrated ${subject}` : ""),
+      scope_shorter: (count) =>
+        count === 1
+          ? "You made the journey shorter — 1 stop moved to optional"
+          : `You made the journey shorter — ${count} stops moved to optional`,
+      scope_deeper: (count) =>
+        count === 1
+          ? "You asked for more depth — 1 stop added back"
+          : `You asked for more depth — ${count} stops added back`,
+      remediation_inserted: (_count, subject) =>
+        subject ? `A warm-up was added before ${subject}` : "A warm-up was added",
+      // Gap lifecycle, rendered from the gaps themselves and never as journey
+      // events: extending the frozen kind set from a screen would be a
+      // learning-engine decision made in the wrong place.
+      gap_opened: (_count, subject) =>
+        subject ? `A misconception was named on ${subject}` : "A misconception was named",
+      gap_closed: (_count, subject) =>
+        subject ? `You cleared a misconception on ${subject}` : "You cleared a misconception",
+    } as Record<string, (count: number, subject: string | null) => string>,
   },
 
   // --- lesson panel ---
@@ -545,6 +628,8 @@ export const t = {
     takeaway: "Take away",
     ownership: "Yours to hold",
     tracePath: "This path crosses several places",
+    /** Same list, one place. "…crosses several places" would be a lie at n=1. */
+    codeLocation: "Where this lives in the code",
     anchorStep: (index: number, total: number) => `Step ${index} of ${total}`,
     yourAnswers: (count: number) => `Your answers (${count})`,
     youWrote: "You wrote",

@@ -248,8 +248,13 @@ the block states per phase, the single consequence line, and the count of open b
 are each a test. Measured result on the same stop and answer: the feedback canvas is
 28% shorter and has one primary action instead of two.
 
-What remains open is `L5`, which turns the collapsed gap list and history into real
-panels and removes the legacy path.
+`L5` is now closed, and not as originally written. The surfaces split had already
+put the gap list and the history behind disclosures in Understanding, so panels
+would have been a third home for material that had just found its second. What L5
+actually did was delete the pre-redesign renderer, invert the flag's default to
+`surfaces`, and fix a bug the split had introduced: the brief renders on both
+surfaces, its counters pointed at blocks that live only in Understanding, and on the
+Lesson tab they were live-looking buttons that did nothing. They now cross first.
 
 ---
 
@@ -594,7 +599,13 @@ Why this order:
 
 ---
 
-### L5 — Gaps and history as panels; remove the legacy path
+### L5 — Gaps and history as panels; remove the legacy path ✅ 7adf9ec
+- **Shipped, and narrower than written.** The panels were not built: S3 had already
+  moved the gap list and the attempt history into Understanding as collapsed
+  disclosures, so a panel would have been a third location for material that had
+  just found its second. What shipped is the deletion (the legacy render arm and
+  `FeedbackCard.tsx`, 594 lines), the flag default inverting to `surfaces`, and the
+  counter-crossing fix described in §3a. `next` is deliberately retained.
 - **Goal.** Complete the model; delete the old renderer.
 - **Files.** new `components/lesson/GapPanel.tsx`, `HistoryPanel.tsx`; remove legacy branches; `lib/flags.ts`
 - **Behaviour.** Inline gap list and inline attempt history are removed; counters open panels. Closed gaps are retained struck-through for the session. Flag removed; `next` becomes the only path.
@@ -608,7 +619,25 @@ Why this order:
 
 ---
 
-### P3 — Generation 🔴
+### P3 — Generation 🔴 ✅
+- **Shipped.** Three additions, all from data the backend already streams: the
+  confirmed goal stays on screen through the wait (the interview used to vanish the
+  instant the pipeline started); the files the exploration reads accumulate into a
+  list instead of being rendered once and discarded; and past five minutes the
+  elapsed line stops promising "two to four minutes". Stage rows, the real activity
+  target, `calls` and the server-preferred elapsed were already in place from P2's
+  work. **Deviation:** the milestone says "the interview transcript stays visible" —
+  what ships is the *synthesised goal*, because `onDone` hands the page the goal and
+  not the answer list, and the review gate had already shown the answers and made
+  the learner confirm them. The goal is the version they agreed to.
+- **Verification status.** Two real runs on `psf/requests`, both completing to the
+  briefing. Goal continuity and the server-preferred elapsed line confirmed on
+  screen. The files-read list is unit-tested (accumulation across polls,
+  distinctness, and `read_file`-only) but its LIVE check is still outstanding: the
+  in-page watcher matched `files read` case-sensitively while the label renders
+  through `text-transform: uppercase`, and `innerText` returns rendered text — so a
+  list that was there could not have been seen. Same class of error as the
+  runtime theme flip. Folded into P4's run rather than paying for a third.
 - **Goal.** The wait becomes the thing the briefing grows out of.
 - **Files.** `components/StartingProgress.tsx`, `app/page.tsx`
 - **Behaviour.** The interview transcript stays visible above. Bar → discrete stage rows. **Explored file paths accumulate** into a persistent list. Past five minutes the copy changes to "taking longer than usual".
@@ -625,7 +654,29 @@ Why this order:
 
 ---
 
-### P4 — Briefing and the route→rail transition 🔴
+### P4 — Briefing and the route→rail transition 🔴 ✅
+- **Shipped.** `RouteOverview` renders the route at chapter granularity from the
+  SAME `splitJourney` the rail uses — one source, two views, so the two cannot
+  disagree about which chapter a stop belongs to once `prune_ahead` and the scope
+  control start moving units. The primary names the first lesson
+  (`Start: <title>`) rather than saying "Start learning". `Change` on the profile
+  card starts a NEW interview for the same repository, which is what "restart with
+  different answers" means — the session menu's `Start over` re-runs the pipeline
+  with the same answers, the one thing a learner who dislikes their profile does not
+  want. The repo rides in `?repo=` and the landing prefills without auto-submitting.
+- **The shared-element transition is NOT built, deliberately.** The milestone says
+  it "will look cheap if it is even slightly wrong", and doing it properly across a
+  route change needs the View Transitions API to hold both DOMs at once. What ships
+  is a directional exit (the page leaves toward the leading edge, where the rail is
+  about to be) plus the continuity that actually mattered: the rail arrives with the
+  chapter containing the first stop already expanded, because `RouteRail` opens
+  `section.containsCurrent` by default. So the chapter just read about is the
+  chapter landed in, whether or not anything moved. Reduced motion navigates at
+  once. Recorded as deferred with a reason rather than approximated.
+- **Verified live** on a 16-stop, 6-chapter session: the route lists every chapter
+  with the planner's own `why` and a per-chapter count, the primary reads
+  `Start: Explain the Session–adapter relationship and mounting`, and the exit
+  applies `opacity: 0; translateX(-2rem)` over `--motion-state`.
 - **Goal.** Confirm understanding, show the route, and enter the workspace continuously.
 - **Files.** `app/session/[id]/welcome/page.tsx`, `ProfileCard.tsx`, new `components/RouteOverview.tsx`
 - **Behaviour.** The briefing shows the route at chapter granularity using the same `RouteItem` primitive as the rail. Primary action names the first lesson. `✎` on the profile leads to restart-with-different-answers. On `Start`, the chapter list animates into the rail position.
@@ -640,7 +691,32 @@ Why this order:
 
 ---
 
-### A1 — Adaptation made visible
+### A1 — Adaptation made visible ✅
+- **Shipped, and one channel was already done.** The composed consequence sentence
+  is L4's `consequenceLine` — one line, ordered by how much it changed the journey,
+  and already asserted to be exactly one where several adaptations coincide. So A1
+  added the other two: a **session log** on the Map tab, and a **rail mark** on the
+  Map tab when the route's shape changed and the learner has not looked since.
+- **The log is a pure function** (`lib/sessionLog.ts`) and the component only draws.
+  Two sources, as §9 Q2 resolved: `journey_events` for route shape (the four frozen
+  kinds) and the gaps themselves for the gap lifecycle. Gap-opened and gap-closed
+  are rendered from gap data and deliberately NOT added to `JOURNEY_EVENT_KINDS` —
+  a set called frozen that grows whenever a screen wants a row is not frozen.
+- **Refusals, each tested.** An unknown kind is dropped rather than rendered as
+  itself (it means this client is older than the server, and a row the learner
+  cannot distinguish from a bug is worse than no row). An id the graph no longer
+  knows gives a null subject, never a UUID. A gap with no timestamps contributes
+  nothing rather than a guessed position in the chronology. A **waived** gap is not
+  reported as cleared, because waiving is a decision and never evidence — saying
+  "you cleared it" would contradict `understanding_of`.
+- **The rail mark counts only shape changes**, because a mark on the rail claims the
+  rail looks different; a gap opening changes what is outstanding. Stored per
+  session in `localStorage`, so a change announced once is not forgotten on reload,
+  and cleared by looking at the Map — which is where the whole route is legible.
+- **Not done:** the detour brief's persistent return affordance. The warm-up already
+  labels itself in the brief and `Next stop →` returns to the stop it unblocks
+  (verified in S6's J3), so what is missing is a *persistent* control rather than a
+  route back. Recorded rather than added late.
 - **Goal.** The three-channel grammar.
 - **Files.** new `components/lesson/AdaptationNotice.tsx`, `components/SessionLog.tsx`; `RouteRail.tsx`, `FeedbackCard.tsx`
 - **Behaviour.** Every adaptation produces a composed consequence sentence, a rail mark with a `new` state until the rail is viewed, and a session-log entry. Multiple simultaneous adaptations compose into **one** sentence. Detour brief gains the persistent return affordance.
@@ -657,7 +733,26 @@ Why this order:
 
 ---
 
-### X1 — Motion and final polish
+### X1 — Motion and final polish ✅
+- **Shipped: the reduced-motion rule stopped being a blanket.** It was
+  `transition-duration: 0.01ms` on everything — the common recipe, and too broad.
+  `prefers-reduced-motion` exists for vestibular discomfort, which comes from things
+  travelling and resizing, not from a colour settling; and zeroing every transition
+  also removed the crossfades that carry meaning here, so state changed with no
+  indication that it had. Calmer would have been fine. Abrupt is not the same thing.
+  The rule now names what goes (all animation, and every transition of a property
+  that moves or resizes) and what stays (opacity and the colour properties, capped
+  at 100ms), via `transition-property` rather than a duration override — which is
+  what makes it selective: an element transitioning `opacity, transform` keeps the
+  first and loses the second, and no duration override can express that.
+- **`scroll-behavior: auto`** is set explicitly rather than left animated: the source
+  pane scrolls when a citation is clicked, which is motion the learner asked for, so
+  it still happens — it just stops travelling.
+- **Probe.** 7 tests reading the stylesheet directly (a jsdom render cannot evaluate
+  a media query), asserting the allowlist contains no property that moves, that
+  opacity and colour survive, that the cap is ≤100ms, and that the four motion
+  duration tokens exist and are ordered by how much moves. Confirmed live that the
+  browser parses both rules.
 - **Goal.** Apply the motion language; close the loose ends.
 - **Files.** `globals.css`, most components
 - **Behaviour.** None.
@@ -834,20 +929,182 @@ L2  extract blocks (no visual)       ✅ 2ff5a86..fdce2c3  1057 -> 540 lines
 L3  Brief / Canvas frame      🔴     ✅ 6fd2ed4
 L3b brief collapse + left align     ✅ 7e2dc38
 L4  phase rendering + feedback 🔴🔴   ✅ 3411ec0  §3a answered
-L5  panels + remove legacy          ⛔ BLOCKED — see ui-surfaces.md
-    S0 journeys on `next`, live          ← next, and closes L4's own gate
-    S1..S6 two-surface model             behind CODEONBOARD_UI=surfaces
-P3  generation                🔴    (reduced scope — see §9 Q1)
-P4  briefing + route→rail     🔴
-A1  adaptation visible              (no backend change — see §9 Q2)
-X1  motion + polish
+    S0 journeys on `next`, live         ✅  closed L4's own gate; 4 defects fixed
+    S1..S6 two-surface model            ✅  merged to master as ec00d54
+L5  panels + remove legacy             ✅  7adf9ec  legacy deleted, -594 lines
+P3  generation                🔴    ✅  goal continuity + files-read list + long-wait copy
+P4  briefing + route→rail     🔴    ✅  route overview + named primary + Change
+A1  adaptation visible              ✅  session log + rail mark (sentence was L4)
+X1  motion + polish                 ✅  reduced-motion refined + probe
 
 optional:  B1 Grader headline (after L4)   ·   B2 progress facts (with P3)
 ```
 
 Base branch: **`master`** (verified — §7). Implementation begins at M0.
 
-### Where this stands
+### Where this stands — the plan is complete
+
+Every milestone in §5 has shipped. `L5`, `P3`, `P4`, `A1` and `X1` closed on branch
+`ui-surfaces-l5`; everything before them is on `master` as of `ec00d54`.
+
+Three things shipped narrower than written, each for a stated reason rather than for
+lack of time:
+
+1. **`L5`'s panels** were not built — S3 had already moved the gap list and the
+   history into Understanding as disclosures, so a panel would have been a third
+   home for material that had just found its second.
+2. **`P4`'s shared-element transition** is deferred. The milestone says it "will look
+   cheap if it is even slightly wrong", and doing it properly across a route change
+   needs the View Transitions API; what ships is a directional exit plus the
+   continuity that actually mattered — the rail arrives with the chapter containing
+   the first stop already expanded.
+3. **`P3`'s "interview transcript"** is the synthesised goal, because `onDone` hands
+   the page a goal and not an answer list, and the review gate had already shown the
+   answers and required the learner to confirm them.
+
+Two things are built but currently inert on real data, which is worth knowing before
+either is trusted:
+
+- **`A1`'s gap rows.** The log renders route-shape changes from `journey_events`
+  (verified live: two warm-up insertions, each naming the stop it unblocks) but
+  contributes no gap rows, because `NodeGap` on the node wire carries no
+  `opened_at`/`closed_at` — those live on `GapDetail`, which only the evidence
+  drawer fetches. The code declines to guess a position in the chronology rather
+  than inventing one, and a test pins that. Putting the timestamps on the node wire
+  is R9/F101 work.
+- **`P3`'s files-read list** is unit-tested but its live confirmation is still
+  outstanding — see the note under P3.
+
+The optional backend items `B1` (Grader headline) and `B2` (progress facts) remain
+decision points, not scheduled work, exactly as written.
+
+### Notes from walking a real session — the seven post-plan fixes
+
+Seven notes came out of the first manual walk of a live session after the plan
+closed. All seven are done, on `ui-surfaces-l5`, verified against the running app
+at `127.0.0.1:3100`. Six were the rail; one was the source pane.
+
+| # | Note | What changed |
+|---|------|--------------|
+| 1 | The current stop repeated its file path | Caption removed. The path is already in the lesson header and the source pane; three copies of `requests/adapters.py` on one screen was the complaint. Measured: the current row is now 37px against 52px for a two-line neighbour. |
+| 2 | The rail is too narrow | `RAIL_REM.wide` 16.75 → 19.5. Measured live at **312px**. |
+| 3 | Stops are too tight; chapters do not separate; no scrolling | Stop padding `py-[calc(5rem/16)]` → `py-[calc(9rem/16)]` (measured 9px), connector re-anchored to `bottom-[calc(-11rem/16)]` to keep the line joining the new spacing, and the chapter gap **fixed twice** — see below. The list is its own scroll region: with every chapter expanded, `clientHeight` 612 against `scrollHeight` 1244. |
+| 4 | No way to hide the rail | `Hide route` / `Show route` in the session bar, hidden in the narrow band where there is no track to give back. Persisted under `codeonboard:rail-hidden` (verified `0` → `1` → `0` across toggles) and deliberately **not** in `prefs`, which is display settings the learner sets from a menu. |
+| 5 | **Bug** — collapsing the chapter you are in still showed your stop | `const visible = open ? section.stops : []`. This reverses an earlier deliberate decision ("show that one stop rather than hiding where the learner is"); the note is right and the old behaviour was wrong, because the chevron said closed while a row sat there, so the control looked broken. Where you are stays legible from the marked heading and its counter. |
+| 6 | Open chapters are not distinguishable from closed ones | The heading tone became three levels rather than two: `text-signal` for the chapter being read, `text-chalk` for open-but-not-current, `text-graphite` for collapsed. |
+| 7 | Source pane could not be undocked or resized, and froze the page | One root cause, three symptoms — see below. |
+
+**Note 7 was a single branch.** An "overlay" rendering forced
+`source={{...source, mode: "dock"}}`, pinned the pane to a fixed `max-w-[34rem]`,
+and laid a `fixed inset-0 bg-ink/70` backdrop button over the page. So undocking
+did nothing (the mode was overridden), resizing did nothing (the width was fixed),
+and the rest of the screen was dead (the backdrop swallowed every click). The
+branch is deleted. `dock` is always a third column; `float` is the draggable,
+resizable window; and `setShowCode` opens in `float` when a dock would starve the
+lesson below its floor. Verified live: no viewport-spanning element with live
+pointer events, `role="dialog"` with **no** `aria-modal`, both mode controls
+present, and all eight resize grips (four edges, four corners).
+
+**Both components were untested, which is why this could regress silently.**
+`components/CodeViewer.test.tsx` (15 tests) and `components/RouteRail.test.tsx`
+(14 tests) now cover them; the frontend suite goes 361 → 390. The rail's two
+behavioural guards were mutation-tested — restoring the old
+`filter(s => s.node.id === currentNodeId)` and the old file caption fails exactly
+those two tests and nothing else.
+
+#### Two follow-ups from the same walk
+
+**The code-locations list was invisible on almost every unit.** `lessonView` had
+`tracePath: !multiAnchor ? "absent" : "collapsed"`, so the list of places a unit is
+anchored on appeared *only* when there were two or more anchors. Most units have one,
+or none and only the display projection — so "where does this live in the code" never
+rendered, which read as the feature having been removed. "Almost never" is not a
+disclosure decision; it is an accident of the data.
+
+The rule is now `locationCount === 0 ? "absent" : "collapsed"`, and `multiAnchor:
+boolean` became `locationCount: number` — the label needs the count anyway, so the
+boolean was discarding the number the renderer wanted. `LessonPanel` falls back to
+the node's display projection when `anchors` is empty; that projection is by
+construction one of the anchors when there are any, so the fallback adds no claim.
+One place is not a path, so at n=1 the label is "Where this lives in the code" and
+the "Step 1 of 1" prefix is dropped. Verified live in both shapes: one row reading
+`HTTPAdapter.__init__ lines 201–221`, and two reading `BaseAdapter.send` /
+`BaseAdapter.close`.
+
+It is a **disclosure, not open**. Opening it in STUDY was tried and reverted within
+the hour: it takes STUDY to five open blocks, which is exactly the crowding §3a
+exists to prevent, and seven existing tests said so — including "no phase has more
+than four blocks open at once". The older reasoning also still stands: L3 already
+puts the same location in the brief, so an open list would be the third thing on
+screen saying where the unit lives. The complaint was that it was *gone*, not that
+it was collapsed.
+
+**`Hide route` moved into the rail.** It was in the session bar beside `Show source`,
+which put a control for a column somewhere else entirely. It is now a labelled `«` in
+the rail's own header — and in the compact strip too, which has no header — while the
+bar keeps `Show route` and shows it *only while the rail is hidden*, because once the
+rail is gone there is no rail to hold the way back. Verified: hide from the rail →
+rail gone, `Show route` appears in the bar, `codeonboard:rail-hidden` = `1`; show →
+rail back, bar clean, control back in the rail.
+
+#### The chapter gap had to be fixed twice, and the first fix did nothing
+
+The first attempt put `mt-7 … first:mt-0` on the heading row. That row is **always
+the first child of its own section wrapper**, so `first:` matched every chapter and
+zeroed the margin for all of them: measured live at **0px** between collapsed
+chapters, with `marginTop: 0px` on all six headings. The stop rows were supplying
+the only visible spacing, which is why an expanded rail looked correctly spaced and
+hid it completely — and why the first live check passed.
+
+The gap now lives on the per-section wrapper, which actually has siblings, so
+`first:` means "the first chapter" rather than "every heading": `mt-9 first:mt-0`,
+measured **36px** between chapters and 0 above the first.
+
+The lesson is that the number was never the problem. Three tests pin the structure
+rather than the value — the element carrying the gap has a previous sibling, the
+heading row carries no top margin, and both the first and later chapters carry the
+same class so the `first:` variant is what distinguishes them. Restoring the old
+structure fails exactly those tests. A test asserting `mt-9` would have passed
+against the broken version.
+
+#### One defect found in passing
+
+Not one of the seven, and found in the live console rather than by reading code:
+`MapView`'s pattern-evidence chips were keyed `${node_id}-${attempt_index}`, which
+is **not unique**. A pattern groups by kind, and a single answer can contain two
+gaps of the same kind on the same unit, so the backend legitimately sends two refs
+with both fields equal — and React logged a duplicate-key error on every render of
+the Map tab.
+
+Both chips did still render; React warned rather than dropping one, verified by
+putting the duplicate key back and watching only the warning test fail. So the
+defect is relying on a guarantee we did not hold — duplicate keys are documented as
+unsupported, "may cause children to be duplicated and/or omitted" — rather than a
+symptom already visible. Had a chip been dropped, the row would read "2 answers
+behind this" above one openable chip: the learner told there is evidence they cannot
+reach. Fixed by including the index, which is unique by construction, and covered by
+`components/MapView.test.tsx`.
+
+#### Two instrument traps, recorded so they are not paid for a third time
+
+- **A frozen CSS transition reads as the wrong colour.** Note 6 measured as *not
+  applied*: the heading class was `text-chalk` and `getComputedStyle` returned
+  graphite. The Browser pane does not composite frames, so `visibilityState` stays
+  `hidden`, no animation frames run, and the `color` transition sits at
+  `currentTime: 0` — the **start** value — indefinitely. `getAnimations()` showed
+  one running `CSSTransition`, and with `transitionProperty: none` the same node
+  read `rgb(221, 229, 234)`. Any colour probe must suppress transitions first or
+  read the class. This is the same shape as the `data-theme` trap recorded in
+  `evidence/s6-surfaces-journeys.md`: a measurement that looks like a product bug.
+- **Pointer gestures cannot be faked from page JS.** `setPointerCapture` with a
+  synthetic `pointerId` throws, which aborts the handler before the drag is
+  recorded, so a resize drag silently does nothing and the width "does not change".
+  `left_click_drag` needs a screenshot, which needs a displayed pane. The resize is
+  therefore verified by test rather than by live gesture — and in jsdom the same
+  gesture needs `MouseEvent`, because jsdom's `PointerEvent` drops
+  `clientX`/`clientY` and every delta comes out `NaN`.
+
+### How it stood at the L-track gate
 
 Foundation (`F1`–`F3d`) is approved and closed. The pre-session front half
 (`P1`, `P2`, `P2b`) has shipped and been verified against the running backend.

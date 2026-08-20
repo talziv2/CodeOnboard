@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import MapView from "@/components/MapView";
+import SessionLog from "@/components/SessionLog";
 import EvidenceDrawer from "@/components/EvidenceDrawer";
 import RouteRail from "@/components/RouteRail";
 import SectionOverview from "@/components/SectionOverview";
@@ -21,6 +22,7 @@ import { lessonUi } from "@/lib/flags";
 import {
   nextTab, surfaceForTab, tabsFor, type SessionTab, type TabEvent,
 } from "@/lib/surfaceTabs";
+import { unseenRouteChanges } from "@/lib/sessionLog";
 import { errorText, t } from "@/lib/strings";
 
 export default function SessionPage() {
@@ -43,16 +45,47 @@ export default function SessionPage() {
   const [focusKey, setFocusKey] = useState(0);
   const { source, patch: patchSource } = useSourcePane();
   const showCode = source.open;
-  const setShowCode = (open: boolean) => patchSource({ open });
+  /**
+   * Open or close the source pane.
+   *
+   * Opening chooses a mode WHEN THERE IS A CHOICE TO MAKE: if a docked third column
+   * would leave the reading column under `LESSON_FLOOR`, the pane opens floating,
+   * because a 300px-wide lesson is not a lesson. That is a default, not a lock —
+   * the dock control is live either way, and the stored mode is what reopens next
+   * time.
+   */
+  const setShowCode = (open: boolean) => {
+    if (open && source.mode === "dock" && sourceMustOverlay(band, viewportWidth, source.dockWidth, rootFontPx)) {
+      patchSource({ open: true, mode: "float" });
+      return;
+    }
+    patchSource({ open });
+  };
   const { width: viewportWidth, band } = useBand();
   const rootFontPx = useRootFontPx();
-  // The pane leaves the grid and becomes a sheet when the window cannot hold
-  // three columns without starving the middle one. Decided from the viewport and
-  // the pane's own width, never from the lesson's measured width — see
-  // `sourceMustOverlay` for why that distinction matters.
-  const sourceOverlay = sourceMustOverlay(band, viewportWidth, source.dockWidth, rootFontPx);
   // The rail has no track of its own in the narrow band; it opens over the page.
   const [railOpen, setRailOpen] = useState(false);
+  // ── hiding the rail (UI note 4) ─────────────────────────────────────────────
+  //
+  // The route is orientation, and orientation is not always what the learner
+  // wants the width for — a long trace path or a wide diff wants the column. So
+  // the track can be given back, and the choice persists: someone who hid it did
+  // not mean "until the next reload".
+  //
+  // Kept out of `prefs` deliberately. That module is display settings the learner
+  // sets from a menu and expects everywhere; this is a per-device layout state
+  // with its own control in the header, and folding it in would put a rail toggle
+  // in the display panel where nobody would look for it.
+  const [railHidden, setRailHidden] = useState(false);
+  useEffect(() => {
+    setRailHidden(window.localStorage.getItem("codeonboard:rail-hidden") === "1");
+  }, []);
+  const toggleRail = () => {
+    setRailHidden((hidden) => {
+      window.localStorage.setItem("codeonboard:rail-hidden", hidden ? "0" : "1");
+      return !hidden;
+    });
+  };
   // ── the tab, and the ONE way it moves (R5) ──────────────────────────────────
   //
   // `setTab` used to be callable from anywhere, and four places called it. None of
@@ -150,6 +183,31 @@ export default function SessionPage() {
     if (!arrivedAt) return;
     dispatchTab({ kind: "arrivedAtStop" });
   }, [arrivedAt, dispatchTab]);
+
+  // ── A1's rail mark ──────────────────────────────────────────────────────────
+  //
+  // Route-shape changes the learner has not looked at the rail since. Only the four
+  // kinds that MOVED something count: a mark on the rail is a claim that the rail
+  // looks different, and a gap opening changes what is outstanding rather than what
+  // the route is.
+  //
+  // Stored per session so it survives a reload — a change announced once and
+  // forgotten on refresh is a change the learner never saw. `localStorage` rather
+  // than the server: this is "have I looked", which is about this browser and this
+  // person, not about the graph.
+  const [railSeenAt, setRailSeenAt] = useState<string | null>(null);
+  useEffect(() => {
+    setRailSeenAt(window.localStorage.getItem(`codeonboard:rail-seen:${id}`));
+  }, [id]);
+  const routeChanges = graph ? unseenRouteChanges(graph, railSeenAt) : [];
+  // Looking at the rail is what clears it. The rail is always on screen in the wide
+  // band, so "viewed" means the map tab — the place the whole route is legible.
+  useEffect(() => {
+    if (tab !== "map") return;
+    const now = new Date().toISOString();
+    window.localStorage.setItem(`codeonboard:rail-seen:${id}`, now);
+    setRailSeenAt(now);
+  }, [tab, id]);
 
   // Looking at a tab is what makes "you have not seen this" false, so visiting
   // clears its dot. Never on a timer: a dot that expires unseen is a change the
@@ -309,9 +367,11 @@ export default function SessionPage() {
           // pane is genuinely docked in the layout — a floating pane and an
           // overlay sheet are both out of flow and claim no track.
           gridTemplateColumns: [
-            band === "narrow" ? null : `${RAIL_REM[band]}rem`,
+            band === "narrow" || railHidden ? null : `${RAIL_REM[band]}rem`,
             "minmax(0,1fr)",
-            tab !== "map" && showCode && openFile && source.mode === "dock" && !sourceOverlay
+            // `dock` means a column, whatever the viewport. Squeezing the lesson
+            // is the learner's call to make; taking the choice away was not.
+            tab !== "map" && showCode && openFile && source.mode === "dock"
               ? "var(--source-width)"
               : null,
           ]
@@ -319,7 +379,7 @@ export default function SessionPage() {
             .join(" "),
         }}
       >
-        {band !== "narrow" && (
+        {band !== "narrow" && !railHidden && (
           <RouteRail
             sections={journey.sections}
             optional={journey.optional}
@@ -332,6 +392,7 @@ export default function SessionPage() {
             }}
             onExpand={() => dispatchTab({ kind: "expandedMap" })}
             compact={band === "medium"}
+            onHide={toggleRail}
           />
         )}
 
@@ -339,7 +400,13 @@ export default function SessionPage() {
           <SurfaceTabs
             tabs={tabs}
             active={tab}
-            changed={unseen}
+            // Two independent signals on one bar: `changed` is the surface dot
+            // from S4 (something landed where you were not looking), and the Map
+            // tab additionally carries A1's route mark when the SHAPE of the
+            // journey changed. Different claims, so they are not merged.
+            changed={
+              routeChanges.length > 0 && tab !== "map" ? [...unseen, "map" as SessionTab] : unseen
+            }
             onPick={(picked) => dispatchTab({ kind: "picked", tab: picked })}
             /* The right side of the lesson bar, as one group rather than three
                things competing for `ms-auto`. */
@@ -371,6 +438,17 @@ export default function SessionPage() {
                   {t.session.showSource}
                 </Button>
               )}
+                {/* ONLY THE WAY BACK IN (UI note 4, second pass).
+                    `Hide route` moved into the rail's own header, where a control
+                    for a column belongs. `Show route` cannot live there — once the
+                    rail is hidden there is no rail to hold it — so it stays here,
+                    and only while it is the one that applies. Hidden in the narrow
+                    band, where the rail has no track to give back: it is a sheet. */}
+                {band !== "narrow" && railHidden && (
+                  <Button variant="chrome" size="sm" onClick={toggleRail}>
+                    {t.session.showRail}
+                  </Button>
+                )}
                 {band === "narrow" && (
                   <button
                     onClick={() => setRailOpen(true)}
@@ -456,6 +534,12 @@ export default function SessionPage() {
                   onOpenEvidence={setEvidenceNodeId}
                 />
               </div>
+              {/* A1's third channel, beside the map rather than behind a menu: the
+                  map is already the session-level peer view, and "what changed"
+                  should not be something you have to suspect before you can find. */}
+              <div className="w-72 shrink-0 overflow-y-auto border-s border-rule px-5 py-4">
+                <SessionLog graph={graph} />
+              </div>
               {/* Progressive disclosure: the profile states a classification,
                   and this is where the learner sees what produced it. */}
               {evidenceNodeId && (
@@ -469,49 +553,37 @@ export default function SessionPage() {
           )}
         </div>
 
+        {/* THE SOURCE PANE IS NEVER A MODAL.
+            
+            It used to become one whenever the viewport could not hold a third
+            column: a `fixed inset-0` sheet with a `bg-ink/70` backdrop over
+            everything, and `mode` forced to `dock` inside it. That took away all
+            three things the pane can do — the backdrop froze the page behind it,
+            forcing `dock` disabled the undock control, and the sheet's fixed
+            `max-w-[34rem]` disabled resizing — for a pane whose entire job is to be
+            READ ALONGSIDE the lesson. A reference you cannot look away from is not
+            a reference.
+            
+            So there is one branch now. `dock` is a third column; `float` is a
+            draggable, resizable window; both leave the rest of the page live. Where
+            a dock genuinely will not fit, the pane OPENS floating — see
+            `openSource` — which is a starting point rather than a lock: the dock
+            control still works, and a learner who insists on docking in a narrow
+            window gets what they asked for. */}
         {tab !== "map" && showCode && openFile && (
-          sourceOverlay ? (
-            /**
-             * A sheet over the page rather than a third column. The pane keeps
-             * its own dock/float controls and its own close — this changes where
-             * it sits, not what it is — but it is forced to `dock` while it is a
-             * sheet, because a floating window inside a full-width overlay is two
-             * ways of being out of flow at once.
-             */
-            <div className="fixed inset-0 z-40 flex justify-end">
-              <button
-                aria-label={t.session.hideSource}
-                onClick={() => setShowCode(false)}
-                className="absolute inset-0 bg-ink/70"
-              />
-              <div className="relative flex h-full w-full max-w-[34rem] flex-col border-s border-rule bg-trench shadow-overlay">
-                <CodeViewer
-                  sessionId={id}
-                  filePath={openFile}
-                  highlightStart={viewingRange?.[0] ?? highlightForOpenFile?.start}
-                  highlightEnd={viewingRange?.[1] ?? highlightForOpenFile?.end}
-                  focusKey={focusKey}
-                  source={{ ...source, mode: "dock" }}
-                  onSourceChange={patchSource}
-                  onClose={() => setShowCode(false)}
-                />
-              </div>
-            </div>
-          ) : (
-            <CodeViewer
-              sessionId={id}
-              filePath={openFile}
-              // A chosen anchor wins; otherwise the node's display range, as
-              // before. CodeViewer itself is unchanged — this is which range it
-              // is handed, not how it renders one.
-              highlightStart={viewingRange?.[0] ?? highlightForOpenFile?.start}
-              highlightEnd={viewingRange?.[1] ?? highlightForOpenFile?.end}
-              focusKey={focusKey}
-              source={source}
-              onSourceChange={patchSource}
-              onClose={() => setShowCode(false)}
-            />
-          )
+          <CodeViewer
+            sessionId={id}
+            filePath={openFile}
+            // A chosen anchor wins; otherwise the node's display range, as
+            // before. CodeViewer itself is unchanged — this is which range it
+            // is handed, not how it renders one.
+            highlightStart={viewingRange?.[0] ?? highlightForOpenFile?.start}
+            highlightEnd={viewingRange?.[1] ?? highlightForOpenFile?.end}
+            focusKey={focusKey}
+            source={source}
+            onSourceChange={patchSource}
+            onClose={() => setShowCode(false)}
+          />
         )}
 
         {/* The route, in the band where it has no column of its own. Same
