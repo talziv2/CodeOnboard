@@ -31,7 +31,7 @@ import TracePath from "@/components/lesson/TracePath";
 import VerificationBlock from "@/components/lesson/VerificationBlock";
 import PracticeSurface from "@/components/ui/PracticeSurface";
 import Button from "@/components/ui/Button";
-import { lessonUi } from "@/lib/flags";
+import { isPhaseDriven, lessonUi } from "@/lib/flags";
 import { lessonPhase } from "@/lib/lessonPhase";
 import { lessonBlocks } from "@/lib/lessonView";
 import { FAILED } from "@/lib/verdict";
@@ -516,12 +516,19 @@ export default function LessonPanel({
         )}
       >
 
-      {/* Two canvases. The `next` one places blocks by phase; the legacy one is
-          the stack exactly as it shipped, kept reachable with the flag off so the
+      {/* Two canvases. The phase-driven one places blocks by phase; the legacy one
+          is the stack exactly as it shipped, kept reachable with the flag off so the
           new information architecture can be proven before it is the only path.
           Both render the SAME block components — what differs is placement and
-          weight, which is the whole of §3a's answer. */}
-      {ui === "next" ? (
+          weight, which is the whole of §3a's answer.
+
+          `surfaces` enters here too, and today renders identically to `next`: it is
+          a re-PLACEMENT of these blocks across two surfaces, not a different set of
+          them (§6). Starting it as an exact copy is what makes S2 and S3 reviewable
+          — each step is a visible divergence from a known-good arrangement rather
+          than a new page appearing all at once. No existing configuration changes
+          behaviour: `legacy` and `next` are untouched. */}
+      {isPhaseDriven(ui) ? (
         <>
           {recovered && (
             <Callout tone="jade" label={t.lesson.recoveredLabel}>

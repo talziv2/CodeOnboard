@@ -19,7 +19,13 @@ import { t } from "@/lib/strings";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 // The flag is read at build time in production; mocked here so both paths are
 // testable in one suite.
-vi.mock("@/lib/flags", () => ({ lessonUi: () => "next" }));
+// Spread the real module so an export added later cannot silently become
+// `undefined` here — replacing the whole module is what broke this file when
+// `isPhaseDriven` landed.
+vi.mock("@/lib/flags", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/flags")>()),
+  lessonUi: () => "next",
+}));
 
 const api = vi.hoisted(() => ({
   getLesson: vi.fn(),
