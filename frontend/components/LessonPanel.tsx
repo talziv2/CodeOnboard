@@ -551,6 +551,9 @@ export default function LessonPanel({
     // useful as the hook L3 and L4's tests key off.
     <div data-lesson-phase={phase}>
       <LessonWorkspace
+        /* The tab switch resets the shared scroller, so re-measure on the same
+           signal rather than waiting for the programmatic scroll's event. */
+        remeasureOn={drawing}
         brief={(collapsed) => (
           <LessonBrief
             node={node}

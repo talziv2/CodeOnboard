@@ -46,10 +46,33 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 export default function LessonWorkspace({
   brief,
   children,
+  remeasureOn,
 }: {
   /** Called with `collapsed`, so the brief decides what it keeps while pinned. */
   brief: (collapsed: boolean) => ReactNode;
   children: ReactNode;
+  /**
+   * A value that changes when the column should start at the top again — today the
+   * surface, so a tab switch resets it.
+   *
+   * BOTH SURFACES SHARE ONE SCROLL CONTAINER. React reuses the div, which is why the
+   * brief keeps its collapsed state across a switch rather than remounting — and why
+   * `scrollTop` carries too, and CLAMPS: leaving Lesson at 500 landed on
+   * Understanding at 190, because Understanding is shorter. The learner arrived below
+   * the top of a surface they had just asked to see, which on Understanding can mean
+   * below the composer.
+   *
+   * THE RESET LIVES IN THE SAME EFFECT AS THE MEASUREMENT, and that is the point
+   * rather than a convenience. The first attempt reset it from the page and measured
+   * here, which is a cross-component ordering dependency — and React runs CHILD
+   * effects before parent ones, so this measured the stale offset and only the second
+   * switch of a pair ever looked right. One function cannot get the order wrong.
+   *
+   * Undefined under `next`, where there is one surface and nothing to switch: the
+   * deps never change, the effect never re-runs, and the single canvas keeps its
+   * scroll position exactly as before.
+   */
+  remeasureOn?: unknown;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -67,13 +90,17 @@ export default function LessonWorkspace({
     }
     if (!box) return;
     const scroller = box;
+    // Top first, then measure. Programmatic scrolling fires its event on the next
+    // frame, so measuring after the assignment rather than waiting for the event is
+    // what keeps the brief from rendering one frame folded at the top.
+    if (remeasureOn !== undefined) scroller.scrollTop = 0;
     // 32px, not 0: a hair of scroll should not swap the layout. The brief has to be
     // genuinely pinned before shrinking reads as intent rather than as a flinch.
     const read = () => setCollapsed(scroller.scrollTop > 32);
     read();
     scroller.addEventListener("scroll", read, { passive: true });
     return () => scroller.removeEventListener("scroll", read);
-  }, []);
+  }, [remeasureOn]);
 
   return (
     <div ref={rootRef} className="flex flex-col">

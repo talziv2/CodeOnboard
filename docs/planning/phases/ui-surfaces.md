@@ -112,8 +112,24 @@ than worth hiding.
 
 ### The brief belongs to neither tab
 
-It sits **above the tab bar**, unchanged from L3: position, title, objective,
-counters, collapsing when pinned. Three reasons:
+**Implementation note, after S3–S6.** It is not physically above the bar, and it
+does not need to be. Both surfaces render into ONE scroll container that React
+reuses, so the brief is not remounted by a tab switch — measured: its collapsed
+state survives, and the scroller is the same DOM node either side. All three
+reasons below are therefore already satisfied by rendering it inside each surface,
+and lifting it would mean either losing L3's collapse-on-scroll (which the brief
+only has because it lives inside the scrollport) or re-plumbing that collapse from
+outside the container it measures. Recorded as a placement that turned out not to
+matter, rather than as an omission.
+
+What DID matter, and was found by checking: the shared container carried its
+`scrollTop` across switches and clamped, so leaving Lesson at 500px landed on
+Understanding at 190px — below its composer. Both surfaces now start at the top,
+reset in the same effect that measures the brief, because React runs child effects
+before parent ones and resetting from the page measured the stale offset.
+
+It sits **above the tab bar** in intent: position, title, objective, counters,
+collapsing when pinned. Three reasons:
 
 - It is **stop context**, not surface content. Which stop this is and what claim the
   learner should be able to make are true in both tabs.
