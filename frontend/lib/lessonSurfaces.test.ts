@@ -126,6 +126,44 @@ describe("the setup's mirror, which is the only duplication allowed", () => {
   });
 });
 
+describe("the question the verdict superseded", () => {
+  const base = { multiAnchor: true, openGapCount: 2, attemptCount: 3, hasReveal: true };
+
+  test("collapsed once a verdict is up, in both reporting phases", () => {
+    for (const phase of ["FEEDBACK", "RESOLVED"] as LessonPhase[]) {
+      const blocks = blocksFor({ ...base, phase, revealed: true });
+      expect(surfaceBlocks(blocks, "understanding").question, phase).toBe("collapsed");
+    }
+  });
+
+  test("open while it IS the question, never both", () => {
+    for (const phase of ["STUDY", "VERIFY"] as LessonPhase[]) {
+      const blocks = blocksFor({ ...base, phase, revealed: true });
+      expect(surfaceBlocks(blocks, "understanding").question, phase).toBe("open");
+      expect(surfaceBlocks(blocks, "understanding").feedback, phase).toBe("absent");
+    }
+  });
+
+  test("it never appears on Lesson, collapsed or otherwise", () => {
+    // Being asked something is not reading. The echo is evidence-side context.
+    for (const input of every) {
+      expect(surfaceBlocks(blocksFor(input), "lesson").question, JSON.stringify(input))
+        .toBeUndefined();
+    }
+  });
+
+  test("collapsing it does not add an expanded block anywhere", () => {
+    // The R3 and R2 caps below are counted over `open` only, so this must not have
+    // moved either number. Asserted directly because a rule that quietly raised the
+    // open count would defeat the milestone it belongs to.
+    for (const input of every) {
+      const blocks = blocksFor(input);
+      expect(openCountIn(blocks, "understanding"), JSON.stringify(input))
+        .toBeLessThanOrEqual(2);
+    }
+  });
+});
+
 describe("R2 · the current thing is never behind both a tab and a disclosure", () => {
   test("every phase's live artifacts are expanded in their own surface", () => {
     // Read through `surfaceBlocks`, not off `lessonBlocks`: the weight that matters
@@ -241,7 +279,9 @@ describe("phase by phase, surface by surface", () => {
     // The prose steps back the moment the explanation exists.
     expect(lesson.setup).toBe("collapsed");
     expect(understanding.feedback).toBe("open");
-    expect(understanding.question).toBe("absent");
+    // Collapsed, not absent: the verdict superseded the question, and "shown about
+    // WHAT?" has to stay answerable on the surface built to answer it (§4).
+    expect(understanding.question).toBe("collapsed");
     // The key point already names the leading gap, so the list is a disclosure.
     expect(understanding.gaps).toBe("collapsed");
   });

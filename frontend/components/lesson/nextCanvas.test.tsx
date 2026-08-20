@@ -414,6 +414,25 @@ describe("the feedback card, on the next path", () => {
     expect(primaries()[0].textContent).toBe(t.lesson.startWarmUp);
   });
 
+  test("only the pressed button says it is loading", async () => {
+    // `loading` is one flag for the whole card. Reading it directly meant that while
+    // a warm-up was being built, the SECONDARY button read "Loading…" and the
+    // tertiary — the one actually working — still read "Build me a warm-up".
+    const user = userEvent.setup();
+    // A retry that never settles, so the in-flight state can be inspected.
+    api.retry.mockReturnValue(new Promise(() => {}));
+    await renderNext();
+    await user.type(textareas()[0], "A wrong answer.");
+    await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
+    await screen.findByText(CONFUSED.rationale!);
+
+    await user.click(screen.getByRole("button", { name: t.lesson.buildWarmUp }));
+
+    // The one pressed now says so, and it is the only one that does.
+    expect(await screen.findByRole("button", { name: t.lesson.loadingShort })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: t.lesson.loadingShort })).toHaveLength(1);
+  });
+
   test("a declined warm-up keeps the verdict up and says so", async () => {
     const user = userEvent.setup();
     api.respond.mockResolvedValue({

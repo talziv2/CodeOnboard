@@ -225,6 +225,43 @@ describe("Understanding holds the evidence, and only the evidence", () => {
   });
 });
 
+describe("the question stays re-readable after the verdict", () => {
+  test("collapsed, with its text, and still exactly one composer", async () => {
+    // Understanding in FEEDBACK used to show a verdict and no sign of what had been
+    // asked — "what have I shown?" answerable, "shown about WHAT?" not, on the one
+    // surface built for the first question.
+    const user = userEvent.setup();
+    await renderSurface("understanding");
+    await user.type(textareas()[0], "A wrong answer.");
+    await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
+    await screen.findByText(CONFUSED.rationale!);
+
+    const echo = disclosures().find((d) =>
+      d.querySelector("summary")!.textContent!.includes(t.lesson.questionAsked)
+    );
+    expect(echo).toBeTruthy();
+    expect(echo!.open).toBe(false);
+    expect(echo!.textContent).toContain(LESSON.lesson.prompt);
+    // The composer did NOT come back inside the disclosure — collapsed here means
+    // "to re-read", never "to answer again".
+    expect(textareas()).toHaveLength(0);
+  });
+
+  test("no echo while the question is still the live artifact", async () => {
+    await renderSurface("understanding");
+    const echo = disclosures().find((d) =>
+      d.querySelector("summary")!.textContent!.includes(t.lesson.questionAsked)
+    );
+    expect(echo).toBeUndefined();
+    expect(textareas()).toHaveLength(1);
+  });
+
+  test("Lesson never shows it", async () => {
+    await renderSurface("lesson");
+    expect(screen.queryByText(LESSON.lesson.prompt)).toBeNull();
+  });
+});
+
 describe("no block is lost between the two surfaces", () => {
   test("everything the single canvas showed is on one surface or the other", async () => {
     // The gate, stated as the learner would notice it failing: something that used

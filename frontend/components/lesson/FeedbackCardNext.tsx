@@ -1,6 +1,6 @@
 "use client";
 
-import type { RefObject } from "react";
+import { useEffect, useState, type RefObject } from "react";
 import type { NodeGap, RespondResult } from "@/lib/api";
 import Button from "@/components/ui/Button";
 import Callout from "@/components/ui/Callout";
@@ -130,20 +130,35 @@ export default function FeedbackCardNext({
     checkAvailable,
   });
 
+  // WHICH action is waiting, not merely that something is.
+  //
+  // `loading` is one flag for the whole card, and the labels read it directly: so
+  // while a warm-up was being built, the SECONDARY button read "Loading…" and the
+  // tertiary — the one actually working — still read "Build me a warm-up". The
+  // learner was told the wrong thing was busy. Observed live in S0.
+  //
+  // Local rather than a prop: the card is what knows which button was pressed, and
+  // lifting it would make every caller pass back something it cannot see.
+  const [pressed, setPressed] = useState<ActionId | null>(null);
+  useEffect(() => {
+    if (!loading && !verifying) setPressed(null);
+  }, [loading, verifying]);
+  const waiting = (id: ActionId) => pressed === id && (loading || verifying);
+
   const label: Record<ActionId, string> = {
-    next: loading ? t.lesson.loadingShort : t.lesson.nextStop,
-    check: verifying
+    next: waiting("next") ? t.lesson.loadingShort : t.lesson.nextStop,
+    check: waiting("check")
       ? t.lesson.verifyCtaBusy
       : isCheck
         ? t.lesson.checkAnother
         : t.lesson.verifyCta,
-    warmUp: t.lesson.buildWarmUp,
+    warmUp: waiting("warmUp") ? t.lesson.loadingShort : t.lesson.buildWarmUp,
     answerAgain: t.lesson.tryAgain,
-    startWarmUp: loading ? t.lesson.loadingShort : t.lesson.startWarmUp,
-    skipWarmUp: t.lesson.skipItMoveOn,
-    moveOn: loading ? t.lesson.loadingShort : t.lesson.moveOnAnyway,
+    startWarmUp: waiting("startWarmUp") ? t.lesson.loadingShort : t.lesson.startWarmUp,
+    skipWarmUp: waiting("skipWarmUp") ? t.lesson.loadingShort : t.lesson.skipItMoveOn,
+    moveOn: waiting("moveOn") ? t.lesson.loadingShort : t.lesson.moveOnAnyway,
   };
-  const onClick: Record<ActionId, () => void> = {
+  const handlers: Record<ActionId, () => void> = {
     next: onAdvanceStop,
     check: onCheckUnderstanding,
     warmUp: onBuildWarmUp,
@@ -152,6 +167,8 @@ export default function FeedbackCardNext({
     skipWarmUp: onAdvanceStop,
     moveOn: onAdvanceStop,
   };
+  // Every action is still DISABLED while anything is in flight — one request at a
+  // time was never the bug. Only the label moved.
   const busy = (id: ActionId) => (id === "check" ? loading || verifying : loading);
   const actions = plannedActions(plan);
 
@@ -246,7 +263,10 @@ export default function FeedbackCardNext({
             // primary and there is only ever one plan.
             variant={i === 0 ? "primary" : i === 1 ? "secondary" : "ghost"}
             size={i === 2 ? undefined : "md"}
-            onClick={onClick[id]}
+            onClick={() => {
+              setPressed(id);
+              handlers[id]();
+            }}
             disabled={busy(id)}
           >
             {label[id]}

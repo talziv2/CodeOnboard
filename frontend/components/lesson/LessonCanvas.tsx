@@ -46,6 +46,7 @@ export default function LessonCanvas({
   gaps,
   attempts,
   question,
+  questionEcho,
   feedback,
   reveal,
   earlier,
@@ -65,12 +66,22 @@ export default function LessonCanvas({
     attempts: string;
     attemptsCount?: number;
     earlier?: string;
+    question?: string;
   };
   setup: ReactNode;
   tracePath: ReactNode;
   gaps: ReactNode;
   attempts: ReactNode;
   question: ReactNode;
+  /**
+   * The question as something to RE-READ: its text, with no composer in it.
+   *
+   * Rendered in place of `question` when a verdict has superseded it. A separate
+   * node rather than the same one, because putting the composer inside a disclosure
+   * would mean two textareas in the DOM and the one-composer invariant is the thing
+   * L4 exists to guarantee.
+   */
+  questionEcho?: ReactNode;
   feedback: ReactNode;
   reveal: ReactNode;
   /** Replaced explanations. Absent on the single canvas — see `lessonBlocks`. */
@@ -108,10 +119,17 @@ export default function LessonCanvas({
       {show("gaps", gaps, labels.gaps, labels.gapsCount)}
       {show("attempts", attempts, labels.attempts, labels.attemptsCount)}
 
-      {/* The primary artifact. Exactly one of these two is ever open — asserted in
+      {/* The primary artifact. Exactly one of these two is ever OPEN — asserted in
           `lessonView.test.ts`, which is the single-composer invariant restated as
-          information architecture rather than left to render order. */}
-      {at("question") !== "absent" && question}
+          information architecture rather than left to render order.
+
+          The collapsed case is the question the verdict superseded, and it renders
+          `questionEcho` — text, not a composer. Above the verdict, because it is
+          what the verdict is about. */}
+      {at("question") === "open" && question}
+      {at("question") === "collapsed" && questionEcho && (
+        <Disclosure label={labels.question ?? ""}>{questionEcho}</Disclosure>
+      )}
       {at("feedback") !== "absent" && feedback}
 
       {/* Below the primary, always. The actions live inside the feedback card, so

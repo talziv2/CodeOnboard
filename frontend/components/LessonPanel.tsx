@@ -615,8 +615,17 @@ export default function LessonPanel({
               gapsCount: openGaps.length,
               attempts: t.lesson.yourAnswers(attempts.length),
               earlier: t.lesson.earlierExplanations(superseded.length),
+              question: t.lesson.questionAsked,
             }}
             earlier={<EarlierExplanations versions={superseded} />}
+            /* Text only. The composer lives in `question` and renders only while
+               that block is open, which is what keeps "exactly one composer" true
+               while the question stays re-readable. */
+            questionEcho={
+              <p className="measure whitespace-pre-wrap text-aside text-paper">
+                {lesson.lesson.prompt}
+              </p>
+            }
             setup={
               <div className="flex flex-col gap-3">
                 {isSplit && lesson.lesson.why_now && (

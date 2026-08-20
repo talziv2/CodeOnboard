@@ -497,6 +497,11 @@ export const t = {
     // survived and the reason this mirror exists at all. Calling it "Before you
     // answer" there would suggest the material had moved.
     setupMirror: "The setup",
+    // The question, once a verdict has superseded it — a label for re-reading, not
+    // for answering. Understanding in FEEDBACK showed a verdict and no sign of what
+    // had been asked, which made "shown about what?" unanswerable on the one
+    // surface built to answer it.
+    questionAsked: "The question you answered",
     // R3's third mitigation. Counted, because the number is the whole point: it
     // says how many times this stop has been rewritten for you, which is a fact
     // about your own history with it.

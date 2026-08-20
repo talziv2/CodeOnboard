@@ -111,7 +111,12 @@ export function surfaceBlocks(
   const out: Partial<Record<BlockName, BlockState>> = {};
   for (const block of ALL_BLOCKS) {
     if (SURFACE_OF[block] === surface) {
-      out[block] = block === "setup" && surface === "lesson" ? setupInLesson(blocks) : blocks[block];
+      out[block] =
+        block === "setup" && surface === "lesson"
+          ? setupInLesson(blocks)
+          : block === "question" && surface === "understanding"
+            ? questionInUnderstanding(blocks)
+            : blocks[block];
     } else if (MIRRORED[block] === surface) {
       out[block] = blocks[block] === "absent" ? "absent" : "collapsed";
     }
@@ -152,6 +157,44 @@ export function surfaceBlocks(
 function setupInLesson(blocks: LessonBlocks): BlockState {
   if (blocks.setup === "absent") return "absent";
   return blocks.reveal === "open" ? "collapsed" : "open";
+}
+
+/**
+ * The question's weight **within Understanding**, which is the other place the
+ * single canvas was answering a different question.
+ *
+ * `lessonBlocks` makes the question `absent` once a verdict exists, and that was
+ * right for one column: the composer had to go — L4 asserts it — and the verdict
+ * became the artifact in its place, directly below the prompt the learner had just
+ * been reading. Nothing was lost, because the question was still on screen a moment
+ * ago and the page had not moved.
+ *
+ * On a surface it is wrong. Understanding in `FEEDBACK` showed a verdict, three
+ * collapsed disclosures, and no sign of what had been asked — so "what have I
+ * shown?" was answerable and "shown about WHAT?" was not, on the one surface whose
+ * whole purpose is the first question.
+ *
+ * §4's Understanding table already specifies the fix: the current question is open
+ * while it is the live artifact and **collapsed when a verdict supersedes it**, not
+ * absent. So:
+ *
+ *   question open      →  open. The composer, and the only composer.
+ *   verdict up instead →  collapsed. The prompt TEXT, with no composer in it.
+ *   neither            →  absent.
+ *
+ * THE COMPOSER IS NOT WHAT COLLAPSES. `LessonCanvas` renders a separate
+ * prompt-only node in the collapsed case, because re-rendering the composer inside
+ * a disclosure would put a second textarea in the DOM and break the one-composer
+ * invariant — the thing L4 exists to guarantee. Collapsed here means "the question,
+ * to re-read", never "the question, to answer again".
+ *
+ * Deliberately not a change to `lessonBlocks`, for the same reason as
+ * `setupInLesson`: `next` keeps its own behaviour, and the two paths stay
+ * independently wrong.
+ */
+function questionInUnderstanding(blocks: LessonBlocks): BlockState {
+  if (blocks.question !== "absent") return blocks.question;
+  return blocks.feedback === "open" ? "collapsed" : "absent";
 }
 
 /** How many blocks one surface has expanded. The R3 gate reads this. */
