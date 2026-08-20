@@ -69,7 +69,25 @@ from backend.repo.cloner import (
     parse_repo_url,
 )
 
-load_dotenv(override=True)
+# `.env` FILLS GAPS; IT DOES NOT WIN.
+#
+# This was `override=True`, which inverted the precedence every other tool in the
+# stack uses: the file beat the environment, so a variable set where the process was
+# launched was silently discarded. `CODEONBOARD_GAPS=0 uv run uvicorn …` ran with
+# gaps ON if `.env` said `1` — the opposite of what the person typing it asked for,
+# with nothing to indicate it.
+#
+# It also cost fourteen test failures. `.env` carries `CODEONBOARD_CURRICULUM=1` for
+# manual E2E runs, and this line runs at IMPORT time, so any test file that imported
+# the API switched the Mentor's planner for every test after it (see
+# `tests/conftest.py`). The suite is isolated from that now, but the isolation was
+# treating a symptom of this line.
+#
+# Default precedence — real environment first, file second — is what makes both the
+# command line and the file usable for what each is for: the file for the values
+# that never change on this machine, the environment for the ones being varied right
+# now.
+load_dotenv()
 logger = logging.getLogger(__name__)
 app = FastAPI(title="CodeOnboard API")
 
