@@ -326,7 +326,7 @@ export default function SessionPage() {
                   There is no matching Hide: the pane owns its own close, and this
                   disappears while it is open. */}
               {tab === "lesson" && !showCode && openFile && (
-                <Button variant="chrome" size="xs" onClick={() => setShowCode(true)}>
+                <Button variant="chrome" size="sm" onClick={() => setShowCode(true)}>
                   {t.session.showSource}
                 </Button>
               )}

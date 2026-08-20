@@ -1545,7 +1545,7 @@ opens against. So the control is right-aligned there.
 ### Verified live
 
 ```
-pane closed        Show source visible, 84px, right-aligned in the lesson bar
+pane closed        Show source visible, 93px, right-aligned in the lesson bar
 click it           pane opens, tracks 268 / 672 / 340, control disappears
 pane's own close   control returns
 menu contents      Make it shorter | Go deeper | Briefing | Start over |
@@ -1572,6 +1572,15 @@ narrow band `Show source` and `Your route` coexist in the same bar without
 crowding it.
 
 Contrast: 5.57 dark, 5.18 light, both clear of 4.5.
+
+Sized `sm` rather than `xs` — 93x29px instead of 84x25px — because `xs` read as
+cramped beside the 37px tabs. Stepped through the `Button` primitive's own scale
+rather than padded with a `className`: the primitive's note says wanting different
+padding is the signal to use a different size, and Tailwind resolves conflicting
+utilities by stylesheet order rather than class order, so an appended `px-4` would
+have been a coin toss against the size's own `px-2`. The bar does not grow — its
+37px height is set by the tabs — and at 700px the strip uses 362 of 699 with no
+overflow.
 
 ### One pre-existing observation, not introduced here
 
