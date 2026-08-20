@@ -39,6 +39,7 @@ export default function Home() {
   const [recent, setRecent] = useState<string[]>([]);
   // Invented per run and sent with /session/start, so the progress screen can
   // poll what that call is doing while it blocks.
+  const [startedGoal, setStartedGoal] = useState<Record<string, string> | null>(null);
   const [progressId, setProgressId] = useState("");
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +71,10 @@ export default function Home() {
   const startSession = async (forGoal: Record<string, string>) => {
     const runId = crypto.randomUUID();
     setProgressId(runId);
+    // Kept so the generation screen can show what the wait is for (P3). The
+    // interview unmounts the moment the step changes, so without this the goal
+    // exists only inside the request that is in flight.
+    setStartedGoal(forGoal);
     setStep("starting");
     setError(null);
     try {
@@ -185,7 +190,7 @@ export default function Home() {
       {step === "goal" && <GoalDialogue repoUrl={repoUrl} onDone={handleGoalDone} />}
 
       {step === "starting" && (
-        <StartingProgress repoUrl={repoUrl} progressId={progressId} />
+        <StartingProgress repoUrl={repoUrl} progressId={progressId} goal={startedGoal} />
       )}
 
       {step === "failed" && (

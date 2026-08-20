@@ -248,8 +248,13 @@ the block states per phase, the single consequence line, and the count of open b
 are each a test. Measured result on the same stop and answer: the feedback canvas is
 28% shorter and has one primary action instead of two.
 
-What remains open is `L5`, which turns the collapsed gap list and history into real
-panels and removes the legacy path.
+`L5` is now closed, and not as originally written. The surfaces split had already
+put the gap list and the history behind disclosures in Understanding, so panels
+would have been a third home for material that had just found its second. What L5
+actually did was delete the pre-redesign renderer, invert the flag's default to
+`surfaces`, and fix a bug the split had introduced: the brief renders on both
+surfaces, its counters pointed at blocks that live only in Understanding, and on the
+Lesson tab they were live-looking buttons that did nothing. They now cross first.
 
 ---
 
@@ -594,7 +599,13 @@ Why this order:
 
 ---
 
-### L5 — Gaps and history as panels; remove the legacy path
+### L5 — Gaps and history as panels; remove the legacy path ✅ 7adf9ec
+- **Shipped, and narrower than written.** The panels were not built: S3 had already
+  moved the gap list and the attempt history into Understanding as collapsed
+  disclosures, so a panel would have been a third location for material that had
+  just found its second. What shipped is the deletion (the legacy render arm and
+  `FeedbackCard.tsx`, 594 lines), the flag default inverting to `surfaces`, and the
+  counter-crossing fix described in §3a. `next` is deliberately retained.
 - **Goal.** Complete the model; delete the old renderer.
 - **Files.** new `components/lesson/GapPanel.tsx`, `HistoryPanel.tsx`; remove legacy branches; `lib/flags.ts`
 - **Behaviour.** Inline gap list and inline attempt history are removed; counters open panels. Closed gaps are retained struck-through for the session. Flag removed; `next` becomes the only path.
@@ -608,7 +619,17 @@ Why this order:
 
 ---
 
-### P3 — Generation 🔴
+### P3 — Generation 🔴 ✅
+- **Shipped.** Three additions, all from data the backend already streams: the
+  confirmed goal stays on screen through the wait (the interview used to vanish the
+  instant the pipeline started); the files the exploration reads accumulate into a
+  list instead of being rendered once and discarded; and past five minutes the
+  elapsed line stops promising "two to four minutes". Stage rows, the real activity
+  target, `calls` and the server-preferred elapsed were already in place from P2's
+  work. **Deviation:** the milestone says "the interview transcript stays visible" —
+  what ships is the *synthesised goal*, because `onDone` hands the page the goal and
+  not the answer list, and the review gate had already shown the answers and made
+  the learner confirm them. The goal is the version they agreed to.
 - **Goal.** The wait becomes the thing the briefing grows out of.
 - **Files.** `components/StartingProgress.tsx`, `app/page.tsx`
 - **Behaviour.** The interview transcript stays visible above. Bar → discrete stage rows. **Explored file paths accumulate** into a persistent list. Past five minutes the copy changes to "taking longer than usual".
@@ -834,10 +855,10 @@ L2  extract blocks (no visual)       ✅ 2ff5a86..fdce2c3  1057 -> 540 lines
 L3  Brief / Canvas frame      🔴     ✅ 6fd2ed4
 L3b brief collapse + left align     ✅ 7e2dc38
 L4  phase rendering + feedback 🔴🔴   ✅ 3411ec0  §3a answered
-L5  panels + remove legacy          ⛔ BLOCKED — see ui-surfaces.md
-    S0 journeys on `next`, live          ← next, and closes L4's own gate
-    S1..S6 two-surface model             behind CODEONBOARD_UI=surfaces
-P3  generation                🔴    (reduced scope — see §9 Q1)
+    S0 journeys on `next`, live         ✅  closed L4's own gate; 4 defects fixed
+    S1..S6 two-surface model            ✅  merged to master as ec00d54
+L5  panels + remove legacy             ✅  7adf9ec  legacy deleted, -594 lines
+P3  generation                🔴    ✅  goal continuity + files-read list + long-wait copy
 P4  briefing + route→rail     🔴
 A1  adaptation visible              (no backend change — see §9 Q2)
 X1  motion + polish

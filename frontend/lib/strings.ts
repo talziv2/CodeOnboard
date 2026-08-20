@@ -104,6 +104,23 @@ export const t = {
       `${count} lookup${count === 1 ? "" : "s"} so far`,
     elapsed: (seconds: number) =>
       `${seconds}s elapsed · usually two to four minutes`,
+    // Past the span the line above promises, that line stops being reassurance and
+    // starts being a thing the screen is getting wrong. Measured runs land around
+    // 2m40s, so five minutes is outside normal rather than at its edge.
+    elapsedLong: (seconds: number) =>
+      `${Math.floor(seconds / 60)}m ${seconds % 60}s elapsed · taking longer than usual`,
+    // The files the exploration has actually opened, accumulated from activity the
+    // backend already streams and the screen currently shows once and discards.
+    //
+    // Named for exactly what it is: `read_file` targets. A list called "explored"
+    // that quietly folded in search patterns and symbol names would be a list the
+    // learner cannot check against their own repository, which is the only thing
+    // this list is for.
+    filesRead: (count: number) => (count === 1 ? "1 file read" : `${count} files read`),
+    // The goal, kept on screen through the wait — the synthesised version rather
+    // than the raw transcript, because the review gate already showed the answers
+    // and the learner confirmed them. This is what they confirmed.
+    goalHeading: "What you asked for",
   },
 
   // --- home: failure ---
