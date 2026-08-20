@@ -647,7 +647,6 @@ export default function LessonPanel({
             surface={drawing}
             labels={{
               setup: isSplit ? t.lesson.setup : t.lesson.walkthrough,
-              setupMirror: t.lesson.setupMirror,
               tracePath:
                 locations.length > 1 ? t.lesson.tracePath : t.lesson.codeLocation,
               // A count on "Where this lives in the code" would always read "(1)".

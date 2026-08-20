@@ -58,7 +58,6 @@ export default function LessonCanvas({
   labels: {
     setup: string;
     /** What the setup is called in Understanding, where it is only ever consulted. */
-    setupMirror?: string;
     tracePath: string;
     tracePathCount?: number;
     gaps: string;
@@ -107,14 +106,13 @@ export default function LessonCanvas({
     );
   };
 
-  // In Understanding the setup is a reference the learner consults mid-answer, and
-  // calling it what Lesson calls it would suggest the material moved here.
-  const setupLabel =
-    surface === "understanding" ? labels.setupMirror ?? labels.setup : labels.setup;
-
   return (
     <>
-      {show("setup", setup, setupLabel)}
+      {/* One label, because the setup now appears on one surface. It used to be
+          mirrored into Understanding under a different name so the learner could
+          consult it mid-answer without a tab change; that mirror is gone, so a
+          per-surface label would be describing a place the block cannot be. */}
+      {show("setup", setup, labels.setup)}
       {show("tracePath", tracePath, labels.tracePath, labels.tracePathCount)}
       {show("gaps", gaps, labels.gaps, labels.gapsCount)}
       {show("attempts", attempts, labels.attempts, labels.attemptsCount)}

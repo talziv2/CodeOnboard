@@ -205,17 +205,15 @@ describe("Understanding holds the evidence, and only the evidence", () => {
     expect(history!.open).toBe(false);
   });
 
-  test("the setup is here too, collapsed, so answering never needs a tab change", async () => {
-    // §1's reason 3, the one objection to the split that survived: answers here are
-    // grounded, and grounding means referring.
+  test("the setup is NOT here — the prose lives on Lesson and only there", async () => {
+    // This reverses §1's reason 3, which had the setup mirrored here as a collapsed
+    // "The setup" so answering never needed a tab change. Removed on request: the
+    // prose is material, material is Lesson's, and a learner who wants to re-read it
+    // goes there. The cost — losing scroll position and a half-typed answer's
+    // context to a tab switch — is accepted, not solved.
     await renderSurface("understanding");
-    const mirror = disclosures().find((d) =>
-      d.querySelector("summary")!.textContent!.includes(t.lesson.setupMirror)
-    );
-    expect(mirror).toBeTruthy();
-    expect(mirror!.open).toBe(false);
-    // And it is the real prose, not a link to it.
-    expect(mirror!.textContent).toContain(LESSON.lesson.setup!);
+    expect(summaries().some((s) => s.includes(t.lesson.setup))).toBe(false);
+    expect(screen.queryByText(LESSON.lesson.setup!)).toBeNull();
   });
 
   test("no trace path and no explanation — those are reading", async () => {
@@ -298,20 +296,17 @@ describe("no block is lost between the two surfaces", () => {
     expect(screen.queryByText(LESSON.lesson.reveal!)).toBeNull();
   });
 
-  test("the setup is the one block on both surfaces, and never expanded on Understanding", async () => {
+  test("no block appears on both surfaces, in any state", async () => {
     await renderSurface("understanding", FRESH);
-    const mirror = disclosures().find((d) =>
-      d.querySelector("summary")!.textContent!.includes(t.lesson.setupMirror)
-    );
-    expect(mirror!.open).toBe(false);
+    expect(screen.queryByText(LESSON.lesson.setup!)).toBeNull();
   });
 });
 
 describe("the accumulation did not move into Understanding", () => {
   test("STUDY: two things expanded on Understanding, one on Lesson", async () => {
     await renderSurface("understanding");
-    // The question and the gaps. Everything else — the setup mirror, the history —
-    // arrives closed.
+    // The question and the gaps. Everything else — the history — arrives closed,
+    // and the setup is not on this surface at all.
     expect(openDisclosures()).toBe(0);
     expect(textareas()).toHaveLength(1);
     expect(screen.getByText(GAP.claim)).toBeTruthy();

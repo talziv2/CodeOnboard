@@ -2,7 +2,6 @@ import { describe, expect, test } from "vitest";
 import type { LessonPhase } from "@/lib/lessonPhase";
 import { lessonBlocks, openCount, type LessonBlocks, type ViewInput } from "@/lib/lessonView";
 import {
-  MIRRORED,
   SURFACE_OF,
   liveArtifacts,
   openCountIn,
@@ -90,29 +89,33 @@ describe("every block has exactly one owning surface", () => {
   });
 });
 
-describe("the setup's mirror, which is the only duplication allowed", () => {
-  test("exactly one block is mirrored, and it is the setup", () => {
-    expect(Object.keys(MIRRORED)).toEqual(["setup"]);
-    expect(MIRRORED.setup).toBe("understanding");
-  });
-
-  test("the mirror is never expanded, in any phase", () => {
-    // An expanded mirror would put the longest thing on the page into both
-    // surfaces at once — the accumulation L4 removed, reintroduced sideways.
+describe("nothing is duplicated across the surfaces", () => {
+  /**
+   * The setup used to be mirrored into Understanding as a collapsed "The setup",
+   * so a learner answering never had to change tabs to re-read the prose. Removed
+   * on request: material is Lesson's, and Understanding is what the learner has
+   * shown. These tests hold the removal, because a mirror is the kind of thing that
+   * creeps back one block at a time.
+   */
+  test("no block is rendered by a surface that does not own it", () => {
     for (const input of every) {
-      const inUnderstanding = surfaceBlocks(blocksFor(input), "understanding").setup;
-      expect(inUnderstanding, JSON.stringify(input)).not.toBe("open");
+      const blocks = blocksFor(input);
+      for (const surface of ["lesson", "understanding"] as const) {
+        for (const block of Object.keys(surfaceBlocks(blocks, surface)) as BlockName[]) {
+          expect(surfaceOf(block), `${block} drawn by ${surface}`).toBe(surface);
+        }
+      }
     }
   });
 
-  test("the mirror shows nothing when the block is absent everywhere", () => {
-    // `setup` is never absent today, so this is asserted through the function's
-    // contract rather than through a reachable phase.
-    const blocks = { ...blocksFor(every[0]), setup: "absent" } as LessonBlocks;
-    expect(surfaceBlocks(blocks, "understanding").setup).toBe("absent");
+  test("the setup is absent from Understanding in every phase", () => {
+    for (const input of every) {
+      const inUnderstanding = surfaceBlocks(blocksFor(input), "understanding");
+      expect("setup" in inUnderstanding, JSON.stringify(input)).toBe(false);
+    }
   });
 
-  test("STUDY: expanded in Lesson, collapsed in Understanding, same moment", () => {
+  test("STUDY: open in Lesson, and nowhere at all in Understanding", () => {
     const blocks = blocksFor({
       phase: "STUDY",
       locationCount: 0,
@@ -122,7 +125,7 @@ describe("the setup's mirror, which is the only duplication allowed", () => {
       hasReveal: true,
     });
     expect(surfaceBlocks(blocks, "lesson").setup).toBe("open");
-    expect(surfaceBlocks(blocks, "understanding").setup).toBe("collapsed");
+    expect(surfaceBlocks(blocks, "understanding").setup).toBeUndefined();
   });
 });
 
@@ -261,7 +264,7 @@ describe("phase by phase, surface by surface", () => {
       earlier: "absent",
     });
     expect(surfaceBlocks(blocks, "understanding")).toEqual({
-      setup: "collapsed",
+      // No `setup`. The prose is Lesson's and is not mirrored here any more.
       question: "open",
       // Open here and only here: in STUDY the gaps are what the learner is
       // answering about, not something a verdict has superseded.
@@ -319,7 +322,6 @@ describe("phase by phase, surface by surface", () => {
       hasReveal: true,
     });
     expect(surfaceBlocks(blocks, "understanding")).toEqual({
-      setup: "collapsed",
       question: "open",
       gaps: "absent",
       attempts: "absent",

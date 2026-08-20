@@ -589,12 +589,6 @@ export const t = {
       "Your last answer reached the objective — this stop counts as demonstrated once the check below is cleared.",
     walkthrough: "Walkthrough",
     setup: "Before you answer",
-    // The same prose, named for the surface that only ever consults it. In
-    // Understanding it is a reference the learner opens mid-answer without leaving
-    // the tab — §1's reason 3, which is the one objection to the split that
-    // survived and the reason this mirror exists at all. Calling it "Before you
-    // answer" there would suggest the material had moved.
-    setupMirror: "The setup",
     // The question, once a verdict has superseded it — a label for re-reading, not
     // for answering. Understanding in FEEDBACK showed a verdict and no sign of what
     // had been asked, which made "shown about what?" unanswerable on the one

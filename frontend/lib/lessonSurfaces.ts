@@ -38,7 +38,7 @@ export type BlockName = keyof LessonBlocks;
  */
 export const SURFACE_OF: Record<BlockName, Surface> = {
   // ── Lesson: the material to read ───────────────────────────────────────────
-  /** The prose to read before answering. Owned here; mirrored — see `MIRRORED`. */
+  /** The prose to read before answering. Owned here, and ONLY here. */
   setup: "lesson",
   /** A list of links into a multi-anchor unit. Reading, not evidence. */
   tracePath: "lesson",
@@ -64,32 +64,24 @@ export const SURFACE_OF: Record<BlockName, Surface> = {
 };
 
 /**
- * The one block that appears in both surfaces, and the surface it is mirrored INTO.
+ * NOTHING IS MIRRORED. A block belongs to one surface, and only that surface.
  *
- * §1's reason 3 is the durable cost of this model and the only one that survived
- * re-examination: **answers here are grounded, and grounding means referring.**
- * Answering needs the objective, the prose and the code. The objective is in the
- * brief, which sits above both tabs; the code column was never in a tab; the prose
- * is here. Sending the learner to another tab mid-answer to re-read the setup — and
- * losing their scroll position and their half-typed answer's context — is the one
- * switch this design cannot justify asking for.
+ * The setup used to be mirrored into Understanding as a collapsed "The setup"
+ * disclosure, on this reasoning: answers here are grounded, grounding means
+ * referring, and sending a learner to another tab mid-answer costs them their
+ * scroll position and the context of a half-typed answer.
  *
- * So the setup is mirrored into Understanding as a collapsed disclosure. One click,
- * no tab change.
+ * That was removed on request. The prose is material, material lives in Lesson, and
+ * a learner who wants to re-read it goes there — so the tab bar means exactly one
+ * thing, with no block appearing in two places at different weights. The cost is
+ * real and is the one named above; it is accepted rather than argued away.
  *
- * A MIRROR IS NEVER EXPANDED. `surfaceBlocks` enforces it rather than trusting the
- * caller, because an expanded mirror would put the single longest thing on the page
- * into both surfaces at once — which is the accumulation L4 removed, reintroduced
- * sideways. The owning surface is where it is read; the mirror is where it is
- * consulted.
- *
- * Deliberately a map with exactly one entry rather than a boolean on the block:
- * duplication across surfaces is a cost, so it should be enumerated in one place
- * where adding to it is a visible decision.
+ * `surfaceBlocks` no longer has a mirror branch, so a block absent from
+ * `SURFACE_OF[block] === surface` is simply not rendered by that surface. If
+ * mirroring is ever wanted again it comes back as an explicit map, because
+ * duplication across surfaces is a cost that should be enumerated where adding to
+ * it is a visible decision.
  */
-export const MIRRORED: Partial<Record<BlockName, Surface>> = {
-  setup: "understanding",
-};
 
 const ALL_BLOCKS = Object.keys(SURFACE_OF) as BlockName[];
 
@@ -100,9 +92,9 @@ export function surfaceOf(block: BlockName): Surface {
 /**
  * What one surface renders, and at what weight.
  *
- * Owned blocks keep the state `lessonBlocks` gave them. A block mirrored into this
- * surface arrives `collapsed` — or `absent`, if it is absent everywhere: a mirror
- * cannot show what does not exist.
+ * Owned blocks keep the state `lessonBlocks` gave them; everything else is not this
+ * surface's to draw. There is no mirror — see the note above `SURFACE_OF`'s
+ * neighbours.
  */
 export function surfaceBlocks(
   blocks: LessonBlocks,
@@ -117,8 +109,6 @@ export function surfaceBlocks(
           : block === "question" && surface === "understanding"
             ? questionInUnderstanding(blocks)
             : blocks[block];
-    } else if (MIRRORED[block] === surface) {
-      out[block] = blocks[block] === "absent" ? "absent" : "collapsed";
     }
   }
   return out;
