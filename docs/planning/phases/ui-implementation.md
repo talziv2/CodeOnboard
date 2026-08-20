@@ -833,8 +833,10 @@ L1  phase logic (no render)          ✅ 99d5451  four phases named
 L2  extract blocks (no visual)       ✅ 2ff5a86..fdce2c3  1057 -> 540 lines
 L3  Brief / Canvas frame      🔴     ✅ 6fd2ed4
 L3b brief collapse + left align     ✅ 7e2dc38
-L4  phase rendering + feedback 🔴🔴   ✅ (this commit)  §3a answered  ← INSPECT
-L5  panels + remove legacy           ← next
+L4  phase rendering + feedback 🔴🔴   ✅ 3411ec0  §3a answered
+L5  panels + remove legacy          ⛔ BLOCKED — see ui-surfaces.md
+    S0 journeys on `next`, live          ← next, and closes L4's own gate
+    S1..S6 two-surface model             behind CODEONBOARD_UI=surfaces
 P3  generation                🔴    (reduced scope — see §9 Q1)
 P4  briefing + route→rail     🔴
 A1  adaptation visible              (no backend change — see §9 Q2)

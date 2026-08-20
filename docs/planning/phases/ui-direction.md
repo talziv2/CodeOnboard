@@ -898,6 +898,18 @@ direction has been argued with.
 
 ## 13. Rejected for now: Lesson / Practice as two tabs
 
+> **SUPERSEDED 2026-08-20 by `ui-surfaces.md`.** Trigger 3 below fired: L3 and L4
+> shipped the single-canvas experiment this section asked for, it improved the
+> canvas measurably (28% shorter, two primaries down to one), and manual
+> inspection still found the session too busy. That document also records the
+> error in reason 4 — it framed collapse and separation as alternatives when they
+> are orthogonal — and the reason reason 2 dissolves once Lesson is understood as
+> an evolving surface rather than static content. Reason 3 survives and is costed
+> there; reason 1's data is unchanged and is re-argued rather than dismissed.
+>
+> Kept in full below, because the argument it makes is the one the revision had to
+> answer.
+
 Raised 2026-08-19, after F3a made the question 18px and that still did not feel
 categorically different from the prose around it. **Not rejected on principle —
 rejected on current evidence.** Recorded with the triggers that would justify
