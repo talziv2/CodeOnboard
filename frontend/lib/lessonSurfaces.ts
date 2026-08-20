@@ -40,7 +40,7 @@ export const SURFACE_OF: Record<BlockName, Surface> = {
   // ── Lesson: the material to read ───────────────────────────────────────────
   /** The prose to read before answering. Owned here, and ONLY here. */
   setup: "lesson",
-  /** A list of links into a multi-anchor unit. Reading, not evidence. */
+  /** Where the unit lives in the code. Owned here; mirrored — see `MIRRORED`. */
   tracePath: "lesson",
   /** The explanation, once earned. The newest thing Lesson has to offer. */
   reveal: "lesson",
@@ -64,24 +64,35 @@ export const SURFACE_OF: Record<BlockName, Surface> = {
 };
 
 /**
- * NOTHING IS MIRRORED. A block belongs to one surface, and only that surface.
+ * The blocks that appear in BOTH surfaces, and the surface each is mirrored INTO.
  *
- * The setup used to be mirrored into Understanding as a collapsed "The setup"
- * disclosure, on this reasoning: answers here are grounded, grounding means
- * referring, and sending a learner to another tab mid-answer costs them their
- * scroll position and the context of a half-typed answer.
+ * §1's reason 3 is the durable cost of the split: **answers here are grounded, and
+ * grounding means referring.** Answering needs the objective, the prose and the
+ * code. The objective is in the brief, above both tabs; the code column was never
+ * in a tab.
  *
- * That was removed on request. The prose is material, material lives in Lesson, and
- * a learner who wants to re-read it goes there — so the tab bar means exactly one
- * thing, with no block appearing in two places at different weights. The cost is
- * real and is the one named above; it is accepted rather than argued away.
+ * WHAT IS MIRRORED, AND WHY IT IS THE LINKS AND NOT THE PROSE. The setup was
+ * mirrored here once and was removed: it is the single longest thing on the page,
+ * and duplicating it put the material into both surfaces at once — the accumulation
+ * L4 removed, reintroduced sideways. The code locations are the opposite shape. A
+ * handful of `file · symbol · lines` links is small, and it is a *reference* rather
+ * than material: mid-answer the question it settles is "which code am I being asked
+ * about", which is exactly what a learner should not have to change tabs to find.
  *
- * `surfaceBlocks` no longer has a mirror branch, so a block absent from
- * `SURFACE_OF[block] === surface` is simply not rendered by that surface. If
- * mirroring is ever wanted again it comes back as an explicit map, because
- * duplication across surfaces is a cost that should be enumerated where adding to
- * it is a visible decision.
+ * So the prose stays Lesson's and the learner goes there to read it; the links are
+ * consultable from where the answering happens.
+ *
+ * A MIRROR IS NEVER EXPANDED. `surfaceBlocks` enforces it rather than trusting the
+ * caller. The owning surface is where a block is read; the mirror is where it is
+ * consulted.
+ *
+ * Deliberately a map rather than a boolean on the block: duplication across surfaces
+ * is a cost, so it is enumerated in one place where adding to it is a visible
+ * decision.
  */
+export const MIRRORED: Partial<Record<BlockName, Surface>> = {
+  tracePath: "understanding",
+};
 
 const ALL_BLOCKS = Object.keys(SURFACE_OF) as BlockName[];
 
@@ -92,9 +103,9 @@ export function surfaceOf(block: BlockName): Surface {
 /**
  * What one surface renders, and at what weight.
  *
- * Owned blocks keep the state `lessonBlocks` gave them; everything else is not this
- * surface's to draw. There is no mirror — see the note above `SURFACE_OF`'s
- * neighbours.
+ * Owned blocks keep the state `lessonBlocks` gave them. A block mirrored into this
+ * surface arrives `collapsed` — or `absent`, if it is absent everywhere: a mirror
+ * cannot show what does not exist.
  */
 export function surfaceBlocks(
   blocks: LessonBlocks,
@@ -109,6 +120,8 @@ export function surfaceBlocks(
           : block === "question" && surface === "understanding"
             ? questionInUnderstanding(blocks)
             : blocks[block];
+    } else if (MIRRORED[block] === surface) {
+      out[block] = blocks[block] === "absent" ? "absent" : "collapsed";
     }
   }
   return out;

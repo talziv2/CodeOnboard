@@ -78,29 +78,40 @@ prose and the code. Three mitigations, in order of how much they cover:
    is the single most-needed reference while answering, and it is *stop* context
    rather than surface content. This is the largest part of reason 3, answered.
 2. **The code column is unaffected.** It was never in either tab.
-3. ~~**The prose is one collapsed disclosure inside Understanding.** One click, no tab
-   change, no scroll position lost.~~ **Removed** — see "The mirror was removed"
-   below. Reason 3 is now mitigated by the brief and the code column only, and the
-   prose costs a tab change.
+3. ~~**The prose is one collapsed disclosure inside Understanding.**~~ Replaced by
+   **the code locations as one collapsed disclosure inside Understanding** — see
+   "What is mirrored, and what is not" below. The links to the code are consultable
+   without a tab change; the prose is not, and costs one.
 
-### The mirror was removed
+### What is mirrored, and what is not
 
-The setup is no longer mirrored into Understanding. It was there as a collapsed
-`"The setup"` for exactly the reason above — so a learner mid-answer could re-read the
-prose without a tab change, keeping their scroll position and their half-typed
-answer's context — and it was the single deliberate duplication in the model.
+**The prose is not mirrored; the code locations are.** `MIRRORED` holds exactly one
+entry, `tracePath: "understanding"`.
 
-Removed on request: the prose is *material*, material belongs to Lesson, and a learner
-who wants to read it goes there. The consequence is stated rather than argued away —
-**reason 3 is now only two-thirds mitigated**, by the brief (the objective) and the
-code column, and re-reading the prose while answering costs a tab change.
+The setup used to be the mirrored block, as a collapsed `"The setup"`, for the reason
+above — a learner mid-answer could re-read the prose without a tab change. It was
+removed on request, and the argument for removing it is the right one: the prose is
+*material*, material belongs to Lesson, and it is the single longest thing on the
+page, so duplicating it put the material into both surfaces at once — the accumulation
+L4 removed, reintroduced sideways.
 
-`MIRRORED` is gone rather than emptied, along with `surfaceBlocks`'s mirror branch and
-the `setupMirror` label: a one-entry map with all its enforcement still standing, and
-nothing in it, is dead code that reads as live. Two tests hold the removal — no
-surface renders a block it does not own, in any of the input combinations, and `setup`
-is absent from Understanding in every phase — because a mirror is the kind of thing
-that creeps back one block at a time.
+The code locations are the opposite shape, which is why they mirror where the prose
+does not. A handful of `file · symbol · lines` links is small, and it is a *reference*
+rather than material: mid-answer the question it settles is "which code am I being
+asked about", and that is exactly what a learner should not change tabs to find.
+
+So of the three things reason 3 needs to hand a learner who is answering: the
+objective is in the brief above both tabs, the code column was never in a tab, the
+**locations are a disclosure on this surface**, and the **prose costs a tab change**.
+That last one is the accepted cost, stated rather than argued away.
+
+A MIRROR IS NEVER EXPANDED — `surfaceBlocks` enforces it rather than trusting the
+caller, and a mirror of an absent block is absent, because a mirror cannot show what
+does not exist. Four tests hold the line in both directions: a surface renders only
+what it owns or what is mirrored into it, exactly one block is mirrored and it is the
+locations, the mirror is never expanded in any phase, and `setup` is absent from
+Understanding in every phase. A mirror is the kind of thing that creeps back one
+block at a time.
 
 ### The cost that remains, stated plainly
 
@@ -231,12 +242,14 @@ Two rules govern the whole table, stated once:
 - **Active:** `Understanding` — by clicking either the tab or the primary
   **"Answer this"** at the foot of Lesson
 - **Lesson:** unchanged
-- **Understanding:** question + composer expanded. The setup is **not** here — it was
-  a collapsed `"The setup"` disclosure until the mirror was removed
+- **Understanding:** question + composer expanded; the code locations available as a
+  collapsed disclosure. The setup is **not** here — it was a collapsed `"The setup"`
+  until the mirror moved to the locations
 - **Auto-switch:** **no** — the learner pressed a control that says where it goes
 - **Returning to material:** objective in the brief · code in its own column,
-  untouched · **prose on the Lesson tab**, which is a tab change
-- **Expanded:** question + composer · **Collapsed:** nothing that is material
+  untouched · locations one click inside this tab · **prose on the Lesson tab**,
+  which is a tab change
+- **Expanded:** question + composer · **Collapsed:** the code locations
 
 ### T2 · submits a partial answer → feedback
 
@@ -363,7 +376,8 @@ indefinitely: a re-teach replaces, and superseded explanations group.
 | current question / verification | it is the live artifact | a verdict supersedes it |
 | current verdict | it is the live artifact | a new question supersedes it |
 | open gaps | the learner is answering (STUDY) | a verdict is up — the key point already names the leading one |
-| the setup | in Lesson, until the explanation supersedes it | in Lesson only — it is **not on Understanding at all** |
+| the setup | in Lesson, until the explanation supersedes it | in Lesson only — **not on Understanding at all** |
+| the code locations | never | always, on **both** surfaces, so answering never needs a tab change to see which code is in question |
 | previous answers | never | always, as `Previous answers (N)` |
 | resolved gaps | never | always, as `Resolved (N)` |
 

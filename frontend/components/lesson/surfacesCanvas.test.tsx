@@ -216,9 +216,16 @@ describe("Understanding holds the evidence, and only the evidence", () => {
     expect(screen.queryByText(LESSON.lesson.setup!)).toBeNull();
   });
 
-  test("no trace path and no explanation — those are reading", async () => {
+  test("the code locations ARE here, collapsed — but the explanation is not", async () => {
+    // The one mirror. Prose and explanation are material and stay on Lesson; a short
+    // list of `file · symbol · lines` links is a reference, and mid-answer "which
+    // code am I being asked about" should not cost a tab change.
     await renderSurface("understanding");
-    expect(summaries().some((s) => s.includes(t.lesson.tracePath))).toBe(false);
+    const locations = disclosures().find((d) =>
+      d.querySelector("summary")!.textContent!.includes(t.lesson.tracePath)
+    );
+    expect(locations).toBeTruthy();
+    expect(locations!.open).toBe(false);
     expect(screen.queryByText(LESSON.lesson.reveal!)).toBeNull();
   });
 });

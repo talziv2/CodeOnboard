@@ -86,9 +86,9 @@ export default function LessonCanvas({
   /** Replaced explanations. Absent on the single canvas — see `lessonBlocks`. */
   earlier?: ReactNode;
 }) {
-  // `surfaceBlocks` applies the surface's own supersession — the setup is open in
-  // Lesson until the explanation exists, and never open in Understanding, where it
-  // is a reference rather than the material.
+  // `surfaceBlocks` applies the surface's own supersession, and downgrades anything
+  // mirrored into this surface to `collapsed` — the setup is open in Lesson until the
+  // explanation exists, and the code locations are a disclosure wherever they appear.
   const state: Partial<Record<keyof LessonBlocks, BlockState>> = surface
     ? surfaceBlocks(blocks, surface)
     : blocks;
@@ -108,10 +108,10 @@ export default function LessonCanvas({
 
   return (
     <>
-      {/* One label, because the setup now appears on one surface. It used to be
-          mirrored into Understanding under a different name so the learner could
-          consult it mid-answer without a tab change; that mirror is gone, so a
-          per-surface label would be describing a place the block cannot be. */}
+      {/* One label each. The setup appears on one surface only, so it needs no
+          per-surface name; the code locations appear on both, but as the same
+          reference under the same label — a mirror the learner consults, not a
+          second copy of something to read. */}
       {show("setup", setup, labels.setup)}
       {show("tracePath", tracePath, labels.tracePath, labels.tracePathCount)}
       {show("gaps", gaps, labels.gaps, labels.gapsCount)}
