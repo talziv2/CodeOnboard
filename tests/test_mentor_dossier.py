@@ -11,6 +11,15 @@ confidence (§5.4); and agent.run() delegates here exactly when
 state.investigation is present.
 
 No network: scripted fake client.
+
+THIS FILE TESTS THE PRE-B3 PLANNER, which means it depends on
+`CODEONBOARD_CURRICULUM` being off. That used to be implicit, and it broke: the
+suite-wide `.env` load in `backend/api.py` turned the flag on for every test that
+ran after any file importing the API, and all fourteen assertions here died on a
+`None` graph while passing in isolation. `tests/conftest.py` now neutralises the
+flag for every test; the canary below states the dependency in the file that has
+it, so if that ever stops being true the failure names itself instead of appearing
+as fourteen unrelated AttributeErrors.
 """
 import copy
 import json
@@ -161,6 +170,12 @@ GOOD_WIRE = [
     node("n2", "src/app/auth.py", symbol="sign"),
     node("n3", "src/app/auth.py", symbol="Signer.apply"),
 ]
+
+
+def test_this_file_is_testing_the_dossier_planner():
+    """The canary. One line, and it is the difference between a named failure and
+    fourteen `NoneType has no attribute 'nodes'`."""
+    assert mentor_agent.curriculum_enabled() is False
 
 
 # ── happy path: symbol-first grounding ────────────────────────────────────────
