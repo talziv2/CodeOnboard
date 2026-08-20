@@ -236,6 +236,19 @@ export default function FeedbackCardNext({
         </Callout>
       )}
 
+      {/* A check that cleared everything and left the stop uncredited. The verdict
+          word above says "Cleared", which is true of the GAP and would otherwise be
+          read as true of the stop — and the gauge not moving would then look like a
+          bug rather than a rule. */}
+      {isCheck &&
+        closed.length > 0 &&
+        openGaps.length === 0 &&
+        result.understanding_state !== "understood" && (
+          <p className="measure border-s-2 border-rule ps-3 text-meta text-graphite">
+            {t.lesson.checkClearedNotCredited}
+          </p>
+        )}
+
       {isCheck && closed.length === 0 && (
         <p className="measure text-meta text-graphite">{t.lesson.checkNothingClosed}</p>
       )}

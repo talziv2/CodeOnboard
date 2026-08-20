@@ -437,6 +437,21 @@ export const t = {
     checkPartly: "Partly cleared",
     checkOpen: "Still open",
     checkClosedLabel: "What this closed",
+    // Said when a check closes everything and the stop STILL is not credited.
+    //
+    // Observed in S0's J4: the learner failed a stop, verified the gap that caused
+    // it, saw "Cleared" and watched the unresolved counter disappear — and goal
+    // readiness did not move, because a verification is evidence about a belief and
+    // the stop's credit is judged on the answer to its question (M7,
+    // `verification.py`). Nothing on screen said so, which made the gauge look
+    // broken rather than strict.
+    //
+    // States the fact and its reason, and promises no route: re-answering the same
+    // question after the explanation has been shown is the memory test §18.7
+    // removed, and a fresh question about the OBJECTIVE is a mechanism the system
+    // does not yet have.
+    checkClearedNotCredited:
+      "That's closed. This stop still isn't counted as demonstrated — that's judged on your answer to its own question, not on the check.",
     checkNothingClosed:
       "That did not settle it. You can try a different angle, or carry on and come back.",
     checkAnother: "Check another",

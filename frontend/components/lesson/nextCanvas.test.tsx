@@ -414,6 +414,58 @@ describe("the feedback card, on the next path", () => {
     expect(primaries()[0].textContent).toBe(t.lesson.startWarmUp);
   });
 
+  test("a check that clears everything says when the stop is still not credited", async () => {
+    // S0's J4: the learner failed a stop, verified the gap that caused it, saw
+    // "Cleared" and watched the counter vanish — and readiness did not move, because
+    // the stop's credit is judged on the answer to its own question. Nothing said so,
+    // which made the gauge look broken rather than strict.
+    const user = userEvent.setup();
+    api.respondToVerification.mockResolvedValue({
+      ...CONFUSED,
+      kind: "verification",
+      classification: null,
+      understanding_state: "failed",
+      resolved: [GAP.id],
+      unresolved: [],
+      gaps: [],
+    });
+    await renderNext();
+    await user.type(textareas()[0], "A wrong answer.");
+    await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
+    await screen.findByText(CONFUSED.rationale!);
+    await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
+    await screen.findByText(PROMPT.question);
+    await user.type(textareas()[0], "The gap, addressed.");
+    await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
+
+    expect(await screen.findByText(t.lesson.checkClearedNotCredited)).toBeTruthy();
+  });
+
+  test("and says nothing when the stop IS credited", async () => {
+    // The line must not become background noise on the happy path.
+    const user = userEvent.setup();
+    api.respondToVerification.mockResolvedValue({
+      ...CONFUSED,
+      kind: "verification",
+      classification: null,
+      understanding_state: "understood",
+      resolved: [GAP.id],
+      unresolved: [],
+      gaps: [],
+    });
+    await renderNext();
+    await user.type(textareas()[0], "A wrong answer.");
+    await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
+    await screen.findByText(CONFUSED.rationale!);
+    await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
+    await screen.findByText(PROMPT.question);
+    await user.type(textareas()[0], "The gap, addressed.");
+    await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
+    await waitFor(() => expect(screen.queryByText(PROMPT.question)).toBeNull());
+
+    expect(screen.queryByText(t.lesson.checkClearedNotCredited)).toBeNull();
+  });
+
   test("only the pressed button says it is loading", async () => {
     // `loading` is one flag for the whole card. Reading it directly meant that while
     // a warm-up was being built, the SECONDARY button read "Loading…" and the
