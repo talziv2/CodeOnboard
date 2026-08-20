@@ -283,3 +283,114 @@ describe("the reveal is still earned", () => {
     expect(textareas()).toHaveLength(1);
   });
 });
+
+describe("the feedback card, on the next path", () => {
+  const answerOnce = async () => {
+    const user = userEvent.setup();
+    await renderNext();
+    await user.type(textareas()[0], "A wrong answer.");
+    await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
+    await screen.findByText(CONFUSED.rationale!);
+  };
+
+  const primaries = () =>
+    [...document.querySelectorAll("button")].filter((b) => b.className.includes("bg-signal"));
+
+  test("exactly one primary action", async () => {
+    await answerOnce();
+    expect(primaries()).toHaveLength(1);
+  });
+
+  test("the key point leads with the blocking gap, framed as an assumption", async () => {
+    await answerOnce();
+
+    expect(screen.getByText(t.lesson.keyPoint(t.lesson.verdict.confused, GAP.claim))).toBeTruthy();
+    // And the rationale is still there underneath, uncollapsed — the key point
+    // orients, it does not substitute.
+    expect(screen.getByText(CONFUSED.rationale!)).toBeTruthy();
+  });
+
+  test("the primary is a check, not Try again, while a gap is open", async () => {
+    await answerOnce();
+
+    // §18.7: re-asking the question whose answer the reveal gave away proves only
+    // that the page was read.
+    expect(primaries()[0].textContent).toBe(t.lesson.verifyCta);
+    expect(screen.queryByRole("button", { name: t.lesson.tryAgain })).toBeNull();
+  });
+
+  test("at most three actions, so the row is never four equal buttons", async () => {
+    await answerOnce();
+    const card = document.querySelector('[tabindex="-1"]')!;
+    const actionRow = card.lastElementChild!;
+    expect(actionRow.querySelectorAll("button").length).toBeLessThanOrEqual(3);
+  });
+
+  test("one consequence line, not a stack of notices", async () => {
+    const user = userEvent.setup();
+    api.respond.mockResolvedValue({
+      ...CONFUSED,
+      mutation: { kind: "prerequisite" },
+      adaptation: { kind: "prerequisite", text: "Start with what a Graph is.", retaught: true, pruned: 2 },
+    });
+    await renderNext();
+    await user.type(textareas()[0], "A wrong answer.");
+    await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
+    await screen.findByText(t.lesson.consequenceWarmUpAdded);
+
+    // The rationale appears TWICE here, and that is the contract rather than a bug:
+    // `mutation.kind === "prerequisite"` is the path where the graph refresh is
+    // deliberately skipped so the verdict stays readable, so the just-graded answer
+    // is synthesised as a `pending` attempt to keep it in the history. One copy in
+    // the card, one in the collapsed history.
+    expect(screen.getAllByText(CONFUSED.rationale!).length).toBe(2);
+
+    // Three things happened; one line is said, the loudest.
+    expect(screen.getByText(t.lesson.consequenceWarmUpAdded)).toBeTruthy();
+    expect(screen.queryByText(t.lesson.consequenceRetaught)).toBeNull();
+    expect(screen.queryByText(t.lesson.consequencePruned(2))).toBeNull();
+    // And starting the warm-up is what leads, because it is already in the journey.
+    expect(primaries()[0].textContent).toBe(t.lesson.startWarmUp);
+  });
+
+  test("a declined warm-up keeps the verdict up and says so", async () => {
+    const user = userEvent.setup();
+    api.respond.mockResolvedValue({
+      ...CONFUSED,
+      mutation: { kind: "none" },
+      adaptation: { kind: "prerequisite" },
+    });
+    await renderNext();
+    await user.type(textareas()[0], "A wrong answer.");
+    await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
+    await screen.findByText(CONFUSED.rationale!);
+
+    // Declining is a real answer: the verdict stays, the outcome is reported, and
+    // routes forward are still reachable.
+    expect(screen.getByText(CONFUSED.rationale!)).toBeTruthy();
+    expect(screen.getByText(t.lesson.consequenceWarmUpUnavailable)).toBeTruthy();
+    expect(primaries()).toHaveLength(1);
+    // Never offered again once declined.
+    expect(screen.queryByRole("button", { name: t.lesson.buildWarmUp })).toBeNull();
+  });
+
+  test("a correct answer offers moving on and nothing else", async () => {
+    const user = userEvent.setup();
+    api.respond.mockResolvedValue({
+      ...CONFUSED,
+      classification: "understood",
+      rationale: "Exactly right.",
+      gaps: [],
+      adaptation: undefined,
+    });
+    await renderNext();
+    await user.type(textareas()[0], "The right answer.");
+    await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
+    await screen.findByText("Exactly right.");
+
+    const card = document.querySelector('[tabindex="-1"]')!;
+    const buttons = [...card.lastElementChild!.querySelectorAll("button")];
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].textContent).toBe(t.lesson.nextStop);
+  });
+});

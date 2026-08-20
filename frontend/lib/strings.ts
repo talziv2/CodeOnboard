@@ -425,6 +425,22 @@ export const t = {
     // The brief's counters. Named by what they are, not by a bare number: "2" in
     // a pinned header says nothing, and the point of the counter is to say that
     // something is still open without listing it again.
+    // The key point — the one condensation in the flow (§2). Three levels, best
+    // available first: the Grader's own headline if B1 ever ships it, otherwise the
+    // verdict word plus the leading gap's claim, otherwise the verdict word alone.
+    //
+    // Framed as an assumption the learner is CARRYING, not as a correction we
+    // computed: the gap claim is a statement of the misconception, and dressing it
+    // up as "actually, X" would assert a correction nothing produced.
+    keyPoint: (verdict: string, claim: string) => `${verdict} — you're working from: ${claim}`,
+    // One consequence line, replacing three separate notices that all described the
+    // same event (§3a question 2). Ordered by how much it changed the journey.
+    consequenceRetaught: "This stop has been rewritten to answer that.",
+    consequencePruned: (count: number) =>
+      count === 1 ? "One later stop is no longer needed." : `${count} later stops are no longer needed.`,
+    consequenceWarmUpAdded: "A warm-up has been added before this stop.",
+    consequenceWarmUpExists: "There is already a warm-up before this stop.",
+    consequenceWarmUpUnavailable: "No warm-up could be built for this.",
     briefGaps: (count: number) => (count === 1 ? "1 unresolved" : `${count} unresolved`),
     briefAttempts: (count: number) =>
       count === 1 ? "1 answer" : `${count} answers`,

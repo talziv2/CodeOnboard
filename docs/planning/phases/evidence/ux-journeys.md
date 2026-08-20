@@ -1876,3 +1876,162 @@ position/title/counters and hides the rest from assistive tech, the region is no
 hidden while expanded, the counters are buttons with a border treatment, and a
 counter with nothing to report is absent rather than zero.
 
+---
+
+## L4 — Phase-driven rendering, and §3a answered
+
+Behind `NEXT_PUBLIC_CODEONBOARD_UI=next`. The legacy path is in the else branch and
+verified untouched.
+
+### The answer, in one sentence
+
+The canvas shows **one primary artifact per phase, and everything that phase has
+superseded collapses to a disclosure.** Superseded is not gone: every block stays
+reachable, which is what makes the decision safe to be wrong about.
+
+### §3a's five questions
+
+1. **After a correct answer?** The verdict with its key point, the rationale, and
+   the explanation — the explanation because it is the payoff for answering, and
+   withholding it at the one moment it is earned would be perverse. Not the setup
+   prose, not the trace path, not the history.
+2. **Adaptation notices — feedback or A1's channel?** Feedback, but as **one**
+   consequence line. `retaught`, `pruned` and three warm-up outcomes were five
+   conditional lines that could stack, all describing the same event from different
+   angles. Ordered by how much they changed the journey; the first that applies is
+   the only one said. Nothing is lost by choosing — a re-taught stop shows its new
+   prose, a pruned journey is shorter in the rail, an inserted warm-up appears in
+   the route.
+3. **Gaps during feedback?** Collapsed to the brief's counter, because the key point
+   already leads with the blocking gap's claim. They stay **open in STUDY**, where
+   they are not superseded — they are what the learner is answering about.
+4. **`takeaway` and `ownership`?** They travel with the explanation. The second
+   `Key point` above the reveal stays dropped: two places to feel finished is the
+   shallow-skipping risk this design exists to avoid.
+5. **History during feedback?** No. A record is consulted, not read. Collapsed in
+   every phase, counted in the brief.
+
+### Measured, live, same stop and same answer on both paths
+
+The grading call was stubbed in the page so the real components could be driven into
+`FEEDBACK` without a model call — the Anthropic credits are exhausted, and stubbing
+the network exercises more of the real thing than a test render does anyway.
+
+```
+                          legacy (:3000)      next (:3100)
+canvas height                 1565px             1127px      -28%
+primaries in the action row        2                  1
+actions in the row                 3                  3
+blocks stacked in the card         4                  varies by content
+non-content chrome                 —              14.7%      gate: <= 25%
+```
+
+The two primaries in legacy are the finding, not a detail: `Next stop →` and `Check
+my understanding` were **both** solid, so the row said nothing about what to do — and
+one of the two was moving on while a gap was still open. The same three actions on
+the next path are `Check my understanding` (primary), `Next stop →` (secondary),
+`Build me a warm-up` (tertiary), which is exactly §2.4's "Partial, gaps open" row.
+
+### What FEEDBACK looks like now, verified in the browser
+
+```
+phase                       FEEDBACK
+disclosures, all closed     "Before you answer" · "Still unresolved 1" · "Your answers (1)"
+composer                    gone
+key point                   "Partly there — you're working from: a connected graph
+                             cannot return None"
+rationale                   still shown, never collapsed
+hint                        shown
+primaries                   1
+actions                     Check my understanding | Next stop → | Build me a warm-up
+verdict before reveal       yes
+```
+
+The three disclosures are precisely the blocks that used to sit open around the
+verdict.
+
+### The key point ladder
+
+Three levels, best available first, each tested with the levels above it removed so
+the fallback is known to be reachable rather than theoretical:
+
+1. `headline` from the Grader — read defensively, so **L4 does not block on B1** and
+   B1 needs no frontend change when it lands.
+2. Composed from the leading gap — blocking first, since a blocking gap is by
+   definition the one standing between the learner and the objective. Framed as an
+   assumption the learner is *carrying*, not as a correction nothing computed.
+3. The verdict word alone, for sessions with no gaps on the wire.
+
+The rationale sits immediately beneath and is **never collapsed**. The key point
+orients; it does not substitute, which is the guard against shallow skipping.
+
+### The action table as a pure function
+
+Six rows plus the check path, so `feedbackActions` is a pure function with a test per
+row and an exhaustive sweep over all 320 input combinations. The sweep earned its
+keep twice:
+
+- **`next` became primary with a gap still open**, by falling through the tail. The
+  no-route-available case is now reached explicitly and offers the warm-up, or
+  moving on when there is genuinely nothing more direct.
+- **The check path offered a warm-up without consulting the gate at all** — the
+  exact "never offer what would be declined" contract. Fixed by giving the module
+  one honest gate, `warmUpAvailable`, computed by the panel as
+  `canRequestWarmUp || (isCheck && !warmUpInserted)`; on a check the panel's own flag
+  is false by construction while a warm-up is still deliberately reachable while
+  something is unresolved.
+
+Invariants asserted across every combination: exactly one primary, no action offered
+twice, at most three actions, a warm-up never offered after one was declined, and
+**moving on is primary only when the objective is met**.
+
+### The contract, carried across deliberately
+
+Every row of §3 that touches this path was preserved and, where it is observable,
+asserted:
+
+- **Pending attempt.** Verified as a test that the just-graded rationale appears
+  **twice** on the `mutation.kind === "prerequisite"` path — once in the card, once
+  in the collapsed history — because the graph refresh is deliberately skipped there
+  so the verdict stays readable, and the answer is synthesised into the history to
+  compensate. A test asserting "appears once" would have looked more correct and
+  broken the contract.
+- **Retry declined.** The verdict stays up, the outcome is reported
+  ("No warm-up could be built for this."), routes forward remain reachable, and the
+  warm-up is never offered again.
+- **Warm-up cap and §18.11.** Encoded in `warmUpAvailable`, never re-derived.
+- **A check is not a re-grade.** `isCheck` drives the plan; `classification` is null
+  there by design and is never inferred from.
+- **"Try again" is not offered while a gap is open.** `feedbackActions` returns
+  `check` instead — a new question about the same misconception rather than a re-ask
+  of the one the reveal just answered (§18.7).
+- **Reveal on revisit.** Still open with no result on screen; tested.
+- **Verification excluded from history.** Unchanged; the learner's own words are
+  shown in the card because they would otherwise be nowhere.
+- **Re-teach and pruning** are both still reported, now inside the one consequence
+  line.
+
+### Both paths, side by side
+
+`"Your answers"` renders as a `<summary>` on :3100 and a `<span>` on :3000 — the
+disclosure wrapper is the next path's, and its absence is the legacy path's. That is
+the cheap check that the flag is doing what it claims.
+
+Tests: **207 passing.** 12 for the view model, 19 for the action table including the
+320-combination sweep, 14 for the key point and consequence line, and 19 render-level
+tests on the next path.
+
+### Not done, and why
+
+- **Scroll anchoring** as its own mechanism. The existing verdict scroll already
+  lands the card at a third of the scrollport, measured clear of the pinned brief
+  (271px vs 104px), and the setup collapsing above it makes the card's position
+  *more* stable rather than less. Adding a second mechanism would be two things
+  fighting over the same scrollTop.
+- **`Review` as the secondary on the understood row.** §2.4 lists it; there is no
+  handler for it and the reveal is already open directly below. Recorded rather than
+  invented.
+- **The seven canonical journeys** end-to-end on live data, both flags. Blocked on
+  the exhausted API credits: answering, grading and re-teaching all need the model.
+  The stub covers the render and the transitions; it cannot prove the backend
+  contract end to end.

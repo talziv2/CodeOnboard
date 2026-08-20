@@ -242,8 +242,14 @@ that were already on screen.
 
 ### Status
 
-Open. Blocks nothing; informs `L1`, `L4` and `L5`. F3b's practice surface is the
-frame this will be redesigned *inside*, and is approved as-is.
+**Answered in L4** — see `evidence/ux-journeys.md`. All five questions are resolved
+in `lib/lessonView.ts`'s own doc, and the answers are asserted rather than described:
+the block states per phase, the single consequence line, and the count of open blocks
+are each a test. Measured result on the same stop and answer: the feedback canvas is
+28% shorter and has one primary action instead of two.
+
+What remains open is `L5`, which turns the collapsed gap list and history into real
+panels and removes the legacy path.
 
 ---
 
@@ -826,9 +832,9 @@ S2b Show source made visible        ✅ a50c3eb + 8343adf  asked for at S2's gat
 L1  phase logic (no render)          ✅ 99d5451  four phases named
 L2  extract blocks (no visual)       ✅ 2ff5a86..fdce2c3  1057 -> 540 lines
 L3  Brief / Canvas frame      🔴     ✅ 6fd2ed4
-L3b brief collapse + left align     ✅ (this commit)  ← INSPECT
-L4  phase rendering + feedback 🔴🔴   ← next; answers §3a
-L5  panels + remove legacy
+L3b brief collapse + left align     ✅ 7e2dc38
+L4  phase rendering + feedback 🔴🔴   ✅ (this commit)  §3a answered  ← INSPECT
+L5  panels + remove legacy           ← next
 P3  generation                🔴    (reduced scope — see §9 Q1)
 P4  briefing + route→rail     🔴
 A1  adaptation visible              (no backend change — see §9 Q2)

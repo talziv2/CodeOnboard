@@ -17,6 +17,7 @@ import type {
 } from "@/lib/api";
 import Callout from "@/components/ui/Callout";
 import FeedbackCard from "@/components/lesson/FeedbackCard";
+import FeedbackCardNext from "@/components/lesson/FeedbackCardNext";
 import CompletionScreen from "@/components/lesson/CompletionScreen";
 import AnswerComposer from "@/components/lesson/AnswerComposer";
 import AttemptHistory from "@/components/lesson/AttemptHistory";
@@ -560,16 +561,21 @@ export default function LessonPanel({
             feedback={
               result && (
                 <PracticeSurface label={practiceLabel}>
-                  <FeedbackCard
+                  <FeedbackCardNext
                     result={result}
                     isCheck={isCheck}
                     checkOutcome={checkOutcome}
                     closed={closed}
                     checkedAnswer={checked?.answer}
-                    adaptation={adaptation}
                     openGaps={openGaps}
                     warmUpInserted={warmUpInserted}
-                    canRequestWarmUp={canRequestWarmUp}
+                    // ONE gate for the whole table. The assessment path uses the
+                    // panel's own flag; on a check that flag is false by
+                    // construction while a warm-up is still deliberately reachable
+                    // while something is unresolved, so the union is what
+                    // `feedbackActions` needs to obey "never offer what would be
+                    // declined" without knowing which path it is on.
+                    warmUpAvailable={canRequestWarmUp || (isCheck && !warmUpInserted)}
                     canAnswerAgain={canAnswerAgain}
                     loading={loading}
                     verifying={verifying}
