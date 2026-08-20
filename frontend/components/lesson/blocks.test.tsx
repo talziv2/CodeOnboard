@@ -5,7 +5,6 @@ import type { Attempt, NodeGap, RespondResult } from "@/lib/api";
 import { node } from "@/test/factories";
 import AnswerComposer from "@/components/lesson/AnswerComposer";
 import AttemptHistory from "@/components/lesson/AttemptHistory";
-import FeedbackCard from "@/components/lesson/FeedbackCard";
 import GapList from "@/components/lesson/GapList";
 import LessonBrief from "@/components/lesson/LessonBrief";
 import RevealBlock from "@/components/lesson/RevealBlock";
@@ -174,86 +173,12 @@ describe("the composers", () => {
   });
 });
 
-describe("the feedback card", () => {
-  const base = {
-    isCheck: false,
-    checkOutcome: { label: "", color: "" },
-    closed: [],
-    checkedAnswer: undefined,
-    adaptation: undefined,
-    openGaps: [],
-    warmUpInserted: false,
-    canRequestWarmUp: false,
-    canAnswerAgain: false,
-    loading: false,
-    verifying: false,
-    error: null,
-    verdictRef: { current: null },
-    onAdvanceStop: vi.fn(),
-    onCheckUnderstanding: vi.fn(),
-    onBuildWarmUp: vi.fn(),
-    onAnswerAgain: vi.fn(),
-    onStartWarmUp: vi.fn(),
-  };
-
-  test("a correct answer offers moving on", () => {
-    const result = { classification: "understood", rationale: "That's it." } as RespondResult;
-    render(<FeedbackCard {...base} result={result} />);
-
-    expect(screen.getByText(t.lesson.verdict.understood)).toBeTruthy();
-    expect(screen.getByText("That's it.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: t.lesson.nextStop })).toBeTruthy();
-  });
-
-  test("a check reports what closed, and never as a re-grade", () => {
-    const result = { classification: null, rationale: "Cleared." } as unknown as RespondResult;
-    render(
-      <FeedbackCard
-        {...base}
-        result={result}
-        isCheck
-        checkOutcome={{ label: t.lesson.checkCleared, color: "var(--color-jade)" }}
-        closed={[{ id: "g1", kind: "wrong_model", claim: "The closed one.", blocking: true }]}
-        checkedAnswer="What the learner wrote."
-      />
-    );
-
-    expect(screen.getByText(t.lesson.checkCleared)).toBeTruthy();
-    expect(screen.getByText("The closed one.")).toBeTruthy();
-    // The learner's own words survive, because a verification answer is kept out
-    // of "Your answers" and would otherwise be nowhere.
-    expect(screen.getByText("What the learner wrote.")).toBeTruthy();
-    // With nothing left open, the primary is moving on — not a warm-up, which is
-    // what a null classification used to fall through to.
-    expect(screen.getByRole("button", { name: t.lesson.nextStop })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: t.lesson.buildWarmUp })).toBeNull();
-  });
-
-  test("with a gap open, the second chance is a new question and not Try again", () => {
-    const result = { classification: "partial", rationale: "Partly." } as RespondResult;
-    render(
-      <FeedbackCard
-        {...base}
-        result={result}
-        canAnswerAgain
-        openGaps={[{ id: "g1", kind: "wrong_model", claim: "Still open.", blocking: true }]}
-      />
-    );
-
-    expect(screen.getByRole("button", { name: t.lesson.verifyCta })).toBeTruthy();
-    // §18.7: re-asking the question whose answer the reveal just gave away proves
-    // only that the page was read.
-    expect(screen.queryByRole("button", { name: t.lesson.tryAgain })).toBeNull();
-  });
-
-  test("with nothing open, Try again is the second chance", () => {
-    const result = { classification: "partial", rationale: "Partly." } as RespondResult;
-    render(<FeedbackCard {...base} result={result} canAnswerAgain openGaps={[]} />);
-
-    expect(screen.getByRole("button", { name: t.lesson.tryAgain })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: t.lesson.verifyCta })).toBeNull();
-  });
-});
+// The legacy `FeedbackCard` had a describe block here. The component is gone (L5)
+// and so are its tests — every claim they made (the verdict word renders, the
+// rationale renders, the actions offered per verdict) is asserted against
+// `FeedbackCardNext` in `nextCanvas.test.tsx`, plus the 320-case sweep over the
+// action table that the legacy card never had. Deleting them removes duplication,
+// not coverage.
 
 describe("the brief when it is pinned", () => {
   const RICH = node("n1", {

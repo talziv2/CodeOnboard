@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, test } from "vitest";
-import { isPhaseDriven, lessonUi, type LessonUi } from "@/lib/flags";
+import { isSplitSurfaces, lessonUi, type LessonUi } from "@/lib/flags";
 
 /**
- * The flag has three values because the decision it gates has been revised once.
+ * Two values now, and the default is the redesign.
  *
- * `next` is not a fallback for `surfaces`; it is what `surfaces` is measured
- * against (S6, against S0's live baseline). The test that matters most is the last
- * one: an unrecognised value must not take the app down.
+ * Before L5 there were three and an unset variable meant the pre-redesign
+ * renderer, so the whole redesign was opt-in. `legacy` is deleted and the default
+ * inverted: the flag now exists to opt OUT of the split, and the test that matters
+ * most is the last one — an unrecognised value must land somewhere sane, and
+ * "somewhere sane" is only true while the default is the thing we believe is best.
  */
 
 const set = (value: string | undefined) => {
@@ -17,39 +19,41 @@ const set = (value: string | undefined) => {
 afterEach(() => set(undefined));
 
 describe("lessonUi", () => {
-  test("all three values are reachable", () => {
-    set("legacy");
-    expect(lessonUi()).toBe("legacy");
+  test("both values are reachable", () => {
+    set("surfaces");
+    expect(lessonUi()).toBe("surfaces");
     set("next");
     expect(lessonUi()).toBe("next");
-    set("surfaces");
+  });
+
+  test("unset means surfaces — the redesign is the default now", () => {
+    set(undefined);
     expect(lessonUi()).toBe("surfaces");
   });
 
-  test("unset means legacy — the shipped renderer is the default", () => {
-    set(undefined);
-    expect(lessonUi()).toBe("legacy");
+  test("`legacy` is gone, and asking for it does not resurrect it", () => {
+    // The renderer is deleted, so the old value must not silently select
+    // something else surprising. It falls back like any other unknown string.
+    set("legacy");
+    expect(lessonUi()).toBe("surfaces");
   });
 
-  test("an unknown value falls back to legacy rather than throwing", () => {
-    // A typo in an env var should not take the app down, and it must not silently
-    // land on an unproven renderer either.
+  test("an unknown value falls back to the default rather than throwing", () => {
     for (const junk of ["Next", "SURFACES", "surface", "true", "1", ""]) {
       set(junk);
-      expect(lessonUi(), junk).toBe("legacy");
+      expect(lessonUi(), junk).toBe("surfaces");
     }
   });
 });
 
-describe("isPhaseDriven", () => {
-  test("both new arrangements read from the phase model; legacy does not", () => {
-    expect(isPhaseDriven("next")).toBe(true);
-    expect(isPhaseDriven("surfaces")).toBe(true);
-    expect(isPhaseDriven("legacy")).toBe(false);
+describe("isSplitSurfaces", () => {
+  test("only `surfaces` draws one surface at a time", () => {
+    expect(isSplitSurfaces("surfaces")).toBe(true);
+    expect(isSplitSurfaces("next")).toBe(false);
   });
 
-  test("it is total over the type, so a fourth value cannot be forgotten", () => {
-    const all: LessonUi[] = ["legacy", "next", "surfaces"];
-    for (const ui of all) expect(typeof isPhaseDriven(ui)).toBe("boolean");
+  test("it is total over the type", () => {
+    const all: LessonUi[] = ["next", "surfaces"];
+    for (const ui of all) expect(typeof isSplitSurfaces(ui)).toBe("boolean");
   });
 });
