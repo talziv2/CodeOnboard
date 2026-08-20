@@ -306,12 +306,32 @@ export const t = {
     familiarityLabel: "Starting point",
     depthLabel: "Depth",
     backgroundLabel: "You already know",
+    // The way out of a profile the learner disagrees with (P4). `Start over` in
+    // the session menu re-runs the pipeline with the SAME answers, which is the one
+    // thing someone who dislikes their profile does not want.
+    changeAnswers: "Change",
+    changeAnswersHint: "Answer the questions again for this repository",
     routeLabel: "Your route",
     routeCount: (stops: number, areas: number) =>
       areas > 0
         ? `${stops} stops across ${areas} ${areas === 1 ? "chapter" : "chapters"}`
         : `${stops} ${stops === 1 ? "stop" : "stops"}`,
+    // Per chapter, in the route overview (P4).
+    routeStops: (n: number) => (n === 1 ? "1 stop" : `${n} stops`),
+    // A pre-B3 graph has no chapters, so `splitJourney` returns one unnamed
+    // section. It still has a route; it just has nothing to call the parts.
+    routeUngrouped: "The route",
+    // Said on the briefing because the counts above exclude them, and a learner who
+    // later finds extra stops in the rail should have been told they existed.
+    routeOptional: (n: number) =>
+      n === 1
+        ? "1 more stop is optional — off the default walk, still reachable"
+        : `${n} more stops are optional — off the default walk, still reachable`,
     begin: "Start learning",
+    // The primary names where it goes (P4). "Start learning" labels a door; this
+    // labels the room behind it, which is the difference between being asked to
+    // commit and being told what to.
+    beginNamed: (title: string) => `Start: ${title}`,
     // The interview answers are fixed strings and fixed keys; these are the
     // short forms that fit on a card. An unrecognised value falls back to
     // itself, so a new option shows up as its own wording rather than blank.

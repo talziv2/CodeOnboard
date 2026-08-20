@@ -7,6 +7,11 @@ interface Props {
   /** Stops on the promised walk, and how many chapters they fall into. */
   stops: number;
   areas: number;
+  /**
+   * Start again with different answers (P4). Optional, so the card still renders
+   * anywhere that has nowhere to send them.
+   */
+  onChangeAnswers?: () => void;
 }
 
 /**
@@ -23,7 +28,7 @@ interface Props {
  * chasing) are shown when present: they are the most specific thing in the
  * profile, and only one goal_type ever fills each of them.
  */
-export default function ProfileCard({ goal, stops, areas }: Props) {
+export default function ProfileCard({ goal, stops, areas, onChangeAnswers }: Props) {
   const familiarity =
     t.welcome.familiarity[goal.familiarity] ?? goal.familiarity ?? null;
   const goalType = t.welcome.goalType[goal.goal_type] ?? goal.goal_type ?? null;
@@ -52,9 +57,25 @@ export default function ProfileCard({ goal, stops, areas }: Props) {
   return (
     <aside className="flex flex-col gap-4 rounded-card border border-rule bg-slab p-5 shadow-card">
       <div className="flex flex-col gap-1">
-        <span className="font-mono text-micro uppercase tracking-[0.16em] text-signal">
-          {t.welcome.profileLabel}
-        </span>
+        <div className="flex items-baseline gap-2">
+          <span className="font-mono text-micro uppercase tracking-[0.16em] text-signal">
+            {t.welcome.profileLabel}
+          </span>
+          {/* Every lesson is pitched against this card, so the learner has to be
+              able to disagree with it. Without this the only ways out were the
+              browser's back button and `Start over`, which re-runs the pipeline
+              with the SAME answers — the one thing someone who dislikes their
+              profile does not want. */}
+          {onChangeAnswers && (
+            <button
+              onClick={onChangeAnswers}
+              title={t.welcome.changeAnswersHint}
+              className="ms-auto shrink-0 font-mono text-micro text-graphite transition hover:text-signal"
+            >
+              {t.welcome.changeAnswers}
+            </button>
+          )}
+        </div>
         <p className="text-meta text-graphite">
           {t.welcome.profileNote}
         </p>

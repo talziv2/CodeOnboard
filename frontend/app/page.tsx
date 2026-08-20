@@ -36,6 +36,17 @@ export default function Home() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("repo");
   const [repoUrl, setRepoUrl] = useState("");
+  // Arriving from the briefing's "change your answers" (P4): the repository is
+  // already known, so it is carried in the URL and the learner starts at the
+  // question they wanted to change rather than at the address bar.
+  //
+  // Prefill only. It does NOT auto-submit: a learner who followed that link may
+  // have wanted a different repository too, and skipping the step they are looking
+  // at would take the decision away from them.
+  useEffect(() => {
+    const carried = new URLSearchParams(window.location.search).get("repo");
+    if (carried) setRepoUrl(carried);
+  }, []);
   const [recent, setRecent] = useState<string[]>([]);
   // Invented per run and sent with /session/start, so the progress screen can
   // poll what that call is doing while it blocks.

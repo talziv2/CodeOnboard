@@ -654,7 +654,29 @@ Why this order:
 
 ---
 
-### P4 — Briefing and the route→rail transition 🔴
+### P4 — Briefing and the route→rail transition 🔴 ✅
+- **Shipped.** `RouteOverview` renders the route at chapter granularity from the
+  SAME `splitJourney` the rail uses — one source, two views, so the two cannot
+  disagree about which chapter a stop belongs to once `prune_ahead` and the scope
+  control start moving units. The primary names the first lesson
+  (`Start: <title>`) rather than saying "Start learning". `Change` on the profile
+  card starts a NEW interview for the same repository, which is what "restart with
+  different answers" means — the session menu's `Start over` re-runs the pipeline
+  with the same answers, the one thing a learner who dislikes their profile does not
+  want. The repo rides in `?repo=` and the landing prefills without auto-submitting.
+- **The shared-element transition is NOT built, deliberately.** The milestone says
+  it "will look cheap if it is even slightly wrong", and doing it properly across a
+  route change needs the View Transitions API to hold both DOMs at once. What ships
+  is a directional exit (the page leaves toward the leading edge, where the rail is
+  about to be) plus the continuity that actually mattered: the rail arrives with the
+  chapter containing the first stop already expanded, because `RouteRail` opens
+  `section.containsCurrent` by default. So the chapter just read about is the
+  chapter landed in, whether or not anything moved. Reduced motion navigates at
+  once. Recorded as deferred with a reason rather than approximated.
+- **Verified live** on a 16-stop, 6-chapter session: the route lists every chapter
+  with the planner's own `why` and a per-chapter count, the primary reads
+  `Start: Explain the Session–adapter relationship and mounting`, and the exit
+  applies `opacity: 0; translateX(-2rem)` over `--motion-state`.
 - **Goal.** Confirm understanding, show the route, and enter the workspace continuously.
 - **Files.** `app/session/[id]/welcome/page.tsx`, `ProfileCard.tsx`, new `components/RouteOverview.tsx`
 - **Behaviour.** The briefing shows the route at chapter granularity using the same `RouteItem` primitive as the rail. Primary action names the first lesson. `✎` on the profile leads to restart-with-different-answers. On `Start`, the chapter list animates into the rail position.
@@ -867,7 +889,7 @@ L4  phase rendering + feedback 🔴🔴   ✅ 3411ec0  §3a answered
     S1..S6 two-surface model            ✅  merged to master as ec00d54
 L5  panels + remove legacy             ✅  7adf9ec  legacy deleted, -594 lines
 P3  generation                🔴    ✅  goal continuity + files-read list + long-wait copy
-P4  briefing + route→rail     🔴
+P4  briefing + route→rail     🔴    ✅  route overview + named primary + Change
 A1  adaptation visible              (no backend change — see §9 Q2)
 X1  motion + polish
 
