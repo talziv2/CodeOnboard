@@ -12,7 +12,7 @@ import { lessonBlocks, openCount, type ViewInput } from "@/lib/lessonView";
 
 const base: ViewInput = {
   phase: "STUDY",
-  multiAnchor: true,
+  locationCount: 3,
   openGapCount: 2,
   attemptCount: 3,
   revealed: true,
@@ -96,8 +96,21 @@ describe("the count §3a was about", () => {
 });
 
 describe("blocks that have nothing to show are absent, not empty", () => {
-  test("no anchors beyond the display one means no trace path", () => {
-    expect(lessonBlocks({ ...base, multiAnchor: false }).tracePath).toBe("absent");
+  test("a unit with no file at all has no code-locations block", () => {
+    expect(lessonBlocks({ ...base, locationCount: 0 }).tracePath).toBe("absent");
+  });
+
+  test("ONE location still shows — absent used to swallow almost every unit", () => {
+    // The old rule was `!multiAnchor ? "absent"`, so the block appeared only on
+    // multi-anchor units. Most units have one anchor, or none and only the display
+    // projection, so in practice "where does this live in the code" never rendered.
+    expect(lessonBlocks({ ...base, locationCount: 1 }).tracePath).toBe("collapsed");
+  });
+
+  test("a disclosure in every phase, because open would cost the block budget", () => {
+    for (const phase of ["STUDY", "FEEDBACK", "VERIFY", "RESOLVED"] as const) {
+      expect(lessonBlocks({ ...base, locationCount: 2, phase }).tracePath).toBe("collapsed");
+    }
   });
 
   test("no gaps means no gap block, in any phase", () => {

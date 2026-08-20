@@ -403,6 +403,22 @@ export default function LessonPanel({
       : t.lesson.checkUnderstanding;
 
   const anchors: Anchor[] = node.anchors ?? [];
+  /**
+   * Where this unit lives in the code — always at least one row where the unit
+   * has a file at all.
+   *
+   * `anchors` is the semantic truth and can be EMPTY: on graphs planned before
+   * anchors existed, and wherever the planner emitted none, the only thing left is
+   * the display projection on the node. That projection is by construction one of
+   * the anchors when there are any (CLAUDE.md), so falling back to it adds no new
+   * claim — it just stops the list disappearing on the units that need it most.
+   */
+  const locations: Anchor[] =
+    anchors.length > 0
+      ? anchors
+      : node.file
+        ? [{ file: node.file, line_start: node.line_start, line_end: node.line_end } as Anchor]
+        : [];
   const adaptation = result?.adaptation;
   // A hint, a follow-up or a corrected lesson is an invitation to answer again
   // — the node is still ahead of them, not behind them.
@@ -486,7 +502,7 @@ export default function LessonPanel({
   const rewritten = drawing === "lesson" && materialIsNew(attempts);
   const blocks = lessonBlocks({
     phase,
-    multiAnchor: anchors.length > 1,
+    locationCount: locations.length,
     openGapCount: openGaps.length,
     attemptCount: attempts.length,
     revealed,
@@ -632,8 +648,10 @@ export default function LessonPanel({
             labels={{
               setup: isSplit ? t.lesson.setup : t.lesson.walkthrough,
               setupMirror: t.lesson.setupMirror,
-              tracePath: t.lesson.tracePath,
-              tracePathCount: anchors.length,
+              tracePath:
+                locations.length > 1 ? t.lesson.tracePath : t.lesson.codeLocation,
+              // A count on "Where this lives in the code" would always read "(1)".
+              tracePathCount: locations.length > 1 ? locations.length : undefined,
               gaps: t.lesson.gapsHeading,
               gapsCount: openGaps.length,
               attempts: t.lesson.yourAnswers(attempts.length),
@@ -662,7 +680,7 @@ export default function LessonPanel({
                 />
               </div>
             }
-            tracePath={<TracePath anchors={anchors} onFileClick={onFileClick} />}
+            tracePath={<TracePath anchors={locations} onFileClick={onFileClick} />}
             gaps={
               <div id="lesson-gaps">
                 <GapList gaps={openGaps} onWaive={onWaive} disabled={loading} />

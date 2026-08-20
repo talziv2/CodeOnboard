@@ -24,6 +24,12 @@ interface Props {
    * would be taking 268px from a lesson already close to its floor.
    */
   compact?: boolean;
+  /**
+   * Give the track back. Lives here rather than in the session bar because it is
+   * a control for this column — the bar keeps only the way back in, since once
+   * the rail is hidden there is no rail to hold a button.
+   */
+  onHide?: () => void;
 }
 
 /**
@@ -278,6 +284,7 @@ function SectionHead({
 export default function RouteRail({
   sections, optional, currentNodeId, openSectionId, onJump, onOpenSection, onExpand,
   compact = false,
+  onHide,
 }: Props) {
   const [showOptional, setShowOptional] = useState(false);
   // Only the sections the learner has actually toggled. Everything else follows
@@ -298,6 +305,22 @@ export default function RouteRail({
     if (isSettled(stop.node) || section.status === "past") return "done";
     return "ahead";
   };
+
+  /**
+   * `«` rather than the words: the header already carries "Your route" and "Open
+   * map", and a third label at 312px pushes the row to two lines. The accessible
+   * name and the tooltip both say it in full.
+   */
+  const hideControl = onHide ? (
+    <button
+      onClick={onHide}
+      aria-label={t.session.hideRail}
+      title={t.session.hideRail}
+      className="shrink-0 font-mono text-micro text-graphite transition hover:text-signal"
+    >
+      «
+    </button>
+  ) : null;
 
   if (compact) {
     /**
@@ -337,14 +360,17 @@ export default function RouteRail({
             ))}
           </div>
         ))}
-        <button
-          onClick={onExpand}
-          aria-label={t.rail.openMap}
-          title={t.rail.openMap}
-          className="mt-auto shrink-0 font-mono text-micro text-graphite transition hover:text-signal"
-        >
-          ⤢
-        </button>
+        <span className="mt-auto flex shrink-0 flex-col items-center gap-2">
+          {hideControl}
+          <button
+            onClick={onExpand}
+            aria-label={t.rail.openMap}
+            title={t.rail.openMap}
+            className="shrink-0 font-mono text-micro text-graphite transition hover:text-signal"
+          >
+            ⤢
+          </button>
+        </span>
       </aside>
     );
   }
@@ -354,16 +380,17 @@ export default function RouteRail({
       aria-label={t.rail.title}
       className="flex h-full min-h-0 flex-col gap-3 border-e border-rule bg-trench py-4"
     >
-      <div className="flex items-baseline justify-between px-4">
-        <span className="font-mono text-micro uppercase tracking-[0.16em] text-graphite">
+      <div className="flex items-baseline gap-3 px-4">
+        <span className="min-w-0 flex-1 truncate font-mono text-micro uppercase tracking-[0.16em] text-graphite">
           {t.rail.title}
         </span>
         <button
           onClick={onExpand}
-          className="font-mono text-micro text-signal transition hover:text-chalk"
+          className="shrink-0 font-mono text-micro text-signal transition hover:text-chalk"
         >
           {t.rail.openMap}
         </button>
+        {hideControl}
       </div>
 
       <nav className="min-h-0 flex-1 overflow-y-auto px-4 pb-2">

@@ -628,6 +628,8 @@ export const t = {
     takeaway: "Take away",
     ownership: "Yours to hold",
     tracePath: "This path crosses several places",
+    /** Same list, one place. "…crosses several places" would be a lie at n=1. */
+    codeLocation: "Where this lives in the code",
     anchorStep: (index: number, total: number) => `Step ${index} of ${total}`,
     yourAnswers: (count: number) => `Your answers (${count})`,
     youWrote: "You wrote",

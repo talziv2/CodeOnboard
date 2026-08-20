@@ -19,9 +19,14 @@ export default function TracePath({
   anchors: Anchor[];
   onFileClick: (file: string, lineStart?: number, lineEnd?: number) => void;
 }) {
+  // One place is not a path. The label and the step prefix both stop claiming an
+  // order that does not exist — which is what let this render for every unit
+  // instead of only the multi-anchor ones.
+  const isPath = anchors.length > 1;
+
   return (
     <div className="flex flex-col gap-2">
-      <SectionLabel>{t.lesson.tracePath}</SectionLabel>
+      <SectionLabel>{isPath ? t.lesson.tracePath : t.lesson.codeLocation}</SectionLabel>
       <ol className="flex flex-col gap-1">
         {anchors.map((a, i) => (
           <li key={`${a.file}-${a.line_start}-${i}`}>
@@ -29,9 +34,11 @@ export default function TracePath({
               onClick={() => onFileClick(a.file, a.line_start, a.line_end)}
               className="group flex w-full items-baseline gap-2.5 rounded-field px-2 py-1 text-start transition hover:bg-slab"
             >
-              <span className="font-mono text-micro uppercase tracking-[0.13em] text-graphite">
-                {t.lesson.anchorStep(i + 1, anchors.length)}
-              </span>
+              {isPath && (
+                <span className="font-mono text-micro uppercase tracking-[0.13em] text-graphite">
+                  {t.lesson.anchorStep(i + 1, anchors.length)}
+                </span>
+              )}
               <span className="min-w-0 flex-1 truncate font-mono text-micro text-signal transition group-hover:text-chalk">
                 {a.symbol ?? a.file}
               </span>

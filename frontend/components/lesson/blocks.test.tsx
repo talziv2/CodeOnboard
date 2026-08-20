@@ -78,6 +78,41 @@ describe("the reading blocks", () => {
     expect(onFileClick).toHaveBeenCalledWith("b.py", 50, 88);
   });
 
+  test("one place is not a path: no step prefix, and a label that fits", async () => {
+    // This block used to be `absent` for anything but a multi-anchor unit, so on
+    // the units most graphs are — one anchor, or none and only the display
+    // projection — "where does this live in the code" never rendered at all. It
+    // renders now, which means the multi-place wording has to stop being assumed.
+    const onFileClick = vi.fn();
+    render(
+      <TracePath
+        onFileClick={onFileClick}
+        anchors={[{ file: "adapters.py", symbol: "BaseAdapter", line_start: 128, line_end: 151 }]}
+      />
+    );
+
+    expect(screen.getByText(t.lesson.codeLocation)).toBeTruthy();
+    expect(screen.queryByText(t.lesson.tracePath)).toBeNull();
+    expect(screen.queryByText(/Step 1 of 1/)).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: /BaseAdapter/ }));
+    expect(onFileClick).toHaveBeenCalledWith("adapters.py", 128, 151);
+  });
+
+  test("several places keep the path wording", () => {
+    render(
+      <TracePath
+        onFileClick={vi.fn()}
+        anchors={[
+          { file: "a.py", symbol: "one", line_start: 1, line_end: 9 },
+          { file: "b.py", symbol: "two", line_start: 50, line_end: 88 },
+        ]}
+      />
+    );
+    expect(screen.getByText(t.lesson.tracePath)).toBeTruthy();
+    expect(screen.queryByText(t.lesson.codeLocation)).toBeNull();
+  });
+
   test("the reveal shows its two callouts only when they exist", () => {
     const { unmount } = render(<RevealBlock reveal="Because of the adapter." />);
     expect(screen.getByText("Because of the adapter.")).toBeTruthy();

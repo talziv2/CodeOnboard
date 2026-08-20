@@ -1012,6 +1012,41 @@ behavioural guards were mutation-tested — restoring the old
 `filter(s => s.node.id === currentNodeId)` and the old file caption fails exactly
 those two tests and nothing else.
 
+#### Two follow-ups from the same walk
+
+**The code-locations list was invisible on almost every unit.** `lessonView` had
+`tracePath: !multiAnchor ? "absent" : "collapsed"`, so the list of places a unit is
+anchored on appeared *only* when there were two or more anchors. Most units have one,
+or none and only the display projection — so "where does this live in the code" never
+rendered, which read as the feature having been removed. "Almost never" is not a
+disclosure decision; it is an accident of the data.
+
+The rule is now `locationCount === 0 ? "absent" : "collapsed"`, and `multiAnchor:
+boolean` became `locationCount: number` — the label needs the count anyway, so the
+boolean was discarding the number the renderer wanted. `LessonPanel` falls back to
+the node's display projection when `anchors` is empty; that projection is by
+construction one of the anchors when there are any, so the fallback adds no claim.
+One place is not a path, so at n=1 the label is "Where this lives in the code" and
+the "Step 1 of 1" prefix is dropped. Verified live in both shapes: one row reading
+`HTTPAdapter.__init__ lines 201–221`, and two reading `BaseAdapter.send` /
+`BaseAdapter.close`.
+
+It is a **disclosure, not open**. Opening it in STUDY was tried and reverted within
+the hour: it takes STUDY to five open blocks, which is exactly the crowding §3a
+exists to prevent, and seven existing tests said so — including "no phase has more
+than four blocks open at once". The older reasoning also still stands: L3 already
+puts the same location in the brief, so an open list would be the third thing on
+screen saying where the unit lives. The complaint was that it was *gone*, not that
+it was collapsed.
+
+**`Hide route` moved into the rail.** It was in the session bar beside `Show source`,
+which put a control for a column somewhere else entirely. It is now a labelled `«` in
+the rail's own header — and in the compact strip too, which has no header — while the
+bar keeps `Show route` and shows it *only while the rail is hidden*, because once the
+rail is gone there is no rail to hold the way back. Verified: hide from the rail →
+rail gone, `Show route` appears in the bar, `codeonboard:rail-hidden` = `1`; show →
+rail back, bar clean, control back in the rail.
+
 #### The chapter gap had to be fixed twice, and the first fix did nothing
 
 The first attempt put `mt-7 … first:mt-0` on the heading row. That row is **always

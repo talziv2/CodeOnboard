@@ -207,6 +207,60 @@ describe("the route scrolls rather than growing past the viewport (note 3)", () 
   });
 });
 
+describe("the hide control belongs to the rail (note 4, second pass)", () => {
+  test("the rail carries its own hide control when one is offered", () => {
+    const onHide = vi.fn();
+    const journey = splitJourney(
+      buildRoute(NODES, NODES.slice(0, -1).map((n, i) => ({ from_id: n.id, to_id: NODES[i + 1].id, kind: "sequence" }))),
+      AREAS,
+      "n2"
+    );
+    render(
+      <RouteRail
+        sections={journey.sections}
+        optional={journey.optional}
+        currentNodeId="n2"
+        onJump={vi.fn()}
+        onOpenSection={vi.fn()}
+        onExpand={vi.fn()}
+        onHide={onHide}
+      />
+    );
+    const hide = screen.getByRole("button", { name: t.session.hideRail });
+    fireEvent.click(hide);
+    expect(onHide).toHaveBeenCalled();
+  });
+
+  test("no control when the page offers no way to hide", () => {
+    // The prop is optional: a caller that cannot restore the rail must not be
+    // given a button that takes it away.
+    rail("n2");
+    expect(screen.queryByRole("button", { name: t.session.hideRail })).toBeNull();
+  });
+
+  test("the glyph is labelled, not left as decoration", () => {
+    const journey = splitJourney(
+      buildRoute(NODES, NODES.slice(0, -1).map((n, i) => ({ from_id: n.id, to_id: NODES[i + 1].id, kind: "sequence" }))),
+      AREAS,
+      "n2"
+    );
+    render(
+      <RouteRail
+        sections={journey.sections}
+        optional={journey.optional}
+        currentNodeId="n2"
+        onJump={vi.fn()}
+        onOpenSection={vi.fn()}
+        onExpand={vi.fn()}
+        onHide={vi.fn()}
+        compact
+      />
+    );
+    // Present in the compact strip too, where there is no header to put it in.
+    expect(screen.getByRole("button", { name: t.session.hideRail })).toBeTruthy();
+  });
+});
+
 describe("the heading and the chevron are two controls, not one", () => {
   test("clicking the heading opens the chapter overview without collapsing it", () => {
     const { onOpenSection } = rail("n2");

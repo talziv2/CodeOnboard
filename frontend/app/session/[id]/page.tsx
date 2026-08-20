@@ -392,6 +392,7 @@ export default function SessionPage() {
             }}
             onExpand={() => dispatchTab({ kind: "expandedMap" })}
             compact={band === "medium"}
+            onHide={toggleRail}
           />
         )}
 
@@ -437,14 +438,15 @@ export default function SessionPage() {
                   {t.session.showSource}
                 </Button>
               )}
-                {/* Give the track back, or take it (UI note 4). In the bar rather
-                    than the header for the same reason `Show source` is: this is a
-                    layout control for the column it sits above, and the header is
-                    session management. Hidden in the narrow band, where the rail has
-                    no track to give back — it is already a sheet. */}
-                {band !== "narrow" && (
+                {/* ONLY THE WAY BACK IN (UI note 4, second pass).
+                    `Hide route` moved into the rail's own header, where a control
+                    for a column belongs. `Show route` cannot live there — once the
+                    rail is hidden there is no rail to hold it — so it stays here,
+                    and only while it is the one that applies. Hidden in the narrow
+                    band, where the rail has no track to give back: it is a sheet. */}
+                {band !== "narrow" && railHidden && (
                   <Button variant="chrome" size="sm" onClick={toggleRail}>
-                    {railHidden ? t.session.showRail : t.session.hideRail}
+                    {t.session.showRail}
                   </Button>
                 )}
                 {band === "narrow" && (
