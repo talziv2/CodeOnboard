@@ -34,6 +34,7 @@ import Button from "@/components/ui/Button";
 import { isPhaseDriven, lessonUi } from "@/lib/flags";
 import { lessonPhase } from "@/lib/lessonPhase";
 import { lessonBlocks } from "@/lib/lessonView";
+import type { Surface } from "@/lib/lessonSurfaces";
 import { FAILED } from "@/lib/verdict";
 import { errorText, t } from "@/lib/strings";
 
@@ -59,11 +60,19 @@ interface Props {
   onFinish: () => void;
   /** Leave the session entirely, from the completion screen. */
   onLeave: () => void;
+  /**
+   * Which surface to render, under `surfaces` only.
+   *
+   * Owned by the session page because the TAB is owned there — R5 keeps tab
+   * selection out of anything that can see a phase, and this component is full of
+   * phase. It receives the consequence of a navigation decision, never makes one.
+   */
+  surface?: Surface | null;
 }
 
 export default function LessonPanel({
   sessionId, nodeId, node, position, total, isPrerequisite,
-  graph, onFileClick, onAdvance, onRespond, finished, onFinish, onLeave,
+  graph, onFileClick, onAdvance, onRespond, finished, onFinish, onLeave, surface,
 }: Props) {
   const router = useRouter();
   const [lesson, setLesson] = useState<Lesson | null>(null);
@@ -436,6 +445,10 @@ export default function LessonPanel({
    * either way; only the `next` path renders from it.
    */
   const ui = lessonUi();
+  // Under `surfaces` the page tells us which surface to draw; under `next` there is
+  // one column and `undefined` is what tells `LessonCanvas` to draw all of it.
+  const drawing: Surface | undefined =
+    ui === "surfaces" ? surface ?? "lesson" : undefined;
   const blocks = lessonBlocks({
     phase,
     multiAnchor: anchors.length > 1,
@@ -530,7 +543,10 @@ export default function LessonPanel({
           behaviour: `legacy` and `next` are untouched. */}
       {isPhaseDriven(ui) ? (
         <>
-          {recovered && (
+          {/* "You came back and got it" is evidence about the LEARNER, so it
+              belongs with the rest of that on Understanding. On the single canvas
+              there was nowhere else for it to be. */}
+          {recovered && drawing !== "lesson" && (
             <Callout tone="jade" label={t.lesson.recoveredLabel}>
               <p className="text-meta text-paper">
                 {t.lesson.recoveredBody}{" "}
@@ -542,8 +558,10 @@ export default function LessonPanel({
 
           <LessonCanvas
             blocks={blocks}
+            surface={drawing}
             labels={{
               setup: isSplit ? t.lesson.setup : t.lesson.walkthrough,
+              setupMirror: t.lesson.setupMirror,
               tracePath: t.lesson.tracePath,
               tracePathCount: anchors.length,
               gaps: t.lesson.gapsHeading,

@@ -18,7 +18,9 @@ import { useSourcePane } from "@/lib/source-pane";
 import { RAIL_REM, useBand, useRootFontPx, sourceMustOverlay } from "@/lib/layout-bands";
 import Button from "@/components/ui/Button";
 import { lessonUi } from "@/lib/flags";
-import { nextTab, tabsFor, type SessionTab, type TabEvent } from "@/lib/surfaceTabs";
+import {
+  nextTab, surfaceForTab, tabsFor, type SessionTab, type TabEvent,
+} from "@/lib/surfaceTabs";
 import { errorText, t } from "@/lib/strings";
 
 export default function SessionPage() {
@@ -418,6 +420,9 @@ export default function SessionPage() {
                   finished={finished}
                   onFinish={() => setFinished(true)}
                   onLeave={() => router.push("/")}
+                  // Which surface the active tab means. Null under `next`, where
+                  // there is one column and the panel draws all of it.
+                  surface={surfaceForTab(tab)}
                 />
               ) : (
                 <p className="font-mono text-aside text-graphite">{t.session.firstLesson}</p>

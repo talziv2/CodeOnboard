@@ -5,7 +5,9 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { Lesson, RespondResult, SessionGraph, VerificationPrompt } from "@/lib/api";
 import { node } from "@/test/factories";
 import SurfaceTabs from "@/components/lesson/SurfaceTabs";
-import { nextTab, tabsFor, type SessionTab, type TabEvent } from "@/lib/surfaceTabs";
+import {
+  nextTab, surfaceForTab, tabsFor, type SessionTab, type TabEvent,
+} from "@/lib/surfaceTabs";
 import { t } from "@/lib/strings";
 
 /**
@@ -131,6 +133,7 @@ function Harness({
         onPick={(picked) => dispatchTab({ kind: "picked", tab: picked })}
       />
       <Panel
+        surface={surfaceForTab(tab)}
         sessionId="s1"
         nodeId={nodeId}
         node={NODE}
@@ -168,69 +171,80 @@ beforeEach(() => {
   api.requestVerification.mockResolvedValue(PROMPT);
 });
 
+/**
+ * A note on what these can and cannot say, now that S3 has split the surfaces.
+ *
+ * The composer lives in Understanding. So "submit an answer from the Lesson tab" is
+ * no longer a thing a learner can do, and a test that did it would be testing a
+ * state the product does not have. What remains — and is the real risk — is the
+ * other direction: a transition triggered in Understanding must not throw the
+ * learner into Lesson when new material lands there.
+ */
+
+/** Go to a tab and answer, which is the only place an answer can be given. */
+async function answerFrom(user: ReturnType<typeof userEvent.setup>, tab: string) {
+  await user.click(screen.getByRole("button", { name: tab }));
+  await user.type(textareas()[0], "A wrong answer.");
+  await user.click(submit());
+  await screen.findByText(RETAUGHT.rationale!);
+}
+
 describe("R5 · phase transitions never move the tab", () => {
-  test("submitting an answer, and the verdict that follows, leave it alone", async () => {
+  test("a verdict arriving where the learner is answering leaves them there", async () => {
+    // STUDY → FEEDBACK, plus a gap opening and the stop being re-taught: three of
+    // the transitions the rule names, in one submit. The re-teach is the tempting
+    // one — new material just landed in Lesson, and nothing may go there for it.
     const user = userEvent.setup();
     render(<Harness Panel={await panel()} />);
-    await screen.findByText(LESSON.lesson.prompt);
-    expect(activeTab()).toBe("Lesson");
+    await screen.findByText(LESSON.lesson.setup!);
 
-    await user.type(textareas()[0], "A wrong answer.");
-    await user.click(submit());
-
-    // STUDY → FEEDBACK. A gap opened and the stop was re-taught, which are two more
-    // of the transitions the rule names.
-    await screen.findByText(RETAUGHT.rationale!);
-    expect(activeTab()).toBe("Lesson");
+    await answerFrom(user, "Understanding");
+    expect(activeTab()).toBe("Understanding");
   });
 
   test("generating a verification leaves it alone", async () => {
     const user = userEvent.setup();
     render(<Harness Panel={await panel()} />);
-    await screen.findByText(LESSON.lesson.prompt);
-    await user.type(textareas()[0], "A wrong answer.");
-    await user.click(submit());
-    await screen.findByText(RETAUGHT.rationale!);
+    await screen.findByText(LESSON.lesson.setup!);
+    await answerFrom(user, "Understanding");
 
     await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
     await screen.findByText(PROMPT.question);
 
     // FEEDBACK → VERIFY.
+    expect(activeTab()).toBe("Understanding");
+  });
+
+  test("reading the explanation in Lesson does not get undone by the phase", async () => {
+    // The learner answered, then deliberately went to read. FEEDBACK is still the
+    // phase, and Lesson is where they chose to be; nothing may pull them back to
+    // the verdict they have already seen.
+    const user = userEvent.setup();
+    render(<Harness Panel={await panel()} />);
+    await screen.findByText(LESSON.lesson.setup!);
+    await answerFrom(user, "Understanding");
+
+    await user.click(screen.getByRole("button", { name: "Lesson" }));
+    expect(activeTab()).toBe("Lesson");
+    // The explanation is here, and it is what they came for.
+    expect(await screen.findByText(LESSON.lesson.reveal!)).toBeTruthy();
     expect(activeTab()).toBe("Lesson");
   });
 
-  test("a verdict arriving while Understanding is attended leaves it there", async () => {
-    // The other direction, which matters just as much: the learner deliberately
-    // chose Understanding, and the phase must not send them back to Lesson.
+  test("going back and forth changes the tab only when clicked", async () => {
     const user = userEvent.setup();
     render(<Harness Panel={await panel()} />);
-    await screen.findByText(LESSON.lesson.prompt);
-    await user.click(screen.getByRole("button", { name: "Understanding" }));
-    expect(activeTab()).toBe("Understanding");
+    await screen.findByText(LESSON.lesson.setup!);
+    await answerFrom(user, "Understanding");
 
-    await user.type(textareas()[0], "A wrong answer.");
-    await user.click(submit());
-    await screen.findByText(RETAUGHT.rationale!);
-
-    expect(activeTab()).toBe("Understanding");
-  });
-
-  test("the whole sequence, from the Map tab, never moves it", async () => {
-    // The strongest version: the learner is looking at the map while a full
-    // study → feedback → verify sequence happens underneath.
-    const user = userEvent.setup();
-    render(<Harness Panel={await panel()} />);
-    await screen.findByText(LESSON.lesson.prompt);
+    await user.click(screen.getByRole("button", { name: "Lesson" }));
+    expect(activeTab()).toBe("Lesson");
     await user.click(screen.getByRole("button", { name: "Map" }));
     expect(activeTab()).toBe("Map");
-
-    await user.type(textareas()[0], "A wrong answer.");
-    await user.click(submit());
-    await screen.findByText(RETAUGHT.rationale!);
-    await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
-    await screen.findByText(PROMPT.question);
-
-    expect(activeTab()).toBe("Map");
+    await user.click(screen.getByRole("button", { name: "Understanding" }));
+    expect(activeTab()).toBe("Understanding");
+    // And the verdict survived the round trip, because the tab never owned it.
+    expect(screen.getByText(RETAUGHT.rationale!)).toBeTruthy();
   });
 });
 
@@ -238,7 +252,7 @@ describe("the learner's own moves still work", () => {
   test("picking a tab selects it", async () => {
     const user = userEvent.setup();
     render(<Harness Panel={await panel()} />);
-    await screen.findByText(LESSON.lesson.prompt);
+    await screen.findByText(LESSON.lesson.setup!);
 
     await user.click(screen.getByRole("button", { name: "Understanding" }));
     expect(activeTab()).toBe("Understanding");
@@ -252,13 +266,10 @@ describe("the learner's own moves still work", () => {
     const user = userEvent.setup();
     const Panel = await panel();
     const { rerender } = render(<Harness Panel={Panel} nodeId="n1" />);
-    await screen.findByText(LESSON.lesson.prompt);
+    await screen.findByText(LESSON.lesson.setup!);
     await user.click(screen.getByRole("button", { name: "Understanding" }));
     expect(activeTab()).toBe("Understanding");
 
-    // The page dispatches `arrivedAtStop` from its jump/advance handlers; here the
-    // harness stands in for that by re-rendering with a new id and dispatching the
-    // same event, which is the contract those handlers have to honour.
     rerender(<Harness Panel={Panel} nodeId="n2" />);
     await waitFor(() => expect(activeTab()).toBe("Lesson"));
   });
