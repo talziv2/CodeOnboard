@@ -256,7 +256,15 @@ function PatternCard({
             explanation surface: one unit, one place its story is told. */}
         {pattern.evidence.map((ref, i) => (
           <button
-            key={`${ref.node_id}-${ref.attempt_index}`}
+            // The index is load-bearing, not decoration. `node_id` +
+            // `attempt_index` is NOT unique: a pattern groups by kind, and one
+            // answer can contain two gaps of the same kind on the same unit, so
+            // the backend legitimately sends two refs with both fields equal.
+            // Both chips did still render — React warned rather than dropping one
+            // — but duplicate keys are documented as unsupported ("may cause
+            // children to be duplicated and/or omitted"), so this was a guarantee
+            // we were relying on without holding it, not a symptom to wait for.
+            key={`${ref.node_id}-${ref.attempt_index}-${i}`}
             onClick={() => onOpen(ref.node_id)}
             // A bare "1" is the whole accessible name otherwise — a screen
             // reader hears "button 1, button 2" with no idea what opens (AC10).

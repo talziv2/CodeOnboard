@@ -1012,6 +1012,24 @@ behavioural guards were mutation-tested — restoring the old
 `filter(s => s.node.id === currentNodeId)` and the old file caption fails exactly
 those two tests and nothing else.
 
+#### One defect found in passing
+
+Not one of the seven, and found in the live console rather than by reading code:
+`MapView`'s pattern-evidence chips were keyed `${node_id}-${attempt_index}`, which
+is **not unique**. A pattern groups by kind, and a single answer can contain two
+gaps of the same kind on the same unit, so the backend legitimately sends two refs
+with both fields equal — and React logged a duplicate-key error on every render of
+the Map tab.
+
+Both chips did still render; React warned rather than dropping one, verified by
+putting the duplicate key back and watching only the warning test fail. So the
+defect is relying on a guarantee we did not hold — duplicate keys are documented as
+unsupported, "may cause children to be duplicated and/or omitted" — rather than a
+symptom already visible. Had a chip been dropped, the row would read "2 answers
+behind this" above one openable chip: the learner told there is evidence they cannot
+reach. Fixed by including the index, which is unique by construction, and covered by
+`components/MapView.test.tsx`.
+
 #### Two instrument traps, recorded so they are not paid for a third time
 
 - **A frozen CSS transition reads as the wrong colour.** Note 6 measured as *not
