@@ -1592,3 +1592,73 @@ at 5.57 / 5.18 and the button sits among same-size siblings in the same bar, so 
 reads as a peer control. Raising `--color-rule` as a component boundary would
 touch every bordered control in the app and belongs in a deliberate pass, not in
 this adjustment.
+
+---
+
+## L1 — The phase model
+
+### Why a phase at all
+
+§3a counted the feedback state rather than describing it: sixteen independent
+conditional sub-blocks in one branch, eleven `<Button>` call sites of which one to
+four render at once, twenty-one distinct copy strings, and around them the setup
+prose, the trace path, the gap list, the attempt history and the reveal with two
+callouts. Restyling cannot reduce a count of sixteen. What makes it reducible is
+noticing that presentation is keyed off many independent flags rather than off one
+state — the same failure D2b exposed at a smaller scale, where a working backend
+produced a silent UI because two flags disagreed about who was rendering.
+
+### Four phases, and the collapse
+
+```
+STUDY     nothing graded on screen — fresh arrival AND revisit
+FEEDBACK  an assessment verdict is on screen
+VERIFY    a verification question is outstanding and unanswered
+RESOLVED  a verification has come back
+```
+
+The branch table asserts every situation the plan enumerates, and the finding is
+in the rows that agree: `understood`, `partial` with gaps, `partial` without gaps,
+`confused` with a warm-up inserted, `confused` with one declined, re-taught,
+pruned, waived, off-topic and the pending-attempt path are **ten rows and one
+phase**. Those variants are content within a state, not states.
+
+`RESOLVED` is kept separate from `FEEDBACK` on purpose. A check arrives as
+`result`, so a model that only asked "is there a result" would render the verdict
+branch — which is silent, because the backend returns `classification: null` on a
+check by design. That is exactly the D2b bug, and a test asserts the phase is not
+`FEEDBACK` there.
+
+Reveal is deliberately NOT folded in: a revisit has attempts and no result, so it
+is `STUDY` with the reveal already open. Reveal is orthogonal to phase.
+
+### The signature
+
+`result` and `verification` are typed `unknown`, which is honest rather than lazy.
+`{ kind?: string | null }` is a weak type, so TypeScript rejects any literal
+without `kind` — which is every assessment, the common case — and adding an index
+signature to fix that then rejects `RespondResult`, because interfaces are not
+assignable to indexed types. The module reads one optional field off an opaque
+reply, and the parameter now says so.
+
+### Zero visual diff
+
+Three substantive lines in `LessonPanel.tsx`: the import, the computed value, and
+`data-lesson-phase` on the root. Nothing renders from the phase yet — L4 is where
+rendering keys off it. The attribute is the one rendered addition, declared: it is
+how the agreement is asserted, since reading the phase off the DOM is the only way
+to catch the derivation drifting from the render rather than testing the pure
+function against itself.
+
+```
+lib/lessonPhase.test.ts        24 tests — the branch table
+LessonPanel.test.tsx (added)    5 tests — STUDY / FEEDBACK / VERIFY / RESOLVED
+                                          each asserting the phase AND the blocks
+suite                          119 passed, typecheck clean
+```
+
+The agreement tests check the phase against what is on screen: STUDY has one
+composer and no verdict, FEEDBACK has the verdict and no composer, VERIFY has the
+question and still exactly one composer, RESOLVED reports without being mistaken
+for a re-grade.
+

@@ -21,6 +21,7 @@ import ConceptTag from "@/components/ui/ConceptTag";
 import PracticeSurface from "@/components/ui/PracticeSurface";
 import SectionLabel from "@/components/ui/SectionLabel";
 import Button from "@/components/ui/Button";
+import { lessonPhase } from "@/lib/lessonPhase";
 import { errorText, t } from "@/lib/strings";
 
 interface Props {
@@ -455,8 +456,22 @@ export default function LessonPanel({
     attempts.some((a) => FAILED.includes(a.classification)) &&
     latest?.classification === "understood";
 
+  /**
+   * What this lesson is doing, as one value — see `lib/lessonPhase.ts`.
+   *
+   * Nothing renders from it yet, deliberately: L1 introduces the concept with no
+   * behaviour attached so the branch table can be checked against the UI that
+   * already exists, before L4 starts keying rendering off it. The sixteen
+   * conditionals below are untouched.
+   */
+  const phase = lessonPhase({ result, verification });
+
   return (
-    <div className="flex flex-col gap-6">
+    // The one thing L1 renders: an invisible attribute, so a test can assert that
+    // the derived phase agrees with the blocks actually on screen rather than
+    // re-testing the pure function against itself. Zero visual diff, and it stays
+    // useful as the hook L3 and L4's tests key off.
+    <div className="flex flex-col gap-6" data-lesson-phase={phase}>
       <div className="flex flex-col gap-2">
         <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
           {isPrerequisite ? t.lesson.warmUpHeading : t.lesson.stopOf(position, total)}

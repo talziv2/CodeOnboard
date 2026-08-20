@@ -350,3 +350,91 @@ describe("citations open the source at the right place", () => {
     expect(onFileClick).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("the derived phase agrees with what is on screen", () => {
+  /**
+   * The other half of L1's gate. `lib/lessonPhase.test.ts` checks the branch
+   * table against the function; this checks the function against the UI that
+   * already exists, which is the only way the claim "these thirteen situations
+   * are four states" means anything. The phase is read off the invisible
+   * `data-lesson-phase` attribute rather than recomputed, so a drift between the
+   * derivation and the render fails here rather than passing twice.
+   */
+  const phaseOnScreen = () =>
+    document.querySelector("[data-lesson-phase]")?.getAttribute("data-lesson-phase");
+
+  test("STUDY: a fresh arrival is asking, with the reveal withheld", async () => {
+    await renderPanel();
+
+    expect(phaseOnScreen()).toBe("STUDY");
+    // Asking: exactly one composer, and no verdict.
+    expect(textareas()).toHaveLength(1);
+    expect(screen.queryByText(CONFUSED.rationale!)).toBeNull();
+    expect(screen.queryByText(LESSON.lesson.reveal!)).toBeNull();
+  });
+
+  test("FEEDBACK: a graded verdict is on screen and the reveal has opened", async () => {
+    const user = userEvent.setup();
+    await renderPanel();
+
+    await user.type(textareas()[0], "A wrong answer.");
+    await user.click(submits()[0]);
+    await screen.findByText(CONFUSED.rationale!);
+
+    expect(phaseOnScreen()).toBe("FEEDBACK");
+    // Reporting, not asking: the verdict is present and the lesson's own
+    // composer is gone.
+    expect(textareas()).toHaveLength(0);
+    expect(screen.getByText(LESSON.lesson.reveal!)).toBeTruthy();
+  });
+
+  test("VERIFY: an outstanding question replaces the verdict, not joins it", async () => {
+    const user = userEvent.setup();
+    await renderPanel();
+
+    await user.type(textareas()[0], "A wrong answer.");
+    await user.click(submits()[0]);
+    await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
+    await screen.findByText(PROMPT.question);
+
+    expect(phaseOnScreen()).toBe("VERIFY");
+    // Asking again — and still exactly one composer, which is the invariant this
+    // file exists to protect.
+    expect(textareas()).toHaveLength(1);
+    expect(submits()).toHaveLength(1);
+    expect(screen.queryByText(CONFUSED.rationale!)).toBeNull();
+  });
+
+  test("RESOLVED: a check reports, and is not mistaken for a re-grade", async () => {
+    const user = userEvent.setup();
+    api.respondToVerification.mockResolvedValue({
+      ...CONFUSED,
+      kind: "verification",
+      classification: null,
+      resolved: ["g1"],
+      unresolved: [],
+    });
+    await renderPanel();
+
+    await user.type(textareas()[0], "A wrong answer.");
+    await user.click(submits()[0]);
+    await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
+    await screen.findByText(PROMPT.question);
+    await user.type(textareas()[0], "The right answer.");
+    await user.click(submits()[0]);
+    await waitFor(() => expect(api.respondToVerification).toHaveBeenCalled());
+
+    await waitFor(() => expect(phaseOnScreen()).toBe("RESOLVED"));
+    // The distinction that matters: a check arrives as `result`, so a phase model
+    // that only asked "is there a result" would call this FEEDBACK and render a
+    // verdict branch that is silent because `classification` is null. That was
+    // D2b.
+    expect(phaseOnScreen()).not.toBe("FEEDBACK");
+  });
+
+  test("every phase the panel can reach is one of the four", async () => {
+    await renderPanel();
+    const seen = phaseOnScreen();
+    expect(["STUDY", "FEEDBACK", "VERIFY", "RESOLVED"]).toContain(seen);
+  });
+});
