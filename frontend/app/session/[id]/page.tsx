@@ -9,6 +9,7 @@ import SectionOverview from "@/components/SectionOverview";
 import LessonPanel from "@/components/LessonPanel";
 import CodeViewer from "@/components/CodeViewer";
 import SessionHeader from "@/components/SessionHeader";
+import SurfaceTabs from "@/components/lesson/SurfaceTabs";
 import { getSession, jump, sessionStart, setScope } from "@/lib/api";
 import type { GraphNode, SessionGraph } from "@/lib/api";
 import { buildRoute, spineLength } from "@/lib/graph-layout";
@@ -16,6 +17,8 @@ import { currentSection, splitJourney } from "@/lib/route-sections";
 import { useSourcePane } from "@/lib/source-pane";
 import { RAIL_REM, useBand, useRootFontPx, sourceMustOverlay } from "@/lib/layout-bands";
 import Button from "@/components/ui/Button";
+import { lessonUi } from "@/lib/flags";
+import { nextTab, tabsFor, type SessionTab, type TabEvent } from "@/lib/surfaceTabs";
 import { errorText, t } from "@/lib/strings";
 
 export default function SessionPage() {
@@ -48,7 +51,32 @@ export default function SessionPage() {
   const sourceOverlay = sourceMustOverlay(band, viewportWidth, source.dockWidth, rootFontPx);
   // The rail has no track of its own in the narrow band; it opens over the page.
   const [railOpen, setRailOpen] = useState(false);
-  const [tab, setTab] = useState<"lesson" | "map">("lesson");
+  // ── the tab, and the ONE way it moves (R5) ──────────────────────────────────
+  //
+  // `setTab` used to be callable from anywhere, and four places called it. None of
+  // them was phase-driven, but nothing stopped a fifth from being: selecting the
+  // tab a phase implies is a one-line change that would feel helpful and is exactly
+  // the surprising navigation this design rules out.
+  //
+  // So the state moves only through `dispatchTab`, whose event type has no phase in
+  // it. Breaking R5 now requires inventing an event and naming it, which is a thing
+  // a reviewer can see.
+  // `useMemo` with no deps, and its stability is LOAD-BEARING: `tabsFor` returns a
+  // fresh array per call, so an unmemoized `tabs` would give `dispatchTab` a new
+  // identity every render, re-firing the arrival effect below and pinning the tab to
+  // Lesson forever. The flag is a build constant, so there is nothing to depend on.
+  const tabs = useMemo(() => tabsFor(lessonUi()), []);
+  const [tab, setTab] = useState<SessionTab>("lesson");
+  const dispatchTab = useCallback(
+    (event: TabEvent) => setTab((current) => nextTab(current, event, tabs)),
+    [tabs]
+  );
+  // Tabs with a change the learner has not looked at yet. S4 drives this from the
+  // adaptation signals; the plumbing is here so the bar's dot is real as soon as
+  // there is something to report. Visiting a tab clears its dot — see the effect
+  // below — because the point of the dot is "you have not seen this", and looking
+  // at it is what makes that false.
+  const [unseen, setUnseen] = useState<SessionTab[]>([]);
   // Which unit's evidence chain is open, if any. Null = closed.
   const [evidenceNodeId, setEvidenceNodeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -104,15 +132,39 @@ export default function SessionPage() {
     loadGraph();
   }, [loadGraph]);
 
+  // ARRIVAL RESETS THE TAB, and it is keyed on the current node rather than
+  // dispatched from the handlers that cause it. There are four ways to arrive —
+  // advancing, jumping from the rail or the map, being taken to a warm-up that was
+  // just spliced in, and resuming a session — and a per-handler dispatch would have
+  // to remember all four. This cannot forget one.
+  //
+  // Not a phase transition: `currentNodeId` changes because the learner navigated.
+  // Landing on a new stop showing the previous stop's Understanding, its verdict and
+  // gaps gone, would be showing them an empty room.
+  // Reads the graph state directly: `currentNodeId` is derived below the loading
+  // guards, and a hook cannot sit after an early return.
+  const arrivedAt = graph?.current_node_id;
+  useEffect(() => {
+    if (!arrivedAt) return;
+    dispatchTab({ kind: "arrivedAtStop" });
+  }, [arrivedAt, dispatchTab]);
+
+  // Looking at a tab is what makes "you have not seen this" false, so visiting
+  // clears its dot. Never on a timer: a dot that expires unseen is a change the
+  // learner was told about and then untold.
+  useEffect(() => {
+    setUnseen((current) => (current.includes(tab) ? current.filter((x) => x !== tab) : current));
+  }, [tab]);
+
   // Esc returns from the map to the lesson.
   useEffect(() => {
     if (tab !== "map") return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setTab("lesson");
+      if (e.key === "Escape") dispatchTab({ kind: "dismissedMap" });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [tab]);
+  }, [tab, dispatchTab]);
 
   const stops = useMemo(
     () => (graph ? buildRoute(graph.nodes, graph.edges) : []),
@@ -162,7 +214,6 @@ export default function SessionPage() {
   // including from the section overview, which is what makes its lesson list a
   // way in rather than a table of contents.
   const handleJump = async (node: GraphNode) => {
-    setTab("lesson");
     setOverviewAreaId(null);
     setViewingFile(null);
     setViewingRange(null);
@@ -258,7 +309,7 @@ export default function SessionPage() {
           gridTemplateColumns: [
             band === "narrow" ? null : `${RAIL_REM[band]}rem`,
             "minmax(0,1fr)",
-            tab === "lesson" && showCode && openFile && source.mode === "dock" && !sourceOverlay
+            tab !== "map" && showCode && openFile && source.mode === "dock" && !sourceOverlay
               ? "var(--source-width)"
               : null,
           ]
@@ -274,36 +325,24 @@ export default function SessionPage() {
             openSectionId={overviewAreaId}
             onJump={handleJump}
             onOpenSection={(areaId) => {
-              setTab("lesson");
+              dispatchTab({ kind: "openedSection" });
               setOverviewAreaId(areaId);
             }}
-            onExpand={() => setTab("map")}
+            onExpand={() => dispatchTab({ kind: "expandedMap" })}
             compact={band === "medium"}
           />
         )}
 
         <div className="flex min-h-0 flex-col border-e border-rule">
-          <div className="flex shrink-0 items-center gap-1 border-b border-rule px-5">
-            {([
-              ["lesson", t.session.tabLesson],
-              ["map", t.session.tabMap],
-            ] as const).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                aria-current={tab === key ? "page" : undefined}
-                className={`-mb-px border-b-2 px-3 py-2.5 font-mono text-micro uppercase tracking-[0.13em] transition ${
-                  tab === key
-                    ? "border-signal text-signal"
-                    : "border-transparent text-graphite hover:text-chalk"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-            {/* The right side of the lesson bar, as one group rather than three
-                things competing for `ms-auto`. */}
-            <span className="ms-auto flex items-center gap-3">
+          <SurfaceTabs
+            tabs={tabs}
+            active={tab}
+            changed={unseen}
+            onPick={(picked) => dispatchTab({ kind: "picked", tab: picked })}
+            /* The right side of the lesson bar, as one group rather than three
+               things competing for `ms-auto`. */
+            trailing={
+              <>
               {tab === "map" && band !== "narrow" && (
                 <span className="font-mono text-micro text-graphite">
                   {t.session.mapHint(graph.nodes.length)}
@@ -325,23 +364,29 @@ export default function SessionPage() {
 
                   There is no matching Hide: the pane owns its own close, and this
                   disappears while it is open. */}
-              {tab === "lesson" && !showCode && openFile && (
+              {tab !== "map" && !showCode && openFile && (
                 <Button variant="chrome" size="sm" onClick={() => setShowCode(true)}>
                   {t.session.showSource}
                 </Button>
               )}
-              {band === "narrow" && (
-                <button
-                  onClick={() => setRailOpen(true)}
-                  className="font-mono text-micro uppercase tracking-[0.13em] text-graphite transition hover:text-signal"
-                >
-                  {t.rail.title}
-                </button>
-              )}
-            </span>
-          </div>
+                {band === "narrow" && (
+                  <button
+                    onClick={() => setRailOpen(true)}
+                    className="font-mono text-micro uppercase tracking-[0.13em] text-graphite transition hover:text-signal"
+                  >
+                    {t.rail.title}
+                  </button>
+                )}
+              </>
+            }
+          />
 
-          {tab === "lesson" ? (
+          {/* `tab !== "map"` rather than `tab === "lesson"`, because `surfaces` adds
+              a third tab that is also a lesson-column view. In S2 both Lesson and
+              Understanding render THIS column unchanged; S3 is what splits its
+              contents across the two using `surfaceBlocks`. Divergence one step at
+              a time, from an arrangement already known to work. */}
+          {tab !== "map" ? (
             <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
               {overviewSection ? (
                 <SectionOverview
@@ -406,7 +451,7 @@ export default function SessionPage() {
           )}
         </div>
 
-        {tab === "lesson" && showCode && openFile && (
+        {tab !== "map" && showCode && openFile && (
           sourceOverlay ? (
             /**
              * A sheet over the page rather than a third column. The pane keeps
@@ -473,12 +518,12 @@ export default function SessionPage() {
                 }}
                 onOpenSection={(areaId) => {
                   setRailOpen(false);
-                  setTab("lesson");
+                  dispatchTab({ kind: "openedSection" });
                   setOverviewAreaId(areaId);
                 }}
                 onExpand={() => {
                   setRailOpen(false);
-                  setTab("map");
+                  dispatchTab({ kind: "expandedMap" });
                 }}
               />
             </div>

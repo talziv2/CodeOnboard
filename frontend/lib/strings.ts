@@ -222,6 +222,26 @@ export const t = {
     finishNo: "Keep going",
     tabLesson: "Lesson",
     tabMap: "Progress map",
+    /**
+     * The one bar's labels, keyed by tab.
+     *
+     * `Understanding` was chosen over `Practice`, `Questions` and `Demonstrate`.
+     * `Practice` implies drills, and a stop asks once — the answer is evidence that
+     * moves goal readiness, not a repetition. `Questions` is narrower than what the
+     * surface holds (verdicts, gaps, previous answers, what was resolved).
+     * `Understanding` matches the header's own `Demonstrated` measure and the
+     * `understanding_state` vocabulary already on the wire.
+     *
+     * `Map` rather than `Progress map` here: in a three-tab bar the qualifier is
+     * the longest word on the bar and earns nothing, and the two-tab bar keeps
+     * `tabMap` above so nothing changes for `next`.
+     */
+    tab: {
+      lesson: "Lesson",
+      understanding: "Understanding",
+      map: "Map",
+    } as Record<string, string>,
+    tabChanged: (label: string) => `${label} has changed since you last looked`,
     mapHint: (count: number) =>
       `${count} concepts · click any stop to go there · esc to return`,
     loading: "Loading session…",
