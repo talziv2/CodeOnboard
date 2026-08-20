@@ -733,7 +733,26 @@ Why this order:
 
 ---
 
-### X1 — Motion and final polish
+### X1 — Motion and final polish ✅
+- **Shipped: the reduced-motion rule stopped being a blanket.** It was
+  `transition-duration: 0.01ms` on everything — the common recipe, and too broad.
+  `prefers-reduced-motion` exists for vestibular discomfort, which comes from things
+  travelling and resizing, not from a colour settling; and zeroing every transition
+  also removed the crossfades that carry meaning here, so state changed with no
+  indication that it had. Calmer would have been fine. Abrupt is not the same thing.
+  The rule now names what goes (all animation, and every transition of a property
+  that moves or resizes) and what stays (opacity and the colour properties, capped
+  at 100ms), via `transition-property` rather than a duration override — which is
+  what makes it selective: an element transitioning `opacity, transform` keeps the
+  first and loses the second, and no duration override can express that.
+- **`scroll-behavior: auto`** is set explicitly rather than left animated: the source
+  pane scrolls when a citation is clicked, which is motion the learner asked for, so
+  it still happens — it just stops travelling.
+- **Probe.** 7 tests reading the stylesheet directly (a jsdom render cannot evaluate
+  a media query), asserting the allowlist contains no property that moves, that
+  opacity and colour survive, that the cap is ≤100ms, and that the four motion
+  duration tokens exist and are ordered by how much moves. Confirmed live that the
+  browser parses both rules.
 - **Goal.** Apply the motion language; close the loose ends.
 - **Files.** `globals.css`, most components
 - **Behaviour.** None.
@@ -916,7 +935,7 @@ L5  panels + remove legacy             ✅  7adf9ec  legacy deleted, -594 lines
 P3  generation                🔴    ✅  goal continuity + files-read list + long-wait copy
 P4  briefing + route→rail     🔴    ✅  route overview + named primary + Change
 A1  adaptation visible              ✅  session log + rail mark (sentence was L4)
-X1  motion + polish
+X1  motion + polish                 ✅  reduced-motion refined + probe
 
 optional:  B1 Grader headline (after L4)   ·   B2 progress facts (with P3)
 ```
