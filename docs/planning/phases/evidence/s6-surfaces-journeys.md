@@ -132,9 +132,15 @@ through the attribute.**
 
 ## Still open
 
-- **The warm-up's transition prose names the previous stop**, not the confusion that
-  caused the insertion. A Teaching/Mutator prompt matter, and verifying a prompt
-  change costs live model calls.
+- ~~**The warm-up's transition prose names the previous stop**~~ — **fixed.** It was
+  a wiring bug: `_previous_unit_section` handed Teaching the structural predecessor
+  under the instruction *"the unit they just finished"*, which for a warm-up is false
+  twice — the learner got stuck on the stop AFTER it, and a warm-up's position in the
+  walk is an accident of where it was spliced. `_unblocks` now reads the stop off the
+  `prerequisite` edge, and the system prompt carries the exception rather than a
+  competing rule. Verified live: *"Now that you know how to use Session safely with
+  context managers…"* became *"Understanding how prepare_auth treats any non-tuple
+  callable as a valid auth handler will unblock you to build custom auth handlers…"*
 - **`off-topic` leaves `understanding_state = not_started`** while an attempt is
   recorded, so the brief shows `1 answer` on a stop the system reports as never
   started. Documented as deliberate (`agents/grader/agent.py`): an off-topic answer
