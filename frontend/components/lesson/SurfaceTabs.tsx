@@ -1,6 +1,7 @@
 "use client";
 
 import type { SessionTab } from "@/lib/surfaceTabs";
+import { isSplitSurfaces, lessonUi } from "@/lib/flags";
 import { t } from "@/lib/strings";
 
 /**
@@ -45,13 +46,21 @@ export default function SurfaceTabs({
   /** The bar's right-hand group — the map hint, `Show source`. */
   trailing?: React.ReactNode;
 }) {
-  // The map's label depends on how many tabs there are. `Progress map` is what the
-  // two-tab bar has always said and `next` has to keep saying it — it stays live as
-  // the thing `surfaces` is measured against, so a relabel there would be a
-  // difference in the comparison that has nothing to do with the comparison. In a
-  // three-tab bar the qualifier is the longest word on the bar and earns nothing.
+  // The map's label depends on the BUILD, not on how many tabs happen to be up.
+  // `Progress map` is what the two-tab bar has always said and `next` has to keep
+  // saying it — it stays live as the thing `surfaces` is measured against, so a
+  // relabel there would be a difference in the comparison that has nothing to do
+  // with the comparison. In `surfaces` the qualifier is the longest word on the bar
+  // and earns nothing.
+  //
+  // This was `tabs.length === 2`, which meant the same thing right up until
+  // `surfaces` gained a two-tab state of its own: opening a chapter overview drops
+  // `Understanding`, and the map tab renamed itself as the learner opened and closed
+  // overviews. A control that renames itself reads as a different control, which is
+  // worse than the mild terseness the qualifier was there to fix.
+  const qualifyMap = !isSplitSurfaces(lessonUi());
   const label = (tab: SessionTab) =>
-    tab === "map" && tabs.length === 2 ? t.session.tabMap : t.session.tab[tab];
+    tab === "map" && qualifyMap ? t.session.tabMap : t.session.tab[tab];
 
   return (
     <div className="flex shrink-0 items-center gap-1 border-b border-rule px-5">

@@ -83,6 +83,41 @@ prose and the code. Three mitigations, in order of how much they cover:
    "What is mirrored, and what is not" below. The links to the code are consultable
    without a tab change; the prose is not, and costs one.
 
+### A chapter overview has no Understanding
+
+The bar is `Lesson · Map` while a section overview is open, not `Lesson ·
+Understanding · Map`.
+
+Understanding is what the learner has **shown** — a question, an answer, a verdict,
+open gaps — and every one of those belongs to a *stop*. A chapter has no question and
+nothing is demonstrated at chapter granularity, so the tab could only ever open onto
+the previous stop's evidence beside a heading about something else. The overview
+renders inside the `tab !== "map"` branch, so before this it drew under Understanding
+too: the bar offered a view that did not exist, and the screenshot that prompted this
+had the overview showing with `Understanding` marked current.
+
+Dropped rather than disabled — a greyed tab still says there is something here.
+`openedSection` already routes to Lesson, and the rendered tab is now additionally
+*derived* as `tabs.includes(stored) ? stored : "lesson"`, so a shrinking tab list
+cannot leave the bar with no active tab. Derived rather than corrected in an effect,
+because an effect would be a second thing that moves the tab, which is what R5's
+reducer exists to prevent.
+
+Two consequences worth recording:
+
+- **`dispatchTab` no longer closes over `tabs`.** Its stability used to be
+  load-bearing — a fresh `tabs` array gave the callback a new identity, re-firing the
+  arrival effect and pinning the tab to Lesson forever — which made a *correct* change
+  to `tabs` a latent bug. The reducer now reads the current tabs through a ref and
+  keeps one identity for the life of the page, so the hazard is gone rather than
+  documented.
+- **The map tab's label is keyed to the build, not the tab count.** It was
+  `tabs.length === 2 ? "Progress map" : "Map"`, which meant the same thing until
+  `surfaces` gained a two-tab state: the tab renamed itself as the learner opened and
+  closed overviews. A control that renames itself reads as a different control, which
+  is worse than the mild terseness the qualifier was fixing. `next` still says
+  `Progress map`, since it stays live as the comparison.
+
 ### What is mirrored, and what is not
 
 **The prose is not mirrored; the code locations are.** `MIRRORED` holds exactly one

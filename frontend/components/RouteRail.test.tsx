@@ -60,6 +60,78 @@ function rail(currentNodeId: string | null = "n2", openSectionId: string | null 
 const heading = (title: string) =>
   screen.getByRole("button", { name: t.rail.openSection(title) });
 
+/** The rail with whatever extra props a test needs on top of the defaults. */
+function railWith(extra: Record<string, unknown>) {
+  const edges: GraphEdge[] = NODES.slice(0, -1).map((n, i) => ({
+    from_id: n.id,
+    to_id: NODES[i + 1].id,
+    kind: "sequence",
+  }));
+  const journey = splitJourney(buildRoute(NODES, edges), AREAS, "n2");
+  return render(
+    <RouteRail
+      sections={journey.sections}
+      optional={journey.optional}
+      currentNodeId="n2"
+      onJump={vi.fn()}
+      onOpenSection={vi.fn()}
+      onExpand={vi.fn()}
+      {...extra}
+    />
+  );
+}
+
+describe("the briefing sits at the head of the route, and is not part of it", () => {
+  test("offered when there is somewhere to send the learner", () => {
+    const onBriefing = vi.fn();
+    railWith({ onBriefing });
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(t.rail.briefing) }));
+    expect(onBriefing).toHaveBeenCalled();
+  });
+
+  test("absent when there is not — a row that goes nowhere is worse than none", () => {
+    rail("n2");
+    expect(screen.queryByText(t.rail.briefing)).toBeNull();
+  });
+
+  test("it is the FIRST thing in the route list, before any chapter", () => {
+    railWith({ onBriefing: vi.fn() });
+    const nav = document.querySelector("nav")!;
+    const briefing = screen.getByText(t.rail.briefing);
+    const firstHeading = screen.getByText("Session–Adapter contract");
+    // `compareDocumentPosition` rather than index arithmetic: the claim is document
+    // order, not how many wrappers happen to sit between them.
+    const order = briefing.compareDocumentPosition(firstHeading);
+    expect(nav.contains(briefing)).toBe(true);
+    expect(order & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test("it carries no understanding state, because nothing is demonstrated there", () => {
+    const { container } = railWith({ onBriefing: vi.fn() });
+    const row = screen.getByText(t.rail.briefing).closest("button")!;
+    // A stop is a pin plus a title; a chapter is a heading with a counter. This is
+    // neither, so it must not borrow either one's furniture.
+    expect(row.querySelector("svg")).toBeNull();
+    expect(row.getAttribute("aria-current")).toBeNull();
+    expect(container.querySelectorAll('[aria-current="step"]')).toHaveLength(1);
+  });
+
+  test("it reads as a different KIND of thing: a bordered box, not tracked caps", () => {
+    railWith({ onBriefing: vi.fn() });
+    const row = screen.getByText(t.rail.briefing).closest("button")!;
+    // The rail's other two idioms are `uppercase tracking-[…]` for chapters and the
+    // pin grid for stops. A border is the visual claim that this is neither.
+    expect(row.className).toMatch(/border/);
+    expect(row.className).not.toMatch(/uppercase/);
+    expect(screen.getByText(t.rail.briefingHint)).toBeTruthy();
+  });
+
+  test("present in the compact strip too, where there is no room for a box", () => {
+    railWith({ onBriefing: vi.fn(), compact: true });
+    expect(screen.getByRole("button", { name: t.rail.briefing })).toBeTruthy();
+  });
+});
+
 describe("collapsed means collapsed (note 5)", () => {
   test("the chapter you are standing in starts open", () => {
     rail("n2");

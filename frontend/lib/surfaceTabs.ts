@@ -56,11 +56,24 @@ export type TabEvent =
   /** Left the map with Escape. */
   | { kind: "dismissedMap" };
 
-/** The tabs this build offers, in bar order. */
-export function tabsFor(ui: LessonUi): SessionTab[] {
-  return ui === "surfaces"
-    ? ["lesson", "understanding", "map"]
-    : ["lesson", "map"];
+/**
+ * The tabs this build offers, in bar order.
+ *
+ * `sectionOverview` drops `understanding`, because a chapter overview has nothing
+ * for it. Understanding is what the learner has SHOWN — a question, an answer, a
+ * verdict, open gaps — and all of those are properties of a stop. A chapter has no
+ * question and nothing is demonstrated at chapter granularity, so the tab could only
+ * ever open onto the previous stop's evidence beside a heading about something else,
+ * or onto nothing at all. Offering it is the bar claiming a view that does not exist.
+ *
+ * Dropped rather than disabled: a greyed tab still says "there is something here".
+ */
+export function tabsFor(
+  ui: LessonUi,
+  { sectionOverview = false }: { sectionOverview?: boolean } = {}
+): SessionTab[] {
+  if (ui !== "surfaces") return ["lesson", "map"];
+  return sectionOverview ? ["lesson", "map"] : ["lesson", "understanding", "map"];
 }
 
 /**

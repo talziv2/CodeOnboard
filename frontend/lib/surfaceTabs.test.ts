@@ -144,3 +144,47 @@ describe("tabs and surfaces are not the same thing", () => {
     expect(surfaceForTab("understanding")).toBe("understanding");
   });
 });
+
+describe("a chapter overview has no Understanding to offer", () => {
+  /**
+   * Understanding is what the learner has SHOWN — a question, an answer, a verdict,
+   * open gaps — and every one of those belongs to a stop. A chapter overview has no
+   * question and nothing is demonstrated at chapter granularity, so the tab could
+   * only open onto the previous stop's evidence beside a heading about something
+   * else. The overview renders inside the `tab !== "map"` branch, so before this it
+   * drew under Understanding too and the bar was claiming a view that did not exist.
+   */
+  test("the bar is Lesson and Map while an overview is open", () => {
+    expect(tabsFor("surfaces", { sectionOverview: true })).toEqual(["lesson", "map"]);
+  });
+
+  test("and all three again once it is closed", () => {
+    expect(tabsFor("surfaces", { sectionOverview: false })).toEqual([
+      "lesson",
+      "understanding",
+      "map",
+    ]);
+    // Omitting the option means no overview — the common case stays the default.
+    expect(tabsFor("surfaces")).toEqual(["lesson", "understanding", "map"]);
+  });
+
+  test("the comparison build is untouched by it — it has no Understanding to drop", () => {
+    expect(tabsFor("next", { sectionOverview: true })).toEqual(["lesson", "map"]);
+    expect(tabsFor("next")).toEqual(["lesson", "map"]);
+  });
+
+  test("a stale pick of a tab that is no longer offered is ignored, not obeyed", () => {
+    // The reducer already refuses tabs outside `available`; this is that guarantee
+    // restated for the case where the list shrank rather than never having had it.
+    const available = tabsFor("surfaces", { sectionOverview: true });
+    expect(nextTab("lesson", { kind: "picked", tab: "understanding" }, available)).toBe(
+      "lesson"
+    );
+  });
+
+  test("opening a section sends the learner to Lesson", () => {
+    expect(
+      nextTab("understanding", { kind: "openedSection" }, tabsFor("surfaces"))
+    ).toBe("lesson");
+  });
+});

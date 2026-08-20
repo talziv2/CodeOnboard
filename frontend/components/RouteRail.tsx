@@ -30,6 +30,11 @@ interface Props {
    * the rail is hidden there is no rail to hold a button.
    */
   onHide?: () => void;
+  /**
+   * Open the briefing. Optional, because the rail is drawn in contexts that have
+   * nowhere to send the learner — and a row that goes nowhere is worse than none.
+   */
+  onBriefing?: () => void;
 }
 
 /**
@@ -285,6 +290,7 @@ export default function RouteRail({
   sections, optional, currentNodeId, openSectionId, onJump, onOpenSection, onExpand,
   compact = false,
   onHide,
+  onBriefing,
 }: Props) {
   const [showOptional, setShowOptional] = useState(false);
   // Only the sections the learner has actually toggled. Everything else follows
@@ -322,6 +328,31 @@ export default function RouteRail({
     </button>
   ) : null;
 
+  /**
+   * The briefing at the head of the route, and deliberately not shaped like the
+   * route.
+   *
+   * A stop is a pin on a connector; a chapter is tracked uppercase mono with a
+   * counter. This is a bordered box in sentence case, because it is neither: there
+   * is no understanding state to show, nothing is demonstrated there, and it sits
+   * *before* the walk rather than being a step in it. The rule underneath is where
+   * the route proper starts — the mirror of the rule above the optional stops, so
+   * the walk is bracketed by the two things that are not part of it.
+   */
+  const briefingRow = onBriefing ? (
+    <div className="mb-3 border-b border-rule pb-3">
+      <button
+        onClick={onBriefing}
+        className="group flex w-full flex-col gap-px rounded-field border border-rule px-2.5 py-1.5 text-start transition hover:border-signal-dim hover:bg-slab"
+      >
+        <span className="text-meta text-paper transition group-hover:text-signal">
+          {t.rail.briefing}
+        </span>
+        <span className="truncate text-micro text-graphite">{t.rail.briefingHint}</span>
+      </button>
+    </div>
+  ) : null;
+
   if (compact) {
     /**
      * The same route at the density of a scrollbar: one pin per stop, in order,
@@ -337,6 +368,18 @@ export default function RouteRail({
         aria-label={t.rail.title}
         className="flex h-full min-h-0 flex-col items-center gap-2 overflow-y-auto border-e border-rule bg-trench py-4"
       >
+        {/* Same idea at strip density: a bordered mark, so it reads as a different
+            kind of thing from the pins below it rather than as another stop. */}
+        {onBriefing && (
+          <button
+            onClick={onBriefing}
+            aria-label={t.rail.briefing}
+            title={`${t.rail.briefing} — ${t.rail.briefingHint}`}
+            className="mb-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-field border border-rule font-mono text-micro text-graphite transition hover:border-signal-dim hover:text-signal"
+          >
+            ◈
+          </button>
+        )}
         {sections.map((section, si) => (
           <div key={section.area?.id ?? si} className="flex flex-col items-center gap-2">
             {si > 0 && <span aria-hidden className="my-1 h-px w-4 bg-rule" />}
@@ -394,6 +437,7 @@ export default function RouteRail({
       </div>
 
       <nav className="min-h-0 flex-1 overflow-y-auto px-4 pb-2">
+        {briefingRow}
         {sections.map((section, si) => {
           const area = section.area;
           const key = area?.id ?? `ungrouped-${si}`;

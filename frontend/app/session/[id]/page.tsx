@@ -96,16 +96,42 @@ export default function SessionPage() {
   // So the state moves only through `dispatchTab`, whose event type has no phase in
   // it. Breaking R5 now requires inventing an event and naming it, which is a thing
   // a reviewer can see.
-  // `useMemo` with no deps, and its stability is LOAD-BEARING: `tabsFor` returns a
-  // fresh array per call, so an unmemoized `tabs` would give `dispatchTab` a new
-  // identity every render, re-firing the arrival effect below and pinning the tab to
-  // Lesson forever. The flag is a build constant, so there is nothing to depend on.
-  const tabs = useMemo(() => tabsFor(lessonUi()), []);
-  const [tab, setTab] = useState<SessionTab>("lesson");
-  const dispatchTab = useCallback(
-    (event: TabEvent) => setTab((current) => nextTab(current, event, tabs)),
-    [tabs]
+  // The chapter overview is a LAYER over the lesson column, not a destination:
+  // no route, no session state, and it never moves the current node. Closing it
+  // puts the learner back exactly where they already were.
+  const [overviewAreaId, setOverviewAreaId] = useState<string | null>(null);
+
+  // The bar's tabs depend on whether a chapter overview is open — an overview has no
+  // Understanding to show — so this array's identity legitimately changes.
+  //
+  // Which is why `dispatchTab` must NOT close over it. It used to, with a
+  // no-dependency `useMemo` whose stability was load-bearing: a fresh `tabs` gave
+  // `dispatchTab` a new identity, which re-fired the arrival effect below and pinned
+  // the tab to Lesson forever. That made a correct change to `tabs` a latent bug, so
+  // the reducer now reads the current tabs through a ref and keeps ONE identity for
+  // the life of the page. The hazard is gone rather than documented.
+  const tabs = useMemo(
+    () => tabsFor(lessonUi(), { sectionOverview: overviewAreaId !== null }),
+    [overviewAreaId]
   );
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+  const [storedTab, setTab] = useState<SessionTab>("lesson");
+  const dispatchTab = useCallback(
+    (event: TabEvent) => setTab((current) => nextTab(current, event, tabsRef.current)),
+    []
+  );
+  /**
+   * The tab actually rendered, which is the stored one only while the bar still
+   * offers it.
+   *
+   * `openedSection` already sends the learner to Lesson, so this should never fire —
+   * but "should never" plus a tab list that can shrink underneath the state is how a
+   * bar ends up with no active tab and a column rendering a surface nobody selected.
+   * Derived rather than corrected in an effect: an effect would be a second thing
+   * that moves the tab, which is exactly what R5's reducer exists to prevent.
+   */
+  const tab = tabs.includes(storedTab) ? storedTab : "lesson";
   // Tabs with a change the learner has not looked at yet. S4 drives this from the
   // adaptation signals; the plumbing is here so the bar's dot is real as soon as
   // there is something to report. Visiting a tab clears its dot — see the effect
@@ -121,10 +147,6 @@ export default function SessionPage() {
   const [finished, setFinished] = useState(false);
   const [scoping, setScoping] = useState(false);
   const [scopeNote, setScopeNote] = useState<string | null>(null);
-  // The chapter overview is a LAYER over the lesson column, not a destination:
-  // no route, no session state, and it never moves the current node. Closing it
-  // puts the learner back exactly where they already were.
-  const [overviewAreaId, setOverviewAreaId] = useState<string | null>(null);
   // Sections already introduced this visit. Kept in a ref because it must not
   // cause a render, and paired with an evidence guard below — a section with
   // stops behind it is not new, whatever this page happens to remember.
@@ -393,6 +415,7 @@ export default function SessionPage() {
             onExpand={() => dispatchTab({ kind: "expandedMap" })}
             compact={band === "medium"}
             onHide={toggleRail}
+            onBriefing={() => router.push(`/session/${id}/welcome`)}
           />
         )}
 
@@ -614,6 +637,13 @@ export default function SessionPage() {
                 onExpand={() => {
                   setRailOpen(false);
                   dispatchTab({ kind: "expandedMap" });
+                }}
+                // Closes the sheet first, like every other navigation out of it:
+                // the briefing is a different page, so leaving the sheet up would
+                // put it over a route the learner is no longer on.
+                onBriefing={() => {
+                  setRailOpen(false);
+                  router.push(`/session/${id}/welcome`);
                 }}
               />
             </div>

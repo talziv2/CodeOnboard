@@ -47,11 +47,49 @@ describe("the three-tab bar", () => {
 });
 
 describe("next's bar is untouched", () => {
-  test("two tabs, and the map keeps its old label", () => {
-    render(<SurfaceTabs tabs={tabsFor("next")} active="lesson" onPick={vi.fn()} />);
+  test("two tabs, and the map keeps its old label", async () => {
+    // The qualifier is keyed to the BUILD, not to how many tabs are up — `surfaces`
+    // now has a two-tab state of its own when a chapter overview is open, and the
+    // map tab must not rename itself as the learner opens and closes overviews. So
+    // this asserts `next`'s copy with `next` actually selected, the same way the
+    // canvas tests do it.
+    vi.resetModules();
+    vi.doMock("@/lib/flags", async (importOriginal) => ({
+      ...(await importOriginal<typeof import("@/lib/flags")>()),
+      lessonUi: () => "next",
+    }));
+    const Bar = (await import("@/components/lesson/SurfaceTabs")).default;
+    render(<Bar tabs={tabsFor("next")} active="lesson" onPick={vi.fn()} />);
     expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual([
       "Lesson",
       t.session.tabMap,
+    ]);
+    vi.doUnmock("@/lib/flags");
+    vi.resetModules();
+  });
+});
+
+describe("surfaces keeps one name for the map, however many tabs are up", () => {
+  test("three tabs: Map", () => {
+    render(<SurfaceTabs tabs={tabsFor("surfaces")} active="lesson" onPick={vi.fn()} />);
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Lesson",
+      "Understanding",
+      "Map",
+    ]);
+  });
+
+  test("two tabs, because an overview is open: still Map", () => {
+    render(
+      <SurfaceTabs
+        tabs={tabsFor("surfaces", { sectionOverview: true })}
+        active="lesson"
+        onPick={vi.fn()}
+      />
+    );
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Lesson",
+      "Map",
     ]);
   });
 });

@@ -388,6 +388,19 @@ export const t = {
     setAside: "◦ set aside",
     setAsideHint: "You chose to stop being asked about this",
     title: "Your route",
+    /**
+     * The briefing, at the head of the route.
+     *
+     * A DESTINATION, NOT A STOP. Nothing is demonstrated there, it carries no
+     * understanding state, and it sits before the walk rather than in it — so it is
+     * drawn as a bordered box in sentence case, which is neither the rail's stop
+     * (pin + connector) nor its chapter heading (tracked uppercase mono).
+     *
+     * The hint is the welcome page's own heading, verbatim, so the row and the page
+     * it opens say the same thing.
+     */
+    briefing: "Briefing",
+    briefingHint: "This repository, and you",
     close: "Close the route",
     openMap: "Open map",
     addedAfterConfusion: "added after confusion",

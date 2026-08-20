@@ -1012,6 +1012,23 @@ behavioural guards were mutation-tested — restoring the old
 `filter(s => s.node.id === currentNodeId)` and the old file caption fails exactly
 those two tests and nothing else.
 
+#### The briefing is at the head of the route
+
+The rail opens with a `Briefing` row above the first chapter, and it is drawn so it
+cannot be mistaken for part of the walk. The rail has exactly two idioms — a stop is a
+pin on a connector, a chapter is tracked uppercase mono with a counter — so this is
+neither: a bordered box in sentence case, with the welcome page's own heading ("This
+repository, and you") as its second line, and a rule under it where the route proper
+starts. That rule is the mirror of the one above the optional stops, so the walk is
+bracketed by the two things that are not part of it.
+
+It carries no pin and no understanding state, because nothing is demonstrated there.
+The compact strip gets the same idea at strip density — a bordered mark rather than a
+pin — and the narrow sheet closes itself first, like every other navigation out of it.
+
+The briefing was reachable only from the session menu before this, which made the one
+page explaining what the repository is something you had to already know about.
+
 #### Two follow-ups from the same walk
 
 **The code-locations list was invisible on almost every unit.** `lessonView` had
