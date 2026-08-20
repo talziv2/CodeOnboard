@@ -95,7 +95,7 @@
         "3007"
       ],
       "env": {
-        "NEXT_PUBLIC_API_URL": "/__api"
+        "NEXT_PUBLIC_API_URL": "http://localhost:8000"
       },
       "cwd": ".ui-audit-fe",
       "port": 3007
@@ -113,7 +113,7 @@
         "8000"
       ],
       "env": {
-        "CODEONBOARD_ALLOWED_ORIGINS": "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3007",
+        "CODEONBOARD_ALLOWED_ORIGINS": "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3007,http://127.0.0.1:3007",
         "CODEONBOARD_GAPS": "1"
       },
       "port": 8000
