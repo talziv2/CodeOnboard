@@ -254,3 +254,94 @@ describe("the feedback card", () => {
     expect(screen.queryByRole("button", { name: t.lesson.verifyCta })).toBeNull();
   });
 });
+
+describe("the brief when it is pinned", () => {
+  const RICH = node("n1", {
+    title: "Understand the Graph",
+    objective: "Explain what Graph owns and why a missing edge is silent.",
+    concept_tags: ["graph", "adjacency-dict"],
+    anchors: [
+      { file: "search.py", symbol: "Graph", line_start: 1006, line_end: 1058 },
+      { file: "search.py", symbol: "Graph.get", line_start: 1100, line_end: 1110 },
+    ],
+  });
+
+  const renderBrief = (collapsed: boolean) =>
+    render(
+      <LessonBrief
+        node={RICH}
+        position={2}
+        total={16}
+        isPrerequisite={false}
+        onFileClick={vi.fn()}
+        openGapCount={1}
+        attemptCount={2}
+        onShowGaps={vi.fn()}
+        onShowAttempts={vi.fn()}
+        collapsed={collapsed}
+      />
+    );
+
+  test("expanded, it carries everything", () => {
+    renderBrief(false);
+
+    expect(screen.getByText(t.lesson.stopOf(2, 16))).toBeTruthy();
+    expect(screen.getByText("Understand the Graph")).toBeTruthy();
+    expect(screen.getByText(/Explain what Graph owns/)).toBeTruthy();
+    expect(screen.getByText("Graph.get")).toBeTruthy();
+    expect(screen.getByText("graph")).toBeTruthy();
+  });
+
+  test("collapsed, position title and counters stay — the read-once rows go", () => {
+    renderBrief(true);
+
+    // Orientation and navigation survive.
+    expect(screen.getByText(t.lesson.stopOf(2, 16))).toBeTruthy();
+    expect(screen.getByText("Understand the Graph")).toBeTruthy();
+    expect(screen.getByText(/unresolved/)).toBeTruthy();
+    expect(screen.getByText(/answers/)).toBeTruthy();
+
+    // The rest is collapsed away and hidden from assistive tech, not merely
+    // clipped: a screen reader must not read a region the sighted user cannot
+    // see. It stays in the DOM so the transition has something to animate.
+    const region = document.querySelector('[aria-hidden="true"].grid');
+    expect(region).toBeTruthy();
+    expect(region!.textContent).toMatch(/Explain what Graph owns/);
+  });
+
+  test("the collapsing region is not hidden while expanded", () => {
+    renderBrief(false);
+    const region = document.querySelector(".grid");
+    expect(region?.getAttribute("aria-hidden")).toBe("false");
+  });
+
+  test("the counters are controls, not text", async () => {
+    renderBrief(false);
+
+    // Both are real buttons with the chrome treatment, which is what makes the
+    // affordance obvious — they read as bare text before.
+    const gaps = screen.getByRole("button", { name: /unresolved/ });
+    const answers = screen.getByRole("button", { name: /answers/ });
+    expect(gaps.className).toMatch(/border/);
+    expect(answers.className).toMatch(/border/);
+    expect(gaps.tagName).toBe("BUTTON");
+    expect(answers.tagName).toBe("BUTTON");
+  });
+
+  test("a counter with nothing to report is absent, not zero", () => {
+    render(
+      <LessonBrief
+        node={RICH}
+        position={1}
+        total={1}
+        isPrerequisite={false}
+        onFileClick={vi.fn()}
+        openGapCount={0}
+        attemptCount={0}
+        collapsed={false}
+      />
+    );
+    expect(screen.queryByRole("button", { name: /unresolved/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /answer/ })).toBeNull();
+  });
+});

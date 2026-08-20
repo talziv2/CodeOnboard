@@ -1795,3 +1795,84 @@ is not in L3 on spec.
 
 Tests: 138 passing — 14 block smoke tests, 5 brief-across-phases tests, and the
 existing 119 unchanged.
+
+---
+
+## L3b — three adjustments from the manual inspection
+
+### 1. The brief collapses once it is pinned
+
+The full brief is right at the top of a lesson and too much standing rent for the
+whole scroll. It now keeps what orients while scrolled — position, title, and the
+counters, which are navigation — and gives back the objective, the anchor list and
+the tags, which are read once before starting. Returning to the top restores it.
+
+Measured with transitions frozen, at all four text sizes:
+
+```
+size      expanded   collapsed   saved    % of lesson viewport
+small       176px       94px      82px    21.4%  ->  11.4%
+medium      194px      104px      90px    23.8%  ->  12.8%
+large       218px      117px     101px    27.1%  ->  14.6%
+xlarge      241px      129px     112px    30.4%  ->  16.3%
+```
+
+At `xlarge` the pinned brief roughly halves, from 30.4% of the reading area to
+16.3%. Title and both counters survive at every size; the objective goes to zero
+height and is `aria-hidden` while collapsed, so a screen reader does not read a
+region the sighted user cannot see.
+
+The animation is on `grid-template-rows`, `1fr` to `0fr`, with F3's
+`--motion-layout` and `--ease-emphasis`. No measurement and no layout read, and —
+the reason for choosing it — **a stalled transition holds its STARTING value**, so
+an environment that never animates leaves the brief expanded rather than leaving
+content present-but-invisible. That is the failure direction to want, and it is
+the same trap the `rise` keyframe hit by animating opacity from zero.
+
+Note the expanded brief grew slightly (184px → 194px at medium): the counters are
+bordered controls now, which is change 3.
+
+### 2. The canvas is left-aligned, not centred
+
+`mx-auto` removed. The cap stays at 46rem, because the reason for it stands —
+prose at 48ch inside a 1170px column leaves the cards around it sprawling to twice
+the width of the text they belong to. The brief's content is capped to the same
+46rem so the two share a left edge, verified: canvas left 296px, brief content
+left 296px, column left 296px.
+
+### 3. The counters are controls
+
+`chrome` buttons at `xs` rather than bare coloured text, which did not read as
+clickable. `chrome` specifically, so they stay session furniture and do not
+compete with the lesson's own primary action: 1px border, 6px radius, 25px tall,
+11px mono. The unresolved one keeps a rust dot, because `chrome`'s text is
+`graphite` and trading away every trace of "something is open" for the sake of
+variant consistency would be the wrong trade.
+
+Contrast 5.18 light and 5.57 dark, both clear of 4.5. The dot is `aria-hidden`.
+
+### Verified across the bands
+
+```
+band            column   canvas   left edges aligned   pins flush   collapse saves
+wide   1440px    1171px    736px          yes             yes           90px
+medium 1100px    1043px    736px          yes             yes           90px
+narrow  900px     899px    736px          yes             yes           90px
+```
+
+Counters present and the position row does not wrap at 900px.
+
+### A measurement note
+
+Setting `scrollTop` programmatically does **not** fire a scroll event in this
+pane, so the collapse appeared not to work at all until the event was dispatched
+by hand — the listener was correct the whole time. And because a stalled
+transition freezes at its start, the collapsed height is only measurable with
+transitions frozen. Two more instances of the same underlying gap: no frame loop.
+Real scrolling in a real browser fires the event and runs the transition.
+
+Tests: 143 passing, six new — expanded carries everything, collapsed keeps
+position/title/counters and hides the rest from assistive tech, the region is not
+hidden while expanded, the counters are buttons with a border treatment, and a
+counter with nothing to report is absent rather than zero.
+

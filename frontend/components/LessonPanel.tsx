@@ -448,7 +448,7 @@ export default function LessonPanel({
     // useful as the hook L3 and L4's tests key off.
     <div data-lesson-phase={phase}>
       <LessonWorkspace
-        brief={
+        brief={(collapsed) => (
           <LessonBrief
             node={node}
             position={position}
@@ -459,8 +459,9 @@ export default function LessonPanel({
             attemptCount={attempts.length}
             onShowGaps={() => revealBlock("lesson-gaps")}
             onShowAttempts={() => revealBlock("lesson-attempts")}
+            collapsed={collapsed}
           />
-        }
+        )}
       >
 
       {recovered && (

@@ -825,7 +825,8 @@ S2  rail + source + responsive 🔴    ✅ 6b45da8  source now on demand
 S2b Show source made visible        ✅ a50c3eb + 8343adf  asked for at S2's gate
 L1  phase logic (no render)          ✅ 99d5451  four phases named
 L2  extract blocks (no visual)       ✅ 2ff5a86..fdce2c3  1057 -> 540 lines
-L3  Brief / Canvas frame      🔴     ✅ (this commit)  ← INSPECT
+L3  Brief / Canvas frame      🔴     ✅ 6fd2ed4
+L3b brief collapse + left align     ✅ (this commit)  ← INSPECT
 L4  phase rendering + feedback 🔴🔴   ← next; answers §3a
 L5  panels + remove legacy
 P3  generation                🔴    (reduced scope — see §9 Q1)
