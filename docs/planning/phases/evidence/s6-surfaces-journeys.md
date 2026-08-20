@@ -51,7 +51,7 @@ than below the fold.
 | J3 | warm-up stop | PASS on the surfaces half — renders on both, arrival resets to Lesson |
 | J4 | verification → resolved | PASS — `Cleared`, all three gaps closed, counter gone |
 | J5 | scope, re-teach | PASS — decline reported in the menu, consequence line intact |
-| J6 | fresh session, first lesson | PASS — the first-visit case, setup expanded as material |
+| J6 | interview → generation → briefing → first lesson | PASS **end to end**, see below |
 | J7 | resume | PASS — lands on Lesson, `Earlier explanations (2)` survives the reload |
 
 ### What the live run proved that the tests could not
@@ -73,6 +73,44 @@ is what proves the marking reads the attempt history rather than live state.
 explanation expanded, `Before you answer` collapsed. Stop 1 of the fresh session
 (never answered): the setup expanded as plain material with no explanation to
 supersede it, 566px.
+
+### J6, finally end to end — and the briefing seen for the first time
+
+S0 could not finish this journey and neither could the first pass of S6: the rig
+proxied the API through `/__api`, and `POST /session/start` died at ~55s on a
+request the backend takes 2m38s to answer. That was always a rig artifact — the
+shipping app fetches the backend directly — but it meant two steps had never been
+observed through the UI at all.
+
+Fixed by removing the proxy rather than working around it: the rig now sets
+`NEXT_PUBLIC_API_URL=http://localhost:8000` and the backend is started with the
+rig's origin in `CODEONBOARD_ALLOWED_ORIGINS`, which is what the real app does. A
+fresh run then completed through the interface:
+
+```
+interview        7 questions, not 6 — `debug_issue` adds its follow-up, which is
+                 exactly what the landing page's "six or seven" copy promises
+review gate      all 7 answers listed, a `Change` on each, nothing started until
+                 "Let's start" was pressed
+generation       per-stage ticks, live lookup counter, elapsed time
+POST             /session/start → 200 through the UI
+briefing         /welcome — NEVER SEEN BEFORE, because every earlier check
+                 arrived at a session by URL and skipped it
+first lesson     Lesson · Understanding · Map, stop 1 of 9, STUDY
+```
+
+The briefing is written to the goal rather than to the repository: for "why does my
+custom auth handler send no Authorization header" it names where authentication is
+applied, what the handler receives, and the two places the problem can be — then
+`Worth knowing` cites `src/requests/sessions.py`. A goal-shaped paragraph, not a
+README summary.
+
+The plan is **9 stops** for this debugging goal against 14 for the earlier
+understand-the-lifecycle goal, which is the planner sizing to a narrower question.
+
+On the fresh session, both surfaces are clean at first visit: Lesson 620px with the
+setup expanded as material and the trace path its only disclosure; Understanding
+692px with the question, one composer and `The setup` collapsed.
 
 ---
 
