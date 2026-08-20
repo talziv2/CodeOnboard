@@ -978,6 +978,59 @@ either is trusted:
 The optional backend items `B1` (Grader headline) and `B2` (progress facts) remain
 decision points, not scheduled work, exactly as written.
 
+### Notes from walking a real session — the seven post-plan fixes
+
+Seven notes came out of the first manual walk of a live session after the plan
+closed. All seven are done, on `ui-surfaces-l5`, verified against the running app
+at `127.0.0.1:3100`. Six were the rail; one was the source pane.
+
+| # | Note | What changed |
+|---|------|--------------|
+| 1 | The current stop repeated its file path | Caption removed. The path is already in the lesson header and the source pane; three copies of `requests/adapters.py` on one screen was the complaint. Measured: the current row is now 37px against 52px for a two-line neighbour. |
+| 2 | The rail is too narrow | `RAIL_REM.wide` 16.75 → 19.5. Measured live at **312px**. |
+| 3 | Stops are too tight; chapters do not separate; no scrolling | Stop padding `py-[calc(5rem/16)]` → `py-[calc(9rem/16)]` (measured 9px), connector re-anchored to `bottom-[calc(-11rem/16)]` to keep the line joining the new spacing, chapter gap `mt-4` → `mt-7`. The list is its own scroll region: with every chapter expanded, `clientHeight` 612 against `scrollHeight` 1064. |
+| 4 | No way to hide the rail | `Hide route` / `Show route` in the session bar, hidden in the narrow band where there is no track to give back. Persisted under `codeonboard:rail-hidden` (verified `0` → `1` → `0` across toggles) and deliberately **not** in `prefs`, which is display settings the learner sets from a menu. |
+| 5 | **Bug** — collapsing the chapter you are in still showed your stop | `const visible = open ? section.stops : []`. This reverses an earlier deliberate decision ("show that one stop rather than hiding where the learner is"); the note is right and the old behaviour was wrong, because the chevron said closed while a row sat there, so the control looked broken. Where you are stays legible from the marked heading and its counter. |
+| 6 | Open chapters are not distinguishable from closed ones | The heading tone became three levels rather than two: `text-signal` for the chapter being read, `text-chalk` for open-but-not-current, `text-graphite` for collapsed. |
+| 7 | Source pane could not be undocked or resized, and froze the page | One root cause, three symptoms — see below. |
+
+**Note 7 was a single branch.** An "overlay" rendering forced
+`source={{...source, mode: "dock"}}`, pinned the pane to a fixed `max-w-[34rem]`,
+and laid a `fixed inset-0 bg-ink/70` backdrop button over the page. So undocking
+did nothing (the mode was overridden), resizing did nothing (the width was fixed),
+and the rest of the screen was dead (the backdrop swallowed every click). The
+branch is deleted. `dock` is always a third column; `float` is the draggable,
+resizable window; and `setShowCode` opens in `float` when a dock would starve the
+lesson below its floor. Verified live: no viewport-spanning element with live
+pointer events, `role="dialog"` with **no** `aria-modal`, both mode controls
+present, and all eight resize grips (four edges, four corners).
+
+**Both components were untested, which is why this could regress silently.**
+`components/CodeViewer.test.tsx` (15 tests) and `components/RouteRail.test.tsx`
+(14 tests) now cover them; the frontend suite goes 361 → 390. The rail's two
+behavioural guards were mutation-tested — restoring the old
+`filter(s => s.node.id === currentNodeId)` and the old file caption fails exactly
+those two tests and nothing else.
+
+#### Two instrument traps, recorded so they are not paid for a third time
+
+- **A frozen CSS transition reads as the wrong colour.** Note 6 measured as *not
+  applied*: the heading class was `text-chalk` and `getComputedStyle` returned
+  graphite. The Browser pane does not composite frames, so `visibilityState` stays
+  `hidden`, no animation frames run, and the `color` transition sits at
+  `currentTime: 0` — the **start** value — indefinitely. `getAnimations()` showed
+  one running `CSSTransition`, and with `transitionProperty: none` the same node
+  read `rgb(221, 229, 234)`. Any colour probe must suppress transitions first or
+  read the class. This is the same shape as the `data-theme` trap recorded in
+  `evidence/s6-surfaces-journeys.md`: a measurement that looks like a product bug.
+- **Pointer gestures cannot be faked from page JS.** `setPointerCapture` with a
+  synthetic `pointerId` throws, which aborts the handler before the drag is
+  recorded, so a resize drag silently does nothing and the width "does not change".
+  `left_click_drag` needs a screenshot, which needs a displayed pane. The resize is
+  therefore verified by test rather than by live gesture — and in jsdom the same
+  gesture needs `MouseEvent`, because jsdom's `PointerEvent` drops
+  `clientX`/`clientY` and every delta comes out `NaN`.
+
 ### How it stood at the L-track gate
 
 Foundation (`F1`–`F3d`) is approved and closed. The pre-session front half

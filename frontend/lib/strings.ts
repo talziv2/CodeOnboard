@@ -237,6 +237,10 @@ export const t = {
       "End the journey here? Everything you have answered is kept, and you'll see the summary of what you covered.",
     finishYes: "Finish it",
     finishNo: "Keep going",
+    // The rail's own toggle (UI note 4). Says which way it goes rather than
+    // naming the thing — "Route" alone would read as a link to the map.
+    hideRail: "Hide route",
+    showRail: "Show route",
     tabLesson: "Lesson",
     tabMap: "Progress map",
     /**

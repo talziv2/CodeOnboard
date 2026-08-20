@@ -120,7 +120,7 @@ function Stop({
       // stop is `paper`. Dropping it leaves done rows at 5.45 / 4.75, still
       // plainly quieter than a live row, and stops the rail dimming its own text
       // below the floor to say something it had already said twice.
-      className={`group relative grid w-full grid-cols-[calc(18rem/16)_1fr] gap-3 py-[calc(5rem/16)] text-start ${
+      className={`group relative grid w-full grid-cols-[calc(18rem/16)_1fr] gap-3 py-[calc(9rem/16)] text-start ${
         stop.isPrerequisite ? "ms-[calc(22rem/16)] w-[calc(100%-22rem/16)]" : ""
       }`}
     >
@@ -128,7 +128,7 @@ function Stop({
       {!isLast && (
         <span
           aria-hidden
-          className="absolute start-2 top-[calc(22rem/16)] bottom-[calc(-7rem/16)] w-px bg-rule"
+          className="absolute start-2 top-[calc(22rem/16)] bottom-[calc(-11rem/16)] w-px bg-rule"
         />
       )}
 
@@ -155,11 +155,11 @@ function Stop({
             anyone reading the rail with a screen reader or a tooltip. */}
         <span className="sr-only">{t.rail.stopState(state)}</span>
 
-        {isCurrent && (
-          <span className="truncate font-mono text-micro text-graphite">
-            {node.file}
-          </span>
-        )}
+        {/* The current stop used to caption itself with its file path. It came
+            out: the path is already above the lesson, in the brief, and beside the
+            source pane when that is open — so in the rail it was a third copy of
+            one fact, and the longest line in the column. The tooltip still carries
+            it for anyone who wants it from here. */}
 
         {/* CURRENT difficulty only. `weak_spot` is sticky — true forever once
             the learner failed here — so rendering it kept a unit they have
@@ -219,7 +219,7 @@ function SectionHead({
   const isCurrent = section.status === "current";
 
   return (
-    <div className="mt-4 flex items-start gap-1.5 first:mt-0">
+    <div className="mt-7 flex items-start gap-1.5 first:mt-0">
       <button
         onClick={onToggle}
         aria-expanded={open}
@@ -245,10 +245,19 @@ function SectionHead({
       >
         <span className="flex items-baseline gap-2">
           <span
+            // Open is a state worth seeing (UI note 6). Three levels rather than
+            // two: the chapter you are IN or whose overview is showing is `signal`;
+            // a chapter merely expanded is `chalk`, which reads as attended without
+            // competing with where you actually are; everything closed stays
+            // `graphite`. Without the middle level, expanding a chapter you are not
+            // in changed nothing about its heading, so the list of headings gave no
+            // clue which one the visible stops belonged to.
             className={`min-w-0 flex-1 font-mono text-micro uppercase tracking-[0.15em] transition ${
               isCurrent || isOverviewOpen
                 ? "text-signal"
-                : "text-graphite group-hover:text-signal"
+                : open
+                  ? "text-chalk group-hover:text-signal"
+                  : "text-graphite group-hover:text-signal"
             }`}
           >
             {area.title}
@@ -360,11 +369,13 @@ export default function RouteRail({
           // An ungrouped bucket has no chapter to introduce and no heading to
           // click, so it is always shown — as it was before grouping existed.
           const open = area ? toggled[area.id] ?? section.containsCurrent : true;
-          // Collapsed, but you are standing in it: show that one stop rather
-          // than hiding where the learner is.
-          const visible = open
-            ? section.stops
-            : section.stops.filter((s) => s.node.id === currentNodeId);
+          // COLLAPSED MEANS COLLAPSED. This used to keep the current stop visible
+          // inside a closed section — "show that one stop rather than hiding where
+          // the learner is" — and it read as a bug, because it is: the chevron says
+          // closed and a row is still there, so the control appears not to have
+          // worked. Where the learner is stays legible without it: the heading of
+          // the section they are in is marked, and its counter still moves.
+          const visible = open ? section.stops : [];
 
           return (
             <div key={key}>
