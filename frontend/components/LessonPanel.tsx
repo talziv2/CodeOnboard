@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import MapView from "@/components/MapView";
 import {
   getLesson,
   respond,
@@ -13,10 +12,32 @@ import {
   waive,
 } from "@/lib/api";
 import type {
-  Anchor, Attempt, Classification, GraphNode, Lesson, NodeGap, RespondResult,
+  Anchor, Attempt, GraphNode, Lesson, NodeGap, RespondResult,
   SessionGraph, VerificationPrompt,
 } from "@/lib/api";
-import { tagStyle, tagLabel } from "@/lib/tags";
+import Callout from "@/components/ui/Callout";
+import FeedbackCard from "@/components/lesson/FeedbackCard";
+import FeedbackCardNext from "@/components/lesson/FeedbackCardNext";
+import CompletionScreen from "@/components/lesson/CompletionScreen";
+import AnswerComposer from "@/components/lesson/AnswerComposer";
+import AttemptHistory from "@/components/lesson/AttemptHistory";
+import GapList from "@/components/lesson/GapList";
+import LessonBrief from "@/components/lesson/LessonBrief";
+import LessonCanvas from "@/components/lesson/LessonCanvas";
+import LessonWorkspace from "@/components/lesson/LessonWorkspace";
+import RevealBlock from "@/components/lesson/RevealBlock";
+import SetupProse from "@/components/lesson/SetupProse";
+import TracePath from "@/components/lesson/TracePath";
+import VerificationBlock from "@/components/lesson/VerificationBlock";
+import PracticeSurface from "@/components/ui/PracticeSurface";
+import Button from "@/components/ui/Button";
+import { isPhaseDriven, lessonUi } from "@/lib/flags";
+import { lessonPhase } from "@/lib/lessonPhase";
+import { lessonBlocks } from "@/lib/lessonView";
+import type { Surface } from "@/lib/lessonSurfaces";
+import EarlierExplanations from "@/components/lesson/EarlierExplanations";
+import { materialIsNew, supersededExplanations } from "@/lib/lessonHistory";
+import { FAILED } from "@/lib/verdict";
 import { errorText, t } from "@/lib/strings";
 
 interface Props {
@@ -31,105 +52,41 @@ interface Props {
   onFileClick: (file: string, lineStart?: number, lineEnd?: number) => void;
   onAdvance: () => Promise<void>;
   onRespond: () => void;
+  /**
+   * Whether the journey is over. Lifted out of this component because it is now
+   * reachable from two places — the end of the walk, and `Finish session` in the
+   * header menu — and a flag owned here could only be set from inside a lesson.
+   */
+  finished: boolean;
+  /** End the journey: the walk ran out, or the learner chose to stop. */
   onFinish: () => void;
-}
-
-/** Keyed by the classification value the Grader returns. */
-const VERDICT_COLOR: Record<string, string> = {
-  understood: "var(--color-jade)",
-  partial: "var(--color-brass)",
-  confused: "var(--color-rust)",
-  "off-topic": "var(--color-rust)",
-};
-
-const NEUTRAL = "var(--color-chalk)";
-
-const FAILED: Classification[] = ["confused", "off-topic"];
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
-        {children}
-      </span>
-      <span aria-hidden className="h-px flex-1 bg-rule" />
-    </div>
-  );
-}
-
-/** Chevron that points right when closed, down when open. */
-function Chevron() {
-  return (
-    <svg
-      aria-hidden
-      viewBox="0 0 10 10"
-      className="h-2.5 w-2.5 shrink-0 fill-none stroke-graphite stroke-[1.5] transition-transform group-open:rotate-90"
-    >
-      <path d="M3.5 1.5 L7 5 L3.5 8.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function whenLabel(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "";
-  const mins = Math.round((Date.now() - then) / 60000);
-  if (mins < 1) return t.lesson.when.justNow;
-  if (mins < 60) return t.lesson.when.minutes(mins);
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return t.lesson.when.hours(hrs);
-  return new Date(iso).toLocaleDateString();
-}
-
-/** One graded answer, collapsed to its verdict until opened. */
-function AttemptCard({ attempt, index }: { attempt: Attempt; index: number }) {
-  const label = t.lesson.verdict[attempt.classification] ?? attempt.classification;
-  const color = VERDICT_COLOR[attempt.classification] ?? NEUTRAL;
-
-  return (
-    <details className="group rounded border border-rule bg-slab open:bg-trench">
-      <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2">
-        <span aria-hidden className="font-mono text-[calc(10rem/16)] text-graphite">
-          {String(index + 1).padStart(2, "0")}
-        </span>
-        <span
-          className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.13em]"
-          style={{ color }}
-        >
-          {label}
-        </span>
-        <span className="ms-auto font-mono text-[calc(10rem/16)] text-graphite">
-          {whenLabel(attempt.at)}
-        </span>
-        <Chevron />
-      </summary>
-      <div className="flex flex-col gap-2.5 border-t border-rule px-3 py-3">
-        <div className="flex flex-col gap-1">
-          <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
-            {t.lesson.youWrote}
-          </span>
-          <p className="measure whitespace-pre-wrap text-[calc(12.5rem/16)] leading-relaxed text-paper">
-            {attempt.answer}
-          </p>
-        </div>
-        {attempt.rationale && (
-          <div className="flex flex-col gap-1">
-            <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
-              {t.lesson.feedback}
-            </span>
-            <p className="measure text-[calc(12.5rem/16)] leading-relaxed text-graphite">
-              {attempt.rationale}
-            </p>
-          </div>
-        )}
-      </div>
-    </details>
-  );
+  /** Leave the session entirely, from the completion screen. */
+  onLeave: () => void;
+  /**
+   * Which surface to render, under `surfaces` only.
+   *
+   * Owned by the session page because the TAB is owned there — R5 keeps tab
+   * selection out of anything that can see a phase, and this component is full of
+   * phase. It receives the consequence of a navigation decision, never makes one.
+   */
+  surface?: Surface | null;
+  /**
+   * Something landed in a surface. The page decides whether that is news — it owns
+   * the tab, and a change in the surface the learner is looking at is not news.
+   *
+   * R1's mitigation, and the reason the panel reports rather than decides: a change
+   * announced only inside the surface that changed is announced to nobody, and this
+   * component cannot see which surface is on screen.
+   */
+  onSurfaceChanged?: (surface: Surface) => void;
+  /** Take the learner to a surface. Always from an explicit control of theirs. */
+  onGoToSurface?: (surface: Surface) => void;
 }
 
 export default function LessonPanel({
   sessionId, nodeId, node, position, total, isPrerequisite,
-  graph, onFileClick, onAdvance, onRespond, onFinish,
+  graph, onFileClick, onAdvance, onRespond, finished, onFinish, onLeave, surface,
+  onSurfaceChanged, onGoToSurface,
 }: Props) {
   const router = useRouter();
   const [lesson, setLesson] = useState<Lesson | null>(null);
@@ -142,7 +99,21 @@ export default function LessonPanel({
   // a different lifetime, and `cached_lesson` is the teacher's artifact.
   const [verification, setVerification] = useState<VerificationPrompt | null>(null);
   const [verifying, setVerifying] = useState(false);
-  const [done, setDone] = useState(false);
+
+  const verdictRef = useRef<HTMLDivElement>(null);
+  // What the last check was ABOUT, captured at submit time.
+  //
+  // Both halves are otherwise unrecoverable once the reply lands. The answer is
+  // cleared from the composer and a verification attempt is deliberately kept
+  // out of "Your answers", so without this the learner's own words vanish. And
+  // `result.gaps` is the still-OPEN list, so a gap that just closed is by
+  // definition absent from it — the claims have to come from the question that
+  // targeted them.
+  const [checked, setChecked] = useState<{ answer: string; targeted: NodeGap[] } | null>(null);
+  // The Mutator refused a warm-up for THIS node. Kept out of `result` on purpose:
+  // it outlives any one answer, because what it records is a fact about the
+  // stop's surroundings rather than about the attempt that asked.
+  const [warmUpDeclined, setWarmUpDeclined] = useState(false);
 
   useEffect(() => {
     setLesson(null);
@@ -154,11 +125,70 @@ export default function LessonPanel({
       .finally(() => setLoading(false));
   }, [sessionId, nodeId]);
 
-  // Moving to a different node is what clears the answer in progress.
+  // Moving to a different node is what clears the answer in progress — and the
+  // refusal with it, since a different stop has a different foundation.
   useEffect(() => {
     setResult(null);
     setAnswer("");
+    setChecked(null);
+    setWarmUpDeclined(false);
+    // AND THE OUTSTANDING CHECK. A verification question belongs to the gap it
+    // was written for, on the node that carries it. Leaving it set turned the
+    // NEXT stop into `VERIFY` — `lessonPhase` reads `verification` — so its
+    // Submit posted `kind: "verification"` for a node with nothing pending, the
+    // backend answered 409 `no_pending_verification`, and the learner pressed a
+    // button that did nothing at all. Hit while re-validating the other fixes.
+    //
+    // Clearing is the honest minimum, not the whole answer: the server still
+    // holds `pending_verification`, and carrying it back when the learner returns
+    // needs it on the wire (F101). Dropping it here loses nothing they can see.
+    setVerification(null);
   }, [sessionId, nodeId]);
+
+  // Bring the verdict to the learner.
+  //
+  // INTERIM. Grading inserts the reveal ABOVE the verdict, so the verdict lands
+  // roughly three viewports below the button that produced it — measured at
+  // 2027px in a 611px column, with the scroll position unmoved. Until the
+  // workspace co-locates an action with its own result, move the column and the
+  // focus ring to the thing that just happened.
+  //
+  // Deliberately NOT `scrollIntoView`: measured against the real page it moved
+  // nothing at all. There are two nested scroll contexts here — the lesson
+  // column and the source pane — and it walks for its own.
+  //
+  // And deliberately NOT `offsetTop`, which is what the first attempt used and
+  // why it still moved nothing: `offsetTop` is measured against the nearest
+  // POSITIONED ancestor, and the lesson column is static, so the number belonged
+  // to a different coordinate space than the one being scrolled. `CodeLines`
+  // documents this same trap — its scroller is explicitly `relative` "so
+  // offsetTop is measured against this box and not against the document".
+  // Rect arithmetic needs no such cooperation from the layout.
+  //
+  // A third of the way down rather than centred, matching the source pane.
+  useEffect(() => {
+    const el = verdictRef.current;
+    if (!result || !el) return;
+
+    // Focus first: it must not depend on the scroll succeeding.
+    el.focus({ preventScroll: true });
+
+    let box: HTMLElement | null = el.parentElement;
+    while (box && !/(auto|scroll)/.test(getComputedStyle(box).overflowY)) {
+      box = box.parentElement;
+    }
+    if (!box) return;
+
+    const delta = el.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    const top = Math.max(0, box.scrollTop + delta - box.clientHeight / 3);
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Plain assignment for the instant case rather than `scrollTo({behavior})`:
+    // identical result, and it works where the animated form does not — a
+    // backgrounded tab runs no animation frames, so `scrollTo` is inert there
+    // while this is not.
+    if (still) box.scrollTop = top;
+    else box.scrollTo({ top, behavior: "smooth" });
+  }, [result]);
 
   const submitAnswer = async () => {
     if (!answer.trim() || loading) return;
@@ -166,12 +196,25 @@ export default function LessonPanel({
     setError(null);
     try {
       const res = await respond(sessionId, answer, nodeId);
+      // A fresh assessment supersedes any check result on screen.
+      setChecked(null);
       setResult(res);
+      // A verdict, a rationale, and possibly a new gap: all of it lands in
+      // Understanding. Reported even when the learner is looking at it — the page
+      // is what knows whether that makes it news.
+      onSurfaceChanged?.("understanding");
+      // The explanation unlocks on the first graded answer, which is material
+      // appearing in Lesson while the learner is somewhere else.
+      if (!revealed && lesson?.lesson.reveal) onSurfaceChanged?.("lesson");
       // A re-teach replaced the cached lesson with one that names the
       // misconception. Pull it, so what is on screen is the corrected lesson
       // rather than the one that misled them.
       if (res.adaptation?.retaught) {
         getLesson(sessionId).then(setLesson).catch(() => {});
+        // The prose itself changed. This is the case R1 was written for: it happens
+        // in Lesson, it happens because of something done in Understanding, and
+        // nothing about the verdict card would tell the learner unless we say so.
+        onSurfaceChanged?.("lesson");
       }
       // A warm-up moves the session pointer, and refreshing now would swap this
       // panel out before the verdict could be read. Follow on the user's click.
@@ -188,7 +231,7 @@ export default function LessonPanel({
     try {
       const res = (await advance(sessionId, "next", nodeId)) as { done?: boolean };
       await onAdvance();
-      if (res?.done) setDone(true);
+      if (res?.done) onFinish();
     } catch (e: unknown) {
       setError(e instanceof Error ? errorText(e.message) : t.lesson.advanceFailed);
     } finally {
@@ -201,6 +244,18 @@ export default function LessonPanel({
     try {
       const { inserted } = await retry(sessionId, nodeId);
       if (!inserted) {
+        // RECORD THE REFUSAL. The card used to infer "declined" from the
+        // GRADING response — `adaptation.kind === "prerequisite"` with no
+        // matching mutation — which cannot see a decline that happens here, on
+        // the retry call. So the Mutator answered `no_useful_prerequisite`, the
+        // sentence below was shown, and "Build me a warm-up" stayed on offer.
+        //
+        // Node-scoped, and kept for the node's lifetime: both refusals
+        // (`no_useful_prerequisite` — nothing smaller is a foundation — and
+        // `prerequisite_exists`) are facts about this stop's surroundings, not
+        // about the answer that preceded the request. Answering again does not
+        // make a foundation appear.
+        setWarmUpDeclined(true);
         // Declining is a real answer — no candidate was a smaller foundation
         // than the stop they are on. Say so and leave the verdict panel up, so
         // the other ways forward stay reachable. Silently resetting the form
@@ -227,6 +282,7 @@ export default function LessonPanel({
     setError(null);
     try {
       setVerification(await requestVerification(sessionId, nodeId));
+      onSurfaceChanged?.("understanding");
       setAnswer("");
       setResult(null);
     } catch (e: unknown) {
@@ -242,6 +298,9 @@ export default function LessonPanel({
     setError(null);
     try {
       const got = await respondToVerification(sessionId, answer, nodeId);
+      onSurfaceChanged?.("understanding");
+      // Captured BEFORE the composer and the prompt are cleared — see `checked`.
+      setChecked({ answer, targeted: verification?.gaps ?? [] });
       setResult(got);
       setVerification(null);
       setAnswer("");
@@ -268,18 +327,18 @@ export default function LessonPanel({
     }
   };
 
-  if (done) {
-    return <CompletionScreen graph={graph} onNewSession={() => router.push("/")} onFinish={onFinish} />;
+  if (finished) {
+    return <CompletionScreen graph={graph} onNewSession={() => router.push("/")} onFinish={onLeave} />;
   }
 
   if (loading && !lesson) {
     return (
-      <p className="animate-pulse font-mono text-sm text-graphite">{t.lesson.writing}</p>
+      <p className="animate-pulse font-mono text-aside text-graphite">{t.lesson.writing}</p>
     );
   }
 
   if (error && !lesson) {
-    return <p className="text-sm text-rust">{error}</p>;
+    return <p className="text-aside text-rust">{error}</p>;
   }
 
   if (!lesson) return null;
@@ -337,6 +396,13 @@ export default function LessonPanel({
   // over the graph, which lags by one refresh on the warm-up path.
   const openGaps: NodeGap[] = result?.gaps ?? node.gaps ?? [];
 
+  // One region, three contents — the eyebrow is what says which.
+  const practiceLabel = verification
+    ? t.lesson.verificationHeading
+    : result
+      ? t.lesson.feedback
+      : t.lesson.checkUnderstanding;
+
   const anchors: Anchor[] = node.anchors ?? [];
   const adaptation = result?.adaptation;
   // A hint, a follow-up or a corrected lesson is an invitation to answer again
@@ -352,511 +418,458 @@ export default function LessonPanel({
   // reached, except when a warm-up was just spliced in: the Mutator caps them at
   // one per node, so offering there would promise something it would decline.
   const warmUpInserted = result?.mutation?.kind === "prerequisite";
+
+  // A CHECK, not an assessment. The backend deliberately returns
+  // `classification: null` here — a verification answer is evidence about named
+  // beliefs, not a re-grade of the objective — so every branch below that keys
+  // off `classification` is silent on this path, and the panel has to read
+  // `resolved` / `unresolved` instead.
+  const isCheck = result?.kind === "verification";
+  const closed = (checked?.targeted ?? []).filter((g) =>
+    (result?.resolved ?? []).includes(g.id)
+  );
+  const stillOpen = (checked?.targeted ?? []).filter((g) =>
+    (result?.unresolved ?? []).includes(g.id)
+  );
+  const checkOutcome =
+    closed.length === 0
+      ? { label: t.lesson.checkOpen, color: "var(--color-brass)" }
+      : stillOpen.length === 0
+      ? { label: t.lesson.checkCleared, color: "var(--color-jade)" }
+      : { label: t.lesson.checkPartly, color: "var(--color-brass)" };
+
   const canRequestWarmUp =
     result !== null &&
     result?.classification !== "understood" &&
-    !warmUpInserted;
+    !warmUpInserted &&
+    // Refused once for this stop. "Never offer what would be declined" is the
+    // whole point of these gates, and a decline recorded on the retry call was
+    // invisible to every one of them.
+    !warmUpDeclined &&
+    // On a check, `classification` is null, so this test passed by accident and
+    // "Build me a warm-up" became the ONLY button offered after a correct
+    // answer. A warm-up is still reachable here, but as a fallback rather than
+    // the whole response.
+    !isCheck;
   const recovered =
     warmUpTitle !== null &&
     attempts.some((a) => FAILED.includes(a.classification)) &&
     latest?.classification === "understood";
 
+  /**
+   * What this lesson is doing, as one value — see `lib/lessonPhase.ts`.
+   *
+   * Nothing renders from it yet, deliberately: L1 introduces the concept with no
+   * behaviour attached so the branch table can be checked against the UI that
+   * already exists, before L4 starts keying rendering off it. The sixteen
+   * conditionals below are untouched.
+   */
+  const phase = lessonPhase({ result, verification });
+
+  /**
+   * Which blocks the canvas shows, and at what weight — see `lib/lessonView.ts`,
+   * where §3a is answered. Computed on both paths so the numbers are measurable
+   * either way; only the `next` path renders from it.
+   */
+  const ui = lessonUi();
+  // Under `surfaces` the page tells us which surface to draw; under `next` there is
+  // one column and `undefined` is what tells `LessonCanvas` to draw all of it.
+  const drawing: Surface | undefined =
+    ui === "surfaces" ? surface ?? "lesson" : undefined;
+  // R3's third mitigation, read from the attempt history so it survives a reload.
+  // Only offered on the split: the group is Lesson's, and `next` has no Lesson to
+  // be a document of.
+  const superseded = drawing ? supersededExplanations(attempts) : [];
+  // Did the last answer rewrite what is on this surface? The consequence line says
+  // so on the Understanding side at the moment it happens; this is what makes the
+  // claim good for a learner who arrives at Lesson later, or after a reload.
+  const rewritten = drawing === "lesson" && materialIsNew(attempts);
+  const blocks = lessonBlocks({
+    phase,
+    multiAnchor: anchors.length > 1,
+    openGapCount: openGaps.length,
+    attemptCount: attempts.length,
+    revealed,
+    hasReveal: isSplit && Boolean(lesson.lesson.reveal),
+    // Zero on the single canvas, which is how `next` stays exactly as it was: the
+    // block is `absent` and nothing renders.
+    supersededCount: superseded.length,
+  });
+
+  // The two handlers that used to be inline in the feedback branch, named so the
+  // card can take callbacks instead of state setters. Same bodies, same effects.
+  const answerAgain = () => {
+    setResult(null);
+    setAnswer("");
+  };
+  /**
+   * Take the learner to a block the brief only counted.
+   *
+   * Rect arithmetic rather than `scrollIntoView`, for two measured reasons. It did
+   * not move at all with `behavior: "smooth"` — that needs an animation frame loop
+   * — and even `block: "center"` cannot know about the PINNED BRIEF, so any
+   * alignment that puts the target near the top of the scrollport puts it
+   * underneath the header instead. The offset here subtracts the brief's real
+   * height, read at call time so the text-size dial cannot stale it.
+   *
+   * Same lesson as the source pane, arrived at from the other direction: there it
+   * was `offsetTop` measuring against the wrong ancestor, here it is a scroll API
+   * that has no idea part of the scrollport is covered.
+   */
+  const revealBlock = (id: string) => {
+    const target = document.getElementById(id);
+    if (!target) return;
+    let box: HTMLElement | null = target.parentElement;
+    while (box && box.scrollHeight <= box.clientHeight) box = box.parentElement;
+    if (!box) return;
+    const brief = box.querySelector("[data-lesson-brief]");
+    const clearance = (brief?.getBoundingClientRect().height ?? 0) + 12;
+    const top =
+      box.scrollTop + target.getBoundingClientRect().top - box.getBoundingClientRect().top - clearance;
+    // The same short-hop-only rule the source pane uses: animate a jump the eye
+    // can follow, and cut straight to a long one rather than making the learner
+    // watch the whole column go past.
+    const goal = Math.max(0, top);
+    const near = Math.abs(goal - box.scrollTop) < box.clientHeight * 1.5;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    box.scrollTo({ top: goal, behavior: near && !still ? "smooth" : "auto" });
+  };
+
+  const startWarmUp = async () => {
+    setLoading(true);
+    try {
+      await onAdvance();
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <span className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.14em] text-graphite">
-          {isPrerequisite ? t.lesson.warmUpHeading : t.lesson.stopOf(position, total)}
-        </span>
-
-        <h2 className="font-display text-[calc(23rem/16)] font-medium leading-[1.2] tracking-tight text-chalk text-balance">
-          {node.title}
-        </h2>
-
-        <button
-          onClick={() => onFileClick(node.file)}
-          className="w-fit border-b border-dashed border-signal-dim pb-px font-mono text-[calc(11rem/16)] text-signal transition hover:border-signal"
-        >
-          {node.file}
-          {" · "}
-          {t.lesson.lines(node.line_start, node.line_end)}
-        </button>
-
-        {node.concept_tags.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {node.concept_tags.map((tag) => {
-              const s = tagStyle(tag);
-              return (
-                <span
-                  key={tag}
-                  className="rounded-[2px] border px-1.5 py-px font-mono text-[calc(9.5rem/16)] tracking-[0.05em]"
-                  style={{ color: s.text, borderColor: s.border, background: s.background }}
-                >
-                  {tagLabel(tag)}
-                </span>
-              );
-            })}
-          </div>
+    // The one thing L1 renders: an invisible attribute, so a test can assert that
+    // the derived phase agrees with the blocks actually on screen rather than
+    // re-testing the pure function against itself. Zero visual diff, and it stays
+    // useful as the hook L3 and L4's tests key off.
+    <div data-lesson-phase={phase}>
+      <LessonWorkspace
+        /* The tab switch resets the shared scroller, so re-measure on the same
+           signal rather than waiting for the programmatic scroll's event. */
+        remeasureOn={drawing}
+        brief={(collapsed) => (
+          <LessonBrief
+            node={node}
+            position={position}
+            total={total}
+            isPrerequisite={isPrerequisite}
+            onFileClick={onFileClick}
+            openGapCount={openGaps.length}
+            attemptCount={attempts.length}
+            onShowGaps={() => revealBlock("lesson-gaps")}
+            onShowAttempts={() => revealBlock("lesson-attempts")}
+            collapsed={collapsed}
+          />
         )}
-      </div>
+      >
 
+      {/* Two canvases. The phase-driven one places blocks by phase; the legacy one
+          is the stack exactly as it shipped, kept reachable with the flag off so the
+          new information architecture can be proven before it is the only path.
+          Both render the SAME block components — what differs is placement and
+          weight, which is the whole of §3a's answer.
+
+          `surfaces` enters here too, and today renders identically to `next`: it is
+          a re-PLACEMENT of these blocks across two surfaces, not a different set of
+          them (§6). Starting it as an exact copy is what makes S2 and S3 reviewable
+          — each step is a visible divergence from a known-good arrangement rather
+          than a new page appearing all at once. No existing configuration changes
+          behaviour: `legacy` and `next` are untouched. */}
+      {isPhaseDriven(ui) ? (
+        <>
+          {/* "You came back and got it" is evidence about the LEARNER, so it
+              belongs with the rest of that on Understanding. On the single canvas
+              there was nowhere else for it to be. */}
+          {/* S5's `new` marking. On Lesson, above the material, because that is
+              what it is about — and only there: on Understanding the consequence
+              line already said it, in the card that caused it. */}
+          {rewritten && (
+            <Callout tone="signal" label={t.lesson.newMaterialLabel}>
+              <p className="text-meta text-chalk">{t.lesson.newMaterialBody}</p>
+            </Callout>
+          )}
+
+          {recovered && drawing !== "lesson" && (
+            <Callout tone="jade" label={t.lesson.recoveredLabel}>
+              <p className="text-meta text-paper">
+                {t.lesson.recoveredBody}{" "}
+                <span className="text-chalk">“{warmUpTitle}”</span>
+                {t.lesson.recoveredBodyEnd}
+              </p>
+            </Callout>
+          )}
+
+          <LessonCanvas
+            blocks={blocks}
+            surface={drawing}
+            labels={{
+              setup: isSplit ? t.lesson.setup : t.lesson.walkthrough,
+              setupMirror: t.lesson.setupMirror,
+              tracePath: t.lesson.tracePath,
+              tracePathCount: anchors.length,
+              gaps: t.lesson.gapsHeading,
+              gapsCount: openGaps.length,
+              attempts: t.lesson.yourAnswers(attempts.length),
+              earlier: t.lesson.earlierExplanations(superseded.length),
+              question: t.lesson.questionAsked,
+            }}
+            earlier={<EarlierExplanations versions={superseded} />}
+            /* Text only. The composer lives in `question` and renders only while
+               that block is open, which is what keeps "exactly one composer" true
+               while the question stays re-readable. */
+            questionEcho={
+              <p className="measure whitespace-pre-wrap text-aside text-paper">
+                {lesson.lesson.prompt}
+              </p>
+            }
+            setup={
+              <div className="flex flex-col gap-3">
+                {isSplit && lesson.lesson.why_now && (
+                  <p className="measure border-s-2 border-rule ps-3 text-meta italic text-graphite">
+                    {lesson.lesson.why_now}
+                  </p>
+                )}
+                <SetupProse
+                  isSplit={isSplit}
+                  body={isSplit ? lesson.lesson.setup : lesson.lesson.walkthrough}
+                />
+              </div>
+            }
+            tracePath={<TracePath anchors={anchors} onFileClick={onFileClick} />}
+            gaps={
+              <div id="lesson-gaps">
+                <GapList gaps={openGaps} onWaive={onWaive} disabled={loading} />
+              </div>
+            }
+            attempts={
+              <div id="lesson-attempts">
+                <AttemptHistory attempts={attempts} />
+              </div>
+            }
+            question={
+              <PracticeSurface label={practiceLabel}>
+                {verification ? (
+                  <VerificationBlock
+                    question={verification.question}
+                    answer={answer}
+                    onAnswerChange={setAnswer}
+                    onSubmit={onSubmitVerification}
+                    onDismiss={() => setVerification(null)}
+                    loading={loading}
+                    error={error}
+                  />
+                ) : (
+                  <AnswerComposer
+                    prompt={lesson.lesson.prompt}
+                    answer={answer}
+                    onAnswerChange={setAnswer}
+                    onSubmit={submitAnswer}
+                    onSkip={handleAdvance}
+                    loading={loading}
+                    error={error}
+                  />
+                )}
+              </PracticeSurface>
+            }
+            feedback={
+              result && (
+                <PracticeSurface label={practiceLabel}>
+                  <FeedbackCardNext
+                    result={result}
+                    isCheck={isCheck}
+                    checkOutcome={checkOutcome}
+                    closed={closed}
+                    checkedAnswer={checked?.answer}
+                    openGaps={openGaps}
+                    warmUpInserted={warmUpInserted}
+                    // ONE gate for the whole table. The assessment path uses the
+                    // panel's own flag; on a check that flag is false by
+                    // construction while a warm-up is still deliberately reachable
+                    // while something is unresolved, so the union is what
+                    // `feedbackActions` needs to obey "never offer what would be
+                    // declined" without knowing which path it is on.
+                    warmUpAvailable={
+                      (canRequestWarmUp || (isCheck && !warmUpInserted)) && !warmUpDeclined
+                    }
+                    warmUpDeclined={warmUpDeclined}
+                    canAnswerAgain={canAnswerAgain}
+                    // Verification is available whenever something is open to
+                    // verify. Exhaustion and the node's remediation cap are not on
+                    // the node wire, so a refusal is reported (`nothing_to_verify`)
+                    // rather than pre-empted.
+                    checkAvailable={openGaps.length > 0}
+                    loading={loading}
+                    verifying={verifying}
+                    error={error}
+                    verdictRef={verdictRef}
+                    onAdvanceStop={handleAdvance}
+                    onCheckUnderstanding={onCheckUnderstanding}
+                    onBuildWarmUp={handleRetry}
+                    onAnswerAgain={answerAgain}
+                    onStartWarmUp={startWarmUp}
+                    // The consequence line's control, under `surfaces` only: the
+                    // line says the stop was rewritten, and on the split the
+                    // rewritten thing is one tab away. Passing a callback rather
+                    // than a tab name keeps navigation the page's business (R5).
+                    onReadInLesson={
+                      drawing && onGoToSurface ? () => onGoToSurface("lesson") : undefined
+                    }
+                  />
+                </PracticeSurface>
+              )
+            }
+            reveal={
+              lesson.lesson.reveal ? (
+                <RevealBlock
+                  reveal={lesson.lesson.reveal}
+                  takeaway={lesson.lesson.takeaway}
+                  ownership={lesson.lesson.ownership}
+                />
+              ) : null
+            }
+          />
+
+          <div className="border-t border-rule pt-4">
+            <button
+              onClick={onFinish}
+              className="font-mono text-micro text-graphite transition hover:text-chalk"
+            >
+              {t.lesson.finishEarly}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
       {recovered && (
-        <div className="flex flex-col gap-1 rounded border border-jade/40 bg-jade/10 px-4 py-3">
-          <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.14em] text-jade">
-            {t.lesson.recoveredLabel}
-          </span>
-          <p className="text-[calc(12.5rem/16)] leading-relaxed text-paper">
+        <Callout tone="jade" label={t.lesson.recoveredLabel}>
+          <p className="text-meta text-paper">
             {t.lesson.recoveredBody}{" "}
             <span className="text-chalk">“{warmUpTitle}”</span>
             {t.lesson.recoveredBodyEnd}
           </p>
-        </div>
+        </Callout>
       )}
 
       {isSplit && lesson.lesson.why_now && (
-        <p className="measure border-s-2 border-rule ps-3 text-[calc(12.5rem/16)] italic leading-relaxed text-graphite">
+        <p className="measure border-s-2 border-rule ps-3 text-meta italic text-graphite">
           {lesson.lesson.why_now}
         </p>
       )}
 
-      <div className="flex flex-col gap-3">
-        {/* A pre-B4 lesson has no halves to withhold, so it renders exactly as
-            it always did, under the label it always had. */}
-        <SectionLabel>{isSplit ? t.lesson.setup : t.lesson.walkthrough}</SectionLabel>
-        <p className="measure whitespace-pre-wrap text-[calc(13.5rem/16)] leading-[1.72] text-paper">
-          {isSplit ? lesson.lesson.setup : lesson.lesson.walkthrough}
-        </p>
-      </div>
+      <SetupProse
+        isSplit={isSplit}
+        body={isSplit ? lesson.lesson.setup : lesson.lesson.walkthrough}
+      />
 
-      {anchors.length > 1 && (
-        <div className="flex flex-col gap-2">
-          <SectionLabel>{t.lesson.tracePath}</SectionLabel>
-          <ol className="flex flex-col gap-1">
-            {anchors.map((a, i) => (
-              <li key={`${a.file}-${a.line_start}-${i}`}>
-                <button
-                  onClick={() => onFileClick(a.file, a.line_start, a.line_end)}
-                  className="group flex w-full items-baseline gap-2.5 rounded px-2 py-1 text-start transition hover:bg-slab"
-                >
-                  <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.13em] text-graphite">
-                    {t.lesson.anchorStep(i + 1, anchors.length)}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate font-mono text-[calc(11rem/16)] text-signal transition group-hover:text-chalk">
-                    {a.symbol ?? a.file}
-                  </span>
-                  <span className="shrink-0 font-mono text-[calc(10rem/16)] text-graphite">
-                    {t.lesson.lines(a.line_start, a.line_end)}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
+      {anchors.length > 1 && <TracePath anchors={anchors} onFileClick={onFileClick} />}
 
       {/* The outstanding-gaps list. §18.10 calls this "the product's most
           honest surface: it tells the learner what they still do not know, by
           name". Named rather than counted — a count says how much is wrong, and
           only the claim says what. */}
       {openGaps.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <SectionLabel>{t.lesson.gapsHeading}</SectionLabel>
-          <p className="text-[calc(12rem/16)] text-graphite">{t.lesson.gapsHelp}</p>
-          <ul className="flex flex-col gap-2">
-            {openGaps.map((gap) => (
-              <li
-                key={gap.id}
-                className="flex items-start justify-between gap-3 rounded border border-hairline bg-paper px-3 py-2"
-              >
-                <div className="flex flex-col gap-1">
-                  <span className="text-[calc(13rem/16)] text-ink">{gap.claim}</span>
-                  <span className="text-[calc(11rem/16)] uppercase tracking-wide text-graphite">
-                    {gap.blocking ? t.lesson.gapBlocking : t.lesson.gapNonBlocking}
-                  </span>
-                </div>
-                <button
-                  onClick={() => onWaive(gap.id)}
-                  disabled={loading}
-                  className="shrink-0 rounded border border-hairline px-2 py-1 text-[calc(11rem/16)] text-graphite transition hover:text-ink disabled:opacity-40"
-                >
-                  {t.lesson.waiveOne}
-                </button>
-              </li>
-            ))}
-          </ul>
+        <div id="lesson-gaps">
+          <GapList gaps={openGaps} onWaive={onWaive} disabled={loading} />
         </div>
       )}
 
       {/* The verification question. No reveal and no model answer are rendered
           because none is sent — showing the answer beside the question is what
           made re-asking meaningless in the first place (§18.7). */}
-      {verification && (
-        <div className="flex flex-col gap-3">
-          <SectionLabel>{t.lesson.verificationHeading}</SectionLabel>
-          <p className="text-[calc(14rem/16)] text-ink">{verification.question}</p>
-          <p className="text-[calc(12rem/16)] text-graphite">
-            {t.lesson.verificationHelp}
-          </p>
-          <textarea
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            placeholder={t.lesson.answerPlaceholder}
-            rows={4}
-            className="w-full rounded border border-hairline bg-paper p-3 text-[calc(14rem/16)] text-ink"
-          />
-          <div className="flex gap-2">
-            <button
-              onClick={onSubmitVerification}
-              disabled={loading || !answer.trim()}
-              className="rounded bg-signal px-4 py-2 text-[calc(13rem/16)] font-medium text-paper transition disabled:opacity-40"
-            >
-              {loading ? t.lesson.grading : t.lesson.submit}
-            </button>
-            <button
-              onClick={() => setVerification(null)}
-              disabled={loading}
-              className="rounded border border-hairline px-3 py-2 text-[calc(13rem/16)] text-graphite transition hover:text-ink disabled:opacity-40"
-            >
-              {t.lesson.notNow}
-            </button>
-          </div>
-        </div>
-      )}
+
 
       {attempts.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <SectionLabel>{t.lesson.yourAnswers(attempts.length)}</SectionLabel>
-          <div className="flex flex-col gap-2">
-            {attempts.map((attempt, i) => (
-              <AttemptCard key={`${attempt.at}-${i}`} attempt={attempt} index={i} />
-            ))}
-          </div>
+        <div id="lesson-attempts">
+          <AttemptHistory attempts={attempts} />
         </div>
       )}
 
-      {!result && (
-        <div className="flex flex-col gap-3">
-          <SectionLabel>{t.lesson.checkUnderstanding}</SectionLabel>
-          <p className="measure text-[calc(13.5rem/16)] leading-[1.6] text-chalk">
-            {lesson.lesson.prompt}
-          </p>
-          <textarea
-            rows={4}
-            className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[calc(13rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
-            placeholder={t.lesson.answerPlaceholder}
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                submitAnswer();
-              }
-            }}
-            disabled={loading}
-          />
-          {error && <p className="text-sm text-rust">{error}</p>}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={submitAnswer}
-              disabled={loading || !answer.trim()}
-              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
-            >
-              {loading ? t.lesson.grading : t.lesson.submit}
-            </button>
-            <button
-              onClick={handleAdvance}
-              disabled={loading}
-              className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
-            >
-              {t.lesson.skipStop}
-            </button>
-            <span className="ms-auto font-mono text-[calc(10.5rem/16)] text-graphite">
-              {t.lesson.submitHint}
-            </span>
-          </div>
-        </div>
+      {/* The lesson's own question. Hidden while a verification is outstanding:
+          both blocks bind the SAME `answer` state, so rendering them together
+          put two textareas on screen that mirrored each other's text, under two
+          buttons both labelled "Submit" that did different things. `Not now`
+          clears the verification and brings this back. */}
+      <PracticeSurface label={practiceLabel}>
+      {verification && (
+        <VerificationBlock
+          question={verification.question}
+          answer={answer}
+          onAnswerChange={setAnswer}
+          onSubmit={onSubmitVerification}
+          onDismiss={() => setVerification(null)}
+          loading={loading}
+        />
       )}
-
-      {/* The reveal. Held back until the learner has answered, which is the
-          whole point of the split — then shown with the verdict rather than
-          before it, so the explanation lands against what they actually said. */}
-      {isSplit && revealed && lesson.lesson.reveal && (
-        <div className="flex flex-col gap-3">
-          <SectionLabel>{t.lesson.reveal}</SectionLabel>
-          <p className="measure whitespace-pre-wrap text-[calc(13.5rem/16)] leading-[1.72] text-paper">
-            {lesson.lesson.reveal}
-          </p>
-
-          {lesson.lesson.takeaway && (
-            <div className="mt-1 flex flex-col gap-1.5 rounded border border-signal-dim/40 bg-signal/[0.06] px-4 py-3">
-              <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-signal">
-                {t.lesson.takeaway}
-              </span>
-              <p className="measure text-[calc(13rem/16)] leading-[1.65] text-chalk">
-                {lesson.lesson.takeaway}
-              </p>
-            </div>
-          )}
-
-          {lesson.lesson.ownership && (
-            <div className="flex flex-col gap-1.5 rounded border border-rule bg-slab px-4 py-3">
-              <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
-                {t.lesson.ownership}
-              </span>
-              <p className="measure text-[calc(12.5rem/16)] leading-[1.65] text-paper">
-                {lesson.lesson.ownership}
-              </p>
-            </div>
-          )}
-        </div>
+      {!result && !verification && (
+        <AnswerComposer
+          prompt={lesson.lesson.prompt}
+          answer={answer}
+          onAnswerChange={setAnswer}
+          onSubmit={submitAnswer}
+          onSkip={handleAdvance}
+          loading={loading}
+          error={error}
+        />
       )}
-
       {result && (
-        <div className="flex flex-col gap-3 rounded border border-rule bg-slab p-4">
-          <p
-            className="font-mono text-[calc(11rem/16)] uppercase tracking-[0.14em]"
-            style={{ color: VERDICT_COLOR[result.classification] ?? NEUTRAL }}
-          >
-            {t.lesson.verdict[result.classification] ?? result.classification}
-          </p>
-          <p className="measure text-[calc(13rem/16)] leading-[1.65] text-paper">
-            {result.rationale}
-          </p>
-          {error && <p className="text-sm text-rust">{error}</p>}
-
-          {/* What the system did about the gap. Only a missing foundation
-              grows the journey; the rest answer the learner where they are. */}
-          {adaptation?.text && (
-            <div className="flex flex-col gap-1.5 rounded border border-signal-dim/40 bg-signal/[0.06] px-4 py-3">
-              <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-signal">
-                {adaptation.kind === "hint" ? t.lesson.hint : t.lesson.followup}
-              </span>
-              <p className="measure text-[calc(13rem/16)] leading-[1.65] text-chalk">
-                {adaptation.text}
-              </p>
-            </div>
-          )}
-
-          {adaptation?.retaught && (
-            <p className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.13em] text-signal">
-              {t.lesson.retaught}
-            </p>
-          )}
-
-          {typeof adaptation?.pruned === "number" && adaptation.pruned > 0 && (
-            <p className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.13em] text-jade">
-              {t.lesson.pruned(adaptation.pruned)}
-            </p>
-          )}
-
-          {FAILED.includes(result.classification) &&
-            adaptation?.kind === "prerequisite" && (
-              <p className="text-[calc(12.5rem/16)] leading-relaxed text-paper">
-                {result.mutation?.kind === "prerequisite"
-                  ? t.lesson.warmUpAdded
-                  : result.mutation?.reason === "prerequisite_exists"
-                  ? t.lesson.warmUpExists
-                  : t.lesson.warmUpUnavailable}
-              </p>
-            )}
-
-          <div className="flex flex-wrap items-center gap-3">
-            {result.classification === "understood" && (
-              <button
-                onClick={handleAdvance}
-                disabled={loading}
-                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
-              >
-                {loading ? t.lesson.loadingShort : t.lesson.nextStop}
-              </button>
-            )}
-
-            {/* Partly there: moving on is the default. The warm-up offer is
-                shared with every other non-understood state, below. */}
-            {result.classification === "partial" && (
-              <button
-                onClick={handleAdvance}
-                disabled={loading}
-                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
-              >
-                {loading ? t.lesson.loadingShort : t.lesson.nextStop}
-              </button>
-            )}
-
-            {canAnswerAgain && openGaps.length > 0 && (
-              // NOT "Try again". That cleared the form and re-showed the very
-              // question whose answer `reveal` had just given away, so passing it
-              // proved only that they had read the page. This asks a NEW question
-              // about the same misconception (§18.7).
-              <button
-                onClick={onCheckUnderstanding}
-                disabled={loading || verifying}
-                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
-              >
-                {verifying ? t.lesson.verifyCtaBusy : t.lesson.verifyCta}
-              </button>
-            )}
-            {canAnswerAgain && openGaps.length === 0 && (
-              <button
-                onClick={() => { setResult(null); setAnswer(""); }}
-                disabled={loading}
-                className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
-              >
-                {t.lesson.tryAgain}
-              </button>
-            )}
-
-            {FAILED.includes(result.classification) && (
-              <>
-                {result.mutation?.kind === "prerequisite" && (
-                  <button
-                    onClick={async () => {
-                      setLoading(true);
-                      try {
-                        await onAdvance();
-                      } finally {
-                        setLoading(false);
-                      }
-                    }}
-                    disabled={loading}
-                    className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
-                  >
-                    {loading ? t.lesson.loadingShort : t.lesson.startWarmUp}
-                  </button>
-                )}
-                <button
-                  onClick={handleAdvance}
-                  disabled={loading}
-                  className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
-                >
-                  {result.mutation?.kind === "prerequisite"
-                    ? t.lesson.skipItMoveOn
-                    : t.lesson.moveOnAnyway}
-                </button>
-              </>
-            )}
-
-            {/* One offer, every state where the objective was not reached. */}
-            {canRequestWarmUp && (
-              <button
-                onClick={handleRetry}
-                disabled={loading}
-                className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
-              >
-                {t.lesson.buildWarmUp}
-              </button>
-            )}
-          </div>
-        </div>
+        <FeedbackCard
+          result={result}
+          isCheck={isCheck}
+          checkOutcome={checkOutcome}
+          closed={closed}
+          checkedAnswer={checked?.answer}
+          adaptation={adaptation}
+          openGaps={openGaps}
+          warmUpInserted={warmUpInserted}
+          canRequestWarmUp={canRequestWarmUp}
+          canAnswerAgain={canAnswerAgain}
+          loading={loading}
+          verifying={verifying}
+          error={error}
+          verdictRef={verdictRef}
+          onAdvanceStop={handleAdvance}
+          onCheckUnderstanding={onCheckUnderstanding}
+          onBuildWarmUp={handleRetry}
+          onAnswerAgain={answerAgain}
+          onStartWarmUp={startWarmUp}
+        />
       )}
+      </PracticeSurface>
+
+      {isSplit && revealed && lesson.lesson.reveal && (
+        <RevealBlock
+          reveal={lesson.lesson.reveal}
+          takeaway={lesson.lesson.takeaway}
+          ownership={lesson.lesson.ownership}
+        />
+      )}
+
+
 
       <div className="border-t border-rule pt-4">
+        {/* Kept where it is. `Finish session` in the header menu is the same
+            action reached from the session level; this one is reached in context,
+            at the end of a lesson, which is a different moment and a different
+            question ("I have what I need from this") — so it is not a duplicate
+            to be removed. Restructuring the lesson's own affordances is L-track
+            work, not the header's. */}
         <button
-          onClick={() => setDone(true)}
-          className="font-mono text-[calc(10.5rem/16)] text-graphite transition hover:text-chalk"
+          onClick={onFinish}
+          className="font-mono text-micro text-graphite transition hover:text-chalk"
         >
           {t.lesson.finishEarly}
         </button>
       </div>
-    </div>
-  );
-}
-
-// ── Completion ───────────────────────────────────────────────────────────────
-
-function CompletionScreen({
-  graph, onNewSession, onFinish,
-}: { graph: SessionGraph; onNewSession: () => void; onFinish: () => void }) {
-  const [tab, setTab] = useState<"summary" | "map">("summary");
-  // "Another pass" must list what is STILL unresolved — not everything the
-  // learner ever stumbled on. `weak_spot` is sticky, so it kept offering a
-  // second pass over units already mastered.
-  const weak = graph.nodes.filter((n) => n.understanding === "unresolved");
-  const understood = graph.nodes.filter((n) => n.understanding_state === "understood").length;
-
-  return (
-    <div className="flex h-full flex-col gap-5">
-      <div className="flex shrink-0 gap-1 border-b border-rule">
-        {(["summary", "map"] as const).map((key) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`-mb-px border-b-2 px-4 py-2 font-mono text-[calc(11rem/16)] uppercase tracking-[0.12em] transition ${
-              tab === key
-                ? "border-signal text-signal"
-                : "border-transparent text-graphite hover:text-chalk"
-            }`}
-          >
-            {key === "map" ? t.completion.tabMap : t.completion.tabSummary}
-          </button>
-        ))}
-      </div>
-
-      {tab === "summary" ? (
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-2">
-            <span className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.14em] text-graphite">
-              {t.completion.label}
-            </span>
-            <h2 className="font-display text-[calc(26rem/16)] font-medium leading-tight tracking-tight text-chalk">
-              {t.completion.heading(understood, graph.nodes.length)}
-            </h2>
-            <p className="measure text-[calc(13.5rem/16)] leading-[1.7] text-paper">
-              {t.completion.body}
-            </p>
-          </div>
-
-          {weak.length > 0 && (
-            <div className="flex flex-col gap-3 rounded border border-rule bg-slab p-4">
-              <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.14em] text-rust">
-                {t.completion.anotherPass(weak.length)}
-              </span>
-              <ul className="flex flex-col gap-2.5">
-                {weak.map((n) => (
-                  <li key={n.id} className="flex flex-col gap-0.5">
-                    <span className="text-[calc(13rem/16)] font-medium text-chalk">{n.title}</span>
-                    <span className="font-mono text-[calc(10.5rem/16)] text-graphite">
-                      {n.file}
-                      {" · "}
-                      {t.lesson.lines(n.line_start, n.line_end)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="flex gap-3">
-            <button
-              onClick={onNewSession}
-              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
-            >
-              {t.completion.newSession}
-            </button>
-            <button
-              onClick={onFinish}
-              className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
-            >
-              {t.completion.goHome}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="min-h-0 flex-1 overflow-hidden rounded border border-rule">
-          <MapView
-            nodes={graph.nodes}
-            edges={graph.edges}
-            currentNodeId={graph.current_node_id}
-            progress={graph.progress}
-            understanding={graph.understanding}
-            areas={graph.areas}
-            repoUrl={graph.repo_url}
-            onNodeClick={() => {}}
-            // The completion screen is a read-only recap; drilling into evidence
-            // belongs to the live session, where the drawer has room.
-            onOpenEvidence={() => {}}
-          />
-        </div>
+        </>
       )}
+      </LessonWorkspace>
     </div>
   );
 }

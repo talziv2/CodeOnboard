@@ -24,6 +24,7 @@ from backend.agents.teaching.agent import (
     _build_user_content,
     _parse_output,
     _previous_unit,
+    _unblocks,
     lesson_form,
 )
 from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
@@ -212,6 +213,65 @@ def test_the_previous_units_claim_is_what_why_now_is_written_from():
     )
     assert "Explain what Session owns" in content
     assert "just finished" in content
+
+
+def test_a_warm_up_is_told_what_it_unblocks_not_what_preceded_it():
+    """S0's finding. A warm-up inserted for an auth misconception opened "Now that
+    you know how to use Session safely with context managers…" — the model
+    faithfully following an instruction that is false for a remediation."""
+    graph = LearningGraph(repo_url=FAKE_REPO_URL, goal=FAKE_GOAL)
+    earlier = graph.add_node(LearningNode(
+        title="Use Session as a context manager",
+        code_anchor=CodeAnchor(file="a.py", line_start=1, line_end=2),
+        lesson_brief={"objective": "Explain why a Session should be closed"},
+    ))
+    stuck_on = graph.add_node(LearningNode(
+        title="Write a custom auth handler",
+        code_anchor=CodeAnchor(file="b.py", line_start=1, line_end=2),
+        lesson_brief={"objective": "Explain how prepare_auth dispatches a callable"},
+    ))
+    graph.add_edge(earlier.id, stuck_on.id, kind="sequence")
+
+    warm_up = LearningNode(
+        title="Understand the callable protocol",
+        code_anchor=CodeAnchor(file="b.py", line_start=10, line_end=20),
+        lesson_brief={"objective": "Explain what makes an object callable"},
+    )
+    graph.insert_before(stuck_on.id, warm_up, kind="prerequisite")
+
+    # Read off the edge, not off position: the warm-up is ALSO the structural
+    # predecessor of the stop it unblocks, so position cannot tell them apart.
+    assert _unblocks(graph, warm_up.id) is stuck_on
+    assert _previous_unit(graph, warm_up.id) is earlier
+
+    content = _build_user_content(
+        FAKE_GOAL, warm_up, "src", "no prior context", [],
+        previous=earlier, unblocks=stuck_on,
+    )
+    assert "WARM-UP" in content
+    assert "Write a custom auth handler" in content
+    assert "Explain how prepare_auth dispatches a callable" in content
+    # And NOT the predecessor's framing, which is the whole bug.
+    assert "just finished" not in content
+    assert "Use Session as a context manager" not in content
+
+
+def test_an_ordinary_unit_is_unaffected_by_the_warm_up_branch():
+    graph = LearningGraph(repo_url=FAKE_REPO_URL, goal=FAKE_GOAL)
+    first = graph.add_node(LearningNode(
+        title="Session basics",
+        code_anchor=CodeAnchor(file="a.py", line_start=1, line_end=2),
+        lesson_brief={"objective": "Explain what Session owns"},
+    ))
+    second = graph.add_node(_make_node())
+    graph.add_edge(first.id, second.id, kind="sequence")
+
+    assert _unblocks(graph, second.id) is None
+    content = _build_user_content(
+        FAKE_GOAL, second, "src", "no prior context", [], previous=first
+    )
+    assert "just finished" in content
+    assert "WARM-UP" not in content
 
 
 def test_the_first_unit_has_no_previous_claim_to_lean_on():

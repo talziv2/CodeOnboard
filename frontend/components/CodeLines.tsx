@@ -73,7 +73,7 @@ function CodeLines({ code, path, highlightStart, highlightEnd, focusKey }: Props
       // against the document.
       className="relative min-h-0 flex-1 overflow-auto py-2"
     >
-      <table className="w-full border-collapse font-mono text-[calc(11rem/16)] leading-[1.75]">
+      <table className="w-full border-collapse font-mono text-micro">
         <tbody>
           {lines.map((line, i) => {
             const lineNum = i + 1;
@@ -96,18 +96,29 @@ function CodeLines({ code, path, highlightStart, highlightEnd, focusKey }: Props
                 }
               >
                 <td
+                  // `signal`, not `signal-dim`. Raising the cold gutter to the
+                  // 4.5 floor left the dim variant at 3.42:1 on the tinted hot
+                  // row — the line under discussion had the least legible number
+                  // in the pane, which is backwards. Now 8.62 / 5.56, above cold
+                  // gutter's 4.53, so prominence runs the same direction as
+                  // attention.
                   className={`w-10 select-none border-r border-rule py-0 pr-2.5 text-right align-top tabular-nums ${
-                    isHot ? "text-signal-dim" : "text-code-gutter"
+                    isHot ? "text-signal" : "text-code-gutter"
                   }`}
                 >
                   {lineNum}
                 </td>
                 <td
-                  // Code outside the band under discussion keeps its syntax
-                  // colours but steps back, which is what the flat two-tone
-                  // treatment used to do with brightness alone.
+                  // Cold code keeps its syntax colours at full strength. It also
+                  // used to carry `code-cold`, an opacity veil, which turned out
+                  // to be the sole cause of failure for ~1100 glyphs in dark and
+                  // ~1700 in light — light had no headroom for a fade at all. The
+                  // band is marked by its tint, its inset rule, its `signal` line
+                  // number and this brighter inherited colour, so the veil was
+                  // the fourth signal and the only subtractive one. See the note
+                  // beside `.tok` in globals.css.
                   className={`whitespace-pre py-0 pl-3 pr-4 ${
-                    isHot ? "text-code-hot" : "text-code-line code-cold"
+                    isHot ? "text-code-hot" : "text-code-line"
                   }`}
                 >
                   {row && row.length > 0

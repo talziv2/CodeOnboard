@@ -6,6 +6,7 @@ import GoalDialogue from "@/components/GoalDialogue";
 import SettingsMenu from "@/components/SettingsMenu";
 import StartingProgress from "@/components/StartingProgress";
 import { checkRepo, sessionStart } from "@/lib/api";
+import Button from "@/components/ui/Button";
 import { errorText, t } from "@/lib/strings";
 
 type Step = "repo" | "goal" | "starting" | "failed";
@@ -89,17 +90,41 @@ export default function Home() {
     startSession(newGoal);
   };
 
+  // The landing block sits above the geometric centre (concept §8.2) — optical
+  // centring, since the eye reads a short centred block as sitting low. Only the
+  // `repo` step: the interview, the progress screen and the failure state are all
+  // taller, and pushing those up would crowd them against the top on a laptop.
+  //
+  // The value is measured rather than chosen. `justify-center` centres within the
+  // PADDED box, so the bottom padding is what moves the block, and the first
+  // guess (16vh) moved the centre only from 50% to 46% — a shift too small to
+  // read as deliberate. At 28vh the 381px block centres at 40.4% on a 720px
+  // viewport, 39.6% at 900px and 41.0% at 640px, and still fits at all three.
+  // Below ~620px it stops fitting, main grows past the viewport and the page
+  // scrolls, which is the right way for this to fail.
+  //
+  // Written as one class per step rather than an override, because Tailwind
+  // resolves conflicts by stylesheet order, not class order — `pb-[28vh]` after
+  // `py-16` would be a coin toss (see the note in `ui/Button.tsx`).
+  const vertical = step === "repo" ? "pt-16 pb-[28vh]" : "py-16";
+
   return (
-    <main className="relative flex min-h-screen flex-col items-center justify-center bg-ink px-6 py-16">
+    <main className={`relative flex min-h-screen flex-col items-center justify-center bg-ink px-6 ${vertical}`}>
       {/* There is no chrome on this page to sit in, so it floats in the corner
           the session header's copy occupies. */}
       <SettingsMenu className="absolute end-5 top-5" />
 
-      <div className="mb-12 flex flex-col items-center gap-2 text-center">
-        <h1 className="font-display text-[calc(38rem/16)] font-medium leading-none tracking-tight text-chalk">
+      <div className="mb-14 flex flex-col items-center gap-2 text-center">
+        {/* The one piece of ornament in the product, and it is a geometric
+            primitive rather than a picture: a filled square turned 45°. It marks
+            the wordmark here and is planned beside it in the session header
+            (concept §8.2). Left inline until that second call site exists —
+            extracting a primitive for one use would be the speculative kind. */}
+        <span aria-hidden className="mb-3 h-2 w-2 rotate-45 bg-signal" />
+        <h1 className="font-display text-display font-medium tracking-tight text-chalk">
           {t.appName}
         </h1>
-        <p className="max-w-sm text-[calc(13.5rem/16)] leading-relaxed text-graphite">
+        <p className="max-w-sm text-aside text-graphite">
           {t.tagline}
         </p>
       </div>
@@ -108,47 +133,52 @@ export default function Home() {
         <form onSubmit={handleRepoSubmit} className="flex w-full max-w-md flex-col gap-3">
           <label
             htmlFor="repo"
-            className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.14em] text-graphite"
+            className="font-mono text-micro uppercase tracking-[0.14em] text-graphite"
           >
             {t.home.repoLabel}
           </label>
           <input
             id="repo"
             type="url"
-            className="rounded border border-rule bg-trench px-3.5 py-3 text-start font-mono text-[calc(13rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
+            className="rounded-field border border-rule bg-trench px-3.5 py-3 text-start font-mono text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
             placeholder={t.home.repoPlaceholder}
             value={repoUrl}
             onChange={(e) => { setRepoUrl(e.target.value); setError(null); }}
             required
           />
 
+          {error && <p className="text-aside text-rust">{error}</p>}
+
+          <Button variant="primary" size="block" className="mt-1"
+            type="submit"
+            disabled={checking}
+          >
+            {checking ? t.home.checking : t.home.start}
+          </Button>
+
+          {/* Below the action, not above it: the sequence reads repo → start →
+              what that costs you. Recents follow, because they are a shortcut
+              back into the field and only matter to someone who has been here
+              before — a returning user looks for them, a new one should not have
+              to step over them to reach the button. */}
+          <p className="mt-2 text-meta text-graphite">{t.home.expectation}</p>
+
           {recent.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.14em] text-graphite">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
                 {t.home.recent}
               </span>
               {recent.map((url) => (
-                <button
+                <Button variant="chrome" size="xs"
                   key={url}
                   type="button"
                   onClick={() => { setRepoUrl(url); setError(null); }}
-                  className="rounded border border-rule px-2.5 py-1 font-mono text-[calc(11rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
                 >
                   {url.replace(/^https?:\/\/github\.com\//, "")}
-                </button>
+                </Button>
               ))}
             </div>
           )}
-
-          {error && <p className="text-[calc(13rem/16)] text-rust">{error}</p>}
-
-          <button
-            type="submit"
-            disabled={checking}
-            className="mt-1 rounded border border-signal-dim bg-signal/15 py-3 text-[calc(13.5rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
-          >
-            {checking ? t.home.checking : t.home.start}
-          </button>
         </form>
       )}
 
@@ -161,37 +191,35 @@ export default function Home() {
       {step === "failed" && (
         <div className="flex w-full max-w-md flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <span className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.14em] text-rust">
+            <span className="font-mono text-micro uppercase tracking-[0.14em] text-rust">
               {t.failed.label}
             </span>
-            <h2 className="font-display text-[calc(21rem/16)] font-medium tracking-tight text-chalk">
+            <h2 className="font-display text-head font-medium tracking-tight text-chalk">
               {repoUrl.replace(/^https?:\/\/github\.com\//, "")}
             </h2>
-            <p className="text-[calc(13rem/16)] leading-relaxed text-graphite">
+            <p className="text-aside text-graphite">
               {t.failed.reassurance}
             </p>
           </div>
 
           {error && (
-            <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded border border-rule bg-trench p-3 font-mono text-[calc(11rem/16)] leading-relaxed text-rust">
+            <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded-field border border-rule bg-trench p-3 font-mono text-micro text-rust">
               {error}
             </pre>
           )}
 
           <div className="flex flex-wrap gap-3">
-            <button
+            <Button variant="primary" size="md"
               onClick={() => goal && startSession(goal)}
               disabled={!goal}
-              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
             >
               {t.failed.tryAgain}
-            </button>
-            <button
+            </Button>
+            <Button variant="secondary" size="md"
               onClick={() => { setStep("repo"); setError(null); setGoal(null); }}
-              className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
             >
               {t.failed.differentRepo}
-            </button>
+            </Button>
           </div>
         </div>
       )}

@@ -4,7 +4,8 @@ import { useState } from "react";
 import type { GraphNode } from "@/lib/api";
 import type { RouteStop } from "@/lib/graph-layout";
 import { isComplete, isSettled, type RouteSection } from "@/lib/route-sections";
-import { understandingStyle, understandingLabel } from "@/lib/tags";
+import { understandingLabel } from "@/lib/tags";
+import StatePin from "@/components/ui/StatePin";
 import { t } from "@/lib/strings";
 
 interface Props {
@@ -18,6 +19,11 @@ interface Props {
   onJump: (node: GraphNode) => void;
   onOpenSection: (areaId: string) => void;
   onExpand: () => void;
+  /**
+   * Collapse to a strip of pins. Used in the medium band, where the full rail
+   * would be taking 268px from a lesson already close to its floor.
+   */
+  compact?: boolean;
 }
 
 /**
@@ -27,6 +33,11 @@ interface Props {
  * ranges and the state legend are all deliberately absent here. Density was the
  * problem: everything on screen carried the same weight, and the current stop
  * did not stand out from the fifteen around it.
+ *
+ * The chapter's `why` went the same way. Two clamped lines under every section
+ * heading was the largest block of prose in the rail, and it repeated text the
+ * chapter overview already opens with — so it is a tooltip here and a paragraph
+ * there, which is the same information at the density each surface is for.
  *
  * The timeline stays. It is what makes the route read as a journey rather than a
  * menu, and it is the only element that shows the order of things.
@@ -61,34 +72,10 @@ function Check() {
   );
 }
 
-/** Pin shape encodes state so the rail stays readable without colour. */
-function Pin({ node, isCurrent }: { node: GraphNode; isCurrent: boolean }) {
-  // ONE encoding, shared with the map (M3a.3 AC2). The pin used to be coloured
-  // by raw `understanding_state` while the map coloured the same unit by its
-  // understanding class, so a stop could be amber here and "Needs work" there.
-  const style = understandingStyle(node.understanding ?? "insufficient");
-  return (
-    <span
-      aria-hidden
-      className="relative z-10 mt-0.5 block h-[calc(17rem/16)] w-[calc(17rem/16)] shrink-0 rounded-full border-[1.5px] bg-ink"
-      style={{
-        borderColor: isCurrent ? "var(--color-signal)" : style.stroke,
-        borderStyle: style.borderStyle,
-        background: isCurrent ? "var(--color-ink)" : style.fill,
-        boxShadow: isCurrent ? "0 0 0 3px var(--color-signal-halo)" : undefined,
-      }}
-    >
-      {isCurrent && (
-        <span className="absolute inset-[calc(3.5rem/16)] rounded-full bg-signal" />
-      )}
-    </span>
-  );
-}
-
 const TITLE_TONE: Record<Tone, string> = {
-  current: "text-[calc(12.5rem/16)] font-semibold text-signal",
-  done: "text-[calc(12rem/16)] font-medium text-graphite group-hover:text-signal",
-  ahead: "text-[calc(12rem/16)] font-medium text-paper group-hover:text-signal",
+  current: "text-meta font-semibold text-signal",
+  done: "text-meta font-medium text-graphite group-hover:text-signal",
+  ahead: "text-meta font-medium text-paper group-hover:text-signal",
 };
 
 /**
@@ -126,9 +113,16 @@ function Stop({
               .join("; ")}`
           : `${node.title} · ${node.file} — ${state}`
       }
+      // A finished stop used to also carry `opacity-80`. It came out at 3.93:1 in
+      // dark and 3.28:1 in light — the worst text in the rail, and the fade was
+      // the whole cause. It was also the third signal for one fact: the pin
+      // already encodes state and the title is already `graphite` where a live
+      // stop is `paper`. Dropping it leaves done rows at 5.45 / 4.75, still
+      // plainly quieter than a live row, and stops the rail dimming its own text
+      // below the floor to say something it had already said twice.
       className={`group relative grid w-full grid-cols-[calc(18rem/16)_1fr] gap-3 py-[calc(5rem/16)] text-start ${
         stop.isPrerequisite ? "ms-[calc(22rem/16)] w-[calc(100%-22rem/16)]" : ""
-      } ${tone === "done" ? "opacity-80 transition-opacity hover:opacity-100" : ""}`}
+      }`}
     >
       {/* connector down to the next stop */}
       {!isLast && (
@@ -138,11 +132,16 @@ function Stop({
         />
       )}
 
-      <Pin node={node} isCurrent={isCurrent} />
+      <StatePin
+        understanding={node.understanding}
+        isCurrent={isCurrent}
+        role="rail"
+        className="z-10 mt-0.5 block"
+      />
 
       <span className="flex min-w-0 flex-col gap-[2px]">
         {stop.isPrerequisite && (
-          <span className="flex items-center gap-[5px] font-mono text-[calc(9.5rem/16)] tracking-[0.06em] text-signal">
+          <span className="flex items-center gap-[5px] font-mono text-micro tracking-[0.06em] text-signal">
             <span aria-hidden className="h-px w-3 bg-signal" />
             {t.rail.addedAfterConfusion}
           </span>
@@ -157,7 +156,7 @@ function Stop({
         <span className="sr-only">{t.rail.stopState(state)}</span>
 
         {isCurrent && (
-          <span className="truncate font-mono text-[calc(10rem/16)] text-graphite">
+          <span className="truncate font-mono text-micro text-graphite">
             {node.file}
           </span>
         )}
@@ -173,7 +172,7 @@ function Stop({
             that did not happen. */}
         {node.understanding === "unresolved" && (
           <span
-            className="font-mono text-[calc(9.5rem/16)] tracking-[0.05em] text-rust"
+            className="font-mono text-micro tracking-[0.05em] text-rust"
             title={
               (node.gaps?.length ?? 0) > 0
                 ? t.rail.unresolvedHint
@@ -238,11 +237,15 @@ function SectionHead({
       <button
         onClick={onOpen}
         aria-label={t.rail.openSection(area.title)}
+        // The chapter's `why` is one hover away rather than two lines of the
+        // rail. It is not lost: the same text is the first thing on the chapter
+        // overview, which is what this button opens.
+        title={area.why ? `${area.title} — ${area.why}` : area.title}
         className="group flex min-w-0 flex-1 flex-col gap-[3px] text-start"
       >
         <span className="flex items-baseline gap-2">
           <span
-            className={`min-w-0 flex-1 font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.15em] transition ${
+            className={`min-w-0 flex-1 font-mono text-micro uppercase tracking-[0.15em] transition ${
               isCurrent || isOverviewOpen
                 ? "text-signal"
                 : "text-graphite group-hover:text-signal"
@@ -250,19 +253,10 @@ function SectionHead({
           >
             {area.title}
           </span>
-          <span className="shrink-0 font-mono text-[calc(9.5rem/16)] tabular-nums text-graphite">
+          <span className="shrink-0 font-mono text-micro tabular-nums text-graphite">
             {t.rail.sectionProgress(section.settled, section.total)}
           </span>
         </span>
-        {area.why && (
-          <span
-            className={`line-clamp-2 text-[calc(10.5rem/16)] leading-snug ${
-              isCurrent ? "text-paper" : "text-graphite/75"
-            }`}
-          >
-            {area.why}
-          </span>
-        )}
       </button>
     </div>
   );
@@ -270,6 +264,7 @@ function SectionHead({
 
 export default function RouteRail({
   sections, optional, currentNodeId, openSectionId, onJump, onOpenSection, onExpand,
+  compact = false,
 }: Props) {
   const [showOptional, setShowOptional] = useState(false);
   // Only the sections the learner has actually toggled. Everything else follows
@@ -291,15 +286,68 @@ export default function RouteRail({
     return "ahead";
   };
 
+  if (compact) {
+    /**
+     * The same route at the density of a scrollbar: one pin per stop, in order,
+     * each carrying the stop's title as its accessible name and its tooltip. It
+     * answers "where am I, how much is left" — the part of the rail worth 56px —
+     * and defers the rest to the map, which the strip's own control opens.
+     *
+     * Section headings are not drawn here: at this width a heading is a truncated
+     * word. The boundary between chapters is a rule instead.
+     */
+    return (
+      <aside
+        aria-label={t.rail.title}
+        className="flex h-full min-h-0 flex-col items-center gap-2 overflow-y-auto border-e border-rule bg-trench py-4"
+      >
+        {sections.map((section, si) => (
+          <div key={section.area?.id ?? si} className="flex flex-col items-center gap-2">
+            {si > 0 && <span aria-hidden className="my-1 h-px w-4 bg-rule" />}
+            {section.stops.map((stop) => (
+              <button
+                key={stop.node.id}
+                onClick={() => onJump(stop.node)}
+                aria-current={stop.node.id === currentNodeId ? "step" : undefined}
+                // Same fallback the full rail uses: a node with no recorded
+                // understanding is "insufficient", not an empty label.
+                aria-label={`${stop.node.title} — ${understandingLabel(stop.node.understanding ?? "insufficient")}`}
+                title={`${stop.node.title} — ${understandingLabel(stop.node.understanding ?? "insufficient")}`}
+                className="flex h-6 w-6 shrink-0 items-center justify-center"
+              >
+                <StatePin
+                  understanding={stop.node.understanding}
+                  isCurrent={stop.node.id === currentNodeId}
+                  role="rail"
+                />
+              </button>
+            ))}
+          </div>
+        ))}
+        <button
+          onClick={onExpand}
+          aria-label={t.rail.openMap}
+          title={t.rail.openMap}
+          className="mt-auto shrink-0 font-mono text-micro text-graphite transition hover:text-signal"
+        >
+          ⤢
+        </button>
+      </aside>
+    );
+  }
+
   return (
-    <aside className="flex h-full min-h-0 flex-col gap-3 border-e border-rule bg-trench py-4">
+    <aside
+      aria-label={t.rail.title}
+      className="flex h-full min-h-0 flex-col gap-3 border-e border-rule bg-trench py-4"
+    >
       <div className="flex items-baseline justify-between px-4">
-        <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
+        <span className="font-mono text-micro uppercase tracking-[0.16em] text-graphite">
           {t.rail.title}
         </span>
         <button
           onClick={onExpand}
-          className="font-mono text-[calc(10.5rem/16)] text-signal transition hover:text-chalk"
+          className="font-mono text-micro text-signal transition hover:text-chalk"
         >
           {t.rail.openMap}
         </button>
@@ -358,7 +406,7 @@ export default function RouteRail({
               onClick={() => setShowOptional((v) => !v)}
               disabled={currentIsOptional}
               aria-expanded={optionalOpen}
-              className="flex w-full items-center gap-2 py-1 font-mono text-[calc(10rem/16)] uppercase tracking-[0.13em] text-graphite transition hover:text-signal disabled:opacity-60"
+              className="flex w-full items-center gap-2 py-1 font-mono text-micro uppercase tracking-[0.13em] text-graphite transition hover:text-signal"
             >
               <Chevron open={optionalOpen} />
               {optionalOpen && !currentIsOptional

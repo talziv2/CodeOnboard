@@ -6,6 +6,8 @@ import ProfileCard from "@/components/ProfileCard";
 import SettingsMenu from "@/components/SettingsMenu";
 import { getSession, getWelcome } from "@/lib/api";
 import type { Briefing, SessionGraph } from "@/lib/api";
+import SectionLabel from "@/components/ui/SectionLabel";
+import Button from "@/components/ui/Button";
 import { errorText, t } from "@/lib/strings";
 
 /**
@@ -55,15 +57,15 @@ export default function WelcomePage() {
       <main className="flex min-h-screen items-center justify-center bg-ink px-6">
         <div className="flex max-w-sm flex-col gap-3 text-center">
           <p className="text-rust">{error}</p>
-          <button
+          <Button variant="secondary" size="md" className="mx-auto"
             onClick={() => {
               setError(null);
               load();
             }}
-            className="mx-auto rounded border border-rule px-4 py-2 text-sm text-graphite transition hover:border-signal-dim hover:text-signal"
+           
           >
             {t.session.retryLoad}
-          </button>
+          </Button>
         </div>
       </main>
     );
@@ -72,7 +74,7 @@ export default function WelcomePage() {
   if (!graph) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-ink">
-        <p className="animate-pulse font-mono text-sm text-graphite">
+        <p className="animate-pulse font-mono text-aside text-graphite">
           {t.session.loading}
         </p>
       </main>
@@ -85,10 +87,10 @@ export default function WelcomePage() {
   return (
     <main className="flex min-h-screen flex-col bg-ink">
       <header className="flex shrink-0 items-center gap-4 border-b border-rule bg-slab px-5 py-2.5">
-        <span className="font-display text-[calc(15rem/16)] tracking-tight text-chalk">
+        <span className="font-display text-aside tracking-tight text-chalk">
           {t.appName}
         </span>
-        <span className="min-w-0 flex-1 truncate font-mono text-[calc(11.5rem/16)] text-graphite">
+        <span className="min-w-0 flex-1 truncate font-mono text-meta text-graphite">
           {repo}
         </span>
         <SettingsMenu />
@@ -96,10 +98,10 @@ export default function WelcomePage() {
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-9 px-7 py-10">
         <div className="flex flex-col gap-2.5">
-          <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-signal">
+          <span className="font-mono text-micro uppercase tracking-[0.16em] text-signal">
             {t.welcome.label}
           </span>
-          <h1 className="font-display text-[calc(27rem/16)] font-medium leading-[1.2] tracking-tight text-chalk">
+          <h1 className="font-display text-chapter font-medium tracking-tight text-chalk">
             {t.welcome.heading}
           </h1>
         </div>
@@ -108,14 +110,14 @@ export default function WelcomePage() {
           <section className="flex flex-col gap-7">
             <div className="flex flex-col gap-3">
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
+                <span className="font-mono text-micro uppercase tracking-[0.16em] text-graphite">
                   {t.welcome.briefingLabel}
                 </span>
                 {/* Which paragraph this is, said rather than implied — a generic
                     architecture summary presented as tailored would be the one
                     dishonest thing on the page. */}
                 {briefing?.available && (
-                  <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+                  <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
                     {briefing.personalized
                       ? t.welcome.personalized
                       : t.welcome.generic}
@@ -124,19 +126,19 @@ export default function WelcomePage() {
               </div>
 
               {briefingFailed ? (
-                <p className="text-[calc(13rem/16)] leading-relaxed text-graphite">
+                <p className="text-aside text-graphite">
                   {t.welcome.failed}
                 </p>
               ) : !briefing ? (
-                <p className="animate-pulse font-mono text-[calc(12.5rem/16)] text-graphite">
+                <p className="animate-pulse font-mono text-meta text-graphite">
                   {t.welcome.loading}
                 </p>
               ) : briefing.available ? (
-                <p className="measure text-[calc(14.5rem/16)] leading-[1.75] text-paper">
+                <p className="measure text-body text-paper">
                   {briefing.paragraph}
                 </p>
               ) : (
-                <p className="measure text-[calc(13rem/16)] leading-relaxed text-graphite">
+                <p className="measure text-aside text-graphite">
                   {t.welcome.unavailable}
                 </p>
               )}
@@ -144,12 +146,7 @@ export default function WelcomePage() {
 
             {briefing && briefing.notes.length > 0 && (
               <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
-                    {t.welcome.notesLabel}
-                  </span>
-                  <span aria-hidden className="h-px flex-1 bg-rule" />
-                </div>
+                <SectionLabel>{t.welcome.notesLabel}</SectionLabel>
                 <ul className="flex flex-col gap-3.5">
                   {briefing.notes.map((note) => (
                     <li key={note.text} className="flex gap-2.5">
@@ -158,13 +155,13 @@ export default function WelcomePage() {
                         className="mt-[calc(9rem/16)] h-px w-3 shrink-0 bg-signal-dim"
                       />
                       <span className="measure flex flex-col gap-1">
-                        <span className="text-[calc(13rem/16)] leading-[1.7] text-paper">
+                        <span className="text-aside text-paper">
                           {note.text}
                         </span>
                         {/* A path only when the backend resolved it against the
                             checkout, so what is shown here always exists. */}
                         {note.file && (
-                          <span className="font-mono text-[calc(11rem/16)] text-graphite">
+                          <span className="font-mono text-micro text-graphite">
                             {note.file}
                           </span>
                         )}
@@ -176,12 +173,11 @@ export default function WelcomePage() {
             )}
 
             <div>
-              <button
+              <Button variant="primary" size="lg"
                 onClick={begin}
-                className="rounded border border-signal-dim bg-signal/15 px-5 py-2.5 text-[calc(13.5rem/16)] font-medium text-signal transition hover:bg-signal/25"
               >
                 {t.welcome.begin}
-              </button>
+              </Button>
             </div>
           </section>
 

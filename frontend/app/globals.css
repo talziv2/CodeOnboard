@@ -17,11 +17,22 @@
   --color-chalk: #dde5ea;
   --color-paper: #b9c6ce;
   --color-graphite: #7b8d99;
+  /* Disabled foreground. A step below `graphite` so "unavailable" reads as
+     unavailable, but chosen to clear 3:1 on every surface a control actually
+     sits on — ink, trench and slab. Measured: 3.9 / 3.8 / 3.5.
+     `raise` is excluded deliberately; it is a progress-track fill and no
+     control is ever drawn on it. */
+  --color-muted: #63737e;
   --color-signal: #5bc8e8;
   --color-signal-dim: #2e7a91;
   --color-jade: #4fb286;
   --color-brass: #d9a441;
-  --color-rust: #d4634f;
+  /* F3d: was #d4634f, which was validated against `ink` only. On the two
+     surfaces a status label actually lands on it fell under the floor — 4.35 on
+     `signal-wash`, 4.21 as a chip on `slab`. Rust is text and border everywhere
+     and never a fill, so raising it can only raise contrast: now 4.54 at its
+     worst composite and 6.37 at its best. */
+  --color-rust: #e07762;
 
   /* Signal used as a *surface* rather than as ink: the halo around the current
      pin, and the fill of the card you are standing on. */
@@ -30,15 +41,156 @@
 
   /* The source pane. Deliberately quieter than body prose — code is there to be
      referred to, not read end to end, until a line is the one under discussion. */
-  --color-code-gutter: #3e4e58;
+  /* The gutter was 2.17 here and 3.54 in light. Quiet was the intent, but line
+     numbers are not decoration in this product: every citation is `file:line`,
+     so a learner reads them to find the thing the lesson is talking about. That
+     makes them content, and content meets 4.5. Set to the floor rather than
+     above it, which keeps three distinct tiers in the pane — hot 12.49, code
+     6.94, gutter 4.53 — so the numbers are legible when sought and still
+     plainly subordinate when not. */
+  --color-code-gutter: #6a808d;
   --color-code-line: #8fa0ac;
   --color-code-hot: #c8d5dd;
 
   --font-display: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
 }
 
+/* `static`, so these are emitted even while nothing consumes them yet. Tailwind
+   tree-shakes unused theme variables by default, which for a milestone whose
+   whole point is to land the scale ahead of its adoption would mean shipping a
+   file whose values cannot be inspected in the browser or referenced from plain
+   CSS. The cost is a few unused custom properties in `:root`, which render
+   nothing. */
+@theme static {
+  /* --- the type scale ------------------------------------------------------
+
+     ADDITIVE. Nothing consumes these yet; the milestone that applies them is a
+     separate one, so this file can be reviewed on its own and the change to how
+     the product looks can be reviewed on its own.
+
+     Named by ROLE, not by t-shirt size, for two reasons. The design work talks
+     in roles — "the mono eyebrow", "lesson prose" — and role names make a wrong
+     choice obvious at the call site in a way `text-lg` does not. And, more
+     practically, `--text-xs` / `--text-sm` / `--text-md` are Tailwind's own keys
+     and are in live use here (12 × `text-sm`, 2 × `text-xs`); redefining them
+     would silently move existing type, which is exactly what this milestone must
+     not do.
+
+     The problem being fixed is not variety, it is flatness. Measured on one
+     session screen: 11 distinct sizes, 10 of them inside a 6.5px band, and 99%
+     of text at or below 16px. Adjacent steps below 20px therefore differ by at
+     least 2px, so a level change is actually visible.
+
+     Line height travels with the size — Tailwind's `--text-*--line-height`
+     pairing — because the two are one decision. Prose is set at 16/1.7 in a 62ch
+     measure, which lands 66–70 characters per line. */
+  --text-micro: calc(11rem / 16);
+  --text-micro--line-height: 1.4;
+  --text-meta: calc(12.5rem / 16);
+  --text-meta--line-height: 1.5;
+  --text-aside: calc(14rem / 16);
+  --text-aside--line-height: 1.55;
+  --text-body: calc(16rem / 16);
+  --text-body--line-height: 1.7;
+  --text-lede: calc(18rem / 16);
+  --text-lede--line-height: 1.5;
+  --text-head: calc(22rem / 16);
+  --text-head--line-height: 1.35;
+  --text-chapter: calc(28rem / 16);
+  --text-chapter--line-height: 1.25;
+  --text-display: calc(36rem / 16);
+  --text-display--line-height: 1.15;
+
+  /* --- the practice surface ------------------------------------------------
+
+     The well needed its own token rather than reusing `raise`. Two constraints
+     pull against each other in the light theme:
+     a surface distinct enough to see against a very light page is dark enough to
+     hurt mid-grey text. Measured, light:
+
+       #c6d5df (raise)  separation 1.28   graphite 4.05  <- fails AA
+       #d0dde4          separation 1.18   graphite 4.38
+       #d4e0e7          separation 1.15   graphite 4.52  <- chosen
+       #dbe5ec (trench) separation 1.09   graphite 4.75  <- barely visible
+
+     There is no value that gives strong separation AND comfortable mid-grey text
+     on a near-white ground; this trades a little separation for text that passes.
+     Dark has no such tension — 1.23 separation with graphite at 4.54. */
+  --color-well: #1a252d;
+
+  /* --- radii ---------------------------------------------------------------
+
+     Today there is one radius in practice: 4px on 68 elements, plus circles.
+     That single value is the strongest "drawn in 2015" signal the product gives
+     off, and it is the cheapest thing on this list to change.
+
+     Role-named again, and for the same collision reason: `rounded` (4px) and
+     `rounded-md` (6px) are both in use, so `--radius-sm` and `--radius-md` are
+     not available to redefine. */
+  --radius-chip: 3px;
+  --radius-field: 6px;
+  --radius-card: 10px;
+  --radius-panel: 14px;
+
+  /* --- elevation -----------------------------------------------------------
+
+     The session view currently contains ZERO elevation: its only two box-shadows
+     are semantic state markers — the halo on the current pin and the inset bar on
+     the highlighted code line — and the two real shadows in the app are on
+     overlays that are closed by default.
+
+     Depth is meant to come from the surface ladder (ink → trench → slab → raise)
+     with shadow only at the top two levels. Dark separates by lightness, light by
+     shadow, because that is how each medium actually reads; the light values
+     below are correspondingly stronger. Re-pointed in the light block. */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.42);
+
+  /* --- motion --------------------------------------------------------------
+
+     Durations proportional to the distance travelled. The app's entire motion
+     language today is Tailwind's default 150ms on hover colour; nothing animates
+     when content changes, which is the main reason state transitions read as
+     instantaneous repaints.
+
+     `--ease-emphasis` is a new key rather than a redefinition of `--ease-out`,
+     which is in use. */
+  --ease-emphasis: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Durations live outside `@theme` deliberately: as plain custom properties they
+   generate no utilities and so cannot collide with Tailwind's transition keys,
+   and they are consumed as `duration-[var(--motion-state)]` where needed. */
+:root {
+  --motion-micro: 120ms;   /* hover, focus, chip state */
+  --motion-state: 200ms;   /* crossfades, phase swaps */
+  --motion-layout: 320ms;  /* insertion, height, panel open */
+  --motion-route: 450ms;   /* the rail's current-pin travelling */
+}
+
+/* --- spacing ---------------------------------------------------------------
+
+   No tokens added on purpose. Tailwind already derives every step from a single
+   `--spacing` (0.25rem), and the app's `gap-1`…`gap-9` resolve off it — a second
+   parallel scale would be a way to disagree with the first.
+
+   What is missing is not values but a CONVENTION, and a convention belongs with
+   the code that follows it rather than in a variable. The intended rhythm, for
+   the milestone that applies it: zone padding 5–6 (24–32px), card padding 4–5
+   (16–24px), between sibling blocks 5 (24px), within a group 2–3 (8–12px), and
+   around the canvas's one primary artifact 6–7 (32–48px). Today the same
+   relationship is `gap-6`, `gap-7` and `gap-9` in three different files. */
+
 /* Concept-tag chips. One fixed hue per tag so the colour becomes readable on
-   its own after a couple of encounters; `lib/tags.ts` reads these by name. */
+   its own after a couple of encounters; `lib/tags.ts` reads these by name.
+
+   Each `-text` value must clear 4.5 against its own `-bg` composited over EVERY
+   surface a chip lands on — `ink`, `trench`, `slab`, `well` and `signal-wash` —
+   not just the page. The chip's own translucent fill lightens the surface under
+   its ink in dark and darkens it in light, so the composite is always worse than
+   the bare pairing: dark `graphite` is 4.67 on `signal-wash` bare but was 4.21
+   inside a chip there. That gap is what F3d closed, and it is why the fill rgb
+   tracks the text value rather than being set independently. */
 :root {
   --tag-architecture-text: #8fb6d9;
   --tag-architecture-border: #33506b;
@@ -49,24 +201,24 @@
   --tag-extension_point-text: #c7a0dc;
   --tag-extension_point-border: #543e63;
   --tag-extension_point-bg: rgba(199, 160, 220, 0.09);
-  --tag-risk-text: #d4634f;
+  --tag-risk-text: #e07762;
   --tag-risk-border: #6b2f26;
-  --tag-risk-bg: rgba(212, 99, 79, 0.1);
+  --tag-risk-bg: rgba(224, 119, 98, 0.1);
   --tag-test_coverage-text: #d9a441;
   --tag-test_coverage-border: #6b5220;
   --tag-test_coverage-bg: rgba(217, 164, 65, 0.09);
-  --tag-component-text: #7b8d99;
+  --tag-component-text: #8899a5;
   --tag-component-border: #24333d;
-  --tag-component-bg: rgba(123, 141, 153, 0.08);
+  --tag-component-bg: rgba(136, 153, 165, 0.08);
   /* A unit that connects several earlier ones and introduces no new code —
      where the mental model consolidates rather than grows. Warm and distinct
      from the six "here is a new thing" kinds, because it is the opposite. */
   --tag-synthesis-text: #e0b088;
   --tag-synthesis-border: #6b4a2e;
   --tag-synthesis-bg: rgba(224, 176, 136, 0.09);
-  --tag-freeform-text: #7b8d99;
+  --tag-freeform-text: #8899a5;
   --tag-freeform-border: #24333d;
-  --tag-freeform-bg: rgba(123, 141, 153, 0.06);
+  --tag-freeform-bg: rgba(136, 153, 165, 0.06);
 
   color-scheme: dark;
 }
@@ -90,10 +242,25 @@
   --color-rule: #a7bbc8;
   --color-chalk: #0c1f2a;
   --color-paper: #2c4653;
+  /* Same role, opposite direction: on paper a disabled control goes LIGHTER, and
+     the ceiling is what still clears 3:1 against every surface it lands on.
+     Deepened from #6f838f when the practice well arrived: that value measured
+     2.94 on `well`, just under the floor, because D3 chose it against ink, trench
+     and slab only. Measured now on ink / trench / slab / well:
+     3.7 / 3.4 / 4.0 / 3.2. */
+  --color-muted: #6a7d88;
   /* Chosen so every one of these clears 4.5:1 against the *darkest* surface
      they land on (trench, the rail), not just against the page ground. */
   --color-graphite: #4b6675;
-  --color-signal: #056782;
+  /* Deepened from #056782. Signal is used as ink ON a 15% signal tint — the
+     primary button, the profile chips — and at the old value that pairing
+     measured 4.44:1, just under AA, on the first screen a learner sees. Because
+     the tint is made FROM signal, foreground and background moved together, so
+     only a darker signal separates them: 4.44 → 5.35 on the tint, 4.11 → 4.92
+     on the halo, and 5.48 → 6.73 bare. Consistent with this theme's own rule
+     that signal deepens rather than brightens, since on paper contrast comes
+     from going darker. */
+  --color-signal: #04596f;
   /* signal-dim does double duty — hover/focus borders AND dim label text (area
      headings, line ranges). On a dark ground one value serves both; on a light
      one a border tint is far too pale to read, so this is set from the text
@@ -103,12 +270,25 @@
   --color-brass: #7d5602;
   --color-rust: #b1301a;
 
-  --color-signal-halo: rgba(5, 103, 130, 0.2);
+  /* Tracks --color-signal above; the halo is the same hue at low alpha, and
+     leaving it on the old rgb would quietly desynchronise the two. */
+  --color-signal-halo: rgba(4, 89, 111, 0.2);
   --color-signal-wash: #cbe4ee;
 
-  --color-code-gutter: #5f7a8a;
+  /* 3.54 before; see the note beside the dark value for why this is content. */
+  --color-code-gutter: #4e6674;
   --color-code-line: #2f4f5f;
   --color-code-hot: #04202c;
+
+  /* Lighter than `raise` on purpose — see the note beside the dark value. */
+  --color-well: #d4e0e7;
+
+  /* Stronger than their dark counterparts on purpose: on paper a surface step
+     alone barely separates two panels, so light leans on the shadow where dark
+     leans on lightness. Cool-tinted rather than neutral black, to sit in the
+     blueprint palette instead of greying it. */
+  --shadow-card: 0 1px 3px rgba(16, 42, 58, 0.1);
+  --shadow-overlay: 0 12px 28px rgba(16, 42, 58, 0.16);
 
   --tag-architecture-text: #16558c;
   --tag-architecture-border: #7ba7cb;
@@ -125,15 +305,15 @@
   --tag-test_coverage-text: #6e4c02;
   --tag-test_coverage-border: #d0b164;
   --tag-test_coverage-bg: rgba(138, 96, 2, 0.12);
-  --tag-component-text: #445c6a;
+  --tag-component-text: #3f5764;
   --tag-component-border: #a7bbc8;
-  --tag-component-bg: rgba(75, 102, 117, 0.12);
+  --tag-component-bg: rgba(63, 87, 100, 0.12);
   --tag-synthesis-text: #7f400f;
   --tag-synthesis-border: #d7a679;
   --tag-synthesis-bg: rgba(145, 74, 18, 0.12);
-  --tag-freeform-text: #4b6675;
+  --tag-freeform-text: #3f5764;
   --tag-freeform-border: #a7bbc8;
-  --tag-freeform-bg: rgba(75, 102, 117, 0.08);
+  --tag-freeform-bg: rgba(63, 87, 100, 0.08);
 
   color-scheme: light;
 }
@@ -146,10 +326,12 @@
    `16px` on purpose: a reader who has already raised their browser's default
    font size keeps that, and this multiplies it.
 
-   Type in the components is written `text-[calc(13.5rem/16)]` rather than
-   `text-[13.5px]`. It is the same size at scale 1 — the design number stays
-   readable in the markup — but it is now relative, so this dial and the
-   browser's own font setting both reach it. A px literal would ignore both. */
+   Components no longer write sizes at all: they name a step from the scale
+   above (`text-body`, `text-micro`), and each step is authored as
+   `calc(N rem/16)` there. Same property as before — the value stays relative, so
+   this dial and the browser's own font setting both reach it, where a px literal
+   would ignore both — but the number now lives in one table instead of being
+   spelled out at 199 call sites in 22 different sizes. */
 :root {
   --ui-scale: 1;
 }
@@ -164,9 +346,64 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
-/* The lesson column holds long-form prose; cap the measure for readability. */
+/* The lesson column holds long-form prose; cap the measure for readability.
+ *
+ * 48ch, not the 62ch this started at, and the difference is a unit trap worth
+ * writing down. `ch` is the advance width of the `0` glyph, which in Geist is
+ * 10.61px at 16px — while the average character in English prose measures
+ * 7.29px. `ch` is therefore 1.45× a real character, so `62ch` renders about
+ * NINETY characters per line, not sixty-two. Measured, not estimated.
+ *
+ * Ninety is well outside the comfortable 60–75 band. 48ch lands at ~70 (507px at
+ * 16px), which is also why the lesson column's floor is specified at 560px: that
+ * is this measure plus its padding.
+ *
+ * The old value was never exposed because the column was narrower than the cap
+ * and did the limiting itself — prose sat at ~62 characters by accident. Raising
+ * prose to 16px without fixing this would have traded one accident for a
+ * genuinely too-wide line the moment the source pane is closed. */
 .measure {
-  max-width: 62ch;
+  max-width: 48ch;
+}
+
+/* --- focus -----------------------------------------------------------------
+
+   One rule at the root, because a focus ring that has to be remembered per
+   component is one that will be forgotten. Before this exactly one control in
+   the app had a focus style — the source pane's divider — while three inputs
+   actively removed the browser's default and substituted a border tint too
+   faint to locate. Every other button, on every screen, was unfocusable to the
+   eye.
+
+   `:focus-visible`, not `:focus`, so a pointer click never leaves a ring behind.
+   Wrapped in `:where()` to keep specificity at zero, which is what lets a
+   component opt out on purpose (the drag divider does) without !important. */
+:where(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-signal);
+  outline-offset: 2px;
+}
+
+/* --- disabled --------------------------------------------------------------
+
+   Disabled was `opacity: .3`–`.4` applied to text that is already `graphite`.
+   Composited, that landed around 1.5:1 — so a disabled control did not read as
+   unavailable, it read as absent. `Back` on the interview's first question was
+   the clearest case: present, occupying space, and effectively invisible.
+
+   Opacity is the wrong channel for this. It scales the gap to the background
+   rather than setting it, so the result depends on whatever surface the control
+   happens to sit on. An explicit foreground does not.
+
+   The accent also has to go: a disabled primary that keeps its signal tint still
+   looks like the thing to press. */
+:where(button, input, textarea, select):disabled {
+  cursor: not-allowed;
+  color: var(--color-muted);
+  border-color: var(--color-rule);
+}
+
+:where(button):disabled {
+  background-color: transparent;
 }
 
 /* --- the source pane -------------------------------------------------------
@@ -197,23 +434,58 @@ body {
   font-weight: var(--code-light-font-weight, inherit);
 }
 
-/* Code outside the band under discussion keeps its hue but steps back. The pane
-   used to say this with brightness alone — two flat greys — which syntax colour
-   would otherwise have flattened back out.
+/* Code outside the band under discussion steps back — but NOT by opacity.
+   `.code-cold` used to carry `opacity: 0.82` (0.9 in light), and the note here
+   claimed cold code held ~5.7:1 in dark and ~5:1 in light. That measured
+   `--color-code-line`, the colour a token inherits only when the grammar gave it
+   none. Measured against the palette that is actually rendered, the veil was the
+   sole cause of failure for 1110 glyphs in dark and ~1690 in light, and light had
+   no headroom for a veil at all: its tightest passing token sits at 4.75:1
+   unveiled, so any fade at all pushes it under the floor.
 
-   Deliberately a light touch. Colour is already doing most of the separating,
-   and the band has a tint and a rule of its own, so this only has to tip the
-   balance. Measured, not guessed: at these values cold code holds ~5.7:1 in
-   dark and ~5:1 in light, against the ~6.7:1 the flat treatment had. A heavier
-   veil looked right in isolation and was unreadable in a paragraph — light
-   suffers most, where dimming ink toward paper washes it out fastest, so it
-   gets the gentler value. */
-.code-cold {
-  opacity: 0.82;
+   So the fade is gone, and the band is carried entirely by devices that cost no
+   legibility, measured on a real stop: the row's own `signal` tint (1.12 against
+   the pane), the 2px inset rule down its left edge in full `signal`, its line
+   number in full `signal` (2.14 against the cold gutter), and the brighter
+   `--color-code-hot` inherited by tokens the grammar left uncoloured (1.80
+   against `--color-code-line`). Four signals, none of them subtractive. The tint
+   alone is the weakest of the four and never carried the band by itself.
+
+   What remains is a palette problem rather than a veil problem: two token colours
+   in dark and three in light are below 4.5 on their own. Recorded with numbers in
+   evidence/ux-journeys.md under F3d; it needs a syntax-colour decision, not a
+   contrast tweak, so it is not silently repainted here. */
+
+/* The interview's one motion. Each question arrives from slightly below where
+   the last one sat, so the sequence reads as moving forward through a list rather
+   than as unrelated screens replacing each other — and going back reads as the
+   same movement, because the direction is a property of "a new question is here",
+   not of which way you travelled.
+
+   IT ANIMATES POSITION ONLY, NEVER OPACITY, and that is the important part. A
+   fade-in has to start from `opacity: 0`, which means the content is invisible
+   until the animation runs — and while an animation is in its active phase it
+   owns the property no matter what `animation-fill-mode` says, so there is no
+   fill-mode setting that makes a stalled fade safe. Measured: in a pane without
+   compositing the animation sits at `currentTime: 0` indefinitely and the entire
+   question renders at `opacity: 0`. Animating only `translateY` makes the worst
+   case "the question is 8px low", which nobody will ever notice, instead of "the
+   question is not there".
+
+   8px and `--motion-layout`: far enough to register as motion, short enough that
+   it is over before it can be waited on. The reduced-motion block below already
+   collapses every animation to 0.01ms, so this needs no guard of its own. */
+@keyframes rise {
+  from {
+    transform: translateY(calc(8rem / 16));
+  }
+  to {
+    transform: none;
+  }
 }
 
-:root[data-theme="light"] .code-cold {
-  opacity: 0.9;
+.rise {
+  animation: rise var(--motion-layout) var(--ease-emphasis);
 }
 
 @media (prefers-reduced-motion: reduce) {

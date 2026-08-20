@@ -4,37 +4,119 @@
     {
       "name": "backend",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "python", "-m", "uvicorn", "backend.api:app", "--port", "8000", "--reload"],
+      "runtimeArgs": [
+        "run",
+        "python",
+        "-m",
+        "uvicorn",
+        "backend.api:app",
+        "--port",
+        "8000",
+        "--reload"
+      ],
       "port": 8000
     },
     {
       "name": "backend-curriculum",
       "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "set \"CODEONBOARD_CURRICULUM=1\" && uv run python -m uvicorn backend.api:app --port 8000 --reload"],
+      "runtimeArgs": [
+        "/c",
+        "set \"CODEONBOARD_CURRICULUM=1\" && uv run python -m uvicorn backend.api:app --port 8000 --reload"
+      ],
       "port": 8000
+    },
+    {
+      "name": "backend-e2e",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "python",
+        "-m",
+        "uvicorn",
+        "backend.api:app",
+        "--port",
+        "8000"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "cwd": "frontend",
+      "port": 3000,
+      "autoPort": true
     },
     {
       "name": "backend-3001",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "python", "-m", "uvicorn", "backend.api:app", "--port", "8001", "--reload"],
-      "env": { "CODEONBOARD_ALLOWED_ORIGINS": "http://localhost:3001,http://127.0.0.1:3001" },
+      "runtimeArgs": [
+        "run",
+        "python",
+        "-m",
+        "uvicorn",
+        "backend.api:app",
+        "--port",
+        "8001",
+        "--reload"
+      ],
+      "env": {
+        "CODEONBOARD_ALLOWED_ORIGINS": "http://localhost:3001,http://127.0.0.1:3001"
+      },
       "port": 8001
     },
     {
       "name": "frontend-3001",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "--port", "3001"],
-      "env": { "NEXT_PUBLIC_API_URL": "http://localhost:8001" },
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3001"
+      ],
+      "env": {
+        "NEXT_PUBLIC_API_URL": "http://localhost:8001"
+      },
       "cwd": "frontend",
       "port": 3001
     },
     {
-      "name": "frontend",
+      "name": "frontend-uiaudit",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "cwd": "frontend",
-      "port": 3000,
-      "autoPort": true
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3007"
+      ],
+      "env": {
+        "NEXT_PUBLIC_API_URL": "http://localhost:8000"
+      },
+      "cwd": ".ui-audit-fe",
+      "port": 3007
+    },
+    {
+      "name": "backend-uiaudit",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "python",
+        "-m",
+        "uvicorn",
+        "backend.api:app",
+        "--port",
+        "8000"
+      ],
+      "env": {
+        "CODEONBOARD_ALLOWED_ORIGINS": "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3007,http://127.0.0.1:3007",
+        "CODEONBOARD_GAPS": "1"
+      },
+      "port": 8000
     }
   ]
 }

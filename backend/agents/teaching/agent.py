@@ -230,7 +230,12 @@ shown first; `reveal` appears only after they have committed to an answer. So:
 Produce a JSON object with exactly these keys:
   why_now:         ONE short sentence connecting this unit to the one they just
                    finished. If this is their first unit, say what the path is
-                   about to build instead. No preamble, no "in this lesson".
+                   about to build instead. If the user turn says this unit is a
+                   WARM-UP, connect it to the stop it unblocks instead — the
+                   developer did not arrive here by finishing the previous unit,
+                   they arrived because they got stuck, and telling them "now that
+                   you know <earlier unit>" describes a journey they did not take.
+                   No preamble, no "in this lesson".
   setup:           markdown. Frame the code and orient the developer — what they
                    are looking at, what to attend to, what question it is about
                    to answer. WITHOUT answering the prompt below.
@@ -530,7 +535,55 @@ def _brief_line(label: str, value: str | None) -> str:
     return f"  {label}: {value}\n" if value else ""
 
 
-def _previous_unit_section(previous: LearningNode | None) -> str:
+def _unblocks(graph: LearningGraph, node_id: str) -> LearningNode | None:
+    """The stop this unit was inserted to unblock, if it is a warm-up.
+
+    `insert_before` chains the warm-up to the stop it precedes with a
+    `prerequisite` edge, so the warm-up is the FROM side. Read from the edge
+    rather than from position: a warm-up is also the structural predecessor of
+    that stop, and "the node before me" cannot tell the two relationships apart.
+    """
+    for edge in graph.edges:
+        if edge.kind == "prerequisite" and edge.from_node_id == node_id:
+            return graph.nodes.get(edge.to_node_id)
+    return None
+
+
+def _previous_unit_section(
+    previous: LearningNode | None,
+    unblocks: LearningNode | None = None,
+) -> str:
+    """What `why_now` is written off.
+
+    A WARM-UP IS NOT A CONTINUATION, and telling the model it is produces prose
+    that is plainly false to the learner who asked for it. Observed live in S0: a
+    warm-up inserted because a learner misunderstood the auth extension point
+    opened "Now that you know how to use Session safely with context managers,
+    you need to understand…" — the model following this instruction faithfully,
+    off a predecessor that had nothing to do with why the unit exists.
+
+    Two things were wrong with pointing a warm-up at the previous unit. The
+    learner did not just finish that unit — they got stuck on the one AFTER this
+    warm-up, which is the reason it was created. And the warm-up's antecedent is
+    the confusion, not the position: it was spliced into the middle of the walk,
+    so "what came before" is an accident of where it landed.
+
+    So a remediation is told what it is for. The stop it unblocks is what the
+    learner was actually trying to do, and `why_now` written off that is the only
+    version that is true — it says why they are here, which they already know they
+    did not choose.
+    """
+    if unblocks is not None:
+        claim = unblocks.objective()
+        return (
+            "THIS UNIT IS A WARM-UP, inserted because the developer got stuck on "
+            "the stop that follows it. They did not choose to be here.\n"
+            "Write `why_now` off the stop it unblocks — one sentence on what this "
+            "gives them for that, NOT on what came before it in the path:\n"
+            f"  the stop they were stuck on: {unblocks.title}\n"
+            + (f"  what they were trying to claim: {claim}\n" if claim else "")
+            + "\n"
+        )
     if previous is None:
         return (
             "This is the first unit of the path — `why_now` should say what the "
@@ -553,6 +606,7 @@ def _build_user_content(
     doc_context: dict | None = None,
     system_context: str = "",
     previous: LearningNode | None = None,
+    unblocks: LearningNode | None = None,
 ) -> str:
     brief = node.lesson_brief or {}
     doc_section = _format_doc_context(node, doc_context)
@@ -568,7 +622,7 @@ def _build_user_content(
         f"Overall goal: {goal.get('primary_goal', '')}\n"
         f"Depth requested: {goal.get('depth', 'normal')}\n\n"
         f"{prior_context}\n\n"
-        f"{_previous_unit_section(previous)}"
+        f"{_previous_unit_section(previous, unblocks)}"
         f"{doc_section}"
         f"LEARNING OBJECTIVE — build exactly this claim:\n"
         f"  {node.objective() or '(none stated — build the brief below)'}\n\n"
@@ -741,6 +795,8 @@ def run(
         state.goal, node, source, prior_context,
         doc_context=doc_context, system_context=system_context,
         previous=_previous_unit(state.graph, current_id),
+        # A warm-up gets told what it unblocks instead of what preceded it.
+        unblocks=_unblocks(state.graph, current_id),
     )
 
     try:

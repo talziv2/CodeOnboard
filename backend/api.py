@@ -15,7 +15,9 @@
 #                  if yes  → returns (next_question, None)
 #                  if no   → calls Haiku, returns (None, GoalOutput)
 #              ← if not done: returns { done: false, question: { text, options } }
-#                if done:     deletes session, returns { done: true, goal: { ... } }
+#                if done:     returns { done: true, goal: { ... } } and KEEPS the
+#                             session, so the client's review step can still call
+#                             /goal/back to reopen an answer before starting
 #
 #   2b. Client calls POST /goal/back { session_id } to correct an earlier answer
 #      api.py  → calls agent.step_back(session), which un-answers the last
@@ -67,7 +69,25 @@ from backend.repo.cloner import (
     parse_repo_url,
 )
 
-load_dotenv(override=True)
+# `.env` FILLS GAPS; IT DOES NOT WIN.
+#
+# This was `override=True`, which inverted the precedence every other tool in the
+# stack uses: the file beat the environment, so a variable set where the process was
+# launched was silently discarded. `CODEONBOARD_GAPS=0 uv run uvicorn …` ran with
+# gaps ON if `.env` said `1` — the opposite of what the person typing it asked for,
+# with nothing to indicate it.
+#
+# It also cost fourteen test failures. `.env` carries `CODEONBOARD_CURRICULUM=1` for
+# manual E2E runs, and this line runs at IMPORT time, so any test file that imported
+# the API switched the Mentor's planner for every test after it (see
+# `tests/conftest.py`). The suite is isolated from that now, but the isolation was
+# treating a symptom of this line.
+#
+# Default precedence — real environment first, file second — is what makes both the
+# command line and the file usable for what each is for: the file for the values
+# that never change on this machine, the environment for the ones being varied right
+# now.
+load_dotenv()
 logger = logging.getLogger(__name__)
 app = FastAPI(title="CodeOnboard API")
 
@@ -98,7 +118,28 @@ app.add_middleware(
 # In-memory session store: session_id → GoalSession (goal dialogue only).
 # Learning-graph sessions live in SQLite (learning_store) — different lifecycle:
 # the goal dialogue is ephemeral, the learning graph persists across requests.
+#
+# A completed dialogue is NOT dropped when the goal is synthesised. The client shows
+# the answers back and waits for the learner to confirm before anything starts, and
+# from that review they can reopen any answer — which is /goal/back, which needs the
+# session. Deleting on completion made every Back on the review step return 404
+# session_not_found.
+#
+# Retention is bounded rather than immediate. Insertion order is dict order, so the
+# oldest dialogues are evicted past _MAX_GOAL_SESSIONS. A GoalSession is a repo URL,
+# a handful of answers and a goal type, so the cap is about not leaking indefinitely
+# rather than about memory pressure — there is no "learner closed the tab" signal to
+# free them on.
 sessions: dict[str, GoalSession] = {}
+
+_MAX_GOAL_SESSIONS = 64
+
+
+def _remember_goal_session(session: GoalSession) -> None:
+    sessions[session.session_id] = session
+    while len(sessions) > _MAX_GOAL_SESSIONS:
+        del sessions[next(iter(sessions))]
+
 
 # Indirection so tests can point persistence at a temp DB.
 SESSIONS_DB_PATH = learning_store.DEFAULT_DB_PATH
@@ -171,7 +212,7 @@ def repo_check(body: RepoCheckRequest) -> dict:
 @app.post("/goal/start", response_model=StartResponse)
 def goal_start(body: StartRequest) -> StartResponse:
     session = start_session(body.repo_url)
-    sessions[session.session_id] = session
+    _remember_goal_session(session)
     first_q = CORE_QUESTIONS[0]
     index, total = question_progress(session)
     return StartResponse(
@@ -196,7 +237,8 @@ def goal_answer(body: AnswerRequest) -> AnswerResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if goal_output is not None:
-        del sessions[body.session_id]
+        # The session stays: the client shows these answers back for confirmation,
+        # and /goal/back has to keep working from that review step.
         return AnswerResponse(done=True, goal=goal_output.model_dump())
 
     index, total = question_progress(session)
@@ -877,7 +919,14 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
     # `gap_kind` is still passed, and is consulted only when there are no gap
     # objects at all — the flag-off world, where the scalar is the whole signal.
     # That is what keeps this call identical to the old `decide` there.
-    plan = adaptation.decide_all(classification, list(node.gaps), gap_kind)
+    # `remediation_rounds` is passed HERE, on the path that spends it. `/verify`
+    # always passed it; this call site never did, so the node-level cap was
+    # unreachable from the only place that could reach it — the second half of
+    # F100, and the half that incrementing the counter alone does not fix.
+    plan = adaptation.decide_all(
+        classification, list(node.gaps), gap_kind,
+        remediation_rounds=node.gap_state.remediation_rounds,
+    )
     action = plan.action
     rationale = grade.get("rationale") or ""
     mutation = {"kind": "none"}
@@ -939,6 +988,33 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
         except Exception as exc:
             state.errors.append(f"re-teach failed: {exc}")
             adapted["retaught"] = False
+
+    # ── the node-level remediation counter (F100) ─────────────────────────────
+    #
+    # `remediation_rounds` was declared, persisted, deserialized and read by
+    # `decide_all`'s cap — and written by nothing, so `REMEDIATION_ROUND_CAP`
+    # was dead and the per-node remediation loop was unbounded.
+    #
+    # A ROUND IS AN APPLIED REMEDIATION, whichever kind it was. Counting only
+    # the structural ones would leave the loop unbounded in exactly the case
+    # the cap exists for: `decide_all` picks the action from gap precedence, so
+    # a node whose leading gap keeps earning `hint` could be hinted at forever
+    # and never reach a cap that only counted warm-ups. What bounds the loop is
+    # the number of times the system has responded to this node with help.
+    #
+    # Applied, not merely chosen: a `prerequisite` the Mutator declined and a
+    # re-teach that raised both leave the learner with nothing new, and charging
+    # a round for them would spend the budget on the system's own failures.
+    #
+    # Verifications are NOT counted here. That is the per-GAP budget, and
+    # `Gap.record_failed_verification` already keeps it (§18.16.1, LQ10).
+    remediated = (
+        mutation.get("kind") == "prerequisite"
+        or adapted.get("retaught") is True
+        or bool(adapted.get("text"))
+    )
+    if remediated:
+        node.gap_state.remediation_rounds += 1
 
     # Adapting UPWARD, and the only response that shortens the journey: an area
     # the learner has demonstrably got does not need its remaining recommended
@@ -1049,6 +1125,11 @@ def session_retry(session_id: str, body: dict) -> dict:
             history.REMEDIATION_INSERTED, nodes=[inserted],
             origin=progress.LEARNER_REQUEST, unlocks=current,
         )
+        # A learner-requested warm-up is a remediation round too (F100). The
+        # origin differs — they asked rather than being sent — but the budget is
+        # the node's, not the policy's, so both paths spend from it. Charged
+        # only when one was actually spliced: a decline costs nothing.
+        graph.nodes[current].gap_state.remediation_rounds += 1
     learning_store.save_graph(graph, SESSIONS_DB_PATH)
     if graph.current_node_id == current:
         # No prerequisite was inserted (guard triggered) — just return current

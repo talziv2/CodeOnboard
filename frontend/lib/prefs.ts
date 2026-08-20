@@ -30,6 +30,19 @@ export interface FloatRect {
 export interface SourcePrefs {
   mode: SourceMode;
   /**
+   * Whether the pane is showing. Persisted, and **false by default**: the source
+   * used to open with every session whether or not the lesson had sent anyone to
+   * it, which spent a third of the width on a file nobody had asked for. It now
+   * opens when a citation is clicked, and stays open across sessions once it has
+   * been opened — the learner who works with the code beside them keeps it, the
+   * learner who does not never sees it.
+   *
+   * Absent from prefs written before this existed, which `readSource` resolves to
+   * the default rather than to `undefined` — an older stored preference must not
+   * leave the pane in a state React treats as uncontrolled.
+   */
+  open: boolean;
+  /**
    * In **rem**, not px: the docked column is part of the layout, so it scales
    * with the text-size dial like every other column rather than squeezing
    * enlarged code into fixed-width chrome.
@@ -52,6 +65,7 @@ export interface Prefs {
 
 export const DEFAULT_SOURCE: SourcePrefs = {
   mode: "dock",
+  open: false,
   dockWidth: 21.25,
   float: { x: null, y: null, w: 680, h: 620 },
 };
@@ -101,6 +115,9 @@ function readSource(raw: unknown): SourcePrefs {
     typeof v === "number" && Number.isFinite(v) ? v : fallback;
   return {
     mode: SOURCE_MODES.includes(s.mode as SourceMode) ? (s.mode as SourceMode) : DEFAULT_SOURCE.mode,
+    // Strict `=== true`, so anything an older or corrupt prefs blob holds here
+    // resolves to closed rather than to something truthy.
+    open: s.open === true,
     dockWidth: clamp(num(s.dockWidth, DEFAULT_SOURCE.dockWidth), DOCK_MIN_REM, DOCK_MAX_REM),
     float: {
       x: typeof f.x === "number" && Number.isFinite(f.x) ? f.x : null,

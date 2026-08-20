@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { goalStart, goalAnswer, goalBack } from "@/lib/api";
 import type { Question } from "@/lib/api";
+import { type TranscriptEntry } from "@/components/goal/AnswerTranscript";
+import OptionList from "@/components/goal/OptionList";
+import ReviewStep from "@/components/goal/ReviewStep";
+import Button from "@/components/ui/Button";
 import { errorText, t } from "@/lib/strings";
 
 interface Props {
@@ -10,18 +14,85 @@ interface Props {
   onDone: (sessionId: string, goal: Record<string, string>) => void;
 }
 
+/**
+ * The goal interview: one question at a time, with everything already answered
+ * still on screen.
+ *
+ * Three things are deliberate here.
+ *
+ * ANSWERS ACCUMULATE LOCALLY, AND ARE SHOWN ONLY AT THE END. `history` is built as
+ * the user goes and truncated when they step back, but it is rendered on the review
+ * step alone — a transcript beside a live question turned every question into a
+ * re-read of everything already said. The backend has no transcript concept, and
+ * adding one would be a schema change to display something the client already knows.
+ *
+ * THE LAST ANSWER DOES NOT START ANYTHING. When the backend returns the synthesised
+ * goal it is held on `review` and the answers are shown back for confirmation;
+ * `onDone` fires only when the user starts the session. Everything downstream is
+ * decided by these answers, and the next thing that happens is a multi-minute
+ * pipeline run, so a wrong answer is expensive to discover later. Note the cost of
+ * reopening from here: re-confirming the last question synthesises the goal again,
+ * which is one more Haiku call.
+ *
+ * `goalBack` STAYS THE ONLY WAY BACKWARDS, including for the transcript's Change
+ * control on an answer four questions ago — that is a loop over the same call,
+ * not a new endpoint. It matters because the backend owns the consequence:
+ * crossing question 2 clears `goal_type`, which is what makes the follow-up
+ * questions recompute. A client that jumped straight to question 2 would leave
+ * the server believing in a goal type the user had abandoned, and the interview
+ * would finish with answers to questions that no longer applied.
+ *
+ * `total` IS A LOWER BOUND, not a target, and is documented as such on the wire:
+ * five core questions plus one follow-up, or two for `improve_existing_system`
+ * and `debug_issue`. So "Question 3 of 6" can honestly become "of 7" after
+ * question 2 is answered, and the progress text is read from the response every
+ * time rather than cached.
+ */
 export default function GoalDialogue({ repoUrl, onDone }: Props) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [question, setQuestion] = useState<Question | null>(null);
   const [answer, setAnswer] = useState("");
+  const [history, setHistory] = useState<TranscriptEntry[]>([]);
+  /**
+   * What has been typed or chosen for each question, whether or not it was
+   * confirmed, keyed on the question's own text.
+   *
+   * Without this, choosing an option and then stepping back lost the choice: it
+   * lived only in `answer`, the server was never told about it, and coming forward
+   * again cleared it. The user had made a decision and the interview forgot it,
+   * which is the opposite of the promise the transcript makes.
+   *
+   * Keyed on the TEXT rather than the index, because index 6 is a different
+   * question depending on the goal type. Changing the goal type on the way back
+   * must not drop the previous follow-up's answer into the new follow-up, which
+   * would put words in the user's mouth.
+   *
+   * A ref, not state: nothing renders from it directly, and reading it inside an
+   * async submit or a multi-step `jumpTo` must not see a stale closure.
+   */
+  const drafts = useRef<Record<string, string>>({});
+  /** Set when every question is answered: the goal, plus the answers to show back. */
+  const [review, setReview] = useState<{
+    goal: Record<string, string>;
+    entries: TranscriptEntry[];
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Set when the server no longer has the goal dialogue. From the review step that
+   * costs editing but not starting, so it is tracked rather than treated as fatal.
+   */
+  const [dialogueLost, setDialogueLost] = useState(false);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       setQuestion(null);
       setAnswer("");
+      setHistory([]);
+      setReview(null);
+      setDialogueLost(false);
+      drafts.current = {};
       try {
         const res = await goalStart(repoUrl);
         setSessionId(res.session_id);
@@ -34,15 +105,37 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
     })();
   }, [repoUrl]);
 
+  /** Record the answer as well as showing it, so stepping away cannot lose it. */
+  const choose = (value: string) => {
+    if (question) drafts.current[question.text] = value;
+    setAnswer(value);
+  };
+
   const submit = async () => {
-    if (!sessionId || !answer.trim() || loading) return;
+    if (!sessionId || !answer.trim() || loading || !question) return;
     setLoading(true);
     setError(null);
     try {
       const res = await goalAnswer(sessionId, answer);
-      setAnswer("");
-      if (res.done && res.goal) onDone(sessionId, res.goal);
-      else if (res.question) setQuestion(res.question);
+      // Recorded only once the backend has accepted it — the vocabulary check
+      // lives there, so an out-of-vocabulary answer must not appear in the
+      // transcript as though it had been taken.
+      const entries = [
+        ...history,
+        { index: question.index, question: question.text, answer },
+      ];
+      setHistory(entries);
+      if (res.done && res.goal) {
+        // Built from `entries` rather than read back from state, which has not
+        // committed yet — the review must show the answer just given.
+        setReview({ goal: res.goal, entries });
+        setAnswer("");
+      } else if (res.question) {
+        setQuestion(res.question);
+        // Whatever was already chosen for THIS question, if the user has seen it
+        // before and stepped away from it.
+        setAnswer(drafts.current[res.question.text] ?? "");
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? errorText(e.message) : t.goal.answerFailed);
     } finally {
@@ -50,126 +143,171 @@ export default function GoalDialogue({ repoUrl, onDone }: Props) {
     }
   };
 
-  // The backend un-answers the last question and hands it back with what was
-  // said, so the previous answer is restored rather than re-typed. It also owns
-  // the consequences — going back past Q2 clears the goal_type that decides
-  // which follow-ups come later.
-  const back = async () => {
-    if (!sessionId || loading || !question || question.index <= 1) return;
+  /**
+   * Reopen question `target`, one `goalBack` call at a time.
+   *
+   * Sequential and not parallel on purpose: each call un-answers exactly one
+   * question, and the server's position is what decides where the next one lands.
+   *
+   * The call count is derived from how many answers the SERVER is holding, which
+   * differs by where we are. Mid-interview the current question is unanswered, so
+   * that is `index - 1`; on the review step every question is answered, so it is
+   * `index`. Reopening the last question from the review is therefore one call, and
+   * reopening question 1 from a six-question review is six — whereas mid-interview
+   * at question 4 it is three, which is the case verified by hand.
+   */
+  const reopen = async (target: number) => {
+    if (!sessionId || loading || !question || target < 1) return;
+    const answered = review ? question.index : question.index - 1;
+    const steps = answered - target + 1;
+    if (steps < 1) return;
     setLoading(true);
     setError(null);
+    let current = question;
+    let restored = "";
+    let done = 0;
     try {
-      const res = await goalBack(sessionId);
-      setQuestion(res.question);
-      setAnswer(res.answer);
+      for (; done < steps; done++) {
+        const res = await goalBack(sessionId);
+        current = res.question;
+        restored = res.answer;
+      }
     } catch (e: unknown) {
-      setError(e instanceof Error ? errorText(e.message) : t.goal.backFailed);
+      // `session_not_found` is not a failed request, it is a vanished interview:
+      // the dialogue lives in memory on the server, so a restart or the retention
+      // cap can take it while this page is still open. What to say depends on
+      // where we are — on the review step the goal is already in hand.
+      const gone = e instanceof Error && e.message === "session_not_found";
+      if (gone) setDialogueLost(true);
+      setError(
+        gone
+          ? review
+            ? t.goal.editExpired
+            : t.goal.sessionExpired
+          : e instanceof Error
+            ? errorText(e.message)
+            : t.goal.backFailed,
+      );
     } finally {
+      // Committed in `finally` because partial progress is still real: if the third
+      // call of three fails, two questions are already un-answered on the server,
+      // and leaving the client showing the old position would describe a state the
+      // server has left. `done` is how far it actually got.
+      setQuestion(current);
+      // The server's committed answer wins; the draft covers a question it has no
+      // answer for, which is any question reached going forward again.
+      setAnswer(restored || drafts.current[current.text] || "");
+      setHistory((prev) => prev.slice(0, Math.max(0, current.index - 1)));
+      // Leaving the review even on a partial failure: the server has un-answered
+      // something, so the goal it handed us no longer describes the session.
+      if (done > 0) setReview(null);
       setLoading(false);
     }
   };
 
   if (loading && !question) {
     return (
-      <p className="animate-pulse font-mono text-sm text-graphite">{t.goal.starting}</p>
+      <p className="animate-pulse font-mono text-aside text-graphite">{t.goal.starting}</p>
     );
   }
 
   if (!question) {
-    return error ? <p className="text-sm text-rust">{error}</p> : null;
+    return error ? <p className="text-aside text-rust">{error}</p> : null;
   }
 
-  const ticks = Math.max(question.total, question.index);
+  if (review) {
+    return (
+      <div className="flex w-full max-w-xl flex-col gap-4">
+        <ReviewStep
+          entries={review.entries}
+          onEdit={reopen}
+          onBack={() => reopen(question.index)}
+          onStart={() => onDone(sessionId!, review.goal)}
+          busy={loading}
+          editable={!dialogueLost}
+        />
+        {error && <p className="text-aside text-rust">{error}</p>}
+      </div>
+    );
+  }
+
+  const total = Math.max(question.total, question.index);
   const answered = answer.trim().length > 0;
   const atStart = question.index <= 1;
 
   return (
-    <div className="flex w-full max-w-xl flex-col gap-5">
-      <div className="flex flex-col gap-2">
-        <div className="flex gap-1" role="presentation">
-          {Array.from({ length: ticks }, (_, i) => (
-            <span
-              key={i}
-              className={`h-0.5 flex-1 rounded-full transition-colors ${
-                i < question.index ? "bg-signal" : "bg-rule"
-              }`}
-            />
-          ))}
-        </div>
-        <span className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.14em] text-graphite">
-          {t.goal.progress(question.index, ticks)}
+    <div className="flex w-full max-w-xl flex-col gap-7">
+      {/* Keyed on the question so React remounts the block: that is what replays
+          `rise` on every move, forwards or back, and what re-lands focus on the
+          new answer control. The tick bar this replaced said the same thing as
+          "Question 3 of 6", while the transcript above now says it more usefully —
+          it shows what the answers WERE, not just how many there are. */}
+      <div key={question.index} className="rise flex flex-col gap-5">
+        <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
+          {t.goal.progress(question.index, total)}
         </span>
-      </div>
 
-      <h2 className="font-display text-[calc(22rem/16)] font-medium leading-[1.25] tracking-tight text-chalk text-balance">
-        {question.text}
-      </h2>
+        <h2 className="font-display text-head font-medium tracking-tight text-chalk text-balance">
+          {question.text}
+        </h2>
 
-      {question.options ? (
-        /* A fixed vocabulary: the backend rejects anything outside it, and
-           `familiarity` is matched against the same strings downstream. So the
-           options are the whole input — no free-text box beside them to type an
-           answer that can only be refused. */
-        <div className="flex flex-wrap gap-2">
-          {question.options.map((opt) => (
-            <button
-              key={opt}
-              onClick={() => setAnswer(opt)}
-              disabled={loading}
-              className={`rounded border px-3 py-1.5 text-start text-[calc(13rem/16)] transition disabled:opacity-50 ${
-                answer === opt
-                  ? "border-signal-dim bg-signal/15 text-signal"
-                  : "border-rule text-graphite hover:border-signal-dim hover:text-chalk"
-              }`}
-            >
-              {opt}
-            </button>
-          ))}
+        {question.options ? (
+          <OptionList
+            options={question.options}
+            value={answer}
+            onSelect={choose}
+            onConfirm={submit}
+            disabled={loading}
+          />
+        ) : (
+          <textarea
+            className="w-full resize-none rounded-field border border-rule bg-trench p-3 text-start text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
+            rows={3}
+            placeholder={t.goal.answerPlaceholder}
+            value={answer}
+            onChange={(e) => choose(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            disabled={loading}
+            autoFocus
+          />
+        )}
+
+        {error && <p className="text-aside text-rust">{error}</p>}
+
+        <div className="flex items-center gap-3">
+          {/* Absent on the first question rather than present-and-disabled. There
+              is nowhere to go back TO, and a control that occupies space to say so
+              is worse than no control — it was the starkest case of the old
+              opacity-based disabled state, rendering at roughly 1.5:1.
+
+              Tertiary now rather than an outline: the transcript's Change control
+              is the specific way back and this is the general one, so it should
+              not hold the same weight as Continue. */}
+          {!atStart && (
+            <Button variant="ghost" onClick={() => reopen(question.index - 1)} disabled={loading}>
+              {t.goal.back}
+            </Button>
+          )}
+          <Button variant="primary" size="lg" onClick={submit} disabled={loading || !answered}>
+            {loading ? t.goal.thinking : t.goal.continue}
+          </Button>
+          {/* Says why Continue is dead rather than leaving the user to guess, then
+              which keys work once it is live. The two hints differ because the two
+              controls do: the options list separates choosing from confirming and
+              the text box does not. */}
+          <span className="font-mono text-micro text-graphite">
+            {!answered
+              ? t.goal.answerRequired
+              : question.options
+                ? t.goal.optionHint
+                : t.goal.enterHint}
+          </span>
         </div>
-      ) : (
-        <textarea
-          className="w-full resize-none rounded border border-rule bg-trench p-3 text-start text-[calc(13.5rem/16)] text-chalk placeholder:text-graphite focus:border-signal-dim focus:outline-none"
-          rows={3}
-          placeholder={t.goal.answerPlaceholder}
-          value={answer}
-          onChange={(e) => setAnswer(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          disabled={loading}
-          autoFocus
-        />
-      )}
-
-      {error && <p className="text-sm text-rust">{error}</p>}
-
-      <div className="flex items-center gap-3">
-        <button
-          onClick={back}
-          disabled={loading || atStart}
-          className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-30 disabled:hover:border-rule disabled:hover:text-graphite"
-        >
-          {t.goal.back}
-        </button>
-        <button
-          onClick={submit}
-          disabled={loading || !answered}
-          className="rounded border border-signal-dim bg-signal/15 px-5 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25 disabled:opacity-40"
-        >
-          {loading ? t.goal.thinking : t.goal.continue}
-        </button>
-        {/* Says why Continue is dead rather than leaving the user to guess.
-            The ↵ hint belongs only to the free-text box that honours it. */}
-        <span className="font-mono text-[calc(10.5rem/16)] text-graphite">
-          {!answered
-            ? t.goal.answerRequired
-            : question.options
-              ? ""
-              : t.goal.enterHint}
-        </span>
       </div>
     </div>
   );

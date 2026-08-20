@@ -43,10 +43,12 @@ interface Palette {
 
 const DARK: Palette = {
   base: "#9aabb6",
-  // Comments recede, but they still have to be readable through the cold veil
-  // in `globals.css` — this is set from that combined figure, not from how it
-  // looks on its own.
-  comment: "#60757f",
+  // Comments recede, and they still have to clear 4.5:1 doing it. This was
+  // `#60757f`, set "from the combined figure" with the cold veil applied — and F3d
+  // deleted that veil, which left the value tuned for a condition that no longer
+  // exists and failing at 3.88 on its own. 4.56 now, and still the most recessive
+  // colour in the palette, which is what the italic is for as well.
+  comment: "#69818c",
   keyword: "#c19ad6",
   language: "#d9a441",
   number: "#e0b088",
@@ -56,7 +58,10 @@ const DARK: Palette = {
   type: "#dcc98a",
   decorator: "#b98db0",
   operator: "#7d8f9b",
-  punctuation: "#6b7d88",
+  // 4.38 → 5.01. Lifted further than the comment on purpose: they were 3.88 and
+  // 4.38, so the palette already said punctuation is the less recessive of the two,
+  // and landing both at ~4.6 would have collapsed a distinction that existed.
+  punctuation: "#748792",
   invalid: "#d4634f",
 };
 
@@ -64,17 +69,25 @@ const DARK: Palette = {
    going darker, and a pastel would read as disabled code. */
 const LIGHT: Palette = {
   base: "#2f4f5f",
-  comment: "#5b7887",
+  // 3.67 → 4.53. Light had no headroom for a veil and none to spare here either:
+  // its ceiling is `base` at 6.83, so the three recessive colours land inside
+  // 4.53–4.75 rather than spread out. They read alike, and that is the honest
+  // trade — comments keep their italic, and a legible cluster beats an illegible
+  // hierarchy.
+  comment: "#506977",
   keyword: "#6e358f",
   language: "#7d5602",
   number: "#8a4310",
   string: "#0a6250",
-  stringPunct: "#2b7566",
+  // 4.28 → 4.64, still well under `string`'s 5.71: the quotes stay quieter than
+  // what they quote.
+  stringPunct: "#296f61",
   func: "#155a8c",
   type: "#6b4f0a",
   decorator: "#8a3d7a",
   operator: "#4b6675",
-  punctuation: "#5a7484",
+  // 3.85 → 4.70, kept under `operator`'s 4.75 so the original ordering survives.
+  punctuation: "#506675",
   invalid: "#b1301a",
 };
 

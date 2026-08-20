@@ -75,9 +75,9 @@ export default function CodeViewer({
 
   const body =
     error != null ? (
-      <p className="px-4 py-3 text-[calc(12rem/16)] text-rust">{error}</p>
+      <p className="px-4 py-3 text-meta text-rust">{error}</p>
     ) : content == null ? (
-      <p className="px-4 py-3 font-mono text-[calc(11rem/16)] text-graphite">
+      <p className="px-4 py-3 font-mono text-micro text-graphite">
         {t.session.loading}
       </p>
     ) : (
@@ -128,16 +128,19 @@ function PaneHeader({
         mode === "float" ? "cursor-move touch-none select-none" : ""
       }`}
     >
-      <span className="min-w-0 flex-1 truncate font-mono text-[calc(11rem/16)] text-graphite">
+      <span className="min-w-0 flex-1 truncate font-mono text-micro text-graphite">
         {filePath}
       </span>
+      {/* `signal`, not `signal-dim`, which measured 3.84:1 on trench. This is the
+          band under discussion — "you are here" — so the full accent is also the
+          semantically correct one of the two. */}
       {highlightStart != null && (
-        <span className="shrink-0 font-mono text-[calc(10rem/16)] text-signal-dim">
+        <span className="shrink-0 font-mono text-micro text-signal">
           {highlightStart}–{highlightEnd}
         </span>
       )}
 
-      <span className="flex shrink-0 items-center rounded border border-rule">
+      <span className="flex shrink-0 items-center rounded-field border border-rule">
         <ModeButton
           active={mode === "dock"}
           label={t.source.dock}
@@ -158,7 +161,7 @@ function PaneHeader({
         data-no-drag
         onClick={onClose}
         aria-label={t.session.hideSource}
-        className="shrink-0 font-mono text-[calc(11rem/16)] text-graphite transition hover:text-signal"
+        className="shrink-0 font-mono text-micro text-graphite transition hover:text-signal"
       >
         ✕
       </button>
@@ -226,6 +229,8 @@ function DockDivider({
     <div
       role="separator"
       aria-orientation="vertical"
+      // Declared, so the focus probe reads this as intended rather than missed.
+      data-focus-exempt=""
       aria-label={t.source.resize}
       tabIndex={0}
       onPointerDown={(e) => {
@@ -244,6 +249,10 @@ function DockDivider({
         applyDockWidth(next);
         onCommit(next);
       }}
+      // The one deliberate opt-out from the global focus ring. This is a
+      // full-height 8px drag handle sitting outside the pane's own bounds, so an
+      // outline would be drawn half-clipped by the grid track; filling it is both
+      // clearer and better placed. The fill IS the focus indicator here.
       className="absolute inset-y-0 -start-1 z-20 w-2 cursor-ew-resize touch-none bg-transparent transition hover:bg-signal/25 focus-visible:bg-signal/40 focus-visible:outline-none"
     />
   );
@@ -363,7 +372,7 @@ function FloatShell({
       onPointerMove={move}
       onPointerUp={end}
       onPointerCancel={end}
-      className="fixed z-40 flex min-h-0 flex-col overflow-hidden rounded-md border border-rule bg-trench shadow-[0_18px_50px_rgba(0,0,0,0.45)]"
+      className="fixed z-40 flex min-h-0 flex-col overflow-hidden rounded-panel border border-rule bg-trench shadow-overlay"
     >
       {children}
 

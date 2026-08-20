@@ -3,7 +3,11 @@
 import type { GraphNode } from "@/lib/api";
 import { isStation } from "@/lib/graph-layout";
 import { isSettled, type RouteSection } from "@/lib/route-sections";
-import { understandingStyle, understandingLabel, tagStyle, tagLabel } from "@/lib/tags";
+import { understandingLabel } from "@/lib/tags";
+import SectionLabel from "@/components/ui/SectionLabel";
+import ConceptTag from "@/components/ui/ConceptTag";
+import StatePin from "@/components/ui/StatePin";
+import Button from "@/components/ui/Button";
 import { t } from "@/lib/strings";
 
 interface Props {
@@ -51,7 +55,7 @@ export default function SectionOverview({
   return (
     <div className="flex flex-col gap-7">
       <div className="flex flex-col gap-2.5">
-        <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
+        <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-micro uppercase tracking-[0.16em] text-graphite">
           <span className="text-signal">{t.section.label}</span>
           <span>{t.section.chapterOf(section.index, sections.filter((s) => s.area).length)}</span>
           <span className="tabular-nums">
@@ -59,12 +63,12 @@ export default function SectionOverview({
           </span>
         </span>
 
-        <h2 className="font-display text-[calc(23rem/16)] font-medium leading-[1.2] tracking-tight text-chalk text-balance">
+        <h2 className="font-display text-head font-medium tracking-tight text-chalk text-balance">
           {area.title}
         </h2>
 
         {area.why && (
-          <p className="measure text-[calc(13.5rem/16)] leading-[1.7] text-paper">
+          <p className="measure text-body text-paper">
             {area.why}
           </p>
         )}
@@ -72,10 +76,10 @@ export default function SectionOverview({
 
       {/* Why now — the chapter's place in the route, not a new claim about it. */}
       <div className="flex flex-col gap-1.5 border-s-2 border-rule ps-3.5">
-        <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+        <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
           {t.section.whyNow}
         </span>
-        <p className="measure text-[calc(12.5rem/16)] leading-relaxed text-graphite">
+        <p className="measure text-meta text-graphite">
           {!previous
             ? t.section.opensRoute
             : previous.settled === previous.total
@@ -93,12 +97,7 @@ export default function SectionOverview({
           show as "what you should be able to say". */}
       {stations.some((s) => s.node.objective) && (
         <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2.5">
-            <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
-              {t.section.byTheEnd}
-            </span>
-            <span aria-hidden className="h-px flex-1 bg-rule" />
-          </div>
+          <SectionLabel>{t.section.byTheEnd}</SectionLabel>
           <ul className="flex flex-col gap-2.5">
             {stations
               .filter((s) => s.node.objective)
@@ -108,7 +107,7 @@ export default function SectionOverview({
                     aria-hidden
                     className="mt-[calc(7rem/16)] h-px w-3 shrink-0 bg-signal-dim"
                   />
-                  <p className="measure text-[calc(13rem/16)] leading-[1.65] text-paper">
+                  <p className="measure text-aside text-paper">
                     {s.node.objective}
                   </p>
                 </li>
@@ -120,41 +119,29 @@ export default function SectionOverview({
       {/* The contents of the chapter — and where the concept tags live now that
           the rail no longer carries them. */}
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2.5">
-          <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
-            {t.section.lessons}
-          </span>
-          <span aria-hidden className="h-px flex-1 bg-rule" />
-        </div>
+        <SectionLabel>{t.section.lessons}</SectionLabel>
 
         <ul className="flex flex-col gap-1">
           {section.stops.map((stop) => {
             const { node } = stop;
             const isCurrent = node.id === currentNodeId;
-            const style = understandingStyle(node.understanding ?? "insufficient");
             return (
               <li key={node.id}>
                 <button
                   onClick={() => onJump(node)}
                   aria-current={isCurrent ? "step" : undefined}
-                  className="group grid w-full grid-cols-[calc(15rem/16)_1fr] gap-3 rounded px-2 py-2 text-start transition hover:bg-slab"
+                  className="group grid w-full grid-cols-[calc(15rem/16)_1fr] gap-3 rounded-field px-2 py-2 text-start transition hover:bg-slab"
                 >
-                  <span
-                    aria-hidden
-                    className="mt-[calc(4rem/16)] h-[calc(13rem/16)] w-[calc(13rem/16)] shrink-0 rounded-full border-[1.5px] bg-ink"
-                    style={{
-                      borderColor: isCurrent ? "var(--color-signal)" : style.stroke,
-                      borderStyle: style.borderStyle,
-                      background: isCurrent ? "var(--color-ink)" : style.fill,
-                      boxShadow: isCurrent
-                        ? "0 0 0 3px var(--color-signal-halo)"
-                        : undefined,
-                    }}
+                  <StatePin
+                    understanding={node.understanding}
+                    isCurrent={isCurrent}
+                    role="list"
+                    className="mt-[calc(4rem/16)]"
                   />
                   <span className="flex min-w-0 flex-col gap-1">
                     <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
                       <span
-                        className={`text-[calc(13rem/16)] leading-snug transition ${
+                        className={`text-aside transition ${
                           isCurrent
                             ? "font-semibold text-signal"
                             : "font-medium text-chalk group-hover:text-signal"
@@ -162,11 +149,11 @@ export default function SectionOverview({
                       >
                         {node.title}
                       </span>
-                      <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.13em] text-graphite">
+                      <span className="font-mono text-micro uppercase tracking-[0.13em] text-graphite">
                         {understandingLabel(node.understanding ?? "insufficient")}
                       </span>
                       {stop.isPrerequisite && (
-                        <span className="font-mono text-[calc(9.5rem/16)] tracking-[0.05em] text-signal">
+                        <span className="font-mono text-micro tracking-[0.05em] text-signal">
                           {t.rail.addedAfterConfusion}
                         </span>
                       )}
@@ -175,28 +162,15 @@ export default function SectionOverview({
                           survived recovery (M3a.3 AC3). */}
                     </span>
 
-                    <span className="truncate font-mono text-[calc(10.5rem/16)] text-graphite">
+                    <span className="truncate font-mono text-micro text-graphite">
                       {node.file}
                     </span>
 
                     {node.concept_tags.length > 0 && (
                       <span className="flex flex-wrap gap-1">
-                        {node.concept_tags.map((tag) => {
-                          const s = tagStyle(tag);
-                          return (
-                            <span
-                              key={tag}
-                              className="rounded-[2px] border px-[5px] py-px font-mono text-[calc(9.5rem/16)] tracking-[0.05em]"
-                              style={{
-                                color: s.text,
-                                borderColor: s.border,
-                                background: s.background,
-                              }}
-                            >
-                              {tagLabel(tag)}
-                            </span>
-                          );
-                        })}
+                        {node.concept_tags.map((tag) => (
+                          <ConceptTag key={tag} tag={tag} />
+                        ))}
                       </span>
                     )}
                   </span>
@@ -209,29 +183,26 @@ export default function SectionOverview({
 
       <div className="flex flex-wrap items-center gap-3 border-t border-rule pt-4">
         {current ? (
-          <button
+          <Button variant="primary" size="md"
             onClick={onClose}
-            className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
           >
             {t.section.continue(current.node.title)}
-          </button>
+          </Button>
         ) : (
           entry && (
-            <button
+            <Button variant="primary" size="md"
               onClick={() => onJump(entry.node)}
-              className="rounded border border-signal-dim bg-signal/15 px-4 py-2 text-[calc(13rem/16)] font-medium text-signal transition hover:bg-signal/25"
             >
               {t.section.startHere(entry.node.title)}
-            </button>
+            </Button>
           )
         )}
-        <button
+        <Button variant="secondary" size="md"
           onClick={onClose}
-          className="rounded border border-rule px-4 py-2 text-[calc(13rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
         >
           {t.section.close}
-        </button>
-        <span className="ms-auto font-mono text-[calc(10rem/16)] text-graphite">
+        </Button>
+        <span className="ms-auto font-mono text-micro text-graphite">
           {t.section.reopenHint}
         </span>
       </div>

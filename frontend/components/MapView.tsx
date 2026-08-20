@@ -12,6 +12,9 @@ import { buildRoute } from "@/lib/graph-layout";
 import {
   tagStyle, tagLabel, stateStyle, stateLabel, isCanonicalTag, STATE_ORDER,
 } from "@/lib/tags";
+import SectionLabel from "@/components/ui/SectionLabel";
+import ConceptTag from "@/components/ui/ConceptTag";
+import StatePin from "@/components/ui/StatePin";
 import { t } from "@/lib/strings";
 
 interface Props {
@@ -87,7 +90,7 @@ function BreakdownRow({
         <span className="min-w-0 truncate" style={accent ? { color: accent } : undefined}>
           {label}
         </span>
-        <span className="shrink-0 font-mono text-[calc(10.5rem/16)] tabular-nums text-graphite">
+        <span className="shrink-0 font-mono text-micro tabular-nums text-graphite">
           {sublabel ?? `${tally.understood}/${total}`}
         </span>
       </span>
@@ -110,8 +113,8 @@ function areaTitle(areas: Area[] | undefined, areaId: string): string {
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-3.5 rounded-md border border-rule bg-slab p-4">
-      <h3 className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">{title}</h3>
+    <section className="flex flex-col gap-3.5 rounded-card border border-rule bg-slab p-4 shadow-card">
+      <h3 className="font-mono text-micro uppercase tracking-[0.16em] text-graphite">{title}</h3>
       {children}
     </section>
   );
@@ -150,15 +153,15 @@ function UnitList({
         <li key={row.node_id}>
           <button
             onClick={() => onOpen(row.node_id)}
-            className="flex w-full flex-col gap-0.5 rounded border border-rule bg-slab px-3 py-2 text-start transition hover:border-signal-dim"
+            className="flex w-full flex-col gap-0.5 rounded-card border border-rule bg-slab px-3 py-2 text-start transition hover:border-signal-dim"
           >
             <span
-              className="text-[calc(12.5rem/16)] font-medium leading-snug"
+              className="text-meta font-medium"
               style={{ color: tone ?? "var(--color-chalk)" }}
             >
               {row.title}
             </span>
-            <span className="font-mono text-[calc(10rem/16)] text-graphite">
+            <span className="font-mono text-micro text-graphite">
               {row.attempts === 1
                 ? t.map.ofAssessed(1, 1).replace("1 of 1", "1 answer")
                 : `${row.attempts} answers`}
@@ -230,8 +233,8 @@ function PatternCard({
   const exhausted = Number(pattern.detail.exhausted ?? 0);
   const retried = Number(pattern.detail.retried ?? 0);
   return (
-    <li className="flex flex-col gap-2 rounded border border-rule bg-slab px-3.5 py-3">
-      <p className="text-[calc(12.5rem/16)] leading-relaxed text-paper">
+    <li className="flex flex-col gap-2 rounded-card border border-rule bg-slab px-3.5 py-3">
+      <p className="text-meta text-paper">
         {patternSentence(pattern)}
         {/* Keeps the aggregate from reading as outstanding work when part of it
             is something the learner already declined to pursue. */}
@@ -246,7 +249,7 @@ function PatternCard({
         )}
       </p>
       <span className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.13em] text-graphite">
+        <span className="font-mono text-micro uppercase tracking-[0.13em] text-graphite">
           {t.map.patternEvidence(pattern.evidence.length)}
         </span>
         {/* Reuses the evidence drawer rather than inventing a second
@@ -258,7 +261,7 @@ function PatternCard({
             // A bare "1" is the whole accessible name otherwise — a screen
             // reader hears "button 1, button 2" with no idea what opens (AC10).
             aria-label={t.map.evidenceRef(i + 1, pattern.evidence.length)}
-            className="rounded-[2px] border border-rule px-1.5 py-px font-mono text-[calc(9.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
+            className="rounded-chip border border-rule px-1.5 py-px font-mono text-micro text-graphite transition hover:border-signal-dim hover:text-signal"
           >
             {i + 1}
           </button>
@@ -342,17 +345,17 @@ export default function MapView({
         {/* headline */}
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-col gap-1">
-            <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
+            <span className="font-mono text-micro uppercase tracking-[0.16em] text-graphite">
               {t.map.label}
             </span>
-            <h2 className="font-display text-[calc(25rem/16)] font-medium leading-tight tracking-tight text-chalk">
+            <h2 className="font-display text-chapter font-medium tracking-tight text-chalk">
               {repo ?? t.map.thisCodebase}
             </h2>
             {/* THE headline is a FRACTION, not a percentage: "7 of 15 required
                 objectives demonstrated" is a sentence the learner can check
                 against the list below, where "47% readiness" sounds like a
                 calibrated prediction the model never made (M3a.3). */}
-            <p className="text-[calc(12.5rem/16)] text-graphite">
+            <p className="text-meta text-graphite">
               {t.map.assessedOf(understanding.assessed, understanding.total)}
               {progress.core_in_progress > 0 && (
                 <> · {t.map.inProgress(progress.core_in_progress)}</>
@@ -370,24 +373,24 @@ export default function MapView({
               the review found. */}
           <div className="flex items-end gap-7">
             <div className="flex flex-col gap-1">
-              <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.14em] text-graphite">
+              <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
                 {t.map.demonstratedLabel}
               </span>
               <span className="flex items-baseline gap-1.5">
-                <span className="font-display text-[calc(30rem/16)] leading-none tabular-nums text-signal">
+                <span className="font-display text-chapter leading-none tabular-nums text-signal">
                   {progress.core_demonstrated}
                 </span>
-                <span className="font-display text-[calc(17rem/16)] leading-none tabular-nums text-graphite">
+                <span className="font-display text-lede leading-none tabular-nums text-graphite">
                   / {progress.core_total}
                 </span>
-                <span className="font-mono text-[calc(10rem/16)] text-graphite">
+                <span className="font-mono text-micro text-graphite">
                   ({pct}%)
                 </span>
               </span>
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.14em] text-graphite">
+              <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
                 {t.map.journeyLabel(progress.stops_settled, progress.stops_total)}
               </span>
               {/* A track of stops, not a bar: the journey is discrete. */}
@@ -413,18 +416,12 @@ export default function MapView({
             route list describing the same units in two places is what made this
             screen a dashboard (M3a.3 AC6). Second section, not sixth. */}
         <section className="flex flex-col gap-4">
-          <h3 className="flex items-center gap-2.5 font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite">
-            {t.map.journeyTitle}
-            <span aria-hidden className="h-px flex-1 bg-rule" />
-          </h3>
+          <SectionLabel as="h3">{t.map.journeyTitle}</SectionLabel>
 
           <ol className="flex flex-col">
             {stops.map((stop, i) => {
               const { node } = stop;
               const isCurrent = node.id === currentNodeId;
-              // The unit's understanding class — the SAME encoding the rail
-              // and the drawer use (AC2).
-              const s = understandingStyle(node.understanding ?? "insufficient");
               const isLast = i === stops.length - 1;
               // A prerequisite connects to the node it unlocks, so the segment
               // below it is the adaptive one.
@@ -453,30 +450,24 @@ export default function MapView({
                   )}
 
                   <span className="flex justify-center pt-2.5">
-                    <span
-                      aria-hidden
-                      className="relative z-10 h-[calc(15rem/16)] w-[calc(15rem/16)] rounded-full border-2 bg-ink"
-                      style={{
-                        borderColor: isCurrent ? "var(--color-signal)" : s.stroke,
-                        background: isCurrent ? "var(--color-ink)" : s.fill,
-                        borderStyle: s.borderStyle,
-                        boxShadow: isCurrent ? "0 0 0 4px var(--color-signal-halo)" : undefined,
-                      }}
-                    >
-                      {isCurrent && <span className="absolute inset-[calc(3rem/16)] rounded-full bg-signal" />}
-                    </span>
+                    <StatePin
+                      understanding={node.understanding}
+                      isCurrent={isCurrent}
+                      role="map"
+                      className="z-10"
+                    />
                   </span>
 
                   <button
                     onClick={() => onNodeClick(node)}
-                    className="flex flex-col gap-2 rounded-md border-2 px-4 py-3.5 text-start transition hover:border-signal-dim"
+                    className="flex flex-col gap-2 rounded-card border-2 px-4 py-3.5 text-start transition hover:border-signal-dim"
                     style={{
                       background: isCurrent ? "var(--color-signal-wash)" : "var(--color-slab)",
                       borderColor: isCurrent ? "var(--color-signal)" : "var(--color-rule)",
                     }}
                   >
                     {stop.isPrerequisite && (
-                      <span className="flex flex-wrap items-center gap-2 font-mono text-[calc(10rem/16)] tracking-[0.06em] text-signal">
+                      <span className="flex flex-wrap items-center gap-2 font-mono text-micro tracking-[0.06em] text-signal">
                         <span aria-hidden className="h-px w-4 bg-signal" />
                         {t.rail.addedAfterConfusion}
                         {stop.unlocksTitle && (
@@ -486,41 +477,28 @@ export default function MapView({
                     )}
 
                     <span
-                      className="font-display text-[calc(17rem/16)] font-medium leading-[1.3] tracking-tight"
+                      className="font-display text-lede font-medium tracking-tight"
                       style={{ color: isCurrent ? "var(--color-signal)" : "var(--color-chalk)" }}
                     >
                       {node.title}
                     </span>
 
-                    <span className="font-mono text-[calc(11rem/16)] text-graphite">
+                    <span className="font-mono text-micro text-graphite">
                       {node.file}
                       {" · "}
                       {t.lesson.lines(node.line_start, node.line_end)}
                     </span>
 
                     <span className="flex flex-wrap items-center gap-1.5">
-                      {node.concept_tags.slice(0, 2).map((tag) => {
-                        const style = tagStyle(tag);
-                        return (
-                          <span
-                            key={tag}
-                            className="rounded-[2px] border px-1.5 py-px font-mono text-[calc(9.5rem/16)] tracking-[0.05em]"
-                            style={{
-                              color: style.text,
-                              borderColor: style.border,
-                              background: style.background,
-                            }}
-                          >
-                            {tagLabel(tag)}
-                          </span>
-                        );
-                      })}
+                      {node.concept_tags.slice(0, 2).map((tag) => (
+                        <ConceptTag key={tag} tag={tag} />
+                      ))}
                       {/* CURRENT state, not the sticky flag. `weak_spot` stays
                           true forever once set, so rendering it captioned a unit
                           the learner has since mastered as a weakness. */}
                       {node.understanding && node.understanding !== "insufficient" && (
                         <span
-                          className="font-mono text-[calc(9.5rem/16)] tracking-[0.05em]"
+                          className="font-mono text-micro tracking-[0.05em]"
                           style={{ color: understandingStyle(node.understanding).stroke }}
                         >
                           {understandingLabel(node.understanding)}
@@ -548,7 +526,7 @@ export default function MapView({
 
             {recovered.length > 0 && (
               <Panel title={`${t.map.workedThrough} · ${recovered.length}`}>
-                <p className="text-[calc(11.5rem/16)] leading-snug text-graphite">
+                <p className="text-meta text-graphite">
                   {t.map.workedThroughHint}
                 </p>
                 <UnitList rows={recovered} onOpen={onOpenEvidence} />
@@ -560,7 +538,7 @@ export default function MapView({
                 about a decision already made. */}
             {setAside.length > 0 && (
               <Panel title={`${t.map.setAside} · ${setAside.length}`}>
-                <p className="text-[calc(11.5rem/16)] leading-snug text-graphite">
+                <p className="text-meta text-graphite">
                   {t.map.setAsideHint}
                 </p>
                 <UnitList rows={setAside} onOpen={onOpenEvidence} />
@@ -578,7 +556,7 @@ export default function MapView({
             most sessions will legitimately have no pattern at all. */}
         <Panel title={t.map.patterns}>
           {[...understanding.patterns, ...understanding.gap_patterns].length === 0 ? (
-            <p className="text-[calc(12rem/16)] leading-relaxed text-graphite">
+            <p className="text-meta text-graphite">
               {t.map.patternsEmpty}
             </p>
           ) : (
@@ -597,7 +575,7 @@ export default function MapView({
         {/* SECONDARY. Collapsed by default: useful on reflection, noise at a
             glance, and all-zero on the sessions that need the screen most. */}
         <details className="group">
-          <summary className="cursor-pointer list-none font-mono text-[calc(10rem/16)] uppercase tracking-[0.16em] text-graphite transition hover:text-signal">
+          <summary className="cursor-pointer list-none font-mono text-micro uppercase tracking-[0.16em] text-graphite transition hover:text-signal">
             {t.map.moreBreakdowns}
           </summary>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -606,7 +584,7 @@ export default function MapView({
               {summary.kinds.map(([tag, tally, total]) => (
                 <BreakdownRow
                   key={tag}
-                  label={<span className="font-mono text-[calc(11rem/16)]">{tagLabel(tag)}</span>}
+                  label={<span className="font-mono text-micro">{tagLabel(tag)}</span>}
                   accent={tagStyle(tag).text}
                   tally={tally}
                   total={total}
@@ -616,7 +594,7 @@ export default function MapView({
 
             {summary.topics.length > 0 && (
               <div className="flex flex-col gap-2 border-t border-rule pt-3">
-                <span className="font-mono text-[calc(9.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+                <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
                   {t.map.topicsTouched}
                 </span>
                 <div className="flex flex-wrap gap-1.5">
@@ -624,7 +602,7 @@ export default function MapView({
                     <span
                       key={tag}
                       title={t.map.understoodOfTotal(tally.understood, total)}
-                      className="rounded-[2px] border border-rule px-1.5 py-px font-mono text-[calc(9.5rem/16)] tracking-[0.05em] text-graphite"
+                      className="rounded-chip border border-rule px-1.5 py-px font-mono text-micro tracking-[0.05em] text-graphite"
                     >
                       {tagLabel(tag)}
                       {total > 1 && <span className="text-paper"> ×{total}</span>}
@@ -641,7 +619,7 @@ export default function MapView({
                 <BreakdownRow
                   key={file}
                   label={
-                    <span className="block truncate text-start font-mono text-[calc(11rem/16)] text-paper">
+                    <span className="block truncate text-start font-mono text-micro text-paper">
                       {file}
                     </span>
                   }

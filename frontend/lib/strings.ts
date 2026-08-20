@@ -17,6 +17,17 @@ export const t = {
     recent: "Recent",
     checking: "Checking the repository…",
     start: "Start",
+    // Sets the expectation BEFORE the wait exists, which is a different
+    // experience from discovering it. Two numbers were considered and both were
+    // refused: "two to four minutes" (the concept's original wording) is
+    // unmeasured — we have no distribution across repository sizes or cached
+    // versus cold runs — and "five short questions" is wrong, which is worse than
+    // vague. `questions.py` asks 5 core questions plus 1 follow-up for five of
+    // the goal types and 2 for `improve_existing_system` and `debug_issue`, so
+    // the real count is six or seven and is not known until Q2 is answered.
+    // Six-or-seven is the honest span; the wait is described by its shape.
+    expectation:
+      "Six or seven short questions, then a few minutes while we read the repository — longer for large ones.",
     repoUnreachable: "That repository couldn't be opened.",
     serverUnreachable: "Couldn't reach the server.",
     pipelineFailed: "Couldn't build your learning path.",
@@ -141,11 +152,38 @@ export const t = {
     continue: "Continue",
     back: "Back",
     enterHint: "↵ to continue",
+    // The options list is driven by the keyboard, so it says so — and it says
+    // what the two keys DO, because selecting and confirming are separate here
+    // and a hint that blurred them would undo the point of separating them.
+    optionHint: "↑↓ to choose · ↵ to continue",
+    // Shown only on the review step, never beside a live question: a running
+    // transcript turned every question into a re-read of everything already said.
+    answers: "Your answers",
+    reviewLabel: "Before we start",
+    reviewTitle: "Ready to start?",
+    // Says what the answers are FOR, which is why reviewing them is worth a beat.
+    // No duration here either — the landing already set that expectation honestly,
+    // and repeating it as a number is where invented figures creep back in.
+    reviewNote:
+      "These answers decide what gets read and what gets taught. Change anything that looks wrong — nothing starts until you say so.",
+    startSession: "Let's start",
+    // Two different dead ends, and they are not the same dead end. On the review
+    // step the goal is already in hand, so the session can still start — only
+    // editing is lost. Mid-interview there is no goal yet, so there is nothing to
+    // do but begin again. Reachable in normal use: the goal dialogue lives in
+    // memory, so a backend restart or the retention cap can take it.
+    editExpired:
+      "These answers can no longer be changed — the interview behind them has expired. You can still start with them as they are, or reload to answer again.",
+    sessionExpired: "The interview has expired. Reload the page to answer again.",
+    edit: "Change",
+    editAnswer: (question: string) => `Change your answer to: ${question}`,
     answerFailed: "Couldn't save that answer.",
     backFailed: "Couldn't go back to the previous question.",
-    // Every question is required: the interview's five answers are the only
-    // input the whole pipeline has, so there is nothing sensible to infer from
-    // a skipped one.
+    // Every question is required: the interview's answers are the only input the
+    // whole pipeline has, so there is nothing sensible to infer from a skipped
+    // one. (Six or seven of them, not five — `total` on the wire is documented as
+    // a lower bound until `goal_type` is known, because two goal types add a
+    // second follow-up.)
     answerRequired: "Answer to continue",
   },
 
@@ -170,8 +208,40 @@ export const t = {
     showSource: "Show source",
     startingOver: "Starting over…",
     startOver: "Start over",
+    // The session-level actions, behind one control. Named for what they act on
+    // rather than what they look like: "⋯" is not a word.
+    menu: "Session actions",
+    menuTitle: "Session",
+    finish: "Finish session",
+    // The only confirmed action here, and the confirmation says what survives
+    // rather than asking "are you sure" — the real question is whether the work
+    // already done is lost, and it is not.
+    finishConfirm:
+      "End the journey here? Everything you have answered is kept, and you'll see the summary of what you covered.",
+    finishYes: "Finish it",
+    finishNo: "Keep going",
     tabLesson: "Lesson",
     tabMap: "Progress map",
+    /**
+     * The one bar's labels, keyed by tab.
+     *
+     * `Understanding` was chosen over `Practice`, `Questions` and `Demonstrate`.
+     * `Practice` implies drills, and a stop asks once — the answer is evidence that
+     * moves goal readiness, not a repetition. `Questions` is narrower than what the
+     * surface holds (verdicts, gaps, previous answers, what was resolved).
+     * `Understanding` matches the header's own `Demonstrated` measure and the
+     * `understanding_state` vocabulary already on the wire.
+     *
+     * `Map` rather than `Progress map` here: in a three-tab bar the qualifier is
+     * the longest word on the bar and earns nothing, and the two-tab bar keeps
+     * `tabMap` above so nothing changes for `next`.
+     */
+    tab: {
+      lesson: "Lesson",
+      understanding: "Understanding",
+      map: "Map",
+    } as Record<string, string>,
+    tabChanged: (label: string) => `${label} has changed since you last looked`,
     mapHint: (count: number) =>
       `${count} concepts · click any stop to go there · esc to return`,
     loading: "Loading session…",
@@ -277,6 +347,7 @@ export const t = {
     setAside: "◦ set aside",
     setAsideHint: "You chose to stop being asked about this",
     title: "Your route",
+    close: "Close the route",
     openMap: "Open map",
     addedAfterConfusion: "added after confusion",
     optionalStops: (count: number) =>
@@ -358,8 +429,66 @@ export const t = {
     verificationHeading: "A different angle on the same idea",
     verificationHelp:
       "Answering this is the only thing that clears the gap — moving on leaves it open.",
+    // The result of a check. A verification carries NO classification — it is
+    // evidence about specific beliefs, not a re-grade of the objective — so the
+    // headline has to come from what actually closed. Three outcomes, and the
+    // wording never claims the objective was reassessed.
+    checkCleared: "Cleared",
+    checkPartly: "Partly cleared",
+    checkOpen: "Still open",
+    checkClosedLabel: "What this closed",
+    // Said when a check closes everything and the stop STILL is not credited.
+    //
+    // Observed in S0's J4: the learner failed a stop, verified the gap that caused
+    // it, saw "Cleared" and watched the unresolved counter disappear — and goal
+    // readiness did not move, because a verification is evidence about a belief and
+    // the stop's credit is judged on the answer to its question (M7,
+    // `verification.py`). Nothing on screen said so, which made the gauge look
+    // broken rather than strict.
+    //
+    // States the fact and its reason, and promises no route: re-answering the same
+    // question after the explanation has been shown is the memory test §18.7
+    // removed, and a fresh question about the OBJECTIVE is a mechanism the system
+    // does not yet have.
+    checkClearedNotCredited:
+      "That's closed. This stop still isn't counted as demonstrated — that's judged on your answer to its own question, not on the check.",
+    checkNothingClosed:
+      "That did not settle it. You can try a different angle, or carry on and come back.",
+    checkAnother: "Check another",
     // The outstanding-gaps list: the most honest surface in the product. Named,
     // never counted, because "what you still do not know" is only useful specific.
+    // The brief's counters. Named by what they are, not by a bare number: "2" in
+    // a pinned header says nothing, and the point of the counter is to say that
+    // something is still open without listing it again.
+    // The key point — the one condensation in the flow (§2). Three levels, best
+    // available first: the Grader's own headline if B1 ever ships it, otherwise the
+    // verdict word plus the leading gap's claim, otherwise the verdict word alone.
+    //
+    // Framed as an assumption the learner is CARRYING, not as a correction we
+    // computed: the gap claim is a statement of the misconception, and dressing it
+    // up as "actually, X" would assert a correction nothing produced.
+    keyPoint: (verdict: string, claim: string) => `${verdict} — you're working from: ${claim}`,
+    // The same ladder, for an answer that REACHED the objective while something
+    // detected earlier is still unverified. The "you're working from" frame is
+    // false here: it told a learner who had just correctly refuted a
+    // misconception that they were carrying it. What is true is that the answer
+    // landed and the earlier belief has not been checked — which is also the
+    // one action worth offering, so the sentence and the button agree.
+    keyPointUnverified: (verdict: string, count: number) =>
+      count === 1
+        ? `${verdict} — one thing you said earlier still needs checking`
+        : `${verdict} — ${count} things you said earlier still need checking`,
+    // One consequence line, replacing three separate notices that all described the
+    // same event (§3a question 2). Ordered by how much it changed the journey.
+    consequenceRetaught: "This stop has been rewritten to answer that.",
+    consequencePruned: (count: number) =>
+      count === 1 ? "One later stop is no longer needed." : `${count} later stops are no longer needed.`,
+    consequenceWarmUpAdded: "A warm-up has been added before this stop.",
+    consequenceWarmUpExists: "There is already a warm-up before this stop.",
+    consequenceWarmUpUnavailable: "No warm-up could be built for this.",
+    briefGaps: (count: number) => (count === 1 ? "1 unresolved" : `${count} unresolved`),
+    briefAttempts: (count: number) =>
+      count === 1 ? "1 answer" : `${count} answers`,
     gapsHeading: "Still unresolved",
     gapsHelp: "You can check these now, or carry on and come back.",
     gapBlocking: "Holding this stop back",
@@ -377,6 +506,33 @@ export const t = {
       "Your last answer reached the objective — this stop counts as demonstrated once the check below is cleared.",
     walkthrough: "Walkthrough",
     setup: "Before you answer",
+    // The same prose, named for the surface that only ever consults it. In
+    // Understanding it is a reference the learner opens mid-answer without leaving
+    // the tab — §1's reason 3, which is the one objection to the split that
+    // survived and the reason this mirror exists at all. Calling it "Before you
+    // answer" there would suggest the material had moved.
+    setupMirror: "The setup",
+    // The question, once a verdict has superseded it — a label for re-reading, not
+    // for answering. Understanding in FEEDBACK showed a verdict and no sign of what
+    // had been asked, which made "shown about what?" unanswerable on the one
+    // surface built to answer it.
+    questionAsked: "The question you answered",
+    // R3's third mitigation. Counted, because the number is the whole point: it
+    // says how many times this stop has been rewritten for you, which is a fact
+    // about your own history with it.
+    earlierExplanations: (count: number) =>
+      count === 1 ? "Earlier explanation (1)" : `Earlier explanations (${count})`,
+    earlierVersion: (n: number) => `Version ${n}`,
+    earlierBecause: "Replaced after you answered:",
+    // Shown on Lesson when the material changed because of the last answer. The
+    // consequence line says it on the Understanding side at the moment it happens;
+    // this is what makes the claim good for a learner who arrives later, and it is
+    // why it reads from the attempt history rather than from the live result.
+    newMaterialLabel: "Rewritten",
+    newMaterialBody: "This stop was rewritten after your last answer.",
+    // The control on the consequence line. Deliberately not "Go to Lesson": it
+    // names what the learner would DO there, and the tab it lands on is visible.
+    readIt: "Read it",
     hint: "A way in",
     followup: "One more, from another angle",
     retaught: "Rewritten around what you said",
@@ -658,6 +814,21 @@ export const t = {
     at_first_question: "This is the first question — there's nothing behind it.",
     invalid_goal_type_option: "Pick one of the listed options.",
     invalid_code_depth_option: "Pick one of the listed options.",
+    // The three ways a check can be refused. All were reachable before and
+    // rendered as raw slugs; `nothing_to_verify` became easier to reach once the
+    // node's remediation cap could actually fire (F100), so naming them is part
+    // of offering the check rather than an aside.
+    //
+    // "Stopped proposing" is the honest wording: the gap is still open and still
+    // counted. The system has run out of ways to ask about it, which is not the
+    // same as the gap having gone away (§18.16.1).
+    nothing_to_verify:
+      "There's nothing left to check here — the system has stopped proposing " +
+      "questions for what's still open.",
+    source_unavailable:
+      "The source for this stop couldn't be read, so no question could be built from it.",
+    verification_unavailable: "Couldn't write a question for this one. Try again in a moment.",
+    no_pending_verification: "That question is no longer open.",
     server_unreachable:
       "Couldn't reach the server. Check the backend is running on port 8000, " +
       "and that this page is open on the same host it allows (localhost).",

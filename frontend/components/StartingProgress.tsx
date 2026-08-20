@@ -92,10 +92,10 @@ export default function StartingProgress({ repoUrl, progressId }: Props) {
   return (
     <div className="flex w-full max-w-md flex-col gap-5">
       <div className="flex flex-col gap-1.5">
-        <span className="font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.14em] text-graphite">
+        <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
           {t.starting.label}
         </span>
-        <h2 className="font-display text-[calc(21rem/16)] font-medium tracking-tight text-chalk">
+        <h2 className="font-display text-head font-medium tracking-tight text-chalk">
           {repoUrl.replace(/^https?:\/\/github\.com\//, "")}
         </h2>
       </div>
@@ -115,12 +115,12 @@ export default function StartingProgress({ repoUrl, progressId }: Props) {
           return (
             <li key={key} className="flex flex-col gap-1">
               <div
-                className={`flex items-center gap-2.5 text-[calc(12.5rem/16)] transition-colors ${
+                className={`flex items-center gap-2.5 text-meta transition-colors ${
                   isDone ? "text-paper" : isActive ? "text-chalk" : "text-graphite"
                 }`}
               >
                 {isDone ? (
-                  <span aria-hidden className="shrink-0 text-[calc(11rem/16)] text-jade">
+                  <span aria-hidden className="shrink-0 text-micro text-jade">
                     ✓
                   </span>
                 ) : isActive ? (
@@ -141,7 +141,7 @@ export default function StartingProgress({ repoUrl, progressId }: Props) {
                 /* Churns several times a second — announcing it would talk over
                    the stage change, which is the part worth hearing. */
                 <div aria-hidden className="flex items-baseline gap-2 ps-[21px]">
-                  <span className="min-w-0 truncate font-mono text-[calc(11rem/16)] text-signal/80">
+                  <span className="min-w-0 truncate font-mono text-micro text-signal/80">
                     {detail()}
                   </span>
                   {/* Only beside a stage that is making them: the count is the
@@ -149,7 +149,7 @@ export default function StartingProgress({ repoUrl, progressId }: Props) {
                       makes no lookups — it read as if planning were still
                       searching the repository. */}
                   {activity && (snapshot?.calls ?? 0) > 0 && (
-                    <span className="shrink-0 font-mono text-[calc(10rem/16)] text-graphite">
+                    <span className="shrink-0 font-mono text-micro text-graphite">
                       {t.starting.lookups(snapshot!.calls)}
                     </span>
                   )}
@@ -162,7 +162,7 @@ export default function StartingProgress({ repoUrl, progressId }: Props) {
 
       <div className="flex items-center gap-2.5 border-t border-rule pt-3">
         <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-signal" />
-        <span className="font-mono text-[calc(11rem/16)] text-graphite">
+        <span className="font-mono text-micro text-graphite">
           {t.starting.elapsed(Math.round(Math.max(ticks, snapshot?.seconds ?? 0)))}
         </span>
       </div>

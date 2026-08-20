@@ -8,12 +8,19 @@ import RouteRail from "@/components/RouteRail";
 import SectionOverview from "@/components/SectionOverview";
 import LessonPanel from "@/components/LessonPanel";
 import CodeViewer from "@/components/CodeViewer";
-import SettingsMenu from "@/components/SettingsMenu";
+import SessionHeader from "@/components/SessionHeader";
+import SurfaceTabs from "@/components/lesson/SurfaceTabs";
 import { getSession, jump, sessionStart, setScope } from "@/lib/api";
 import type { GraphNode, SessionGraph } from "@/lib/api";
 import { buildRoute, spineLength } from "@/lib/graph-layout";
 import { currentSection, splitJourney } from "@/lib/route-sections";
 import { useSourcePane } from "@/lib/source-pane";
+import { RAIL_REM, useBand, useRootFontPx, sourceMustOverlay } from "@/lib/layout-bands";
+import Button from "@/components/ui/Button";
+import { lessonUi } from "@/lib/flags";
+import {
+  nextTab, surfaceForTab, tabsFor, type SessionTab, type TabEvent,
+} from "@/lib/surfaceTabs";
 import { errorText, t } from "@/lib/strings";
 
 export default function SessionPage() {
@@ -25,17 +32,60 @@ export default function SessionPage() {
   // Without it the pane highlighted the node's display range in whatever file
   // was opened, so step 2 of a flow opened the right file at the wrong lines.
   const [viewingRange, setViewingRange] = useState<[number, number] | null>(null);
-  const [showCode, setShowCode] = useState(true);
+  // The pane's visibility is a persisted PREFERENCE, not page state: it now
+  // defaults to closed and opens on a citation, so "was it open last time" is
+  // the only thing worth carrying between sessions. `useSourcePane` reads it in
+  // an effect, which is why the server-rendered markup matches — closed is both
+  // the default and the first paint.
   // A counter, not a flag: asking for a location the pane is *already* showing
   // still has to move it there. Nothing else changes when the same anchor is
   // clicked twice, so without this the pane would just sit where it was.
   const [focusKey, setFocusKey] = useState(0);
   const { source, patch: patchSource } = useSourcePane();
-  const [tab, setTab] = useState<"lesson" | "map">("lesson");
+  const showCode = source.open;
+  const setShowCode = (open: boolean) => patchSource({ open });
+  const { width: viewportWidth, band } = useBand();
+  const rootFontPx = useRootFontPx();
+  // The pane leaves the grid and becomes a sheet when the window cannot hold
+  // three columns without starving the middle one. Decided from the viewport and
+  // the pane's own width, never from the lesson's measured width — see
+  // `sourceMustOverlay` for why that distinction matters.
+  const sourceOverlay = sourceMustOverlay(band, viewportWidth, source.dockWidth, rootFontPx);
+  // The rail has no track of its own in the narrow band; it opens over the page.
+  const [railOpen, setRailOpen] = useState(false);
+  // ── the tab, and the ONE way it moves (R5) ──────────────────────────────────
+  //
+  // `setTab` used to be callable from anywhere, and four places called it. None of
+  // them was phase-driven, but nothing stopped a fifth from being: selecting the
+  // tab a phase implies is a one-line change that would feel helpful and is exactly
+  // the surprising navigation this design rules out.
+  //
+  // So the state moves only through `dispatchTab`, whose event type has no phase in
+  // it. Breaking R5 now requires inventing an event and naming it, which is a thing
+  // a reviewer can see.
+  // `useMemo` with no deps, and its stability is LOAD-BEARING: `tabsFor` returns a
+  // fresh array per call, so an unmemoized `tabs` would give `dispatchTab` a new
+  // identity every render, re-firing the arrival effect below and pinning the tab to
+  // Lesson forever. The flag is a build constant, so there is nothing to depend on.
+  const tabs = useMemo(() => tabsFor(lessonUi()), []);
+  const [tab, setTab] = useState<SessionTab>("lesson");
+  const dispatchTab = useCallback(
+    (event: TabEvent) => setTab((current) => nextTab(current, event, tabs)),
+    [tabs]
+  );
+  // Tabs with a change the learner has not looked at yet. S4 drives this from the
+  // adaptation signals; the plumbing is here so the bar's dot is real as soon as
+  // there is something to report. Visiting a tab clears its dot — see the effect
+  // below — because the point of the dot is "you have not seen this", and looking
+  // at it is what makes that false.
+  const [unseen, setUnseen] = useState<SessionTab[]>([]);
   // Which unit's evidence chain is open, if any. Null = closed.
   const [evidenceNodeId, setEvidenceNodeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [restarting, setRestarting] = useState(false);
+  // Owned here, not in LessonPanel, because two things end the journey now: the
+  // walk running out, and `Finish session` in the header menu.
+  const [finished, setFinished] = useState(false);
   const [scoping, setScoping] = useState(false);
   const [scopeNote, setScopeNote] = useState<string | null>(null);
   // The chapter overview is a LAYER over the lesson column, not a destination:
@@ -84,15 +134,39 @@ export default function SessionPage() {
     loadGraph();
   }, [loadGraph]);
 
+  // ARRIVAL RESETS THE TAB, and it is keyed on the current node rather than
+  // dispatched from the handlers that cause it. There are four ways to arrive —
+  // advancing, jumping from the rail or the map, being taken to a warm-up that was
+  // just spliced in, and resuming a session — and a per-handler dispatch would have
+  // to remember all four. This cannot forget one.
+  //
+  // Not a phase transition: `currentNodeId` changes because the learner navigated.
+  // Landing on a new stop showing the previous stop's Understanding, its verdict and
+  // gaps gone, would be showing them an empty room.
+  // Reads the graph state directly: `currentNodeId` is derived below the loading
+  // guards, and a hook cannot sit after an early return.
+  const arrivedAt = graph?.current_node_id;
+  useEffect(() => {
+    if (!arrivedAt) return;
+    dispatchTab({ kind: "arrivedAtStop" });
+  }, [arrivedAt, dispatchTab]);
+
+  // Looking at a tab is what makes "you have not seen this" false, so visiting
+  // clears its dot. Never on a timer: a dot that expires unseen is a change the
+  // learner was told about and then untold.
+  useEffect(() => {
+    setUnseen((current) => (current.includes(tab) ? current.filter((x) => x !== tab) : current));
+  }, [tab]);
+
   // Esc returns from the map to the lesson.
   useEffect(() => {
     if (tab !== "map") return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setTab("lesson");
+      if (e.key === "Escape") dispatchTab({ kind: "dismissedMap" });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [tab]);
+  }, [tab, dispatchTab]);
 
   const stops = useMemo(
     () => (graph ? buildRoute(graph.nodes, graph.edges) : []),
@@ -142,7 +216,6 @@ export default function SessionPage() {
   // including from the section overview, which is what makes its lesson list a
   // way in rather than a table of contents.
   const handleJump = async (node: GraphNode) => {
-    setTab("lesson");
     setOverviewAreaId(null);
     setViewingFile(null);
     setViewingRange(null);
@@ -160,12 +233,12 @@ export default function SessionPage() {
       <main className="flex min-h-screen items-center justify-center bg-ink px-6">
         <div className="flex max-w-sm flex-col gap-3 text-center">
           <p className="text-rust">{error}</p>
-          <button
+          <Button variant="secondary" size="md" className="mx-auto"
             onClick={() => { setError(null); loadGraph(); }}
-            className="mx-auto rounded border border-rule px-4 py-2 text-sm text-graphite transition hover:border-signal-dim hover:text-signal"
+           
           >
             {t.session.retryLoad}
-          </button>
+          </Button>
         </div>
       </main>
     );
@@ -174,7 +247,7 @@ export default function SessionPage() {
   if (!graph) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-ink">
-        <p className="animate-pulse font-mono text-sm text-graphite">
+        <p className="animate-pulse font-mono text-aside text-graphite">
           {t.session.loading}
         </p>
       </main>
@@ -201,129 +274,27 @@ export default function SessionPage() {
 
   return (
     <main className="flex h-screen flex-col overflow-hidden bg-ink">
-      <header className="flex shrink-0 items-center gap-4 border-b border-rule bg-slab px-5 py-2.5">
-        <span className="font-display text-[calc(15rem/16)] tracking-tight text-chalk">
-          {t.appName}
-        </span>
-
-        <span className="min-w-0 flex-1 truncate font-mono text-[calc(11.5rem/16)] text-graphite">
-          {graph.repo_url.replace(/^https?:\/\/github\.com\//, "")}
-          {graph.goal?.primary_goal && (
-            <> &nbsp;·&nbsp; <span className="text-signal">{graph.goal.primary_goal}</span></>
-          )}
-          {depth && <> &nbsp;·&nbsp; {t.session.depth[depth] ?? depth}</>}
-        </span>
-
-        {/* TWO measures, side by side (learning-graph.md §5.4, decision OQ-1).
-            Goal readiness is evidence — what has been demonstrated of what the
-            goal requires. Journey is coverage — how far along the walk. Showing
-            only the first reads 0% for a learner who walked every stop without
-            answering; showing only the second claims understanding nobody
-            demonstrated. */}
-        <span className="flex shrink-0 items-center gap-2.5">
-          <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.13em] text-graphite">
-            {t.session.demonstrated}
-          </span>
-          <span className="h-1 w-20 overflow-hidden rounded-full bg-raise">
-            <span
-              className="block h-full rounded-full bg-gradient-to-r from-signal-dim to-signal transition-[width] duration-500"
-              style={{ width: `${pct}%` }}
-            />
-          </span>
-          {/* The FRACTION is the number; the percentage is a gloss on it. "47%
-              readiness" sounds like a calibrated prediction, where "7 / 15
-              required objectives demonstrated" is a claim the learner can check
-              against the journey below (M3a.3). */}
-          <span
-            className="font-mono text-xs tabular-nums text-chalk"
-            title={t.map.coreDemonstrated(
-              graph.progress.core_demonstrated,
-              graph.progress.core_total
-            )}
-          >
-            {graph.progress.core_demonstrated}/{graph.progress.core_total}
-            <span className="text-graphite"> ({pct}%)</span>
-          </span>
-        </span>
-
-        <span className="flex shrink-0 items-center gap-2.5">
-          <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.13em] text-graphite">
-            {t.session.journey}
-          </span>
-          <span
-            className="font-mono text-xs tabular-nums text-chalk"
-            title={t.map.stopsTaken(
-              graph.progress.stops_settled,
-              graph.progress.stops_total
-            )}
-          >
-            {t.session.journeyCount(
-              graph.progress.stops_settled,
-              graph.progress.stops_total
-            )}
-          </span>
-        </span>
-
-        {/* Scope control (U4). Sits in the header beside readiness because it
-            is a statement about the whole journey, not about a stop. */}
-        <span className="flex shrink-0 items-center gap-1.5">
-          <span className="font-mono text-[calc(10rem/16)] uppercase tracking-[0.13em] text-graphite">
-            {t.scope.label(spineLength(stops))}
-          </span>
-          <button
-            onClick={() => adjustScope("shorter")}
-            disabled={scoping}
-            className="rounded border border-rule px-2 py-1 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
-          >
-            {scoping ? t.scope.working : t.scope.shorter}
-          </button>
-          <button
-            onClick={() => adjustScope("deeper")}
-            disabled={scoping}
-            className="rounded border border-rule px-2 py-1 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
-          >
-            {t.scope.deeper}
-          </button>
-          {scopeNote && (
-            <span className="font-mono text-[calc(10rem/16)] text-signal">{scopeNote}</span>
-          )}
-        </span>
-
-        {tab === "lesson" && (
-          <button
-            onClick={() => setShowCode((v) => !v)}
-            className="shrink-0 rounded border border-rule px-3 py-1.5 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
-          >
-            {showCode ? t.session.hideSource : t.session.showSource}
-          </button>
-        )}
-        {/* The briefing and the profile card stay reachable: what the system
-            took the goal to be is worth re-reading mid-journey, and it is the
-            page that explains why the lessons are pitched the way they are. */}
-        <button
-          onClick={() => router.push(`/session/${id}/welcome`)}
-          className="shrink-0 rounded border border-rule px-3 py-1.5 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal"
-        >
-          {t.welcome.headerLink}
-        </button>
-        <button
-          onClick={async () => {
-            setRestarting(true);
-            try {
-              const { session_id } = await sessionStart(graph.repo_url, graph.goal, true);
-              router.push(`/session/${session_id}`);
-            } catch {
-              setRestarting(false);
-            }
-          }}
-          disabled={restarting}
-          className="shrink-0 rounded border border-rule px-3 py-1.5 font-mono text-[calc(10.5rem/16)] text-graphite transition hover:border-signal-dim hover:text-signal disabled:opacity-40"
-        >
-          {restarting ? t.session.startingOver : t.session.startOver}
-        </button>
-
-        <SettingsMenu />
-      </header>
+      <SessionHeader
+        graph={graph}
+        depth={depth}
+        pct={pct}
+        stopCount={spineLength(stops)}
+        scoping={scoping}
+        scopeNote={scopeNote}
+        onScope={adjustScope}
+        onBriefing={() => router.push(`/session/${id}/welcome`)}
+        restarting={restarting}
+        onStartOver={async () => {
+          setRestarting(true);
+          try {
+            const { session_id } = await sessionStart(graph.repo_url, graph.goal, true);
+            router.push(`/session/${session_id}`);
+          } catch {
+            setRestarting(false);
+          }
+        }}
+        onFinish={() => setFinished(true)}
+      />
 
       <div
         className="grid min-h-0 flex-1"
@@ -334,52 +305,90 @@ export default function SessionPage() {
           // A floating pane is out of flow, so it claims no track — only the
           // docked one reserves a column, and its width is the variable the
           // divider drags (see `globals.css`).
-          gridTemplateColumns:
-            tab === "lesson" && showCode && openFile && source.mode === "dock"
-              ? "16.75rem minmax(0,1fr) var(--source-width)"
-              : "16.75rem minmax(0,1fr)",
+          // Three bands, three rail tracks, and a source column only when the
+          // pane is genuinely docked in the layout — a floating pane and an
+          // overlay sheet are both out of flow and claim no track.
+          gridTemplateColumns: [
+            band === "narrow" ? null : `${RAIL_REM[band]}rem`,
+            "minmax(0,1fr)",
+            tab !== "map" && showCode && openFile && source.mode === "dock" && !sourceOverlay
+              ? "var(--source-width)"
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" "),
         }}
       >
-        <RouteRail
-          sections={journey.sections}
-          optional={journey.optional}
-          currentNodeId={currentNodeId}
-          openSectionId={overviewAreaId}
-          onJump={handleJump}
-          onOpenSection={(areaId) => {
-            setTab("lesson");
-            setOverviewAreaId(areaId);
-          }}
-          onExpand={() => setTab("map")}
-        />
+        {band !== "narrow" && (
+          <RouteRail
+            sections={journey.sections}
+            optional={journey.optional}
+            currentNodeId={currentNodeId}
+            openSectionId={overviewAreaId}
+            onJump={handleJump}
+            onOpenSection={(areaId) => {
+              dispatchTab({ kind: "openedSection" });
+              setOverviewAreaId(areaId);
+            }}
+            onExpand={() => dispatchTab({ kind: "expandedMap" })}
+            compact={band === "medium"}
+          />
+        )}
 
         <div className="flex min-h-0 flex-col border-e border-rule">
-          <div className="flex shrink-0 items-center gap-1 border-b border-rule px-5">
-            {([
-              ["lesson", t.session.tabLesson],
-              ["map", t.session.tabMap],
-            ] as const).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                aria-current={tab === key ? "page" : undefined}
-                className={`-mb-px border-b-2 px-3 py-2.5 font-mono text-[calc(10.5rem/16)] uppercase tracking-[0.13em] transition ${
-                  tab === key
-                    ? "border-signal text-signal"
-                    : "border-transparent text-graphite hover:text-chalk"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-            {tab === "map" && (
-              <span className="ms-auto font-mono text-[calc(10.5rem/16)] text-graphite">
-                {t.session.mapHint(graph.nodes.length)}
-              </span>
-            )}
-          </div>
+          <SurfaceTabs
+            tabs={tabs}
+            active={tab}
+            changed={unseen}
+            onPick={(picked) => dispatchTab({ kind: "picked", tab: picked })}
+            /* The right side of the lesson bar, as one group rather than three
+               things competing for `ms-auto`. */
+            trailing={
+              <>
+              {tab === "map" && band !== "narrow" && (
+                <span className="font-mono text-micro text-graphite">
+                  {t.session.mapHint(graph.nodes.length)}
+                </span>
+              )}
+              {/* Opening the source is not session management, so it does not
+                  belong behind the overflow menu with Start over and Finish.
+                  Lessons cite code throughout and the pane now starts closed, so
+                  the way to open it has to be findable without already knowing
+                  it exists.
 
-          {tab === "lesson" ? (
+                  It lives here rather than in the header for a measured reason:
+                  the header is fully allocated — the goal zone is what is left
+                  after the other three, and adding a ~109px control took it from
+                  844px to ~735px at 1280 and raised S1's overflow floor from
+                  657px to ~766px. This bar had 829px of empty space at the same
+                  width. Right-aligned, because that is the edge the pane opens
+                  against.
+
+                  There is no matching Hide: the pane owns its own close, and this
+                  disappears while it is open. */}
+              {tab !== "map" && !showCode && openFile && (
+                <Button variant="chrome" size="sm" onClick={() => setShowCode(true)}>
+                  {t.session.showSource}
+                </Button>
+              )}
+                {band === "narrow" && (
+                  <button
+                    onClick={() => setRailOpen(true)}
+                    className="font-mono text-micro uppercase tracking-[0.13em] text-graphite transition hover:text-signal"
+                  >
+                    {t.rail.title}
+                  </button>
+                )}
+              </>
+            }
+          />
+
+          {/* `tab !== "map"` rather than `tab === "lesson"`, because `surfaces` adds
+              a third tab that is also a lesson-column view. In S2 both Lesson and
+              Understanding render THIS column unchanged; S3 is what splits its
+              contents across the two using `surfaceBlocks`. Divergence one step at
+              a time, from an arrangement already known to work. */}
+          {tab !== "map" ? (
             <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
               {overviewSection ? (
                 <SectionOverview
@@ -408,10 +417,28 @@ export default function SessionPage() {
                   }}
                   onAdvance={handleAdvance}
                   onRespond={loadGraph}
-                  onFinish={() => router.push("/")}
+                  finished={finished}
+                  onFinish={() => setFinished(true)}
+                  onLeave={() => router.push("/")}
+                  // Which surface the active tab means. Null under `next`, where
+                  // there is one column and the panel draws all of it.
+                  surface={surfaceForTab(tab)}
+                  // R1. The panel reports where something landed; this decides
+                  // whether that is news. A change in the surface the learner is
+                  // looking at is not news, and marking it would leave a stale dot
+                  // waiting to appear the moment they switched away.
+                  onSurfaceChanged={(changed) => {
+                    if (changed === tab) return;
+                    setUnseen((current) =>
+                      current.includes(changed) ? current : [...current, changed]
+                    );
+                  }}
+                  // The consequence line's `Read it`. A learner click, so R5 is
+                  // satisfied by the same reducer everything else goes through.
+                  onGoToSurface={(target) => dispatchTab({ kind: "picked", tab: target })}
                 />
               ) : (
-                <p className="font-mono text-sm text-graphite">{t.session.firstLesson}</p>
+                <p className="font-mono text-aside text-graphite">{t.session.firstLesson}</p>
               )}
             </div>
           ) : (
@@ -442,20 +469,83 @@ export default function SessionPage() {
           )}
         </div>
 
-        {tab === "lesson" && showCode && openFile && (
-          <CodeViewer
-            sessionId={id}
-            filePath={openFile}
-            // A chosen anchor wins; otherwise the node's display range, as
-            // before. CodeViewer itself is unchanged — this is which range it
-            // is handed, not how it renders one.
-            highlightStart={viewingRange?.[0] ?? highlightForOpenFile?.start}
-            highlightEnd={viewingRange?.[1] ?? highlightForOpenFile?.end}
-            focusKey={focusKey}
-            source={source}
-            onSourceChange={patchSource}
-            onClose={() => setShowCode(false)}
-          />
+        {tab !== "map" && showCode && openFile && (
+          sourceOverlay ? (
+            /**
+             * A sheet over the page rather than a third column. The pane keeps
+             * its own dock/float controls and its own close — this changes where
+             * it sits, not what it is — but it is forced to `dock` while it is a
+             * sheet, because a floating window inside a full-width overlay is two
+             * ways of being out of flow at once.
+             */
+            <div className="fixed inset-0 z-40 flex justify-end">
+              <button
+                aria-label={t.session.hideSource}
+                onClick={() => setShowCode(false)}
+                className="absolute inset-0 bg-ink/70"
+              />
+              <div className="relative flex h-full w-full max-w-[34rem] flex-col border-s border-rule bg-trench shadow-overlay">
+                <CodeViewer
+                  sessionId={id}
+                  filePath={openFile}
+                  highlightStart={viewingRange?.[0] ?? highlightForOpenFile?.start}
+                  highlightEnd={viewingRange?.[1] ?? highlightForOpenFile?.end}
+                  focusKey={focusKey}
+                  source={{ ...source, mode: "dock" }}
+                  onSourceChange={patchSource}
+                  onClose={() => setShowCode(false)}
+                />
+              </div>
+            </div>
+          ) : (
+            <CodeViewer
+              sessionId={id}
+              filePath={openFile}
+              // A chosen anchor wins; otherwise the node's display range, as
+              // before. CodeViewer itself is unchanged — this is which range it
+              // is handed, not how it renders one.
+              highlightStart={viewingRange?.[0] ?? highlightForOpenFile?.start}
+              highlightEnd={viewingRange?.[1] ?? highlightForOpenFile?.end}
+              focusKey={focusKey}
+              source={source}
+              onSourceChange={patchSource}
+              onClose={() => setShowCode(false)}
+            />
+          )
+        )}
+
+        {/* The route, in the band where it has no column of its own. Same
+            component and the same handlers — jumping closes it, because the
+            thing it navigates to is underneath it. */}
+        {band === "narrow" && railOpen && (
+          <div className="fixed inset-0 z-40 flex">
+            <button
+              aria-label={t.rail.close}
+              onClick={() => setRailOpen(false)}
+              className="absolute inset-0 bg-ink/70"
+            />
+            <div className="relative flex h-full w-[17rem] max-w-[85vw] flex-col bg-trench shadow-overlay">
+              <RouteRail
+                sections={journey.sections}
+                optional={journey.optional}
+                currentNodeId={currentNodeId}
+                openSectionId={overviewAreaId}
+                onJump={(node) => {
+                  setRailOpen(false);
+                  handleJump(node);
+                }}
+                onOpenSection={(areaId) => {
+                  setRailOpen(false);
+                  dispatchTab({ kind: "openedSection" });
+                  setOverviewAreaId(areaId);
+                }}
+                onExpand={() => {
+                  setRailOpen(false);
+                  dispatchTab({ kind: "expandedMap" });
+                }}
+              />
+            </div>
+          </div>
         )}
       </div>
     </main>
