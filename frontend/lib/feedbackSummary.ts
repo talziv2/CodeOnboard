@@ -34,7 +34,23 @@ export function keyPoint(
   const headline = result.headline;
   if (typeof headline === "string" && headline.trim()) return headline.trim();
 
-  // 2. The leading gap. Blocking first — a blocking gap is by definition the one
+  // 2a. THE VERDICT VETOES THE FRAME. An answer graded `understood` can still
+  // leave a gap open — gaps close only by verification (M6/M7), so one opened by
+  // an earlier attempt survives a later correct answer, and the node is reported
+  // `partial` until it is checked. Composing level 2 here produced, live:
+  //
+  //   "Understood — you're working from: requests only supports two built-in
+  //    auth classes and does not provide an extension point"
+  //
+  // on the answer that had just refuted exactly that, correctly. The frame
+  // asserts a belief the learner demonstrably does not hold. What is true is
+  // that something earlier is still unchecked, which is also what
+  // `feedbackActions` now offers as the primary — one story, not two.
+  if (result.classification === "understood" && openGaps.length > 0) {
+    return t.lesson.keyPointUnverified(verdictWord, openGaps.length);
+  }
+
+  // 2b. The leading gap. Blocking first — a blocking gap is by definition the one
   // standing between the learner and the objective, so it is the one to lead with.
   const leading = openGaps.find((g) => g.blocking) ?? openGaps[0];
   if (leading?.claim) return t.lesson.keyPoint(verdictWord, leading.claim);

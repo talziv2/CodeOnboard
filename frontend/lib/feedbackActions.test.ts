@@ -18,13 +18,56 @@ const base: ActionInput = {
   warmUpDeclined: false,
   warmUpAvailable: true,
   canAnswerAgain: true,
+  checkAvailable: true,
 };
 
 describe("the table", () => {
-  test("understood: moving on is primary, and it is the only row where it is", () => {
+  test("understood with nothing outstanding: moving on is primary", () => {
     expect(feedbackActions({ ...base, classification: "understood" })).toEqual({
       primary: "next",
     });
+  });
+
+  // ── S0 defect 2 ─────────────────────────────────────────────────────────────
+  test("understood with a gap still open: the check leads, because only it can close it", () => {
+    // Observed live on a `required` stop the server reported `partial`: the whole
+    // action row was "Next stop →". Verification is the only caller of
+    // `Gap.mark_verified`, so the one thing that could close the gap was the one
+    // thing not offered, and the learner was shown "1 unresolved" beside a single
+    // button that walked away from it.
+    const plan = feedbackActions({ ...base, classification: "understood", openGapCount: 1 });
+    expect(plan.primary).toBe("check");
+    expect(plan.secondary).toBe("next");
+    // Not a warm-up: this answer REACHED the objective. Stepping back would be the
+    // system disagreeing with its own grade.
+    expect(plannedActions(plan)).not.toContain("warmUp");
+  });
+
+  test("understood with a gap open but nothing verifiable: moving on, and it says so", () => {
+    // The node's remediation cap has fired or every gap is exhausted, so `/verify`
+    // would 409. Offering a check we know would be refused is the same defect as
+    // offering a declined warm-up.
+    const plan = feedbackActions({
+      ...base,
+      classification: "understood",
+      openGapCount: 1,
+      checkAvailable: false,
+    });
+    expect(plan).toEqual({ primary: "next" });
+  });
+
+  test("a check is offered on the strength of open gaps, not of `canAnswerAgain`", () => {
+    // `canAnswerAgain` means "the system invited another attempt at the same
+    // question" — true only for hint/followup/reteach, and false for `understood`,
+    // which is exactly where verification is most clearly the right act. Gating the
+    // check on it made the correct action unreachable precisely when it was correct.
+    const plan = feedbackActions({
+      ...base,
+      classification: "understood",
+      openGapCount: 1,
+      canAnswerAgain: false,
+    });
+    expect(plan.primary).toBe("check");
   });
 
   test("partial with a gap open: a check leads", () => {
@@ -98,6 +141,22 @@ describe("the check path, where classification is null", () => {
     expect(plan).toEqual({ primary: "next" });
   });
 
+  // ── S0 defect 3, the half that lived in this branch ─────────────────────────
+  test("a warm-up declined earlier is not offered again from the check path", () => {
+    // This branch read `warmUpAvailable && !warmUpInserted` and never consulted
+    // `warmUpDeclined` at all, so a refusal recorded on the assessment path
+    // reappeared as a tertiary here.
+    const plan = feedbackActions({
+      ...base,
+      classification: null,
+      isCheck: true,
+      openGapCount: 1,
+      warmUpDeclined: true,
+    });
+    expect(plannedActions(plan)).not.toContain("warmUp");
+    expect(plan.primary).toBe("check");
+  });
+
   test("a null classification never falls through to a warm-up primary", () => {
     // The exact bug: `null !== "understood"` was true, so "Build me a warm-up"
     // became the only button offered after a correct check.
@@ -122,15 +181,18 @@ describe("the rules that hold across every row", () => {
           for (const warmUpDeclined of [true, false]) {
             for (const warmUpAvailable of [true, false]) {
               for (const canAnswerAgain of [true, false]) {
-                every.push({
-                  classification,
-                  isCheck,
-                  openGapCount,
-                  warmUpInserted,
-                  warmUpDeclined,
-                  warmUpAvailable,
-                  canAnswerAgain,
-                });
+                for (const checkAvailable of [true, false]) {
+                  every.push({
+                    classification,
+                    isCheck,
+                    openGapCount,
+                    warmUpInserted,
+                    warmUpDeclined,
+                    warmUpAvailable,
+                    canAnswerAgain,
+                    checkAvailable,
+                  });
+                }
               }
             }
           }
@@ -160,23 +222,38 @@ describe("the rules that hold across every row", () => {
   });
 
   test("moving on is primary only when the objective is met", () => {
+    // THE INVARIANT'S QUANTITY, CORRECTED. This used to accept
+    // `classification === "understood"` on its own, which is the latest assessment
+    // of one answer and not the node's state: `understanding_of()` withholds
+    // `understood` while any blocking gap is unverified. So the sweep asserted the
+    // invariant against the same wrong premise the code held, and passed while
+    // "Next stop →" was the only action on a stop the server called `partial`.
+    //
+    // The objective is met when the answer landed AND nothing is outstanding — or
+    // when something is outstanding and nothing on offer could close it, which is
+    // the honest version of leaving.
     for (const input of every) {
       const plan = feedbackActions(input);
       if (plan.primary !== "next") continue;
-      // `next` is legitimate as primary in exactly three situations: the answer was
-      // understood, a check closed everything, or there is no named gap left to
-      // close and a retry is what remains on offer.
+      const nothingOutstanding = input.openGapCount === 0;
+      const nothingCouldClose = !input.checkAvailable;
       const met =
-        input.classification === "understood" ||
-        (input.isCheck && input.openGapCount === 0) ||
-        (input.openGapCount === 0 && !["confused", "off-topic"].includes(input.classification ?? ""));
+        (input.classification === "understood" && (nothingOutstanding || nothingCouldClose)) ||
+        (input.isCheck && (nothingOutstanding || nothingCouldClose)) ||
+        (nothingOutstanding &&
+          !["confused", "off-topic"].includes(input.classification ?? ""));
       expect(met, `next was primary for ${JSON.stringify(input)}`).toBe(true);
     }
   });
 
-  test("a warm-up is never offered once the backend has declined one", () => {
-    for (const input of every.filter((i) => i.warmUpDeclined && !i.warmUpInserted && !i.isCheck)) {
-      expect(plannedActions(feedbackActions(input))).not.toContain("warmUp");
+  test("a warm-up is never offered once one has been declined, on either path", () => {
+    // `!i.isCheck` used to be part of this filter, which is precisely how the
+    // check branch got away with never reading `warmUpDeclined`.
+    for (const input of every.filter((i) => i.warmUpDeclined && !i.warmUpInserted)) {
+      expect(
+        plannedActions(feedbackActions(input)),
+        JSON.stringify(input)
+      ).not.toContain("warmUp");
     }
   });
 

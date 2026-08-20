@@ -8,6 +8,15 @@
  *   learner is and the objective. Moving on is never primary unless the objective
  *   is met.**
  *
+ * **"The objective is met" is not `classification === "understood"`.** That is the
+ * latest assessment of one answer; the objective is the node's state, and
+ * `understanding_of()` withholds `understood` while any blocking gap is unverified.
+ * The two diverge routinely, because gaps close only by verification. Reading the
+ * assessment as if it were the state is what let this module return "Next stop →"
+ * as the only action on a `required` stop the server reported `partial` — and the
+ * exhaustive sweep asserted the invariant against the same wrong quantity, so it
+ * passed. The sweep now checks it against `understood && no gaps outstanding`.
+ *
  * That rule is the whole content of this module, and it is a pure function because
  * the table it generates has six rows plus the check path, and a six-row table
  * expressed as nested JSX conditionals is how the sixteen-conditional feedback
@@ -70,6 +79,25 @@ export interface ActionInput {
   warmUpAvailable: boolean;
   /** The panel's gate: answering again is live. */
   canAnswerAgain: boolean;
+  /**
+   * A check can be offered at all.
+   *
+   * SEPARATE FROM `canAnswerAgain`, which is what it used to be gated on. That
+   * flag means "the system invited another attempt at the same question" — true
+   * only for `hint`, `followup` and `reteach`. Verification is a different act
+   * with a different producer: `/verify` needs nothing but the node, and the one
+   * verdict where it is *most* clearly right — `understood` with a gap still
+   * open — is precisely the one where `canAnswerAgain` is false, because
+   * `decide_all` returns `none` there. So the action the design calls correct
+   * was unreachable exactly when it was correct.
+   *
+   * Panel-owned, like the warm-up gates, and deliberately not re-derived here.
+   * Today the panel can only know whether an open gap exists; whether that gap
+   * still has verification budget is not on the node wire, so a refusal is
+   * reported rather than pre-empted (`nothing_to_verify`). When the wire carries
+   * exhaustion, this is the one place that narrows.
+   */
+  checkAvailable: boolean;
 }
 
 const FAILED = ["confused", "off-topic"];
@@ -82,6 +110,7 @@ export function feedbackActions({
   warmUpDeclined,
   warmUpAvailable,
   canAnswerAgain,
+  checkAvailable,
 }: ActionInput): ActionPlan {
   // A check first, because `classification` is null on this path and every test
   // below it would fall through. What most directly closes the gap after a check is
@@ -90,16 +119,38 @@ export function feedbackActions({
   if (isCheck) {
     if (openGapCount > 0) {
       return {
-        primary: "check",
-        secondary: "next",
-        tertiary: warmUpAvailable && !warmUpInserted ? "warmUp" : undefined,
+        primary: checkAvailable ? "check" : "next",
+        secondary: checkAvailable ? "next" : undefined,
+        // `warmUpDeclined` is consulted here too. It used to be read only by the
+        // assessment rows, so a warm-up refused on the retry call was offered
+        // again from the check path — the one contract these gates exist for.
+        tertiary:
+          warmUpAvailable && !warmUpInserted && !warmUpDeclined ? "warmUp" : undefined,
       };
     }
     return { primary: "next" };
   }
 
-  // The objective is met: this is the one row where moving on is primary.
+  // THE OBJECTIVE IS MET ONLY IF NOTHING IS STILL OUTSTANDING. `classification`
+  // is the latest assessment; it is not the node's state. A gap opened by an
+  // earlier attempt closes only by verification (M6), so `understood` arrives
+  // with gaps open routinely, and `understanding_of()` reports the node `partial`
+  // until they are verified — which means readiness does not credit it either.
+  //
+  // This row used to return `next` alone. Live, on a `required` stop reported
+  // `partial` with a blocking gap open, the whole action row was "Next stop →":
+  // the learner was told "Understood", shown "1 unresolved", and given one button
+  // that walked away from it. Verification is the only caller of
+  // `Gap.mark_verified`, so the sole mechanism that could close it was the one
+  // thing not on offer.
+  //
+  // A warm-up is deliberately NOT offered here. It remediates confusion, and
+  // this answer reached the objective; stepping back would be the system
+  // disagreeing with its own grade.
   if (classification === "understood") {
+    if (openGapCount > 0 && checkAvailable) {
+      return { primary: "check", secondary: "next" };
+    }
     return { primary: "next" };
   }
 
@@ -110,9 +161,10 @@ export function feedbackActions({
 
   // Asked for and refused. Do not offer it again; a check is what is left.
   if (warmUpDeclined) {
+    const canCheck = checkAvailable && openGapCount > 0;
     return {
-      primary: canAnswerAgain && openGapCount > 0 ? "check" : "moveOn",
-      secondary: canAnswerAgain && openGapCount > 0 ? "moveOn" : undefined,
+      primary: canCheck ? "check" : "moveOn",
+      secondary: canCheck ? "moveOn" : undefined,
     };
   }
 
@@ -121,7 +173,7 @@ export function feedbackActions({
   // Something is named and still open: closing it is more direct than anything
   // else on offer, and a check asks a NEW question about it rather than re-asking
   // the one whose answer the reveal has already given away.
-  if (openGapCount > 0 && canAnswerAgain) {
+  if (openGapCount > 0 && checkAvailable) {
     return {
       primary: "check",
       secondary: failed ? "moveOn" : "next",
@@ -131,7 +183,13 @@ export function feedbackActions({
 
   // Partly there with nothing named. Another attempt at the same question is
   // meaningful here precisely because there is no gap for a check to target.
-  if (!failed && canAnswerAgain) {
+  //
+  // `openGapCount === 0` is what the comment always claimed and the condition
+  // never said. It did not matter while a check was gated on `canAnswerAgain`
+  // — the row above caught every named gap — but once a check can be
+  // unavailable for its own reasons, a `partial` answer with two gaps open fell
+  // through to here and made `next` primary again. The sweep caught it.
+  if (!failed && canAnswerAgain && openGapCount === 0) {
     return {
       primary: "next",
       secondary: "answerAgain",

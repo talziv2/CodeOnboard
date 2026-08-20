@@ -46,6 +46,41 @@ describe("the key point ladder", () => {
     expect(keyPoint({ classification: "confused" }, [], "Not quite")).toBe("Not quite");
   });
 
+  // ── S0 defect 1 ─────────────────────────────────────────────────────────────
+  test("the frame is never applied to an answer that reached the objective", () => {
+    // Observed live, twice: "Understood — you're working from: requests only
+    // supports two built-in auth classes and does not provide an extension point"
+    // — on the answer that had just refuted exactly that, correctly, and been
+    // graded `understood` for it. Gaps close only by verification, so a gap opened
+    // by an EARLIER attempt is still open here; the frame asserts a belief the
+    // learner demonstrably does not hold.
+    const line = keyPoint({ classification: "understood" }, [blocking], "Understood");
+    expect(line).not.toContain("working from");
+    expect(line).not.toContain(blocking.claim);
+    expect(line).toBe(t.lesson.keyPointUnverified("Understood", 1));
+  });
+
+  test("what it says instead is the thing that is true, and it counts", () => {
+    expect(keyPoint({ classification: "understood" }, [blocking, soft], "Understood")).toBe(
+      t.lesson.keyPointUnverified("Understood", 2)
+    );
+  });
+
+  test("understood with nothing open is still the bare verdict word", () => {
+    expect(keyPoint({ classification: "understood" }, [], "Understood")).toBe("Understood");
+  });
+
+  test("the Grader's own headline still outranks the veto", () => {
+    // Level 1 is the Grader's sentence about THIS answer, so it is right even when
+    // a gap is outstanding — the veto only replaces what we compose ourselves.
+    const line = keyPoint(
+      { classification: "understood", headline: "That's it — the callable IS the contract." },
+      [blocking],
+      "Understood"
+    );
+    expect(line).toBe("That's it — the callable IS the contract.");
+  });
+
   test("an empty or whitespace headline does not win", () => {
     expect(keyPoint({ classification: "partial", headline: "   " }, [blocking], "Partly")).toContain(
       blocking.claim

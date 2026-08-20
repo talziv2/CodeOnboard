@@ -87,6 +87,10 @@ export default function LessonPanel({
   // definition absent from it — the claims have to come from the question that
   // targeted them.
   const [checked, setChecked] = useState<{ answer: string; targeted: NodeGap[] } | null>(null);
+  // The Mutator refused a warm-up for THIS node. Kept out of `result` on purpose:
+  // it outlives any one answer, because what it records is a fact about the
+  // stop's surroundings rather than about the attempt that asked.
+  const [warmUpDeclined, setWarmUpDeclined] = useState(false);
 
   useEffect(() => {
     setLesson(null);
@@ -98,11 +102,24 @@ export default function LessonPanel({
       .finally(() => setLoading(false));
   }, [sessionId, nodeId]);
 
-  // Moving to a different node is what clears the answer in progress.
+  // Moving to a different node is what clears the answer in progress — and the
+  // refusal with it, since a different stop has a different foundation.
   useEffect(() => {
     setResult(null);
     setAnswer("");
     setChecked(null);
+    setWarmUpDeclined(false);
+    // AND THE OUTSTANDING CHECK. A verification question belongs to the gap it
+    // was written for, on the node that carries it. Leaving it set turned the
+    // NEXT stop into `VERIFY` — `lessonPhase` reads `verification` — so its
+    // Submit posted `kind: "verification"` for a node with nothing pending, the
+    // backend answered 409 `no_pending_verification`, and the learner pressed a
+    // button that did nothing at all. Hit while re-validating the other fixes.
+    //
+    // Clearing is the honest minimum, not the whole answer: the server still
+    // holds `pending_verification`, and carrying it back when the learner returns
+    // needs it on the wire (F101). Dropping it here loses nothing they can see.
+    setVerification(null);
   }, [sessionId, nodeId]);
 
   // Bring the verdict to the learner.
@@ -193,6 +210,18 @@ export default function LessonPanel({
     try {
       const { inserted } = await retry(sessionId, nodeId);
       if (!inserted) {
+        // RECORD THE REFUSAL. The card used to infer "declined" from the
+        // GRADING response — `adaptation.kind === "prerequisite"` with no
+        // matching mutation — which cannot see a decline that happens here, on
+        // the retry call. So the Mutator answered `no_useful_prerequisite`, the
+        // sentence below was shown, and "Build me a warm-up" stayed on offer.
+        //
+        // Node-scoped, and kept for the node's lifetime: both refusals
+        // (`no_useful_prerequisite` — nothing smaller is a foundation — and
+        // `prerequisite_exists`) are facts about this stop's surroundings, not
+        // about the answer that preceded the request. Answering again does not
+        // make a foundation appear.
+        setWarmUpDeclined(true);
         // Declining is a real answer — no candidate was a smaller foundation
         // than the stop they are on. Say so and leave the verdict panel up, so
         // the other ways forward stay reachable. Silently resetting the form
@@ -377,6 +406,10 @@ export default function LessonPanel({
     result !== null &&
     result?.classification !== "understood" &&
     !warmUpInserted &&
+    // Refused once for this stop. "Never offer what would be declined" is the
+    // whole point of these gates, and a decline recorded on the retry call was
+    // invisible to every one of them.
+    !warmUpDeclined &&
     // On a check, `classification` is null, so this test passed by accident and
     // "Build me a warm-up" became the ONLY button offered after a correct
     // answer. A warm-up is still reachable here, but as a fallback rather than
@@ -544,6 +577,7 @@ export default function LessonPanel({
                     onSubmit={onSubmitVerification}
                     onDismiss={() => setVerification(null)}
                     loading={loading}
+                    error={error}
                   />
                 ) : (
                   <AnswerComposer
@@ -575,8 +609,16 @@ export default function LessonPanel({
                     // while something is unresolved, so the union is what
                     // `feedbackActions` needs to obey "never offer what would be
                     // declined" without knowing which path it is on.
-                    warmUpAvailable={canRequestWarmUp || (isCheck && !warmUpInserted)}
+                    warmUpAvailable={
+                      (canRequestWarmUp || (isCheck && !warmUpInserted)) && !warmUpDeclined
+                    }
+                    warmUpDeclined={warmUpDeclined}
                     canAnswerAgain={canAnswerAgain}
+                    // Verification is available whenever something is open to
+                    // verify. Exhaustion and the node's remediation cap are not on
+                    // the node wire, so a refusal is reported (`nothing_to_verify`)
+                    // rather than pre-empted.
+                    checkAvailable={openGaps.length > 0}
                     loading={loading}
                     verifying={verifying}
                     error={error}

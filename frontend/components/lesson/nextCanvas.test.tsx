@@ -225,6 +225,61 @@ describe("VERIFY and RESOLVED", () => {
     expect(setupDisclosure?.open).toBe(false);
   });
 
+  // ── S0 defect 5, found while re-validating the other four ──────────────────
+  test("an outstanding check does not follow the learner to the next stop", async () => {
+    // It used to. `lessonPhase` reads `verification`, which nothing cleared on a
+    // node change, so the NEXT stop opened in VERIFY carrying the previous stop's
+    // question. Its Submit posted `kind: "verification"` for a node with nothing
+    // pending, the backend answered 409, and the button did nothing at all.
+    const user = userEvent.setup();
+    const { default: LessonPanel } = await import("@/components/LessonPanel");
+    const g = graph();
+    const props = {
+      sessionId: "s1",
+      node: NODE,
+      position: 2,
+      total: 16,
+      isPrerequisite: false,
+      graph: g,
+      onFileClick: vi.fn(),
+      onAdvance: vi.fn(),
+      onRespond: vi.fn(),
+      finished: false,
+      onFinish: vi.fn(),
+      onLeave: vi.fn(),
+    };
+    const { rerender } = render(<LessonPanel {...props} nodeId="n1" />);
+    await screen.findByText(LESSON.lesson.prompt);
+    await user.type(textareas()[0], "A wrong answer.");
+    await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
+    await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
+    await screen.findByText(PROMPT.question);
+
+    const second = node("n2", { title: "A different stop", objective: "Something else." });
+    rerender(<LessonPanel {...props} nodeId="n2" node={second} />);
+
+    await waitFor(() => expect(screen.queryByText(PROMPT.question)).toBeNull());
+    // And the stop is answerable again, rather than stuck behind a dead Submit.
+    await screen.findByText(LESSON.lesson.prompt);
+  });
+
+  test("a check that fails says so, instead of a Submit that does nothing", async () => {
+    // `VerificationBlock` took no `error` prop at all, while `AnswerComposer`
+    // always had one — so every way a check can fail was silent.
+    const user = userEvent.setup();
+    api.respondToVerification.mockRejectedValue(new Error("no_pending_verification"));
+    await renderNext();
+    await user.type(textareas()[0], "A wrong answer.");
+    await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
+    await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
+    await screen.findByText(PROMPT.question);
+
+    await user.type(textareas()[0], "An answer to the check.");
+    await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
+
+    expect(await screen.findByText(t.errors.no_pending_verification)).toBeTruthy();
+  });
+
   test("RESOLVED reports without a composer", async () => {
     const user = userEvent.setup();
     api.respondToVerification.mockResolvedValue({

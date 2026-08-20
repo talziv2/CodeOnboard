@@ -433,6 +433,16 @@ export const t = {
     // computed: the gap claim is a statement of the misconception, and dressing it
     // up as "actually, X" would assert a correction nothing produced.
     keyPoint: (verdict: string, claim: string) => `${verdict} — you're working from: ${claim}`,
+    // The same ladder, for an answer that REACHED the objective while something
+    // detected earlier is still unverified. The "you're working from" frame is
+    // false here: it told a learner who had just correctly refuted a
+    // misconception that they were carrying it. What is true is that the answer
+    // landed and the earlier belief has not been checked — which is also the
+    // one action worth offering, so the sentence and the button agree.
+    keyPointUnverified: (verdict: string, count: number) =>
+      count === 1
+        ? `${verdict} — one thing you said earlier still needs checking`
+        : `${verdict} — ${count} things you said earlier still need checking`,
     // One consequence line, replacing three separate notices that all described the
     // same event (§3a question 2). Ordered by how much it changed the journey.
     consequenceRetaught: "This stop has been rewritten to answer that.",
@@ -742,6 +752,21 @@ export const t = {
     at_first_question: "This is the first question — there's nothing behind it.",
     invalid_goal_type_option: "Pick one of the listed options.",
     invalid_code_depth_option: "Pick one of the listed options.",
+    // The three ways a check can be refused. All were reachable before and
+    // rendered as raw slugs; `nothing_to_verify` became easier to reach once the
+    // node's remediation cap could actually fire (F100), so naming them is part
+    // of offering the check rather than an aside.
+    //
+    // "Stopped proposing" is the honest wording: the gap is still open and still
+    // counted. The system has run out of ways to ask about it, which is not the
+    // same as the gap having gone away (§18.16.1).
+    nothing_to_verify:
+      "There's nothing left to check here — the system has stopped proposing " +
+      "questions for what's still open.",
+    source_unavailable:
+      "The source for this stop couldn't be read, so no question could be built from it.",
+    verification_unavailable: "Couldn't write a question for this one. Try again in a moment.",
+    no_pending_verification: "That question is no longer open.",
     server_unreachable:
       "Couldn't reach the server. Check the backend is running on port 8000, " +
       "and that this page is open on the same host it allows (localhost).",

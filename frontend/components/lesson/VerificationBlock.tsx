@@ -27,6 +27,7 @@ export default function VerificationBlock({
   onSubmit,
   onDismiss,
   loading,
+  error,
 }: {
   question: string;
   answer: string;
@@ -34,6 +35,12 @@ export default function VerificationBlock({
   onSubmit: () => void;
   onDismiss: () => void;
   loading: boolean;
+  /**
+   * Why this exists: `AnswerComposer` has always rendered its failures and this
+   * did not, so every way a check can fail — the 409s, a grading error — left the
+   * learner pressing Submit against a button that did nothing and said nothing.
+   */
+  error?: string | null;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -46,6 +53,7 @@ export default function VerificationBlock({
         rows={4}
         className="w-full resize-none rounded-field border border-rule bg-trench p-3 text-start text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
       />
+      {error && <p className="measure text-aside text-rust">{error}</p>}
       <div className="flex gap-2">
         <Button variant="primary" size="md" onClick={onSubmit} disabled={loading || !answer.trim()}>
           {loading ? t.lesson.grading : t.lesson.submit}

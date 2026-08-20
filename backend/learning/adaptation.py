@@ -192,16 +192,25 @@ def decide_all(
     # cap ends the offering, never the obligation.
     exhausted = [g for g in open_gaps if g.is_exhausted]
     eligible = [g for g in open_gaps if not g.is_exhausted]
+    capped: list[Gap] = []
     if remediation_rounds >= REMEDIATION_ROUND_CAP:
-        eligible = []
+        # The node has spent its rounds. Its gaps stop being WORKED ON — and are
+        # still REPORTED, which is what `deferred` is for. Emptying `eligible`
+        # without keeping them meant they appeared in neither list and fell out
+        # of the plan altogether, contradicting the comment below. Unreachable
+        # until `remediation_rounds` began to be incremented at all (F100), which
+        # is how it survived.
+        capped, eligible = eligible, []
 
     blocking = [g for g in eligible if g.is_blocking]
     active = tuple(blocking[:ACTIVE_SET_MAX])
     # Everything blocking and outstanding that is not being worked on now,
     # whichever reason it is waiting for. A capped gap belongs here rather than
     # nowhere, so the count the learner is shown stays truthful.
-    deferred = tuple(blocking[ACTIVE_SET_MAX:]) + tuple(
-        g for g in exhausted if g.is_blocking
+    deferred = (
+        tuple(blocking[ACTIVE_SET_MAX:])
+        + tuple(g for g in capped if g.is_blocking)
+        + tuple(g for g in exhausted if g.is_blocking)
     )
     collapsed = len(blocking) > ACTIVE_SET_MAX
 

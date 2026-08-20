@@ -901,7 +901,14 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
     # `gap_kind` is still passed, and is consulted only when there are no gap
     # objects at all — the flag-off world, where the scalar is the whole signal.
     # That is what keeps this call identical to the old `decide` there.
-    plan = adaptation.decide_all(classification, list(node.gaps), gap_kind)
+    # `remediation_rounds` is passed HERE, on the path that spends it. `/verify`
+    # always passed it; this call site never did, so the node-level cap was
+    # unreachable from the only place that could reach it — the second half of
+    # F100, and the half that incrementing the counter alone does not fix.
+    plan = adaptation.decide_all(
+        classification, list(node.gaps), gap_kind,
+        remediation_rounds=node.gap_state.remediation_rounds,
+    )
     action = plan.action
     rationale = grade.get("rationale") or ""
     mutation = {"kind": "none"}
@@ -963,6 +970,33 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
         except Exception as exc:
             state.errors.append(f"re-teach failed: {exc}")
             adapted["retaught"] = False
+
+    # ── the node-level remediation counter (F100) ─────────────────────────────
+    #
+    # `remediation_rounds` was declared, persisted, deserialized and read by
+    # `decide_all`'s cap — and written by nothing, so `REMEDIATION_ROUND_CAP`
+    # was dead and the per-node remediation loop was unbounded.
+    #
+    # A ROUND IS AN APPLIED REMEDIATION, whichever kind it was. Counting only
+    # the structural ones would leave the loop unbounded in exactly the case
+    # the cap exists for: `decide_all` picks the action from gap precedence, so
+    # a node whose leading gap keeps earning `hint` could be hinted at forever
+    # and never reach a cap that only counted warm-ups. What bounds the loop is
+    # the number of times the system has responded to this node with help.
+    #
+    # Applied, not merely chosen: a `prerequisite` the Mutator declined and a
+    # re-teach that raised both leave the learner with nothing new, and charging
+    # a round for them would spend the budget on the system's own failures.
+    #
+    # Verifications are NOT counted here. That is the per-GAP budget, and
+    # `Gap.record_failed_verification` already keeps it (§18.16.1, LQ10).
+    remediated = (
+        mutation.get("kind") == "prerequisite"
+        or adapted.get("retaught") is True
+        or bool(adapted.get("text"))
+    )
+    if remediated:
+        node.gap_state.remediation_rounds += 1
 
     # Adapting UPWARD, and the only response that shortens the journey: an area
     # the learner has demonstrably got does not need its remaining recommended
@@ -1073,6 +1107,11 @@ def session_retry(session_id: str, body: dict) -> dict:
             history.REMEDIATION_INSERTED, nodes=[inserted],
             origin=progress.LEARNER_REQUEST, unlocks=current,
         )
+        # A learner-requested warm-up is a remediation round too (F100). The
+        # origin differs — they asked rather than being sent — but the budget is
+        # the node's, not the policy's, so both paths spend from it. Charged
+        # only when one was actually spliced: a decline costs nothing.
+        graph.nodes[current].gap_state.remediation_rounds += 1
     learning_store.save_graph(graph, SESSIONS_DB_PATH)
     if graph.current_node_id == current:
         # No prerequisite was inserted (guard triggered) — just return current

@@ -51,7 +51,9 @@ export default function FeedbackCardNext({
   openGaps,
   warmUpInserted,
   warmUpAvailable,
+  warmUpDeclined,
   canAnswerAgain,
+  checkAvailable,
   loading,
   verifying,
   error,
@@ -70,7 +72,10 @@ export default function FeedbackCardNext({
   openGaps: NodeGap[];
   warmUpInserted: boolean;
   warmUpAvailable: boolean;
+  /** The Mutator refused one for this node — on EITHER call. Panel-owned. */
+  warmUpDeclined: boolean;
   canAnswerAgain: boolean;
+  checkAvailable: boolean;
   loading: boolean;
   verifying: boolean;
   error: string | null;
@@ -100,12 +105,18 @@ export default function FeedbackCardNext({
     isCheck,
     openGapCount: openGaps.length,
     warmUpInserted,
-    // Declined: a warm-up was the adaptation the backend chose, and it did not
-    // produce one. Declining is a real answer, and the verdict stays up.
+    // Declined, by EITHER route. The automatic one is still read from the grading
+    // response: the backend chose `prerequisite` and produced no mutation. The
+    // other — the learner pressed the button and the Mutator refused — happens on
+    // a call this response knows nothing about, so the panel records it and passes
+    // it in. Inferring both from `result` is why a refused warm-up stayed on offer.
     warmUpDeclined:
-      result.adaptation?.kind === "prerequisite" && result.mutation?.kind !== "prerequisite",
+      warmUpDeclined ||
+      (result.adaptation?.kind === "prerequisite" &&
+        result.mutation?.kind !== "prerequisite"),
     warmUpAvailable,
     canAnswerAgain,
+    checkAvailable,
   });
 
   const label: Record<ActionId, string> = {
