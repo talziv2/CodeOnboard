@@ -113,6 +113,7 @@ export default function SurfaceTabs({
               return (
                 <button
                   key={m}
+                  data-tour={`mode-${m}`}
                   onClick={() => onSwitchMode(m)}
                   // `aria-pressed` rather than `aria-current`: this is a toggle
                   // between two states of the same column, not a link to a page.
@@ -157,6 +158,7 @@ export default function SurfaceTabs({
           return (
             <button
               key={tab}
+              data-tour={tab === "understanding" ? "tab-understanding" : undefined}
               onClick={() => onPick(tab)}
               aria-current={isActive ? "page" : undefined}
               className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2.5 font-mono text-micro uppercase tracking-[0.13em] transition ${

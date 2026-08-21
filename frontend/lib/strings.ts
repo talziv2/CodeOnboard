@@ -397,6 +397,96 @@ export const t = {
     } as Record<string, string>,
   },
 
+  // --- the first-run tour ---
+  //
+  // WORDING RULE: every step says what the thing is FOR, never what it is called.
+  // "This is the route rail" teaches a name the learner will never need; "your
+  // journey, and nothing in it is locked" teaches the one fact that changes how
+  // they use it. A tour that narrates the furniture is a tour people skip.
+  //
+  // Gated steps carry a `cue` as well as a `body`. The cue is the instruction, and
+  // it is shown only while the step is actually waiting — walking back through the
+  // tour re-reads the same steps without re-arming them (see `lib/tour.ts`), and a
+  // step that still said "click it" with a `Next` button beside it would be giving
+  // two different instructions at once.
+  tour: {
+    /** The bubble's own chrome. */
+    step: (n: number, total: number) => `${n} of ${total}`,
+    next: "Next",
+    back: "Back",
+    skip: "Skip tour",
+    done: "Got it",
+    close: "Close the tour",
+    /** Announced when a step opens, for anyone not seeing the spotlight move. */
+    announce: (n: number, total: number, title: string) => `Tour step ${n} of ${total}: ${title}`,
+    replay: "Replay the tour",
+
+    steps: {
+      intro: {
+        title: "A quick tour",
+        body:
+          "Three parts to this screen: your route down the side, the lesson in the middle, and the code beside it. About a minute to walk through them.",
+        action: "Show me",
+      },
+      rail: {
+        title: "Your route",
+        body:
+          "Every stop on the journey, grouped into chapters. The one in cyan is where you are, and nothing is locked — click any stop to go there, or a chapter heading to read what it covers.",
+      },
+      brief: {
+        title: "What this stop is for",
+        body:
+          "The objective is the claim you should be able to make when you're done. It isn't a summary — it's the standard your answer gets marked against. It stays pinned here while you scroll.",
+      },
+      code: {
+        title: "Anchored to real code",
+        body:
+          "Every lesson points at actual lines in the repository, never at an invented example. They sit behind this row so they are not a third copy of the same thing.",
+        cue: "Open it, then click a line.",
+      },
+      source: {
+        title: "The code, beside the lesson",
+        body:
+          "It stays open next to what you're reading — dock it, float it, drag it wider, or close it. When it's closed, “Show source” up on the bar brings it back.",
+      },
+      understanding: {
+        title: "Where you answer",
+        body:
+          "The lesson is what to read; this is the other half. The question lives here, along with your verdict, your earlier answers, and anything you got wrong — which stays on the record until you clear it by answering a fresh question about it.",
+        cue: "Open it.",
+      },
+      composer: {
+        title: "How a stop counts",
+        body:
+          "Answer in your own words and submit — ⌘↵ works too. It's marked against the objective still pinned above, and the verdict is what moves your progress. Skipping is allowed; it just doesn't count as demonstrated.",
+      },
+      route: {
+        title: "Stepping back",
+        body:
+          "Learn is this one stop. Route is the whole journey — where you've been, and how it's going.",
+        cue: "Switch to Route.",
+      },
+      map: {
+        title: "The journey, whole",
+        body:
+          "Every stop and how they connect; click one to go and read it. The Analysis tab beside it is the evidence behind your progress — what you've demonstrated, what's still open, and everything the session has changed.",
+      },
+      back: {
+        title: "And back again",
+        body: "Learn brings you back to exactly the stop you left.",
+        cue: "Switch to Learn.",
+      },
+      progress: {
+        title: "Two numbers, two claims",
+        body:
+          "The first is objectives you've actually demonstrated. The second is stops you've dealt with. They're different things, and only the first one is about what you understand. The ⋯ menu holds the rest — make the route shorter or deeper, reread the briefing, or finish early.",
+      },
+    } as Record<string, { title: string; body: string; cue?: string; action?: string }>,
+
+    /** The closing line, on the last step. */
+    finished: "You can replay this from the ⋯ menu any time.",
+  },
+
   // --- source pane ---
   source: {
     dock: "Dock to the side",

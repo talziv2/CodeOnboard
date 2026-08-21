@@ -94,13 +94,20 @@ export default function LessonCanvas({
     : blocks;
   const at = (block: keyof LessonBlocks) => state[block] ?? "absent";
 
-  const show = (block: keyof LessonBlocks, node: ReactNode, label: string, count?: number) => {
+  const show = (
+    block: keyof LessonBlocks,
+    node: ReactNode,
+    label: string,
+    count?: number,
+    /** `data-tour` for the collapsed form; the open form carries its own. */
+    tour?: string
+  ) => {
     const value = at(block);
     if (value === "absent") return null;
     return value === "open" ? (
       node
     ) : (
-      <Disclosure label={label} count={count}>
+      <Disclosure label={label} count={count} tour={tour}>
         {node}
       </Disclosure>
     );
@@ -113,7 +120,7 @@ export default function LessonCanvas({
           reference under the same label — a mirror the learner consults, not a
           second copy of something to read. */}
       {show("setup", setup, labels.setup)}
-      {show("tracePath", tracePath, labels.tracePath, labels.tracePathCount)}
+      {show("tracePath", tracePath, labels.tracePath, labels.tracePathCount, "code-links")}
       {show("gaps", gaps, labels.gaps, labels.gapsCount)}
       {show("attempts", attempts, labels.attempts, labels.attemptsCount)}
 

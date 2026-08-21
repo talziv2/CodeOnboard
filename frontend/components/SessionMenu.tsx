@@ -34,6 +34,7 @@ export default function SessionMenu({
   scopeNote,
   onScope,
   onBriefing,
+  onReplayTour,
   onStartOver,
   restarting,
   onFinish,
@@ -44,6 +45,8 @@ export default function SessionMenu({
   scopeNote: string | null;
   onScope: (direction: "shorter" | "deeper") => void;
   onBriefing: () => void;
+  /** Run the first-run walkthrough again. Absent where there is no tour to run. */
+  onReplayTour?: () => void;
   onStartOver: () => void;
   restarting: boolean;
   onFinish: () => void;
@@ -145,6 +148,19 @@ export default function SessionMenu({
             >
               {t.welcome.headerLink}
             </MenuItem>
+            {/* Sits with the briefing rather than with the destructive pair
+                below it: both are "show me the orientation again", and neither
+                changes anything about the session. */}
+            {onReplayTour && (
+              <MenuItem
+                onClick={() => {
+                  onReplayTour();
+                  setOpen(false);
+                }}
+              >
+                {t.tour.replay}
+              </MenuItem>
+            )}
             <MenuItem onClick={onStartOver} disabled={restarting}>
               {restarting ? t.session.startingOver : t.session.startOver}
             </MenuItem>

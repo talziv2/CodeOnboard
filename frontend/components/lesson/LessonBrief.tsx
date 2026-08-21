@@ -70,7 +70,7 @@ export default function LessonBrief({
   const showAnchorList = anchors.length > 1;
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div data-tour="brief" className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
           {isPrerequisite ? t.lesson.warmUpHeading : t.lesson.stopOf(position, total)}

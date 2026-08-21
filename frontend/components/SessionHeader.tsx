@@ -40,6 +40,7 @@ export default function SessionHeader({
   scopeNote,
   onScope,
   onBriefing,
+  onReplayTour,
   onStartOver,
   restarting,
   onFinish,
@@ -52,6 +53,7 @@ export default function SessionHeader({
   scopeNote: string | null;
   onScope: (direction: "shorter" | "deeper") => void;
   onBriefing: () => void;
+  onReplayTour: () => void;
   onStartOver: () => void;
   restarting: boolean;
   onFinish: () => void;
@@ -76,7 +78,7 @@ export default function SessionHeader({
       </span>
 
       {/* progress — two measures, labels on demand */}
-      <span className="group flex shrink-0 items-center gap-3">
+      <span data-tour="progress" className="group flex shrink-0 items-center gap-3">
         <span className="flex items-center gap-2">
           <span className="hidden font-mono text-micro uppercase tracking-[0.13em] text-graphite group-hover:inline group-focus-within:inline">
             {t.session.demonstrated}
@@ -136,6 +138,7 @@ export default function SessionHeader({
           scopeNote={scopeNote}
           onScope={onScope}
           onBriefing={onBriefing}
+          onReplayTour={onReplayTour}
           onStartOver={onStartOver}
           restarting={restarting}
           onFinish={onFinish}

@@ -39,6 +39,13 @@
   --color-signal-halo: rgba(91, 200, 232, 0.16);
   --color-signal-wash: #16232b;
 
+  /* The tour's dimming. Its own token rather than `ink` at an alpha, because a
+     scrim is the one surface whose job is identical in both themes — push the
+     page back so one element can stand out — and `ink` inverts between them, so
+     the light theme would have been dimming a near-white page with a near-white
+     wash. Deep and cool in both, weaker on paper where less is needed. */
+  --color-scrim: rgba(4, 8, 11, 0.74);
+
   /* The source pane. Deliberately quieter than body prose — code is there to be
      referred to, not read end to end, until a line is the one under discussion. */
   /* The gutter was 2.17 here and 3.54 in light. Quiet was the intent, but line
@@ -275,6 +282,10 @@
   --color-signal-halo: rgba(4, 89, 111, 0.2);
   --color-signal-wash: #cbe4ee;
 
+  /* See the dark value: same role, and on paper a lighter scrim already reads as
+     "everything but this is out of play". */
+  --color-scrim: rgba(14, 33, 44, 0.46);
+
   /* 3.54 before; see the note beside the dark value for why this is content. */
   --color-code-gutter: #4e6674;
   --color-code-line: #2f4f5f;
@@ -486,6 +497,28 @@ body {
 
 .rise {
   animation: rise var(--motion-layout) var(--ease-emphasis);
+}
+
+/* The tour's ring: the one element on screen that is still in play.
+
+   Animates the SHADOW only — no transform, no opacity — for the same reason
+   `rise` animates position only. A stalled animation leaves a solid ring, which
+   is the whole signal; a stalled opacity fade would leave no ring at all. The
+   reduced-motion block below removes the animation entirely and the ring's own
+   `box-shadow`, set in the component, is what remains. */
+@keyframes tour-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px var(--color-signal), 0 0 0 6px var(--color-signal-halo);
+  }
+  50% {
+    box-shadow: 0 0 0 2px var(--color-signal), 0 0 0 12px var(--color-signal-halo);
+  }
+}
+
+.tour-ring {
+  box-shadow: 0 0 0 2px var(--color-signal), 0 0 0 6px var(--color-signal-halo);
+  animation: tour-pulse 2s var(--ease-emphasis) infinite;
 }
 
 /* Reduced motion means less MOVEMENT, not less feedback (X1).
