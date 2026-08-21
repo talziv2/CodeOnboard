@@ -3,6 +3,7 @@
 import type { GraphNode } from "@/lib/api";
 import Button from "@/components/ui/Button";
 import ConceptTag from "@/components/ui/ConceptTag";
+import { InlineProse } from "@/components/ui/Prose";
 import { t } from "@/lib/strings";
 
 /**
@@ -119,7 +120,10 @@ export default function LessonBrief({
             // Clamped to two lines even when open. The brief is pinned, so it
             // spends viewport the lesson needs, and at `xlarge` an unclamped
             // objective is what would eat it.
-            <p className="measure line-clamp-2 text-meta text-paper">{node.objective}</p>
+            <p className="measure line-clamp-2 text-meta text-paper">
+              {/* Inline, so the two-line clamp still applies to one element. */}
+              <InlineProse text={node.objective} tone="paper" />
+            </p>
           )}
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

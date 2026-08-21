@@ -15,12 +15,30 @@
 #                      of an answer, it is a property of the answer that caused
 #                      it).
 #
-#   PLAN-SCOPED        the JOURNEY changed shape. Affects many nodes, outlives
-#                      the answer, and — decisively — `scope.shorten()` and
-#                      `scope.deepen()` happen at `/session/{id}/scope` where
-#                      THERE IS NO ATTEMPT AT ALL. A field that cannot be
-#                      written for half its producers is in the wrong place.
-#                      Lives in `LearningGraph.journey_events`.
+#   JOURNEY-SCOPED     something happened to the JOURNEY rather than to an
+#                      answer. Affects many nodes, outlives the answer, and —
+#                      decisively — `scope.shorten()` and `scope.deepen()` happen
+#                      at `/session/{id}/scope` where THERE IS NO ATTEMPT AT ALL.
+#                      A field that cannot be written for half its producers is
+#                      in the wrong place. Lives in
+#                      `LearningGraph.journey_events`.
+#
+# THIS CATEGORY WAS WIDENED, DELIBERATELY, AND HERE IS THE ARGUMENT
+#
+# It was called PLAN-SCOPED and defined as "the journey changed shape", which is
+# what its first four kinds are. `jumped` is not: a jump moves the learner
+# through the route without altering it. The category is now movement OR shape,
+# for one reason — `/jump` was the only navigation act in the system that left no
+# trace at all, while `/advance`'s skip stamped `user_override` and every scope
+# change wrote an event here. A learner who jumped around all session was
+# indistinguishable, afterwards, from one who walked the path.
+#
+# The alternative was a second list beside this one, holding a single kind and
+# read by the same log for the same purpose. The lifecycle split this module
+# exists to enforce is ATTEMPT vs JOURNEY, and a jump is unambiguously the second
+# — it happens with no answer to hang from, which is the test stated below. So
+# the boundary that matters is intact; only the narrower name for one side of it
+# was wrong.
 #
 # The test that settles which is which: *could this have happened without a
 # learner answering something?* A hint could not. A scope change could, and
@@ -169,10 +187,23 @@ PRUNE_AHEAD = "prune_ahead"
 SCOPE_SHORTER = "scope_shorter"
 SCOPE_DEEPER = "scope_deeper"
 REMEDIATION_INSERTED = "remediation_inserted"
+# The learner moved to a stop that is not the next one. The only kind here that
+# does not change the journey's shape — see the header for why it lives here
+# anyway. `nodes` is the stop landed on; `from_node_id` the one left behind, or
+# absent when there was no current stop to leave.
+JUMPED = "jumped"
 
 JOURNEY_EVENT_KINDS = frozenset({
-    PRUNE_AHEAD, SCOPE_SHORTER, SCOPE_DEEPER, REMEDIATION_INSERTED,
+    PRUNE_AHEAD, SCOPE_SHORTER, SCOPE_DEEPER, REMEDIATION_INSERTED, JUMPED,
 })
+
+# Why the learner moved. `study` is an ordinary jump — they chose a stop and went
+# to it. `resume` is the return offered by the arrival notice, and it is recorded
+# distinctly because it is the OPPOSITE act: rejoining the route rather than
+# leaving it, which is why it clears the notice instead of raising another one.
+JUMP_STUDY = "study"
+JUMP_RESUME = "resume"
+JUMP_INTENTS = frozenset({JUMP_STUDY, JUMP_RESUME})
 
 
 def new_journey_event(kind: str, *, nodes=None, cause=None, **detail) -> dict:

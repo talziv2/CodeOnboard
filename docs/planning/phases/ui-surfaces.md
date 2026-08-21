@@ -78,8 +78,75 @@ prose and the code. Three mitigations, in order of how much they cover:
    is the single most-needed reference while answering, and it is *stop* context
    rather than surface content. This is the largest part of reason 3, answered.
 2. **The code column is unaffected.** It was never in either tab.
-3. **The prose is one collapsed disclosure inside Understanding.** One click, no tab
-   change, no scroll position lost.
+3. ~~**The prose is one collapsed disclosure inside Understanding.**~~ Replaced by
+   **the code locations as one collapsed disclosure inside Understanding** — see
+   "What is mirrored, and what is not" below. The links to the code are consultable
+   without a tab change; the prose is not, and costs one.
+
+### A chapter overview has no Understanding
+
+The bar is `Lesson · Map` while a section overview is open, not `Lesson ·
+Understanding · Map`.
+
+Understanding is what the learner has **shown** — a question, an answer, a verdict,
+open gaps — and every one of those belongs to a *stop*. A chapter has no question and
+nothing is demonstrated at chapter granularity, so the tab could only ever open onto
+the previous stop's evidence beside a heading about something else. The overview
+renders inside the `tab !== "map"` branch, so before this it drew under Understanding
+too: the bar offered a view that did not exist, and the screenshot that prompted this
+had the overview showing with `Understanding` marked current.
+
+Dropped rather than disabled — a greyed tab still says there is something here.
+`openedSection` already routes to Lesson, and the rendered tab is now additionally
+*derived* as `tabs.includes(stored) ? stored : "lesson"`, so a shrinking tab list
+cannot leave the bar with no active tab. Derived rather than corrected in an effect,
+because an effect would be a second thing that moves the tab, which is what R5's
+reducer exists to prevent.
+
+Two consequences worth recording:
+
+- **`dispatchTab` no longer closes over `tabs`.** Its stability used to be
+  load-bearing — a fresh `tabs` array gave the callback a new identity, re-firing the
+  arrival effect and pinning the tab to Lesson forever — which made a *correct* change
+  to `tabs` a latent bug. The reducer now reads the current tabs through a ref and
+  keeps one identity for the life of the page, so the hazard is gone rather than
+  documented.
+- **The map tab's label is keyed to the build, not the tab count.** It was
+  `tabs.length === 2 ? "Progress map" : "Map"`, which meant the same thing until
+  `surfaces` gained a two-tab state: the tab renamed itself as the learner opened and
+  closed overviews. A control that renames itself reads as a different control, which
+  is worse than the mild terseness the qualifier was fixing. `next` still says
+  `Progress map`, since it stays live as the comparison.
+
+### What is mirrored, and what is not
+
+**The prose is not mirrored; the code locations are.** `MIRRORED` holds exactly one
+entry, `tracePath: "understanding"`.
+
+The setup used to be the mirrored block, as a collapsed `"The setup"`, for the reason
+above — a learner mid-answer could re-read the prose without a tab change. It was
+removed on request, and the argument for removing it is the right one: the prose is
+*material*, material belongs to Lesson, and it is the single longest thing on the
+page, so duplicating it put the material into both surfaces at once — the accumulation
+L4 removed, reintroduced sideways.
+
+The code locations are the opposite shape, which is why they mirror where the prose
+does not. A handful of `file · symbol · lines` links is small, and it is a *reference*
+rather than material: mid-answer the question it settles is "which code am I being
+asked about", and that is exactly what a learner should not change tabs to find.
+
+So of the three things reason 3 needs to hand a learner who is answering: the
+objective is in the brief above both tabs, the code column was never in a tab, the
+**locations are a disclosure on this surface**, and the **prose costs a tab change**.
+That last one is the accepted cost, stated rather than argued away.
+
+A MIRROR IS NEVER EXPANDED — `surfaceBlocks` enforces it rather than trusting the
+caller, and a mirror of an absent block is absent, because a mirror cannot show what
+does not exist. Four tests hold the line in both directions: a surface renders only
+what it owns or what is mirrored into it, exactly one block is mirrored and it is the
+locations, the mirror is never expanded in any phase, and `setup` is absent from
+Understanding in every phase. A mirror is the kind of thing that creeps back one
+block at a time.
 
 ### The cost that remains, stated plainly
 
@@ -210,12 +277,14 @@ Two rules govern the whole table, stated once:
 - **Active:** `Understanding` — by clicking either the tab or the primary
   **"Answer this"** at the foot of Lesson
 - **Lesson:** unchanged
-- **Understanding:** question + composer expanded; the setup available as a collapsed
-  **"The setup"** disclosure
+- **Understanding:** question + composer expanded; the code locations available as a
+  collapsed disclosure. The setup is **not** here — it was a collapsed `"The setup"`
+  until the mirror moved to the locations
 - **Auto-switch:** **no** — the learner pressed a control that says where it goes
-- **Returning to material:** objective in the brief · setup one click inside this tab
-  · code in its own column, untouched
-- **Expanded:** question + composer · **Collapsed:** the setup
+- **Returning to material:** objective in the brief · code in its own column,
+  untouched · locations one click inside this tab · **prose on the Lesson tab**,
+  which is a tab change
+- **Expanded:** question + composer · **Collapsed:** the code locations
 
 ### T2 · submits a partial answer → feedback
 
@@ -342,7 +411,8 @@ indefinitely: a re-teach replaces, and superseded explanations group.
 | current question / verification | it is the live artifact | a verdict supersedes it |
 | current verdict | it is the live artifact | a new question supersedes it |
 | open gaps | the learner is answering (STUDY) | a verdict is up — the key point already names the leading one |
-| the setup | never | always, as `The setup`, so answering never needs a tab change |
+| the setup | in Lesson, until the explanation supersedes it | in Lesson only — **not on Understanding at all** |
+| the code locations | never | always, on **both** surfaces, so answering never needs a tab change to see which code is in question |
 | previous answers | never | always, as `Previous answers (N)` |
 | resolved gaps | never | always, as `Resolved (N)` |
 

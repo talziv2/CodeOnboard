@@ -58,7 +58,6 @@ export default function LessonCanvas({
   labels: {
     setup: string;
     /** What the setup is called in Understanding, where it is only ever consulted. */
-    setupMirror?: string;
     tracePath: string;
     tracePathCount?: number;
     gaps: string;
@@ -87,9 +86,9 @@ export default function LessonCanvas({
   /** Replaced explanations. Absent on the single canvas — see `lessonBlocks`. */
   earlier?: ReactNode;
 }) {
-  // `surfaceBlocks` applies the surface's own supersession — the setup is open in
-  // Lesson until the explanation exists, and never open in Understanding, where it
-  // is a reference rather than the material.
+  // `surfaceBlocks` applies the surface's own supersession, and downgrades anything
+  // mirrored into this surface to `collapsed` — the setup is open in Lesson until the
+  // explanation exists, and the code locations are a disclosure wherever they appear.
   const state: Partial<Record<keyof LessonBlocks, BlockState>> = surface
     ? surfaceBlocks(blocks, surface)
     : blocks;
@@ -107,14 +106,13 @@ export default function LessonCanvas({
     );
   };
 
-  // In Understanding the setup is a reference the learner consults mid-answer, and
-  // calling it what Lesson calls it would suggest the material moved here.
-  const setupLabel =
-    surface === "understanding" ? labels.setupMirror ?? labels.setup : labels.setup;
-
   return (
     <>
-      {show("setup", setup, setupLabel)}
+      {/* One label each. The setup appears on one surface only, so it needs no
+          per-surface name; the code locations appear on both, but as the same
+          reference under the same label — a mirror the learner consults, not a
+          second copy of something to read. */}
+      {show("setup", setup, labels.setup)}
       {show("tracePath", tracePath, labels.tracePath, labels.tracePathCount)}
       {show("gaps", gaps, labels.gaps, labels.gapsCount)}
       {show("attempts", attempts, labels.attempts, labels.attemptsCount)}

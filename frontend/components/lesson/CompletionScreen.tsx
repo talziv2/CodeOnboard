@@ -95,18 +95,17 @@ export default function CompletionScreen({
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-hidden rounded-card border border-rule">
+          {/* The route only. The measures and the profile that used to come with
+              this view live in Analysis now, and the recap above already states
+              what was understood — so what is left here is the walk itself. */}
           <MapView
             nodes={graph.nodes}
             edges={graph.edges}
             currentNodeId={graph.current_node_id}
-            progress={graph.progress}
-            understanding={graph.understanding}
-            areas={graph.areas}
             repoUrl={graph.repo_url}
-            onNodeClick={() => {}}
-            // The completion screen is a read-only recap; drilling into evidence
-            // belongs to the live session, where the drawer has room.
-            onOpenEvidence={() => {}}
+            // A read-only recap: the stop card still describes a stop, and with
+            // no handler it offers no way to walk to one. The live session is
+            // where the route is navigable.
           />
         </div>
       )}

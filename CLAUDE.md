@@ -182,6 +182,24 @@ All user-facing wording lives in `frontend/lib/strings.ts`, imported directly as
 to a readable sentence). It is a plain module, not a React context: keeping copy
 out of the components is a tidiness choice, not localization infrastructure.
 
+**Model-authored prose is markdown, and is rendered as markdown.** Teaching is
+asked for markdown in `setup` and `reveal` (`agents/teaching/agent.py`) and the
+models deliver it throughout — bolded leads, backticked identifiers, numbered
+steps, the occasional fence. Every such string goes through
+`frontend/components/ui/Prose.tsx`: `Prose` for a block of prose, `InlineProse`
+for a single line whose element the caller already styles (the pinned objective, a
+gap's claim, the verdict headline — the clamp and the strike-through belong to the
+caller). `frontend/lib/markdown.ts` is the parser: pure, returns nodes, never HTML,
+so `dangerouslySetInnerHTML` never enters the picture. Two subset rules are
+load-bearing and documented there — **`_` is never emphasis**, because
+`line_start` and `__init__` are the vocabulary, and an **unclosed delimiter stays
+literal**, because prose that half-parses is worse than prose that does not.
+
+**Learner-written text is never markdown.** Attempt answers and check answers stay
+`whitespace-pre-wrap` exactly as typed. Interpreting a learner's asterisk as
+emphasis rewrites what they said, and the one place their own words appear is the
+one place fidelity beats polish.
+
 Goal-interview questions are static strings in `backend/agents/goal/questions.py`
 — shown verbatim rather than generated, so the interview never drifts.
 
@@ -264,9 +282,25 @@ to choose the intervention (hint / re-teach / prerequisite / follow-up) and what
 the Mutator's `Diagnosis` carries. A flag-on session can therefore receive a
 different response than the same session flag-off. Measured direction: `gap_kind`
 agreement 47–48/48 against a baseline of 45, `missing_prerequisite` 4/6 → 6/6.
-Gaps are collected but never shown to the learner until gap-model M6 ships
-verification — until then nothing can close one, so a displayed list could only
-ever grow. Decided in `learning-graph.md` §11 OQ-4.
+Gaps were withheld from the learner until M6 shipped verification, because until
+something could close one a displayed list could only ever grow
+(`learning-graph.md` §11 OQ-4). They are now shown, as a **ledger**: every gap
+on the stop with its `status`, open ones first with a `Clear this` button,
+settled ones below, struck through and marked. The condition that justified
+hiding them is the same one that shapes the surface — a list you can only add to
+is a scoreboard of failures, and one you can close entries on is a record of
+repair.
+
+Two rules follow from that, and both are load-bearing:
+
+- **Only a fresh verification answer produces `verified`.** `Gap.mark_verified`
+  is called from exactly one place. Re-answering the lesson's own question can
+  match or open gaps, never close one — the reveal already gave the reasoning
+  away, so that would test recall (§18.7).
+- **The attempt cap bounds the system, not the learner.**
+  `VERIFICATION_ATTEMPT_CAP` removes a gap from the *active set*, so `/verify`
+  stops offering it. A learner who names it — `POST /verify {gap_id}` from the
+  ledger — still gets a question. Asking is a different act from being nagged.
 
 ---
 

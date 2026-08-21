@@ -50,6 +50,24 @@ describe("buildSections", () => {
     expect(sections[0].stops.map((s) => s.node.id)).toEqual(["a1", "a2"]);
   });
 
+  test("a chapter forced out of order by the walk is listed where the walk puts it", () => {
+    // The header numbers stops by the walk, so a rail sorted by the declared
+    // order would draw "stop 2 of 3" below "stop 3 of 3". The planner sorts its
+    // chain by area, so this only happens when a cross-area dependency forced
+    // the chain out of chapter order — and there the walk is the truth.
+    const nodes = [
+      node("b1", { area_id: "b" }),
+      node("a1", { area_id: "a" }),
+      node("a2", { area_id: "a" }),
+    ];
+    const stops = buildRoute(nodes, [seq("b1", "a1"), seq("a1", "a2")]);
+
+    const sections = buildSections(stops, [area("a", 1), area("b", 2)], null);
+
+    expect(sections.map((s) => s.area?.id)).toEqual(["b", "a"]);
+    expect(sections.map((s) => s.index)).toEqual([1, 2]);
+  });
+
   test("with no declared areas, everything falls into one ungrouped bucket", () => {
     // Every pre-B3 graph is in exactly this shape and must still render whole.
     const stops = buildRoute([node("a"), node("b")], [seq("a", "b")]);

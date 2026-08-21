@@ -85,6 +85,23 @@
       "port": 3001
     },
     {
+      "name": "frontend-3100",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3100"
+      ],
+      "env": {
+        "NEXT_PUBLIC_API_URL": "http://localhost:8000"
+      },
+      "cwd": "frontend",
+      "port": 3100,
+      "autoPort": false
+    },
+    {
       "name": "frontend-uiaudit",
       "runtimeExecutable": "npm",
       "runtimeArgs": [
@@ -117,6 +134,77 @@
         "CODEONBOARD_GAPS": "1"
       },
       "port": 8000
+    },
+    {
+      "name": "backend-3100",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "python",
+        "-m",
+        "uvicorn",
+        "backend.api:app",
+        "--port",
+        "8100",
+        "--reload"
+      ],
+      "env": {
+        "CODEONBOARD_ALLOWED_ORIGINS": "http://localhost:3100,http://127.0.0.1:3100"
+      },
+      "port": 8100
+    },
+    {
+      "name": "backend-reload-8000",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "python",
+        "-m",
+        "uvicorn",
+        "backend.api:app",
+        "--port",
+        "8000",
+        "--reload"
+      ],
+      "env": {
+        "CODEONBOARD_ALLOWED_ORIGINS": "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3100,http://127.0.0.1:3100"
+      },
+      "port": 8000
+    },
+    {
+      "name": "frontend-3105",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3105"
+      ],
+      "env": {
+        "NEXT_PUBLIC_API_URL": "http://localhost:8105"
+      },
+      "cwd": "frontend",
+      "port": 3105
+    },
+    {
+      "name": "backend-3105",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "python",
+        "-m",
+        "uvicorn",
+        "backend.api:app",
+        "--port",
+        "8105",
+        "--reload"
+      ],
+      "env": {
+        "CODEONBOARD_ALLOWED_ORIGINS": "http://localhost:3105,http://127.0.0.1:3105",
+        "CODEONBOARD_GAPS": "1"
+      },
+      "port": 8105
     }
   ]
 }

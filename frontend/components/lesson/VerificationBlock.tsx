@@ -1,6 +1,7 @@
 "use client";
 
 import Button from "@/components/ui/Button";
+import Prose from "@/components/ui/Prose";
 import { t } from "@/lib/strings";
 
 /**
@@ -44,7 +45,7 @@ export default function VerificationBlock({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <p className="measure text-lede text-chalk">{question}</p>
+      <Prose text={question} size="lede" tone="chalk" />
       <p className="text-meta text-graphite">{t.lesson.verificationHelp}</p>
       <textarea
         value={answer}

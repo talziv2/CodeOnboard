@@ -10,3 +10,4 @@ __pycache__/
 _tmp_compare/
 frontend/.next/
 frontend/node_modules/
+node_modules/

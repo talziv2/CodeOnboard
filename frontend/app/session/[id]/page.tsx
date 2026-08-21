@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import MapView from "@/components/MapView";
-import SessionLog from "@/components/SessionLog";
+import AnalysisView from "@/components/AnalysisView";
 import EvidenceDrawer from "@/components/EvidenceDrawer";
 import RouteRail from "@/components/RouteRail";
 import SectionOverview from "@/components/SectionOverview";
@@ -20,9 +20,11 @@ import { RAIL_REM, useBand, useRootFontPx, sourceMustOverlay } from "@/lib/layou
 import Button from "@/components/ui/Button";
 import { lessonUi } from "@/lib/flags";
 import {
-  nextTab, surfaceForTab, tabsFor, type SessionTab, type TabEvent,
+  activeTab, INITIAL_TABS, modeOf, reduceTabs, surfaceForTab, tabsFor,
+  type SessionTab, type TabEvent, type TabState,
 } from "@/lib/surfaceTabs";
 import { unseenRouteChanges } from "@/lib/sessionLog";
+import { arrivalNotice } from "@/lib/arrival";
 import { errorText, t } from "@/lib/strings";
 
 export default function SessionPage() {
@@ -96,16 +98,45 @@ export default function SessionPage() {
   // So the state moves only through `dispatchTab`, whose event type has no phase in
   // it. Breaking R5 now requires inventing an event and naming it, which is a thing
   // a reviewer can see.
-  // `useMemo` with no deps, and its stability is LOAD-BEARING: `tabsFor` returns a
-  // fresh array per call, so an unmemoized `tabs` would give `dispatchTab` a new
-  // identity every render, re-firing the arrival effect below and pinning the tab to
-  // Lesson forever. The flag is a build constant, so there is nothing to depend on.
-  const tabs = useMemo(() => tabsFor(lessonUi()), []);
-  const [tab, setTab] = useState<SessionTab>("lesson");
-  const dispatchTab = useCallback(
-    (event: TabEvent) => setTab((current) => nextTab(current, event, tabs)),
-    [tabs]
+  // The chapter overview is a LAYER over the lesson column, not a destination:
+  // no route, no session state, and it never moves the current node. Closing it
+  // puts the learner back exactly where they already were.
+  const [overviewAreaId, setOverviewAreaId] = useState<string | null>(null);
+
+  // The bar's tabs depend on whether a chapter overview is open — an overview has no
+  // Understanding to show — so this array's identity legitimately changes.
+  //
+  // Which is why `dispatchTab` must NOT close over it. It used to, with a
+  // no-dependency `useMemo` whose stability was load-bearing: a fresh `tabs` gave
+  // `dispatchTab` a new identity, which re-fired the arrival effect below and pinned
+  // the tab to Lesson forever. That made a correct change to `tabs` a latent bug, so
+  // the reducer now reads the current tabs through a ref and keeps ONE identity for
+  // the life of the page. The hazard is gone rather than documented.
+  const tabs = useMemo(
+    () => tabsFor(lessonUi(), { sectionOverview: overviewAreaId !== null }),
+    [overviewAreaId]
   );
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+  const [tabState, setTabState] = useState<TabState>(INITIAL_TABS);
+  const dispatchTab = useCallback(
+    (event: TabEvent) =>
+      setTabState((current) => reduceTabs(current, event, tabsRef.current)),
+    []
+  );
+  /**
+   * The tab actually rendered, which is the remembered one only while the bar still
+   * offers it — and the mode it belongs to, which is what the column branches on.
+   *
+   * `openedSection` already sends the learner to Lesson, so the clamp inside
+   * `activeTab` should never fire — but "should never" plus a tab list that can
+   * shrink underneath the state is how a bar ends up with no active tab and a column
+   * rendering a surface nobody selected. Derived rather than corrected in an effect:
+   * an effect would be a second thing that moves the tab, which is exactly what R5's
+   * reducer exists to prevent.
+   */
+  const tab = activeTab(tabState, tabs);
+  const mode = modeOf(tab);
   // Tabs with a change the learner has not looked at yet. S4 drives this from the
   // adaptation signals; the plumbing is here so the bar's dot is real as soon as
   // there is something to report. Visiting a tab clears its dot — see the effect
@@ -120,11 +151,14 @@ export default function SessionPage() {
   // walk running out, and `Finish session` in the header menu.
   const [finished, setFinished] = useState(false);
   const [scoping, setScoping] = useState(false);
+  // Going back to the route. Its own flag rather than reusing a jump spinner: the
+  // notice's button is the only thing that shows it, and it must not be disabled
+  // by an unrelated navigation.
+  const [returning, setReturning] = useState(false);
+  // The arrival the learner has said "Stay here" to, by its timestamp. See the
+  // note beside `arrivalDismissed` for why this is not a boolean.
+  const [dismissedArrivalAt, setDismissedArrivalAt] = useState<string | null>(null);
   const [scopeNote, setScopeNote] = useState<string | null>(null);
-  // The chapter overview is a LAYER over the lesson column, not a destination:
-  // no route, no session state, and it never moves the current node. Closing it
-  // puts the learner back exactly where they already were.
-  const [overviewAreaId, setOverviewAreaId] = useState<string | null>(null);
   // Sections already introduced this visit. Kept in a ref because it must not
   // cause a render, and paired with an evidence guard below — a section with
   // stops behind it is not new, whatever this page happens to remember.
@@ -216,20 +250,38 @@ export default function SessionPage() {
     setUnseen((current) => (current.includes(tab) ? current.filter((x) => x !== tab) : current));
   }, [tab]);
 
-  // Esc returns from the map to the lesson.
+  // Esc returns from route mode to the lesson. Bound for the MODE rather than for
+  // the map tab: Analysis is the same excursion from reading, and an Escape that
+  // worked on one of the two and silently did nothing on the other would read as a
+  // key that sometimes fails.
   useEffect(() => {
-    if (tab !== "map") return;
+    if (mode !== "route") return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") dispatchTab({ kind: "dismissedMap" });
+      if (e.key === "Escape") dispatchTab({ kind: "dismissedRoute" });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [tab, dispatchTab]);
+  }, [mode, dispatchTab]);
 
   const stops = useMemo(
     () => (graph ? buildRoute(graph.nodes, graph.edges) : []),
     [graph]
   );
+
+  // How the learner reached the current stop, said on the stop itself.
+  //
+  // Derived HERE because it is a statement about the route, and this is where the
+  // route lives — the same `stops` the rail is numbered from, so the notice cannot
+  // quote a position the rail disagrees with.
+  //
+  // Dismissal is keyed on `arrival.at` rather than being a boolean: a later jump
+  // is a new fact and must be said again, and a boolean would silence every
+  // arrival for the rest of the session after the first "Stay here".
+  const arrival = useMemo(
+    () => arrivalNotice(graph?.arrival, graph?.current_node_id ?? null, stops),
+    [graph?.arrival, graph?.current_node_id, stops]
+  );
+  const arrivalDismissed = dismissedArrivalAt === graph?.arrival?.at;
 
   // Journey → section → stop, derived from the same graph the rail walks.
   const journey = useMemo(
@@ -283,6 +335,25 @@ export default function SessionPage() {
       await loadGraph();
     } catch (e: unknown) {
       setError(e instanceof Error ? errorText(e.message) : t.session.jumpFailed);
+    }
+  };
+
+  // Rejoining the route. Same endpoint as a jump, with the intent that tells the
+  // server this is the opposite act: it clears the arrival notice instead of
+  // raising another one, while still being recorded — a log showing only
+  // departures would imply the learner never came back.
+  const handleReturnToRoute = async (nodeId: string) => {
+    setReturning(true);
+    setViewingFile(null);
+    setViewingRange(null);
+    setFocusKey((k) => k + 1);
+    try {
+      await jump(id, nodeId, "resume");
+      await loadGraph();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? errorText(e.message) : t.session.jumpFailed);
+    } finally {
+      setReturning(false);
     }
   };
 
@@ -371,7 +442,7 @@ export default function SessionPage() {
             "minmax(0,1fr)",
             // `dock` means a column, whatever the viewport. Squeezing the lesson
             // is the learner's call to make; taking the choice away was not.
-            tab !== "map" && showCode && openFile && source.mode === "dock"
+            mode === "learn" && showCode && openFile && source.mode === "dock"
               ? "var(--source-width)"
               : null,
           ]
@@ -393,6 +464,7 @@ export default function SessionPage() {
             onExpand={() => dispatchTab({ kind: "expandedMap" })}
             compact={band === "medium"}
             onHide={toggleRail}
+            onBriefing={() => router.push(`/session/${id}/welcome`)}
           />
         )}
 
@@ -408,6 +480,7 @@ export default function SessionPage() {
               routeChanges.length > 0 && tab !== "map" ? [...unseen, "map" as SessionTab] : unseen
             }
             onPick={(picked) => dispatchTab({ kind: "picked", tab: picked })}
+            onSwitchMode={(picked) => dispatchTab({ kind: "switchedMode", mode: picked })}
             /* The right side of the lesson bar, as one group rather than three
                things competing for `ms-auto`. */
             trailing={
@@ -433,7 +506,7 @@ export default function SessionPage() {
 
                   There is no matching Hide: the pane owns its own close, and this
                   disappears while it is open. */}
-              {tab !== "map" && !showCode && openFile && (
+              {mode === "learn" && !showCode && openFile && (
                 <Button variant="chrome" size="sm" onClick={() => setShowCode(true)}>
                   {t.session.showSource}
                 </Button>
@@ -461,12 +534,13 @@ export default function SessionPage() {
             }
           />
 
-          {/* `tab !== "map"` rather than `tab === "lesson"`, because `surfaces` adds
-              a third tab that is also a lesson-column view. In S2 both Lesson and
-              Understanding render THIS column unchanged; S3 is what splits its
-              contents across the two using `surfaceBlocks`. Divergence one step at
-              a time, from an arrangement already known to work. */}
-          {tab !== "map" ? (
+          {/* THE MODE decides which column this is, not the tab. Learn mode's two
+              tabs are two views of the SAME column — S3 splits its contents across
+              them with `surfaceBlocks`, and both render the lesson arrangement —
+              while route mode's two are whole views of the session. Branching on
+              the mode is what stops a new tab in either mode from having to be
+              added to a condition somewhere else. */}
+          {mode === "learn" ? (
             <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
               {overviewSection ? (
                 <SectionOverview
@@ -485,6 +559,12 @@ export default function SessionPage() {
                   total={spineLength(stops)}
                   isPrerequisite={currentStop?.isPrerequisite ?? false}
                   graph={graph}
+                  arrival={arrivalDismissed ? null : arrival}
+                  onReturnToRoute={handleReturnToRoute}
+                  onDismissArrival={() =>
+                    setDismissedArrivalAt(graph.arrival?.at ?? null)
+                  }
+                  returningToRoute={returning}
                   onFileClick={(file, lineStart, lineEnd) => {
                     setViewingFile(file);
                     setViewingRange(
@@ -520,28 +600,31 @@ export default function SessionPage() {
               )}
             </div>
           ) : (
+            /* Route mode. The map gets the whole column now — the session log was a
+               288px sidebar pinned beside it, which cost the route a fifth of its
+               width on every visit for a list that is usually three lines long, and
+               it now sits in Analysis where the rest of the account of the journey
+               is. */
             <div className="flex min-h-0 flex-1">
               <div className="min-h-0 flex-1">
-                <MapView
-                  nodes={graph.nodes}
-                  edges={graph.edges}
-                  currentNodeId={currentNodeId}
-                  progress={graph.progress}
-                  understanding={graph.understanding}
-                  areas={graph.areas}
-                  repoUrl={graph.repo_url}
-                  onNodeClick={handleJump}
-                  onOpenEvidence={setEvidenceNodeId}
-                />
-              </div>
-              {/* A1's third channel, beside the map rather than behind a menu: the
-                  map is already the session-level peer view, and "what changed"
-                  should not be something you have to suspect before you can find. */}
-              <div className="w-72 shrink-0 overflow-y-auto border-s border-rule px-5 py-4">
-                <SessionLog graph={graph} />
+                {tab === "map" ? (
+                  <MapView
+                    nodes={graph.nodes}
+                    edges={graph.edges}
+                    currentNodeId={currentNodeId}
+                    repoUrl={graph.repo_url}
+                    onGoToLesson={handleJump}
+                  />
+                ) : (
+                  <AnalysisView graph={graph} onOpenEvidence={setEvidenceNodeId} />
+                )}
               </div>
               {/* Progressive disclosure: the profile states a classification,
-                  and this is where the learner sees what produced it. */}
+                  and this is where the learner sees what produced it. Outside the
+                  tab branch, because both tabs of this mode can open it — the
+                  patterns and bands in Analysis, and anything the map grows later —
+                  and a drawer that closed itself on a tab switch would lose the
+                  thing the learner opened it to read. */}
               {evidenceNodeId && (
                 <EvidenceDrawer
                   sessionId={id}
@@ -570,7 +653,7 @@ export default function SessionPage() {
             `openSource` — which is a starting point rather than a lock: the dock
             control still works, and a learner who insists on docking in a narrow
             window gets what they asked for. */}
-        {tab !== "map" && showCode && openFile && (
+        {mode === "learn" && showCode && openFile && (
           <CodeViewer
             sessionId={id}
             filePath={openFile}
@@ -614,6 +697,13 @@ export default function SessionPage() {
                 onExpand={() => {
                   setRailOpen(false);
                   dispatchTab({ kind: "expandedMap" });
+                }}
+                // Closes the sheet first, like every other navigation out of it:
+                // the briefing is a different page, so leaving the sheet up would
+                // put it over a route the learner is no longer on.
+                onBriefing={() => {
+                  setRailOpen(false);
+                  router.push(`/session/${id}/welcome`);
                 }}
               />
             </div>

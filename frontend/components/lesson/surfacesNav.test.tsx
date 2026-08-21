@@ -6,7 +6,8 @@ import type { Lesson, RespondResult, SessionGraph, VerificationPrompt } from "@/
 import { node } from "@/test/factories";
 import SurfaceTabs from "@/components/lesson/SurfaceTabs";
 import {
-  nextTab, surfaceForTab, tabsFor, type SessionTab, type TabEvent,
+  activeTab as tabOf, INITIAL_TABS, reduceTabs, surfaceForTab, tabsFor,
+  type TabEvent, type TabState,
 } from "@/lib/surfaceTabs";
 import { t } from "@/lib/strings";
 
@@ -112,11 +113,12 @@ function Harness({
   Panel: typeof import("@/components/LessonPanel").default;
   nodeId?: string;
 }) {
-  const [tab, setTab] = useState<SessionTab>("lesson");
+  const [tabState, setTabState] = useState<TabState>(INITIAL_TABS);
   const dispatchTab = useCallback(
-    (event: TabEvent) => setTab((c) => nextTab(c, event, TABS)),
+    (event: TabEvent) => setTabState((c) => reduceTabs(c, event, TABS)),
     []
   );
+  const tab = tabOf(tabState, TABS);
 
   // The page keys arrival on the current node rather than dispatching from each
   // handler, so that no way of arriving can be forgotten. Mirrored here, because
@@ -131,6 +133,7 @@ function Harness({
         tabs={TABS}
         active={tab}
         onPick={(picked) => dispatchTab({ kind: "picked", tab: picked })}
+        onSwitchMode={(picked) => dispatchTab({ kind: "switchedMode", mode: picked })}
       />
       <Panel
         surface={surfaceForTab(tab)}
@@ -163,6 +166,16 @@ async function panel() {
 const activeTab = () =>
   screen.getAllByRole("button").find((b) => b.getAttribute("aria-current") === "page")
     ?.textContent;
+
+/**
+ * Go to the map, which now means switching mode rather than clicking a peer tab.
+ *
+ * The Map tab is not rendered in learn mode at all, so this is not a relabelling of
+ * the old click — it is the navigation the learner actually has. Route mode opens on
+ * its remembered tab, which starts as Map.
+ */
+const goToMap = (user: ReturnType<typeof userEvent.setup>) =>
+  user.click(screen.getByRole("button", { name: t.session.mode.route }));
 
 const textareas = () => screen.queryAllByPlaceholderText("Write your answer…");
 const submit = () => screen.getAllByRole("button", { name: t.lesson.submit })[0];
@@ -242,8 +255,13 @@ describe("R5 · phase transitions never move the tab", () => {
 
     await user.click(screen.getByRole("button", { name: "Lesson" }));
     expect(activeTab()).toBe("Lesson");
-    await user.click(screen.getByRole("button", { name: "Map" }));
+    await goToMap(user);
     expect(activeTab()).toBe("Map");
+    // Back in learn mode, on the tab it was left on — Lesson, because that is where
+    // the learner was before stepping away. Coming back is not starting over, and
+    // it is not being re-routed either.
+    await user.click(screen.getByRole("button", { name: t.session.mode.learn }));
+    expect(activeTab()).toBe("Lesson");
     await user.click(screen.getByRole("button", { name: "Understanding" }));
     expect(activeTab()).toBe("Understanding");
     // And the verdict survived the round trip, because the tab never owned it.
@@ -288,8 +306,9 @@ describe("the learner's own moves still work", () => {
 
     await user.click(screen.getByRole("button", { name: "Understanding" }));
     expect(activeTab()).toBe("Understanding");
-    await user.click(screen.getByRole("button", { name: "Map" }));
+    await goToMap(user);
     expect(activeTab()).toBe("Map");
+    await user.click(screen.getByRole("button", { name: t.session.mode.learn }));
     await user.click(screen.getByRole("button", { name: "Lesson" }));
     expect(activeTab()).toBe("Lesson");
   });

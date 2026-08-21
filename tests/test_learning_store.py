@@ -235,3 +235,56 @@ def test_session_written_before_the_symbol_column_still_loads(db_path):
     assert loaded is not None, "an old session must never fail to load"
     assert loaded.nodes[node.id].title == "legacy node"
     assert loaded.nodes[node.id].code_anchor.symbol is None
+
+
+def test_arrival_roundtrips(db_path):
+    """The notice must survive a reload — a learner who refreshes is still off-route."""
+    g = LearningGraph(repo_url="r", goal={"primary_goal": "g"})
+    a = g.add_node(_make_node("first"))
+    b = g.add_node(_make_node("second"))
+    g.add_edge(a.id, b.id, kind="sequence")
+    g.set_current(b.id)
+    g.record_arrival(b.id, kind="jumped", from_node_id=a.id)
+    save_graph(g, db_path)
+
+    loaded = load_graph(g.session_id, db_path)
+    assert loaded is not None
+    assert loaded.arrival["node_id"] == b.id
+    assert loaded.arrival["from_node_id"] == a.id
+    assert loaded.arrival["kind"] == "jumped"
+
+
+def test_a_cleared_arrival_roundtrips_as_none(db_path):
+    g = LearningGraph(repo_url="r", goal={"primary_goal": "g"})
+    node = g.add_node(_make_node("only"))
+    g.record_arrival(node.id, kind="jumped", from_node_id=None)
+    g.clear_arrival()
+    save_graph(g, db_path)
+
+    loaded = load_graph(g.session_id, db_path)
+    assert loaded is not None
+    assert loaded.arrival is None
+
+
+def test_session_written_before_the_arrival_column_still_loads(db_path):
+    """A session from before the arrival column loads with no notice, not an error.
+
+    Same guarantee as the `symbol` column above, and the same reason: every one of
+    the stored sessions predates this, and `None` reads correctly as "nothing to
+    say about how they got here".
+    """
+    import sqlite3
+
+    g = LearningGraph(repo_url="r", goal={"primary_goal": "g"})
+    node = g.add_node(_make_node("legacy node"))
+    save_graph(g, db_path)
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("ALTER TABLE sessions DROP COLUMN arrival_json")
+    conn.commit()
+    conn.close()
+
+    loaded = load_graph(g.session_id, db_path)
+    assert loaded is not None, "an old session must never fail to load"
+    assert loaded.arrival is None
+    assert loaded.nodes[node.id].title == "legacy node"

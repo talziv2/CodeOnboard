@@ -135,9 +135,14 @@ def test_respond_returns_the_open_gaps_by_name(client):
     assert shown["objective_part"] == "what the handler owns"
 
 
-def test_respond_omits_settled_gaps(client):
-    """A verified gap is closed; a waived one is what they asked to stop hearing
-    about. Neither is outstanding work."""
+def test_respond_sends_settled_gaps_with_their_status(client):
+    """The payload is a LEDGER, not a debt column.
+
+    It sent open gaps only, which meant the one act a learner can perform on a
+    gap — closing it — deleted the row. Success erased its own record. So every
+    gap ships, and `status` is what distinguishes outstanding work from repaired
+    work; the client filters for whichever it is rendering.
+    """
     node = _node("A")
     verified, waived, open_ = (
         Gap.create("wrong_model", "v"), Gap.create("wrong_model", "w"),
@@ -149,7 +154,12 @@ def test_respond_omits_settled_gaps(client):
     session_id = _start(client, _graph(node, _node("B")))
 
     body = _respond(client, session_id).json()
-    assert [g["claim"] for g in body["gaps"]] == [CLAIM]
+    assert {g["claim"]: g["status"] for g in body["gaps"]} == {
+        "v": "verified", "w": "waived", CLAIM: "open",
+    }
+    # A settled gap carries when it settled, so the ledger can say so.
+    assert next(g for g in body["gaps"] if g["claim"] == "v")["closed_at"]
+    assert next(g for g in body["gaps"] if g["claim"] == CLAIM)["closed_at"] is None
 
 
 def test_respond_reports_a_non_blocking_gap_as_not_blocking(client):
@@ -192,14 +202,15 @@ def test_a_client_that_sends_no_kind_gets_the_assessment_path(client):
 # ── POST /verify ─────────────────────────────────────────────────────────────
 
 
-def _verify(client, session_id, question="a fresh question about a new case"):
+def _verify(client, session_id, question="a fresh question about a new case",
+            **body):
     def _make(state, node, gaps, source, client=None):
         from backend.agents.teaching.verify import VerificationPrompt
         return VerificationPrompt(question=question, targets=[g.id for g in gaps])
 
     with patch("backend.api.teaching_verify.verify", side_effect=_make), \
          patch("backend.api._node_source", return_value="source"):
-        return client.post(f"/session/{session_id}/verify", json={})
+        return client.post(f"/session/{session_id}/verify", json=body)
 
 
 def test_verify_returns_a_question_and_no_answer(client):
@@ -321,7 +332,9 @@ def test_a_verification_answer_closes_the_gap_it_demonstrated(client):
 
     assert body["kind"] == "verification"
     assert body["resolved"] == [gap.id]
-    assert body["gaps"] == []            # nothing open left
+    # THE ROW SURVIVES ITS OWN CLOSURE. It used to leave the payload here, which
+    # made the learner's one success the one thing they could not see afterwards.
+    assert [(g["id"], g["status"]) for g in body["gaps"]] == [(gap.id, "verified")]
     assert _stored(session_id).nodes[node.id].gaps[0].status == "verified"
 
 
@@ -429,7 +442,7 @@ def test_waive_a_single_gap_by_id(client):
                        json={"gap_id": a.id}).json()
 
     assert body["waived"] == [a.id]
-    assert [g["id"] for g in body["gaps"]] == [b.id]
+    assert {g["id"]: g["status"] for g in body["gaps"]} == {a.id: "waived", b.id: "open"}
     stored = _stored(session_id).nodes[node.id]
     assert {g.id: g.status for g in stored.gaps} == {a.id: "waived", b.id: "open"}
 
@@ -443,7 +456,9 @@ def test_waive_the_node_waives_every_open_blocking_gap_and_names_them(client):
     body = client.post(f"/session/{session_id}/waive", json={}).json()
 
     assert set(body["waived"]) == {a.id, b.id}
-    assert body["gaps"] == []
+    # Waiving stops the asking; it does not erase what was asked about. The rows
+    # stay so the learner can still choose to clear one.
+    assert {g["status"] for g in body["gaps"]} == {"waived"}
     assert _stored(session_id).nodes[node.id].user_override == "waive_remaining"
 
 
@@ -487,7 +502,9 @@ def test_waive_leaves_a_non_blocking_gap_alone(client):
     body = client.post(f"/session/{session_id}/waive", json={}).json()
 
     assert body["waived"] == [blocking.id]
-    assert [g["id"] for g in body["gaps"]] == [altitude.id]
+    assert {g["id"]: g["status"] for g in body["gaps"]} == {
+        blocking.id: "waived", altitude.id: "open",
+    }
 
 
 def test_a_waived_gap_can_be_verified_later(client):
@@ -669,3 +686,63 @@ def test_evidence_links_a_gap_to_the_attempts_that_opened_and_closed_it(client):
     assert got["gaps"][0]["origin_attempt"] == 0
     assert got["gaps"][0]["resolved_by"] == 1
     assert got["timeline"][1]["kind"] == history.VERIFICATION
+
+
+# ── /verify: the learner naming a gap ────────────────────────────────────────
+#
+# Precedence is the SYSTEM's rule for choosing when nobody said. Once the gap
+# list is a set of buttons, the learner says — and these are the four ways that
+# can go.
+
+
+def test_verify_targets_the_gap_the_learner_named(client):
+    """Without this the learner reads three named misconceptions and can only be
+    asked about whichever one the arbitration order happens to lead with."""
+    node = _node("A")
+    altitude = Gap.create("right_idea_wrong_altitude", "too low")
+    foundation = Gap.create("missing_prerequisite", "no idea what a socket is")
+    node.gap_state.gaps.extend([altitude, foundation])
+    session_id = _start(client, _graph(node))
+
+    # `foundation` outranks it, so precedence alone would never pick this one —
+    # which is exactly what `test_verify_targets_the_highest_precedence_gap`
+    # asserts about the unnamed call on this same shape.
+    got = _verify(client, session_id, gap_id=altitude.id)
+    assert got.json()["targets"] == [altitude.id]
+
+
+def test_a_named_gap_is_reachable_past_the_cap(client):
+    """`VERIFICATION_ATTEMPT_CAP` bounds the system's nagging, not the learner's
+    appetite (gaps.py §18.16.1). Unnamed, this same gap is the 409 asserted in
+    `test_verify_refuses_an_exhausted_gap`."""
+    node = _node("A")
+    gap = Gap.create("wrong_model", CLAIM)
+    gap.verification_attempts = VERIFICATION_ATTEMPT_CAP
+    node.gap_state.gaps.append(gap)
+    session_id = _start(client, _graph(node))
+
+    got = _verify(client, session_id, gap_id=gap.id)
+    assert got.status_code == 200
+    assert got.json()["targets"] == [gap.id]
+
+
+def test_naming_a_settled_gap_is_a_404(client):
+    """A verified gap has nothing left to demonstrate. Refused rather than
+    re-asked, so a stale list cannot spend a call re-closing a closed gap."""
+    node = _node("A")
+    gap = Gap.create("wrong_model", CLAIM)
+    gap.mark_verified(0)
+    node.gap_state.gaps.append(gap)
+    session_id = _start(client, _graph(node))
+
+    got = _verify(client, session_id, gap_id=gap.id)
+    assert got.status_code == 404
+    assert got.json()["detail"] == "gap_not_found"
+
+
+def test_naming_an_unknown_gap_is_a_404(client):
+    """So a stale list cannot be answered with someone else's question."""
+    node = _node("A")
+    node.gap_state.gaps.append(Gap.create("wrong_model", CLAIM))
+    session_id = _start(client, _graph(node))
+    assert _verify(client, session_id, gap_id="nope").status_code == 404

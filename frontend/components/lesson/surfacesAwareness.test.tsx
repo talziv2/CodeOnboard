@@ -6,7 +6,8 @@ import type { Lesson, RespondResult, SessionGraph } from "@/lib/api";
 import { node } from "@/test/factories";
 import SurfaceTabs from "@/components/lesson/SurfaceTabs";
 import {
-  nextTab, surfaceForTab, tabsFor, type SessionTab, type TabEvent,
+  activeTab as tabOf, INITIAL_TABS, reduceTabs, surfaceForTab, tabsFor,
+  type TabEvent, type TabState,
 } from "@/lib/surfaceTabs";
 import type { Surface } from "@/lib/lessonSurfaces";
 import { t } from "@/lib/strings";
@@ -130,12 +131,13 @@ function Harness({
   Panel: typeof import("@/components/LessonPanel").default;
   which?: typeof NODE;
 }) {
-  const [tab, setTab] = useState<SessionTab>("lesson");
+  const [tabState, setTabState] = useState<TabState>(INITIAL_TABS);
   const [unseen, setUnseen] = useState<Surface[]>([]);
   const dispatchTab = useCallback(
-    (event: TabEvent) => setTab((c) => nextTab(c, event, TABS)),
+    (event: TabEvent) => setTabState((c) => reduceTabs(c, event, TABS)),
     []
   );
+  const tab = tabOf(tabState, TABS);
   useEffect(() => {
     setUnseen((current) =>
       current.includes(tab as Surface) ? current.filter((x) => x !== tab) : current
@@ -149,6 +151,7 @@ function Harness({
         active={tab}
         changed={unseen}
         onPick={(picked) => dispatchTab({ kind: "picked", tab: picked })}
+        onSwitchMode={(picked) => dispatchTab({ kind: "switchedMode", mode: picked })}
       />
       <Panel
         surface={surfaceForTab(tab)}

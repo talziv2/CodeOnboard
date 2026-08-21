@@ -171,6 +171,15 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
             conn.execute("ALTER TABLE sessions ADD COLUMN briefing_json TEXT")
         except Exception:
             pass
+        # How the learner reached the current stop, when that is worth a notice.
+        # A session column rather than a node one because it describes the
+        # session's POSITION, not any unit — a node-scoped flag would have to be
+        # cleared on every other node every time the learner moved, and the one
+        # that got missed would show a stale notice.
+        try:
+            conn.execute("ALTER TABLE sessions ADD COLUMN arrival_json TEXT")
+        except Exception:
+            pass
 
 
 def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
@@ -181,8 +190,8 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
             INSERT INTO sessions
                 (session_id, repo_url, goal_json, current_node_id,
                  doc_context_json, areas_json, journey_events_json, briefing_json,
-                 schema_version)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 arrival_json, schema_version)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(session_id) DO UPDATE SET
                 repo_url            = excluded.repo_url,
                 goal_json           = excluded.goal_json,
@@ -191,6 +200,7 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
                 areas_json          = excluded.areas_json,
                 journey_events_json = excluded.journey_events_json,
                 briefing_json       = excluded.briefing_json,
+                arrival_json        = excluded.arrival_json,
                 schema_version      = excluded.schema_version,
                 updated_at       = strftime('%Y-%m-%d %H:%M:%f', 'now')
             """,
@@ -203,6 +213,7 @@ def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
                 json.dumps(graph.areas) if graph.areas else None,
                 json.dumps(graph.journey_events) if graph.journey_events else None,
                 json.dumps(graph.briefing) if graph.briefing is not None else None,
+                json.dumps(graph.arrival) if graph.arrival is not None else None,
                 SCHEMA_VERSION,
             ),
         )
@@ -251,6 +262,7 @@ def load_graph(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> LearningGrap
             areas=_json_or_default(session_row, "areas_json", []),
             journey_events=_json_or_default(session_row, "journey_events_json", []),
             briefing=_json_or_default(session_row, "briefing_json", None),
+            arrival=_json_or_default(session_row, "arrival_json", None),
         )
         for node_row in conn.execute(
             "SELECT * FROM nodes WHERE session_id = ?", (session_id,)

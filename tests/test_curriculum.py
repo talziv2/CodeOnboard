@@ -207,6 +207,59 @@ def test_a_self_dependency_does_not_deadlock():
     assert {o.id for o in order(objectives)} == {"a", "b"}
 
 
+def test_a_chapter_is_walked_through_before_the_next_one_starts():
+    # The rail groups stops by area and the header numbers them by the walk, so
+    # a chain that interleaves areas makes the two disagree: the learner reads
+    # "stop 2 of 12" on the stop the rail draws fourth.
+    objectives = [obj("a1", area="a"), obj("b1", area="b"), obj("a2", area="a")]
+
+    ordered = order(objectives, [area("a", 1), area("b", 2)])
+
+    assert [o.id for o in ordered] == ["a1", "a2", "b1"]
+
+
+def test_the_declared_area_order_beats_the_order_objectives_arrived_in():
+    objectives = [obj("b1", area="b"), obj("a1", area="a")]
+
+    ordered = order(objectives, [area("a", 1), area("b", 2)])
+
+    assert [o.id for o in ordered] == ["a1", "b1"]
+
+
+def test_a_chapter_does_not_split_around_a_free_objective_from_the_next():
+    # a0 → a1 is one dependency tier apart, and b1 is free. Emitting a whole
+    # tier at a time would put b1 between them; the walk must keep chapter a
+    # running for as long as its own dependencies allow.
+    objectives = [
+        obj("a0", area="a"),
+        obj("b1", area="b"),
+        obj("a1", area="a", depends_on=["a0"]),
+    ]
+
+    ordered = order(objectives, [area("a", 1), area("b", 2)])
+
+    assert [o.id for o in ordered] == ["a0", "a1", "b1"]
+
+
+def test_a_dependency_still_wins_over_the_chapter_it_crosses():
+    # Being taught in the wrong chapter is a smaller cost than being taught
+    # before the thing it needs.
+    objectives = [obj("a1", area="a", depends_on=["b1"]), obj("b1", area="b")]
+
+    ordered = order(objectives, [area("a", 1), area("b", 2)])
+
+    assert [o.id for o in ordered] == ["b1", "a1"]
+
+
+def test_an_objective_naming_no_declared_area_sorts_last():
+    # The rail puts it in the trailing ungrouped bucket; the walk agrees.
+    objectives = [obj("x", area="ghost"), obj("a1", area="a")]
+
+    ordered = order(objectives, [area("a", 1)])
+
+    assert [o.id for o in ordered] == ["a1", "x"]
+
+
 def test_ordering_keeps_every_objective_exactly_once():
     objectives = [obj(f"n{i}", depends_on=[f"n{i-1}"] if i else []) for i in range(10)]
     ordered = order(objectives)

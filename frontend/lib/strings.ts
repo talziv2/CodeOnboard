@@ -261,10 +261,37 @@ export const t = {
       lesson: "Lesson",
       understanding: "Understanding",
       map: "Map",
+      // The half of the old Map tab that was never a map: the measures, the
+      // outcome bands, the patterns, the breakdowns and the session log.
+      // `Analysis` over `Progress`, which the session header already reports at
+      // all times, and over `Insights`, which promises interpretation this layer
+      // does not do — everything in it is a count over evidence the learner can
+      // open.
+      analysis: "Analysis",
     } as Record<string, string>,
+    /**
+     * The two modes, and the switch that holds them.
+     *
+     * Verbs for what the learner is DOING, not nouns for what is on screen: the
+     * tabs already name the views, and a switch labelled with two more nouns
+     * would read as four peer destinations again — which is the arrangement it
+     * replaces. `Route` over `Navigate` because the product's own vocabulary is
+     * route, stop, rail, journey, and over `Map` because the map is one of the
+     * two tabs inside it.
+     */
+    mode: {
+      learn: "Learn",
+      route: "Route",
+    } as Record<string, string>,
+    // Names the group for a screen reader, which otherwise hears two unexplained
+    // toggles ahead of the tabs.
+    modeLabel: "What you're doing",
     tabChanged: (label: string) => `${label} has changed since you last looked`,
+    // "go there" until stops opened a card instead of jumping. The hint has to
+    // describe what the click actually does, or it promises a navigation the
+    // learner then has to take a second step to get.
     mapHint: (count: number) =>
-      `${count} concepts · click any stop to go there · esc to return`,
+      `${count} concepts · click any stop to read it · esc to return`,
     loading: "Loading session…",
     loadFailed: "Couldn't load this session.",
     retryLoad: "Try loading again",
@@ -388,6 +415,19 @@ export const t = {
     setAside: "◦ set aside",
     setAsideHint: "You chose to stop being asked about this",
     title: "Your route",
+    /**
+     * The briefing, at the head of the route.
+     *
+     * A DESTINATION, NOT A STOP. Nothing is demonstrated there, it carries no
+     * understanding state, and it sits before the walk rather than in it — so it is
+     * drawn as a bordered box in sentence case, which is neither the rail's stop
+     * (pin + connector) nor its chapter heading (tracked uppercase mono).
+     *
+     * The hint is the welcome page's own heading, verbatim, so the row and the page
+     * it opens say the same thing.
+     */
+    briefing: "Briefing",
+    briefingHint: "This repository, and you",
     close: "Close the route",
     openMap: "Open map",
     addedAfterConfusion: "added after confusion",
@@ -491,6 +531,12 @@ export const t = {
         subject ? `A misconception was named on ${subject}` : "A misconception was named",
       gap_closed: (_count, subject) =>
         subject ? `You cleared a misconception on ${subject}` : "You cleared a misconception",
+      // Phrased as the learner's own act, because it was one. The log is a record
+      // of what happened to this journey, and "you moved" belongs in it beside
+      // "the system moved something" — the omission was what made jumping the one
+      // navigation act with no trace.
+      jumped: (_count, subject) =>
+        subject ? `You jumped to ${subject}` : "You jumped to another stop",
     } as Record<string, (count: number, subject: string | null) => string>,
   },
 
@@ -498,6 +544,42 @@ export const t = {
   lesson: {
     writing: "Writing this lesson…",
     warmUpHeading: "Warm-up · added after confusion",
+    // --- the arrival notice, on a stop the learner jumped to ---
+    //
+    // WORDING RULE: it reports MOVEMENT and never judges it. Jumping is allowed —
+    // no stop is locked and dependencies are not enforced — so nothing here may
+    // read as a reprimand or as a warning that something will go wrong. What it
+    // exists to fix is that departing from the route used to be silent, so the
+    // rail's order looked decorative.
+    //
+    // Composed from a place phrase rather than written out per case: three
+    // movements (ahead / back / unknown) times two places (a numbered station and
+    // a stop the rail does not number) is six sentences to keep in step, and they
+    // drifted the moment one of them was edited.
+    arrival: {
+      label: "Off the route",
+      place: (position: number, total: number) => `stop ${position} of ${total}`,
+      // A warm-up or an `optional` unit. The rail counts neither, so quoting a
+      // number would promise a position it does not show.
+      placeAside: "a stop off the default walk",
+      ahead: (place: string, passed: number) =>
+        passed === 0
+          ? `You jumped ahead to ${place}.`
+          : `You jumped ahead to ${place}, passing ${passed === 1 ? "1 stop" : `${passed} stops`}.`,
+      // "Already taken" is a claim about evidence, so it is said only where the
+      // stop was actually visited — jumping back to something never reached is
+      // perfectly possible.
+      back: (place: string, revisited: boolean) =>
+        revisited
+          ? `You came back to ${place} — already taken.`
+          : `You went back to ${place}.`,
+      // Said when the stop they left is no longer in the graph. Reports where they
+      // are and stops there, rather than guessing which way they came.
+      here: (place: string) => `You jumped to ${place}.`,
+      returnTo: (title: string) => `Return to “${title}”`,
+      returning: "Going back…",
+      dismiss: "Stay here",
+    },
     stopOf: (position: number, total: number) => `Stop ${position} of ${total}`,
     lines: (start: number, end: number) => `lines ${start}–${end}`,
     recoveredLabel: "The warm-up worked",
@@ -572,8 +654,24 @@ export const t = {
     briefGaps: (count: number) => (count === 1 ? "1 unresolved" : `${count} unresolved`),
     briefAttempts: (count: number) =>
       count === 1 ? "1 answer" : `${count} answers`,
-    gapsHeading: "Still unresolved",
-    gapsHelp: "You can check these now, or carry on and come back.",
+    gapsHeading: "What you got wrong here",
+    gapsHelp:
+      "Each one stays on the record. Clear it by answering a fresh question about it — it then reads as resolved rather than disappearing.",
+    /** The ledger's own tally: resolved over total, never a bare count of debt. */
+    gapsTally: (resolved: number, total: number) =>
+      `${resolved} of ${total} resolved`,
+    /** Per-gap actions and status. */
+    gapSolve: "Clear this",
+    gapSolveBusy: "Writing a question…",
+    gapStatusOpen: "Unresolved",
+    gapStatusVerified: "Resolved",
+    gapStatusWaived: "Set aside",
+    gapSettledHeading: "Settled",
+    /** Shown on a resolved gap: what closed it, and that only an answer could. */
+    gapResolvedNote: "You answered a check on this correctly.",
+    gapWaivedNote: "You chose to stop being asked. It can still be cleared.",
+    /** The system stopped offering; the learner can still ask. */
+    gapAskedTwice: "Asked twice already — you can still try again.",
     gapBlocking: "Holding this stop back",
     gapNonBlocking: "Worth knowing",
     gapWaived: "You set this aside",
@@ -589,12 +687,6 @@ export const t = {
       "Your last answer reached the objective — this stop counts as demonstrated once the check below is cleared.",
     walkthrough: "Walkthrough",
     setup: "Before you answer",
-    // The same prose, named for the surface that only ever consults it. In
-    // Understanding it is a reference the learner opens mid-answer without leaving
-    // the tab — §1's reason 3, which is the one objection to the split that
-    // survived and the reason this mirror exists at all. Calling it "Before you
-    // answer" there would suggest the material had moved.
-    setupMirror: "The setup",
     // The question, once a verdict has superseded it — a label for re-reading, not
     // for answering. Understanding in FEEDBACK showed a verdict and no sign of what
     // had been asked, which made "shown about what?" unanswerable on the one
@@ -693,7 +785,10 @@ export const t = {
 
   // --- map view ---
   map: {
+    // `label` now heads the Analysis tab; the map keeps `routeLabel`. The split
+    // is why they differ: one names evidence, the other names a place.
     label: "What you understand so far",
+    routeLabel: "The route through this repository",
     thisCodebase: "This codebase",
     conceptsUnderstood: (understood: number, total: number) =>
       `${understood} of ${total} concepts understood`,
@@ -861,6 +956,40 @@ export const t = {
     whereInRepo: "Where in the repository",
     theRoute: "The route",
     unlocks: (title: string) => `· unlocks “${title}”`,
+
+    // --- the stop card (the map's summary of one stop) ---
+    //
+    // Clicking a stop used to jump into its lesson immediately. That made the map
+    // a set of links rather than a map: the one surface whose whole job is
+    // deciding where to go was the only one that would not tell you anything
+    // about a place before taking you there. The card answers "what is this one?"
+    // and then offers the jump as a separate, deliberate act.
+    //
+    // Every line of it is ALREADY IN THE GRAPH — the objective the Planner wrote,
+    // the anchors, the tags, the evidence state. Nothing here is generated, and
+    // nothing is a claim the rest of the app does not already make.
+    stop: {
+      label: "Stop",
+      // The eyebrow, when the stop consumes no number: a warm-up, or depth the
+      // learner did not ask for. Both are reachable, neither is on the walk.
+      offRoute: "Off the default walk",
+      objective: "What this stop is for",
+      // Said rather than left blank: a pre-B3 graph has no `objective`, and an
+      // empty space would read as "nothing to learn here".
+      noObjective: "No objective was recorded for this stop.",
+      where: "Where in the code",
+      concepts: "Concepts",
+      // The card states evidence; it never asks for any. Both counters are read
+      // out as facts, because the map is not where an answer is given.
+      untouched: "No answers recorded here yet",
+      optional: "Optional — off the default walk, still reachable",
+      // Two labels for one button, because the act differs. From anywhere else
+      // this moves the session pointer; on the stop you are already standing on
+      // it just puts the lesson back in front of you.
+      goToLesson: "Go to lesson",
+      returnToLesson: "Back to this lesson",
+      close: "Close",
+    },
     understoodOfTotal: (understood: number, total: number) =>
       `${understood} of ${total} understood`,
   },

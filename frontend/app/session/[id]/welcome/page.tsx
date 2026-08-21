@@ -9,6 +9,7 @@ import { getSession, getWelcome } from "@/lib/api";
 import type { Briefing, SessionGraph } from "@/lib/api";
 import SectionLabel from "@/components/ui/SectionLabel";
 import Button from "@/components/ui/Button";
+import Prose, { InlineProse } from "@/components/ui/Prose";
 import { buildRoute } from "@/lib/graph-layout";
 import { splitJourney } from "@/lib/route-sections";
 import { errorText, t } from "@/lib/strings";
@@ -196,9 +197,7 @@ export default function WelcomePage() {
                   {t.welcome.loading}
                 </p>
               ) : briefing.available ? (
-                <p className="measure text-body text-paper">
-                  {briefing.paragraph}
-                </p>
+                <Prose text={briefing.paragraph} size="body" tone="paper" />
               ) : (
                 <p className="measure text-aside text-graphite">
                   {t.welcome.unavailable}
@@ -218,7 +217,7 @@ export default function WelcomePage() {
                       />
                       <span className="measure flex flex-col gap-1">
                         <span className="text-aside text-paper">
-                          {note.text}
+                          <InlineProse text={note.text} tone="paper" />
                         </span>
                         {/* A path only when the backend resolved it against the
                             checkout, so what is shown here always exists. */}

@@ -1,5 +1,6 @@
 "use client";
 
+import Prose from "@/components/ui/Prose";
 import type { SupersededExplanation } from "@/lib/lessonHistory";
 import { t } from "@/lib/strings";
 
@@ -48,10 +49,10 @@ export default function EarlierExplanations({
           </div>
 
           {version.setup && (
-            <p className="measure whitespace-pre-wrap text-aside text-paper">{version.setup}</p>
+            <Prose text={version.setup} size="aside" tone="paper" />
           )}
           {version.reveal && (
-            <p className="measure whitespace-pre-wrap text-aside text-paper">{version.reveal}</p>
+            <Prose text={version.reveal} size="aside" tone="paper" />
           )}
         </div>
       ))}

@@ -8,6 +8,7 @@ import {
   advance,
   retry,
   requestVerification,
+  openOnly,
   respondToVerification,
   waive,
 } from "@/lib/api";
@@ -29,12 +30,15 @@ import SetupProse from "@/components/lesson/SetupProse";
 import TracePath from "@/components/lesson/TracePath";
 import VerificationBlock from "@/components/lesson/VerificationBlock";
 import PracticeSurface from "@/components/ui/PracticeSurface";
+import Prose, { InlineProse } from "@/components/ui/Prose";
 import Button from "@/components/ui/Button";
 import { isSplitSurfaces, lessonUi } from "@/lib/flags";
 import { lessonPhase } from "@/lib/lessonPhase";
 import { lessonBlocks } from "@/lib/lessonView";
+import type { ArrivalNotice as Arrival } from "@/lib/arrival";
 import type { Surface } from "@/lib/lessonSurfaces";
 import EarlierExplanations from "@/components/lesson/EarlierExplanations";
+import ArrivalNotice from "@/components/lesson/ArrivalNotice";
 import { materialIsNew, supersededExplanations } from "@/lib/lessonHistory";
 import { FAILED } from "@/lib/verdict";
 import { errorText, t } from "@/lib/strings";
@@ -62,6 +66,19 @@ interface Props {
   /** Leave the session entirely, from the completion screen. */
   onLeave: () => void;
   /**
+   * How the learner got here, when that is worth saying — null when they walked.
+   *
+   * DERIVED BY THE PAGE, not here. It is a statement about the ROUTE, and the
+   * page is what holds the route (`buildRoute`); this component sees one stop and
+   * could not compute "passing 4 stops" without building the walk a second time.
+   */
+  arrival?: Arrival | null;
+  /** Rejoin the route — a jump back to the stop the learner left. */
+  onReturnToRoute?: (nodeId: string) => void;
+  /** Stop saying it, for this arrival. */
+  onDismissArrival?: () => void;
+  returningToRoute?: boolean;
+  /**
    * Which surface to render, under `surfaces` only.
    *
    * Owned by the session page because the TAB is owned there — R5 keeps tab
@@ -84,6 +101,7 @@ interface Props {
 
 export default function LessonPanel({
   sessionId, nodeId, node, position, total, isPrerequisite,
+  arrival = null, onReturnToRoute, onDismissArrival, returningToRoute = false,
   graph, onFileClick, onAdvance, onRespond, finished, onFinish, onLeave, surface,
   onSurfaceChanged, onGoToSurface,
 }: Props) {
@@ -109,6 +127,9 @@ export default function LessonPanel({
   // definition absent from it — the claims have to come from the question that
   // targeted them.
   const [checked, setChecked] = useState<{ answer: string; targeted: NodeGap[] } | null>(null);
+  // Which gap the learner asked to clear, while its question is being written.
+  // Row-scoped so the spinner lands on the row they pressed rather than on all.
+  const [solvingGapId, setSolvingGapId] = useState<string | null>(null);
   // The Mutator refused a warm-up for THIS node. Kept out of `result` on purpose:
   // it outlives any one answer, because what it records is a fact about the
   // stop's surroundings rather than about the attempt that asked.
@@ -276,11 +297,17 @@ export default function LessonPanel({
   // Ask for a FRESH question about the leading gap. Not a retry: the learner
   // has already been shown the reasoning for the question they answered, so
   // re-asking it would test recall (§18.7).
-  const onCheckUnderstanding = async () => {
+  //
+  // `gapId` is the learner naming one from the ledger; omitting it lets the
+  // server pick the leading gap, which is what the panel's own CTA does. The
+  // named form also reaches a gap the system has stopped proposing for — the
+  // cap bounds the nagging, not the learner (see `/verify`).
+  const onCheckUnderstanding = async (gapId?: string) => {
     setVerifying(true);
+    setSolvingGapId(gapId ?? null);
     setError(null);
     try {
-      setVerification(await requestVerification(sessionId, nodeId));
+      setVerification(await requestVerification(sessionId, nodeId, gapId));
       onSurfaceChanged?.("understanding");
       setAnswer("");
       setResult(null);
@@ -288,6 +315,7 @@ export default function LessonPanel({
       setError(e instanceof Error ? errorText(e.message) : t.lesson.warmUpFailed);
     } finally {
       setVerifying(false);
+      setSolvingGapId(null);
     }
   };
 
@@ -391,9 +419,13 @@ export default function LessonPanel({
   // pointless friction rather than pedagogy.
   const revealed = Boolean(result) || attempts.length > 0;
 
-  // What the learner still does not know here, preferring the just-graded reply
-  // over the graph, which lags by one refresh on the warm-up path.
-  const openGaps: NodeGap[] = result?.gaps ?? node.gaps ?? [];
+  // Every gap on this stop, settled ones included, preferring the just-graded
+  // reply over the graph, which lags by one refresh on the warm-up path.
+  const allGaps: NodeGap[] = result?.gaps ?? node.gaps ?? [];
+  // OUTSTANDING work only. Split from `allGaps` rather than filtered at source:
+  // the ledger needs both halves to show progress, and every counter here means
+  // "still wrong" and would be inflated by the resolved rows.
+  const openGaps: NodeGap[] = openOnly(allGaps);
 
   // One region, three contents — the eyebrow is what says which.
   const practiceLabel = verification
@@ -504,6 +536,7 @@ export default function LessonPanel({
     phase,
     locationCount: locations.length,
     openGapCount: openGaps.length,
+    gapCount: allGaps.length,
     attemptCount: attempts.length,
     revealed,
     hasReveal: isSplit && Boolean(lesson.lesson.reveal),
@@ -626,6 +659,19 @@ export default function LessonPanel({
           {/* S5's `new` marking. On Lesson, above the material, because that is
               what it is about — and only there: on Understanding the consequence
               line already said it, in the card that caused it. */}
+          {/* FIRST in the canvas, above the material and above `new`: the fact
+              that the learner is not where the route put them frames everything
+              under it, and a notice below the walkthrough would be read after the
+              thing it is about. */}
+          {arrival && onReturnToRoute && onDismissArrival && (
+            <ArrivalNotice
+              notice={arrival}
+              onReturn={onReturnToRoute}
+              onDismiss={onDismissArrival}
+              returning={returningToRoute}
+            />
+          )}
+
           {rewritten && (
             <Callout tone="signal" label={t.lesson.newMaterialLabel}>
               <p className="text-meta text-chalk">{t.lesson.newMaterialBody}</p>
@@ -647,13 +693,21 @@ export default function LessonPanel({
             surface={drawing}
             labels={{
               setup: isSplit ? t.lesson.setup : t.lesson.walkthrough,
-              setupMirror: t.lesson.setupMirror,
               tracePath:
                 locations.length > 1 ? t.lesson.tracePath : t.lesson.codeLocation,
               // A count on "Where this lives in the code" would always read "(1)".
               tracePathCount: locations.length > 1 ? locations.length : undefined,
               gaps: t.lesson.gapsHeading,
-              gapsCount: openGaps.length,
+              // The OPEN count, on a list that also holds settled rows. The
+              // collapsed label is a call to action — "2" means two things still
+              // want answering — and counting the cleared ones there would make
+              // the number grow as the learner fixed things.
+              //
+              // Dropped entirely at zero rather than shown as "0": a settled
+              // ledger is a record, and a disclosure badged "0" reads as an
+              // empty block nobody should bother opening. The tally inside says
+              // "3 of 3 resolved", which is the thing actually worth knowing.
+              gapsCount: openGaps.length || undefined,
               attempts: t.lesson.yourAnswers(attempts.length),
               earlier: t.lesson.earlierExplanations(superseded.length),
               question: t.lesson.questionAsked,
@@ -663,15 +717,13 @@ export default function LessonPanel({
                that block is open, which is what keeps "exactly one composer" true
                while the question stays re-readable. */
             questionEcho={
-              <p className="measure whitespace-pre-wrap text-aside text-paper">
-                {lesson.lesson.prompt}
-              </p>
+              <Prose text={lesson.lesson.prompt} size="aside" tone="paper" />
             }
             setup={
               <div className="flex flex-col gap-3">
                 {isSplit && lesson.lesson.why_now && (
                   <p className="measure border-s-2 border-rule ps-3 text-meta italic text-graphite">
-                    {lesson.lesson.why_now}
+                    <InlineProse text={lesson.lesson.why_now} tone="graphite" />
                   </p>
                 )}
                 <SetupProse
@@ -683,7 +735,13 @@ export default function LessonPanel({
             tracePath={<TracePath anchors={locations} onFileClick={onFileClick} />}
             gaps={
               <div id="lesson-gaps">
-                <GapList gaps={openGaps} onWaive={onWaive} disabled={loading} />
+                <GapList
+                  gaps={allGaps}
+                  onSolve={onCheckUnderstanding}
+                  onWaive={onWaive}
+                  disabled={loading || verifying}
+                  solvingGapId={solvingGapId}
+                />
               </div>
             }
             attempts={

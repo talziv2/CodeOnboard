@@ -1,0 +1,525 @@
+"use client";
+
+import { useMemo } from "react";
+import type {
+  Pattern, SessionGraph, UnderstandingRow, UnderstandingState,
+} from "@/lib/api";
+import {
+  tagStyle, tagLabel, stateStyle, stateLabel, isCanonicalTag, STATE_ORDER,
+} from "@/lib/tags";
+import SessionLog from "@/components/SessionLog";
+import { t } from "@/lib/strings";
+
+/**
+ * What the evidence shows, and what the system did about it.
+ *
+ * Route mode's second tab, and the half of the old Map view that was not a map: the
+ * two progress measures, the three outcome bands, the pattern layer, the breakdowns,
+ * and the session log. One tab used to hold all of that stacked under the route, so
+ * reading the map meant scrolling past a dashboard and reading the dashboard meant
+ * scrolling past the map. Neither is a subsection of the other — the route is
+ * navigation, this is interpretation — so they are two tabs of one mode.
+ *
+ * Takes the whole `graph` rather than the four slices it reads, which is the opposite
+ * of `MapView`'s explicit props and deliberate: this is the session-level view of
+ * everything the session knows, and enumerating that as parameters would be a prop
+ * list that grows every time the profile does.
+ *
+ * NOTHING HERE IS DERIVED THAT THE BACKEND ALREADY DECIDES. The headline numbers,
+ * the three bands and the patterns all come from `backend/learning/progress.py` and
+ * the profile builder; a second implementation in the client is how the header and
+ * the map came to disagree (`learning-graph.md` §5.6). What is computed here is only
+ * the tag/file cross-tabulation, which nothing else needs.
+ */
+
+type Tally = Record<UnderstandingState, number>;
+
+const emptyTally = (): Tally => ({
+  understood: 0,
+  partial: 0,
+  failed: 0,
+  not_started: 0,
+});
+
+/** Proportional bar of the state mix. Carries the aggregate at a glance
+ *  without asking anyone to read four numbers. */
+function StateStrip({ tally, total }: { tally: Tally; total: number }) {
+  return (
+    <span className="flex h-1.5 w-full overflow-hidden rounded-full bg-raise">
+      {STATE_ORDER.map((state) => {
+        const n = tally[state];
+        if (n === 0) return null;
+        return (
+          <span
+            key={state}
+            title={`${n} ${stateLabel(state)}`}
+            style={{
+              width: `${(n / total) * 100}%`,
+              background: state === "not_started" ? "var(--color-rule)" : stateStyle(state).stroke,
+            }}
+          />
+        );
+      })}
+    </span>
+  );
+}
+
+/** One row of the "by concept" / "by file" breakdowns. */
+function BreakdownRow({
+  label, sublabel, tally, total, accent,
+}: {
+  label: React.ReactNode;
+  sublabel?: string;
+  tally: Tally;
+  total: number;
+  accent?: string;
+}) {
+  return (
+    <li className="flex flex-col gap-1.5">
+      <span className="flex items-baseline justify-between gap-3">
+        <span className="min-w-0 truncate" style={accent ? { color: accent } : undefined}>
+          {label}
+        </span>
+        <span className="shrink-0 font-mono text-micro tabular-nums text-graphite">
+          {sublabel ?? `${tally.understood}/${total}`}
+        </span>
+      </span>
+      <StateStrip tally={tally} total={total} />
+    </li>
+  );
+}
+
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="flex flex-col gap-3.5 rounded-card border border-rule bg-slab p-4 shadow-card">
+      <h3 className="font-mono text-micro uppercase tracking-[0.16em] text-graphite">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+/** A named list of units, each opening its own evidence. Used by all three
+ *  outcome bands, which differ in meaning rather than in shape. */
+function UnitList({
+  rows, onOpen, tone,
+}: {
+  rows: UnderstandingRow[];
+  onOpen: (id: string) => void;
+  tone?: string;
+}) {
+  return (
+    <ul className="flex flex-col gap-2">
+      {rows.map((row) => (
+        <li key={row.node_id}>
+          <button
+            onClick={() => onOpen(row.node_id)}
+            className="flex w-full flex-col gap-0.5 rounded-card border border-rule bg-slab px-3 py-2 text-start transition hover:border-signal-dim"
+          >
+            <span
+              className="text-meta font-medium"
+              style={{ color: tone ?? "var(--color-chalk)" }}
+            >
+              {row.title}
+            </span>
+            <span className="font-mono text-micro text-graphite">
+              {row.attempts === 1
+                ? t.map.ofAssessed(1, 1).replace("1 of 1", "1 answer")
+                : `${row.attempts} answers`}
+              {row.disposition !== "active" && (
+                <> · {t.map.disposition[row.disposition] ?? row.disposition}</>
+              )}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The sentence for one pattern, composed here so all wording stays in `strings`. */
+function patternSentence(pattern: Pattern): string {
+  const d = pattern.detail;
+  switch (pattern.template) {
+    case "kind_contrast":
+      return t.map.pattern.kind_contrast(
+        tagLabel(String(d.lead_kind)), Number(d.lead_extra), Number(d.lead_total),
+        tagLabel(String(d.base_kind)), Number(d.base_extra), Number(d.base_total)
+      );
+    case "recurring_shortfall":
+      return t.map.pattern.recurring_shortfall(
+        Number(d.attempts), Number(d.nodes),
+        t.map.shortfall[String(d.gap_kind)] ?? String(d.gap_kind)
+      );
+    case "area_evidence":
+      return t.map.pattern.area_evidence(
+        Number(d.demonstrated), Number(d.assessed), String(d.area_title)
+      );
+    // ── M3b: the misconceptions themselves ─────────────────────────────────
+    case "gap_outcomes":
+      return t.map.pattern.gap_outcomes(
+        Number(d.total), Number(d.verified), Number(d.waived), Number(d.open)
+      );
+    case "blocking_backlog":
+      return t.map.pattern.blocking_backlog(Number(d.gaps), Number(d.nodes));
+    case "verification_outcomes":
+      return t.map.pattern.verification_outcomes(
+        Number(d.tested), Number(d.closed)
+      );
+    case "remediation_closure":
+      return t.map.pattern.remediation_closure(
+        Number(d.warmups), Number(d.closed)
+      );
+    default:
+      return "";
+  }
+}
+
+/**
+ * One observation, with its evidence one click away.
+ *
+ * No dismiss, no "not useful", no feedback control — OQ-5, decided 2026-08-18.
+ * These are deterministic aggregates over evidence the learner can inspect, not
+ * diagnoses of them, so there is nothing to contest; offering a rebuttal would
+ * imply the card is an opinion. Feedback arrives with L3 interpretations, where
+ * the system genuinely infers rather than counts.
+ */
+function PatternCard({
+  pattern, onOpen,
+}: { pattern: Pattern; onOpen: (nodeId: string) => void }) {
+  const setAside = Number(pattern.detail.set_aside ?? 0);
+  // Qualifiers that change what the sentence means and must not be dropped:
+  // a backlog the system has stopped offering work on, and checks that took
+  // more than one go.
+  const exhausted = Number(pattern.detail.exhausted ?? 0);
+  const retried = Number(pattern.detail.retried ?? 0);
+  return (
+    <li className="flex flex-col gap-2 rounded-card border border-rule bg-slab px-3.5 py-3">
+      <p className="text-meta text-paper">
+        {patternSentence(pattern)}
+        {/* Keeps the aggregate from reading as outstanding work when part of it
+            is something the learner already declined to pursue. */}
+        {setAside > 0 && (
+          <span className="text-graphite"> {t.map.pattern.setAsideNote(setAside)}</span>
+        )}
+        {exhausted > 0 && (
+          <span className="text-graphite"> {t.map.pattern.blockingExhausted(exhausted)}</span>
+        )}
+        {retried > 0 && (
+          <span className="text-graphite"> {t.map.pattern.verificationRetried(retried)}</span>
+        )}
+      </p>
+      <span className="flex flex-wrap items-center gap-2">
+        <span className="font-mono text-micro uppercase tracking-[0.13em] text-graphite">
+          {t.map.patternEvidence(pattern.evidence.length)}
+        </span>
+        {/* Reuses the evidence drawer rather than inventing a second
+            explanation surface: one unit, one place its story is told. */}
+        {pattern.evidence.map((ref, i) => (
+          <button
+            // The index is load-bearing, not decoration. `node_id` +
+            // `attempt_index` is NOT unique: a pattern groups by kind, and one
+            // answer can contain two gaps of the same kind on the same unit, so
+            // the backend legitimately sends two refs with both fields equal.
+            // Both chips did still render — React warned rather than dropping one
+            // — but duplicate keys are documented as unsupported ("may cause
+            // children to be duplicated and/or omitted"), so this was a guarantee
+            // we were relying on without holding it, not a symptom to wait for.
+            key={`${ref.node_id}-${ref.attempt_index}-${i}`}
+            onClick={() => onOpen(ref.node_id)}
+            // A bare "1" is the whole accessible name otherwise — a screen
+            // reader hears "button 1, button 2" with no idea what opens (AC10).
+            aria-label={t.map.evidenceRef(i + 1, pattern.evidence.length)}
+            className="rounded-chip border border-rule px-1.5 py-px font-mono text-micro text-graphite transition hover:border-signal-dim hover:text-signal"
+          >
+            {i + 1}
+          </button>
+        ))}
+      </span>
+    </li>
+  );
+}
+
+export default function AnalysisView({
+  graph,
+  onOpenEvidence,
+}: {
+  graph: SessionGraph;
+  /** Opens the evidence chain behind one unit's state. */
+  onOpenEvidence: (nodeId: string) => void;
+}) {
+  const { nodes, progress, understanding } = graph;
+
+  const summary = useMemo(() => {
+    const byTag = new Map<string, Tally>();
+    const byFile = new Map<string, Tally>();
+
+    for (const node of nodes) {
+      const state = node.understanding_state;
+
+      for (const tag of node.concept_tags) {
+        const tally = byTag.get(tag) ?? emptyTally();
+        tally[state] += 1;
+        byTag.set(tag, tally);
+      }
+
+      const f = byFile.get(node.file) ?? emptyTally();
+      f[state] += 1;
+      byFile.set(node.file, f);
+    }
+
+    const totalOf = (tally: Tally) => STATE_ORDER.reduce((sum, s) => sum + tally[s], 0);
+    const rank = (a: [string, Tally], b: [string, Tally]) =>
+      totalOf(b[1]) - totalOf(a[1]) || a[0].localeCompare(b[0]);
+
+    const entries = [...byTag.entries()];
+    return {
+      // The canonical vocabulary answers "what kind of understanding"; free-form
+      // tags answer "on what topic". Mixing them buries the six that matter.
+      kinds: entries
+        .filter(([tag]) => isCanonicalTag(tag))
+        .sort(rank)
+        .map(([k, tally]) => [k, tally, totalOf(tally)] as const),
+      topics: entries
+        .filter(([tag]) => !isCanonicalTag(tag))
+        .sort(rank)
+        .map(([k, tally]) => [k, tally, totalOf(tally)] as const),
+      files: [...byFile.entries()].sort(rank).map(([k, tally]) => [k, tally, totalOf(tally)] as const),
+    };
+  }, [nodes]);
+
+  // The three outcome bands. Server-classified, so nothing here decides what
+  // counts as a weakness — and `recovered` can never leak into `needs work`,
+  // because the backend put each id in exactly one bucket.
+  const byId = useMemo(
+    () => new Map(understanding.nodes.map((r) => [r.node_id, r])),
+    [understanding.nodes]
+  );
+  const pick = (ids: string[]) =>
+    ids.map((id) => byId.get(id)).filter((r): r is UnderstandingRow => Boolean(r));
+  // AC8: with no evidence there is nothing to profile, and rendering empty
+  // analytics panels made the commonest state (60 of 69 stored sessions) the
+  // worst served — 1875px of scroll to reach the only useful thing. In this tab
+  // the consequence is milder than it was on the map, because the map is no
+  // longer underneath it, but the rule is the same: say so and stop.
+  const hasEvidence = understanding.assessed > 0;
+  const needsWork = pick(understanding.needs_work);
+  const setAside = pick(understanding.set_aside);
+  const recovered = pick(understanding.recovered);
+
+  const pct = Math.round(progress.goal_readiness * 100);
+
+  return (
+    <div className="h-full overflow-y-auto px-6 py-7">
+      <div className="mx-auto flex max-w-4xl flex-col gap-7">
+
+        {/* headline — the two measures, which are the reason to open this tab */}
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <span className="font-mono text-micro uppercase tracking-[0.16em] text-graphite">
+              {t.map.label}
+            </span>
+            {/* THE headline is a FRACTION, not a percentage: "7 of 15 required
+                objectives demonstrated" is a sentence the learner can check
+                against the list below, where "47% readiness" sounds like a
+                calibrated prediction the model never made (M3a.3). */}
+            <p className="text-meta text-graphite">
+              {t.map.assessedOf(understanding.assessed, understanding.total)}
+              {progress.core_in_progress > 0 && (
+                <> · {t.map.inProgress(progress.core_in_progress)}</>
+              )}
+              {progress.detours.length > 0 && (
+                <> · {t.map.detoursTaken(progress.detours.length)}</>
+              )}
+              {progress.skipped > 0 && <> · {t.map.skippedStops(progress.skipped)}</>}
+            </p>
+          </div>
+
+          {/* Two measures, two GRAMMARS (AC9). Demonstrated understanding is a
+              fraction of mastery; the journey is a discrete track of stops. Two
+              percentages side by side read as competing scores — which is what
+              the review found. */}
+          <div className="flex items-end gap-7">
+            <div className="flex flex-col gap-1">
+              <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
+                {t.map.demonstratedLabel}
+              </span>
+              <span className="flex items-baseline gap-1.5">
+                <span className="font-display text-chapter leading-none tabular-nums text-signal">
+                  {progress.core_demonstrated}
+                </span>
+                <span className="font-display text-lede leading-none tabular-nums text-graphite">
+                  / {progress.core_total}
+                </span>
+                <span className="font-mono text-micro text-graphite">
+                  ({pct}%)
+                </span>
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
+                {t.map.journeyLabel(progress.stops_settled, progress.stops_total)}
+              </span>
+              {/* A track of stops, not a bar: the journey is discrete. */}
+              <span aria-hidden className="flex flex-wrap gap-[3px]">
+                {Array.from({ length: progress.stops_total }, (_, i) => (
+                  <span
+                    key={i}
+                    className="h-[calc(10rem/16)] w-[calc(5rem/16)] rounded-[1px]"
+                    style={{
+                      background: i < progress.stops_settled
+                        ? "var(--color-signal-dim)" : "var(--color-rule)",
+                    }}
+                  />
+                ))}
+              </span>
+            </div>
+          </div>
+        </header>
+
+        {/* Said rather than left blank. An analysis tab with nothing in it reads
+            as something that failed to load, and "no answers yet" is a fact. */}
+        {!hasEvidence && (
+          <p className="measure text-meta text-graphite">{t.map.noEvidenceYet}</p>
+        )}
+
+        {/* ── NEEDS WORK / WORKED THROUGH / SET ASIDE ─────────────────────────
+            Three bands, adjacent on purpose. Separating "still open" from
+            "worked through" is the point of the milestone; putting them side by
+            side is what stops the second reading as the first. */}
+        {(needsWork.length > 0 || recovered.length > 0 || setAside.length > 0) && (
+          <div className="grid gap-4 md:grid-cols-2">
+            {needsWork.length > 0 && (
+              <Panel title={`${t.map.needsWork} · ${needsWork.length}`}>
+                <UnitList rows={needsWork} onOpen={onOpenEvidence} tone="var(--color-rust)" />
+              </Panel>
+            )}
+
+            {recovered.length > 0 && (
+              <Panel title={`${t.map.workedThrough} · ${recovered.length}`}>
+                <p className="text-meta text-graphite">
+                  {t.map.workedThroughHint}
+                </p>
+                <UnitList rows={recovered} onOpen={onOpenEvidence} />
+              </Panel>
+            )}
+
+            {/* Unresolved, and the learner closed the question. Kept visible so
+                the truth survives, kept OUT of "needs work" so it does not nag
+                about a decision already made. */}
+            {setAside.length > 0 && (
+              <Panel title={`${t.map.setAside} · ${setAside.length}`}>
+                <p className="text-meta text-graphite">
+                  {t.map.setAsideHint}
+                </p>
+                <UnitList rows={setAside} onOpen={onOpenEvidence} />
+              </Panel>
+            )}
+          </div>
+        )}
+
+        {hasEvidence && (
+        <>
+        {/* ── PATTERNS ────────────────────────────────────────────────────────
+            A deeper interpretation layer, so it sits BELOW the outcome bands
+            and never competes with them. Renders only when a threshold is met;
+            otherwise one restrained line, because at the measured session size
+            most sessions will legitimately have no pattern at all. */}
+        <Panel title={t.map.patterns}>
+          {[...understanding.patterns, ...understanding.gap_patterns].length === 0 ? (
+            <p className="text-meta text-graphite">
+              {t.map.patternsEmpty}
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2.5">
+              {[...understanding.patterns, ...understanding.gap_patterns].map((pattern) => (
+                <PatternCard
+                  key={pattern.template}
+                  pattern={pattern}
+                  onOpen={onOpenEvidence}
+                />
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        {/* SECONDARY. Collapsed by default: useful on reflection, noise at a
+            glance, and all-zero on the sessions that need the screen most. */}
+        <details className="group">
+          <summary className="cursor-pointer list-none font-mono text-micro uppercase tracking-[0.16em] text-graphite transition hover:text-signal">
+            {t.map.moreBreakdowns}
+          </summary>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <Panel title={t.map.byKind}>
+            <ul className="flex flex-col gap-3">
+              {summary.kinds.map(([tag, tally, total]) => (
+                <BreakdownRow
+                  key={tag}
+                  label={<span className="font-mono text-micro">{tagLabel(tag)}</span>}
+                  accent={tagStyle(tag).text}
+                  tally={tally}
+                  total={total}
+                />
+              ))}
+            </ul>
+
+            {summary.topics.length > 0 && (
+              <div className="flex flex-col gap-2 border-t border-rule pt-3">
+                <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
+                  {t.map.topicsTouched}
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {summary.topics.map(([tag, tally, total]) => (
+                    <span
+                      key={tag}
+                      title={t.map.understoodOfTotal(tally.understood, total)}
+                      className="rounded-chip border border-rule px-1.5 py-px font-mono text-micro tracking-[0.05em] text-graphite"
+                    >
+                      {tagLabel(tag)}
+                      {total > 1 && <span className="text-paper"> ×{total}</span>}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Panel>
+
+          <Panel title={t.map.whereInRepo}>
+            <ul className="flex flex-col gap-3">
+              {summary.files.map(([file, tally, total]) => (
+                <BreakdownRow
+                  key={file}
+                  label={
+                    <span className="block truncate text-start font-mono text-micro text-paper">
+                      {file}
+                    </span>
+                  }
+                  sublabel={`${tally.understood}/${total}`}
+                  tally={tally}
+                  total={total}
+                />
+              ))}
+            </ul>
+          </Panel>
+          </div>
+        </details>
+        </>
+        )}
+
+        {/* ── WHAT THE SYSTEM DID ─────────────────────────────────────────────
+            A1's third channel. It used to be a 288px column pinned beside the
+            map, which cost the map a fifth of its width on every visit for a
+            list that is usually three lines long. It belongs in this tab: the
+            log is an account of how the plan changed, which is the same kind of
+            claim as the rest of this view, and it is still one click from the
+            map rather than behind a menu. */}
+        <section className="border-t border-rule pt-6">
+          {/* No heading of its own here: `SessionLog` draws its own label, and a
+              second one above it would be the same words twice. */}
+          <SessionLog graph={graph} />
+        </section>
+
+      </div>
+    </div>
+  );
+}

@@ -3,6 +3,14 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 /**
+ * The dead band the collapse lives in. Asymmetric on purpose: the brief folds once
+ * the scroll is unmistakable, and unfolds only near the top, so the two edges can
+ * never trade a toggle back and forth across one coordinate.
+ */
+const COLLAPSE_ABOVE = 48;
+const EXPAND_BELOW = 16;
+
+/**
  * The frame the lesson lives in: a brief that stays, and a canvas that scrolls.
  *
  * The problem it solves is orientation. Every block in a lesson is otherwise a
@@ -30,6 +38,28 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
  * stalled transition snaps between two correct layouts, rather than leaving content
  * present-but-invisible — the trap the `rise` keyframe hit by animating opacity
  * from zero.
+ *
+ * A SCROLL-DRIVEN COLLAPSE FIGHTS SCROLL ANCHORING, and this is the one thing here
+ * that cannot be left to defaults. Chrome picks an anchor node in the visible
+ * content and, when something ABOVE it changes height, silently adjusts `scrollTop`
+ * to hold that node still. The brief shrinking is exactly that change, so the
+ * browser undid the very scroll that caused it. Measured in a real engine on this
+ * layout: at `scrollTop` 40 the collapse drove it to 0, and expanding again from 60
+ * drove it to 104 — the two together being a loop the learner sees as the header
+ * flickering, or as the page refusing to scroll past the first ~50px until they
+ * shove it. `overflow-anchor: none` on this root takes the whole lesson subtree out
+ * of anchor selection, which is what stops the adjustment; the alternatives do not
+ * work, and it is worth saying why. Keeping the scrollable height constant with a
+ * spacer does not help — anchoring holds a NODE still, not a height, and the node
+ * moved either way (measured: still 40 → 0). Nor is hysteresis alone enough: the
+ * adjustment is ~Δ of the collapsed rows, larger than any honest dead band.
+ *
+ * With the adjustment gone the collapse leaves `scrollTop` untouched, so the canvas
+ * slides up by exactly what the brief gave back and the gap between them never
+ * changes. The cost is that the canvas no longer holds position if something above
+ * the reading point resizes on its own; nothing in a lesson does that, and every
+ * jump that matters — a counter's target, a focused composer — is already scrolled
+ * to explicitly.
  *
  * THE CANVAS IS CAPPED BUT NOT CENTRED. The lesson column runs from 572px to
  * ~1170px depending on the band, and prose set to 48ch inside a 1170px column
@@ -94,16 +124,25 @@ export default function LessonWorkspace({
     // frame, so measuring after the assignment rather than waiting for the event is
     // what keeps the brief from rendering one frame folded at the top.
     if (remeasureOn !== undefined) scroller.scrollTop = 0;
-    // 32px, not 0: a hair of scroll should not swap the layout. The brief has to be
-    // genuinely pinned before shrinking reads as intent rather than as a flinch.
-    const read = () => setCollapsed(scroller.scrollTop > 32);
+    // A BAND, not a line. Not 0 because a hair of scroll should not swap the
+    // layout — the brief has to be genuinely pinned before shrinking reads as
+    // intent rather than as a flinch — and not one number because a single
+    // threshold makes the state a function of a coordinate the layout keeps
+    // landing back on. A trackpad emits sub-pixel deltas, and one that hovers on
+    // the line toggles the fold on every event. Collapsed stays collapsed until
+    // the learner is most of the way back to the top.
+    const read = () =>
+      setCollapsed((was) =>
+        was ? scroller.scrollTop > EXPAND_BELOW : scroller.scrollTop > COLLAPSE_ABOVE
+      );
     read();
     scroller.addEventListener("scroll", read, { passive: true });
     return () => scroller.removeEventListener("scroll", read);
   }, [remeasureOn]);
 
   return (
-    <div ref={rootRef} className="flex flex-col">
+    // `overflow-anchor:none` is load-bearing, not a tweak — see the note above.
+    <div ref={rootRef} className="flex flex-col [overflow-anchor:none]">
       {/*
         `top-0` sticks to the top of the scrollport, which is the padding box of
         the page's scroll container. It needs an opaque background, or the canvas

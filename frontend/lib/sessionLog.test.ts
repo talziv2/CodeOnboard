@@ -170,3 +170,52 @@ describe("order, and what the rail mark counts", () => {
     expect(unseenRouteChanges(graph, null)).toHaveLength(1);
   });
 });
+
+describe("a jump is the learner's own movement, and it is recorded", () => {
+  test("produces a row naming the stop LANDED ON", () => {
+    // Not `cause` — a jump has none, because no answer triggered it. The sentence
+    // is "you jumped to X", so X is `nodes[0]`.
+    const nodes = [stop("n1", "Session basics"), stop("n2", "The adapter")];
+    const log = sessionLog(
+      graphOf(nodes, [
+        {
+          kind: "jumped",
+          at: "2026-08-21T10:00:00Z",
+          nodes: ["n2"],
+          from_node_id: "n1",
+          intent: "study",
+        },
+      ])
+    );
+
+    expect(log).toHaveLength(1);
+    expect(log[0].kind).toBe("jumped");
+    expect(log[0].subject).toBe("The adapter");
+  });
+
+  test("a return is recorded too, so the log does not imply they never came back", () => {
+    const nodes = [stop("n1", "Session basics"), stop("n2", "The adapter")];
+    const log = sessionLog(
+      graphOf(nodes, [
+        { kind: "jumped", at: "2026-08-21T10:00:00Z", nodes: ["n2"], intent: "study" },
+        { kind: "jumped", at: "2026-08-21T10:05:00Z", nodes: ["n1"], intent: "resume" },
+      ])
+    );
+
+    // Newest first.
+    expect(log.map((e) => e.subject)).toEqual(["Session basics", "The adapter"]);
+  });
+
+  test("but it does NOT mark the rail as changed", () => {
+    // The route did not change, and the learner is the one who moved. Marking the
+    // rail `new` for their own action would be the app telling them what they just
+    // did — which is a different failure from the gap kinds' exclusion.
+    const nodes = [stop("n1", "Session basics"), stop("n2", "The adapter")];
+    const graph = graphOf(nodes, [
+      { kind: "jumped", at: "2026-08-21T10:00:00Z", nodes: ["n2"], intent: "study" },
+    ]);
+
+    expect(sessionLog(graph)).toHaveLength(1);
+    expect(unseenRouteChanges(graph, null)).toEqual([]);
+  });
+});

@@ -276,11 +276,27 @@ class LearningGraph:
     # one by `lesson_brief["area_id"]`. Empty for every graph the objective-first
     # planner did not build.
     areas: list[dict] = field(default_factory=list)
-    # PLAN-SCOPED history: every change to the shape of the journey — prune-ahead,
-    # scope adjustments, remediation insertions. Session-scoped rather than
+    # JOURNEY-SCOPED history: every change to the shape of the journey —
+    # prune-ahead, scope adjustments, remediation insertions — plus the jumps that
+    # moved the learner through it out of order. Session-scoped rather than
     # node-scoped for the same reason `areas` is: it belongs to the journey, not
     # to any one unit. Append-only, oldest first.
     journey_events: list[dict] = field(default_factory=list)
+    # HOW THE LEARNER GOT TO `current_node_id`, when that is worth saying.
+    #
+    # Distinct from `journey_events` on purpose, and the distinction is
+    # permanent-vs-current: the event list is the append-only record ("they
+    # jumped, at 14:02"), and this is the one live fact a screen can act on
+    # ("they are here, and they did not walk here"). Deriving the second from the
+    # first is not safe — `/advance` records nothing, so a stale `jumped` event
+    # would still match a node the learner later walked back into behind a
+    # warm-up, and the notice would fire on a stop they reached legitimately.
+    #
+    # `None` means "no notice to show", and it deliberately conflates two things
+    # that need no separating: arrived by walking, and written before this
+    # existed. Both are the absence of a positive claim, which is what a notice
+    # requires. Cleared by `/advance` — walking on is rejoining the route.
+    arrival: dict | None = None
 
     # --- construction helpers ---
 
@@ -373,6 +389,31 @@ class LearningGraph:
             return None
         assessments[-1][history.RESPONSE] = response
         return assessments[-1]
+
+    def record_arrival(
+        self, node_id: str, *, kind: str, from_node_id: str | None = None
+    ) -> dict:
+        """Record HOW the learner reached `node_id`, for the notice on that stop.
+
+        Stores the raw fact and nothing derived: which stop was left, which was
+        landed on, when. Direction, position and how many stops were passed are
+        all computed from the ROUTE by the caller that draws the notice — the
+        frontend's `buildRoute`, which is what numbers the rail. Computing them
+        here would put a second implementation of "stop N of M" on the wire, and
+        the two would eventually disagree in exactly the place a learner is
+        comparing them.
+        """
+        self.arrival = {
+            "node_id": node_id,
+            "kind": kind,
+            "from_node_id": from_node_id,
+            "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }
+        return self.arrival
+
+    def clear_arrival(self) -> None:
+        """Forget how the learner got here — they are on the route now."""
+        self.arrival = None
 
     def record_journey_event(self, kind: str, **payload) -> dict:
         """Record a change to the SHAPE of the journey.
@@ -713,9 +754,13 @@ class LearningGraph:
             # learner decided about remediation.
             "understanding": understanding_model.profile(self),
             "areas": self.areas,
-            # Plan-scoped history. On the wire so M3 can explain a journey that
-            # changed shape; no M2 surface reads it yet.
+            # Journey-scoped history. On the wire so M3 can explain a journey
+            # that changed shape, and so the session log can show the jumps that
+            # moved the learner through it.
             "journey_events": self.journey_events,
+            # The live arrival fact, for the notice on a jumped-to lesson. Null
+            # whenever there is nothing to say.
+            "arrival": self.arrival,
             "nodes": [
                 {
                     "id": n.id,
@@ -761,15 +806,29 @@ class LearningGraph:
                     "weak_spot": n.weak_spot,
                     "has_lesson": n.cached_lesson is not None,
                     "attempts": n.attempts,
-                    # OPEN gaps only (gap-model M9). What the learner still does
-                    # not know, by name — the rail marks these distinctly from
-                    # untouched stops, which previously both read as "not done".
-                    # Settled gaps are omitted: a verified one is closed, and a
-                    # waived one is what they asked to stop hearing about.
+                    # EVERY gap, settled ones included, each with its `status`.
+                    # What the learner does not know here by name — and what
+                    # they have since put right.
+                    #
+                    # This sent open gaps only, and it is the payload the lesson
+                    # falls back to between answers. So a gap the learner CLOSED
+                    # was visible for exactly one render of the feedback card and
+                    # then gone: the single act they can perform on a gap deleted
+                    # its own evidence. Consumers that mean "outstanding work" —
+                    # the rail's count, its hover — filter on `status`, which is
+                    # a thing they can now do and previously could not.
+                    #
+                    # `opened_at` / `closed_at` also unblock the session log's
+                    # gap rows, which were written against this shape and had
+                    # nothing to read.
                     "gaps": [
                         {"id": g.id, "kind": g.kind, "claim": g.claim,
-                         "blocking": g.is_blocking}
-                        for g in n.gaps if g.is_open
+                         "objective_part": g.objective_part,
+                         "status": g.status, "blocking": g.is_blocking,
+                         "verification_attempts": g.verification_attempts,
+                         "exhausted": g.is_exhausted,
+                         "opened_at": g.opened_at, "closed_at": g.closed_at}
+                        for g in n.gaps
                     ],
                 }
                 for n in self.nodes.values()
