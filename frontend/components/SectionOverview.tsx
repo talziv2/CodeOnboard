@@ -8,6 +8,7 @@ import SectionLabel from "@/components/ui/SectionLabel";
 import ConceptTag from "@/components/ui/ConceptTag";
 import StatePin from "@/components/ui/StatePin";
 import Button from "@/components/ui/Button";
+import Prose, { InlineProse } from "@/components/ui/Prose";
 import { t } from "@/lib/strings";
 
 interface Props {
@@ -68,9 +69,7 @@ export default function SectionOverview({
         </h2>
 
         {area.why && (
-          <p className="measure text-body text-paper">
-            {area.why}
-          </p>
+          <Prose text={area.why} size="body" tone="paper" />
         )}
       </div>
 
@@ -108,7 +107,7 @@ export default function SectionOverview({
                     className="mt-[calc(7rem/16)] h-px w-3 shrink-0 bg-signal-dim"
                   />
                   <p className="measure text-aside text-paper">
-                    {s.node.objective}
+                    <InlineProse text={s.node.objective} tone="paper" />
                   </p>
                 </li>
               ))}

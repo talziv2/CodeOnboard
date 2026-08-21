@@ -4,6 +4,7 @@ import { useEffect, useState, type RefObject } from "react";
 import type { NodeGap, RespondResult } from "@/lib/api";
 import Button from "@/components/ui/Button";
 import Callout from "@/components/ui/Callout";
+import Prose, { InlineProse } from "@/components/ui/Prose";
 import { feedbackActions, plannedActions, type ActionId } from "@/lib/feedbackActions";
 import { consequenceLine, keyPoint } from "@/lib/feedbackSummary";
 import { NEUTRAL, VERDICT_COLOR } from "@/lib/verdict";
@@ -184,25 +185,30 @@ export default function FeedbackCardNext({
         className="measure text-lede"
         style={{ color: verdictColor }}
       >
-        {headline}
+        {/* Inline, not block: the key point is one line by contract, and it keeps
+            the verdict's own colour — `inherit` emphasises by weight so a bolded
+            clause cannot repaint itself and drop the classification. */}
+        <InlineProse text={headline} tone="inherit" />
       </p>
 
       {/* Never collapsed. The key point above orients; this is the reasoning, and
           hiding it is what would turn a condensation into a substitute. */}
-      <p className="measure text-aside text-paper">{result.rationale}</p>
+      <Prose text={result.rationale} size="aside" tone="paper" />
 
       {help && (
         <Callout
           tone="signal"
           label={result.adaptation?.kind === "hint" ? t.lesson.hint : t.lesson.followup}
         >
-          <p className="measure text-aside text-chalk">{help}</p>
+          <Prose text={help} size="aside" tone="chalk" />
         </Callout>
       )}
 
       {consequence && (
         <div className="flex flex-wrap items-baseline gap-x-2 border-s-2 border-rule ps-3">
-          <p className="measure text-meta text-graphite">{consequence}</p>
+          <p className="measure text-meta text-graphite">
+            <InlineProse text={consequence} tone="graphite" />
+          </p>
           {/* Offered only for the consequence that is ABOUT the other surface. A
               pruned journey and a declined warm-up changed nothing in Lesson, so
               sending the learner there would be sending them to look at nothing. */}
@@ -229,7 +235,7 @@ export default function FeedbackCardNext({
                 key={gap.id}
                 className="measure text-meta text-paper line-through decoration-jade/60"
               >
-                {gap.claim}
+                <InlineProse text={gap.claim} tone="paper" />
               </li>
             ))}
           </ul>

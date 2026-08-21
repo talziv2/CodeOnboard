@@ -1,6 +1,7 @@
 "use client";
 
 import Callout from "@/components/ui/Callout";
+import Prose from "@/components/ui/Prose";
 import SectionLabel from "@/components/ui/SectionLabel";
 import { t } from "@/lib/strings";
 
@@ -30,17 +31,17 @@ export default function RevealBlock({
   return (
     <div className="flex flex-col gap-3">
       <SectionLabel>{t.lesson.reveal}</SectionLabel>
-      <p className="measure whitespace-pre-wrap text-body text-paper">{reveal}</p>
+      <Prose text={reveal} size="body" tone="paper" />
 
       {takeaway && (
         <Callout tone="signal" label={t.lesson.takeaway} className="mt-1">
-          <p className="measure text-aside text-chalk">{takeaway}</p>
+          <Prose text={takeaway} size="aside" tone="chalk" />
         </Callout>
       )}
 
       {ownership && (
         <Callout tone="neutral" label={t.lesson.ownership}>
-          <p className="measure text-meta text-paper">{ownership}</p>
+          <Prose text={ownership} size="meta" tone="paper" />
         </Callout>
       )}
     </div>

@@ -29,6 +29,7 @@ import SetupProse from "@/components/lesson/SetupProse";
 import TracePath from "@/components/lesson/TracePath";
 import VerificationBlock from "@/components/lesson/VerificationBlock";
 import PracticeSurface from "@/components/ui/PracticeSurface";
+import Prose, { InlineProse } from "@/components/ui/Prose";
 import Button from "@/components/ui/Button";
 import { isSplitSurfaces, lessonUi } from "@/lib/flags";
 import { lessonPhase } from "@/lib/lessonPhase";
@@ -662,15 +663,13 @@ export default function LessonPanel({
                that block is open, which is what keeps "exactly one composer" true
                while the question stays re-readable. */
             questionEcho={
-              <p className="measure whitespace-pre-wrap text-aside text-paper">
-                {lesson.lesson.prompt}
-              </p>
+              <Prose text={lesson.lesson.prompt} size="aside" tone="paper" />
             }
             setup={
               <div className="flex flex-col gap-3">
                 {isSplit && lesson.lesson.why_now && (
                   <p className="measure border-s-2 border-rule ps-3 text-meta italic text-graphite">
-                    {lesson.lesson.why_now}
+                    <InlineProse text={lesson.lesson.why_now} tone="graphite" />
                   </p>
                 )}
                 <SetupProse

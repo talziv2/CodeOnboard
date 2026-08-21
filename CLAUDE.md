@@ -182,6 +182,24 @@ All user-facing wording lives in `frontend/lib/strings.ts`, imported directly as
 to a readable sentence). It is a plain module, not a React context: keeping copy
 out of the components is a tidiness choice, not localization infrastructure.
 
+**Model-authored prose is markdown, and is rendered as markdown.** Teaching is
+asked for markdown in `setup` and `reveal` (`agents/teaching/agent.py`) and the
+models deliver it throughout — bolded leads, backticked identifiers, numbered
+steps, the occasional fence. Every such string goes through
+`frontend/components/ui/Prose.tsx`: `Prose` for a block of prose, `InlineProse`
+for a single line whose element the caller already styles (the pinned objective, a
+gap's claim, the verdict headline — the clamp and the strike-through belong to the
+caller). `frontend/lib/markdown.ts` is the parser: pure, returns nodes, never HTML,
+so `dangerouslySetInnerHTML` never enters the picture. Two subset rules are
+load-bearing and documented there — **`_` is never emphasis**, because
+`line_start` and `__init__` are the vocabulary, and an **unclosed delimiter stays
+literal**, because prose that half-parses is worse than prose that does not.
+
+**Learner-written text is never markdown.** Attempt answers and check answers stay
+`whitespace-pre-wrap` exactly as typed. Interpreting a learner's asterisk as
+emphasis rewrites what they said, and the one place their own words appear is the
+one place fidelity beats polish.
+
 Goal-interview questions are static strings in `backend/agents/goal/questions.py`
 — shown verbatim rather than generated, so the interview never drifts.
 

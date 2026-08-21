@@ -71,6 +71,37 @@ export function langForPath(path: string): string | null {
   return BY_EXTENSION[name.slice(dot + 1).toLowerCase()] ?? null;
 }
 
+/**
+ * The info string on a fenced code block, mapped to a grammar.
+ *
+ * A separate table from `BY_EXTENSION` because the two are answering different
+ * questions from different sources: that one reads a repository path, this reads
+ * a word a model typed after three backticks. The names overlap but the misses
+ * do not — nobody writes ```pyi, and nothing in a repo is called `console`.
+ * Unknown or absent languages return null and the block renders uncoloured.
+ */
+const BY_FENCE: Record<string, keyof typeof GRAMMARS> = {
+  python: "python", py: "python", python3: "python",
+  md: "markdown", markdown: "markdown",
+  json: "json", jsonc: "json",
+  yml: "yaml", yaml: "yaml",
+  toml: "toml",
+  ini: "ini", cfg: "ini", conf: "ini",
+  sh: "shellscript", bash: "shellscript", zsh: "shellscript",
+  shell: "shellscript", console: "shellscript", terminal: "shellscript",
+  js: "javascript", jsx: "javascript", javascript: "javascript",
+  ts: "typescript", tsx: "typescript", typescript: "typescript",
+  html: "html",
+  css: "css",
+  xml: "xml", svg: "xml",
+};
+
+/** The grammar for a fence's info string, or null when we have none for it. */
+export function langForFence(info: string | null): string | null {
+  if (!info) return null;
+  return BY_FENCE[info.trim().toLowerCase()] ?? null;
+}
+
 let highlighter: Promise<HighlighterCore> | null = null;
 const loaded = new Set<string>();
 

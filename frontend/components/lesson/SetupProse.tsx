@@ -1,5 +1,6 @@
 "use client";
 
+import Prose from "@/components/ui/Prose";
 import SectionLabel from "@/components/ui/SectionLabel";
 import { t } from "@/lib/strings";
 
@@ -23,7 +24,9 @@ export default function SetupProse({
       {/* A pre-B4 lesson has no halves to withhold, so it renders exactly as
           it always did, under the label it always had. */}
       <SectionLabel>{isSplit ? t.lesson.setup : t.lesson.walkthrough}</SectionLabel>
-      <p className="measure whitespace-pre-wrap text-body text-paper">{body}</p>
+      {/* Markdown, because `agent.py` asks Teaching for markdown here. Printing
+          the asterisks was never a rendering choice, only a missing renderer. */}
+      <Prose text={body} size="body" tone="paper" />
     </div>
   );
 }

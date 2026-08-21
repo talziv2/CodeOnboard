@@ -1,6 +1,7 @@
 "use client";
 
 import Button from "@/components/ui/Button";
+import Prose from "@/components/ui/Prose";
 import { t } from "@/lib/strings";
 
 /**
@@ -35,7 +36,11 @@ export default function AnswerComposer({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <p className="measure text-lede text-chalk">{prompt}</p>
+      {/* The question is markdown too — Teaching writes `**Anchor 1:**` and
+          backticked identifiers into it constantly, and the one string the
+          learner has to parse to answer at all was the worst place to print
+          syntax. */}
+      <Prose text={prompt} size="lede" tone="chalk" />
       <textarea
         rows={4}
         className="w-full resize-none rounded-field border border-rule bg-trench p-3 text-start text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
