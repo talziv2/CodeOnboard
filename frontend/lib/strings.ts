@@ -441,8 +441,8 @@ export const t = {
       code: {
         title: "Anchored to real code",
         body:
-          "Every lesson points at actual lines in the repository, never at an invented example.",
-        cue: "Open one to see it.",
+          "Every lesson points at actual lines in the repository, never at an invented example. They sit behind this row so they are not a third copy of the same thing.",
+        cue: "Open it, then click a line.",
       },
       source: {
         title: "The code, beside the lesson",

@@ -26,14 +26,29 @@ export default function Disclosure({
   count,
   children,
   className = "",
+  tour,
 }: {
   label: string;
   count?: number;
   children: ReactNode;
   className?: string;
+  /**
+   * Makes the disclosure itself a tour target (`lib/tour.ts`).
+   *
+   * It has to go on the `<details>` rather than on whatever is inside it: a
+   * closed `<details>` hides its content but Chrome still reports a rectangle
+   * for it, in empty space below the summary — so a spotlight aimed at the
+   * content drew a ring around nothing. Aimed here, it rings the row the learner
+   * can actually see, and grows with the element when they open it, which keeps
+   * what is inside reachable through the hole.
+   */
+  tour?: string;
 }) {
   return (
-    <details className={`group rounded-card border border-rule bg-slab ${className}`}>
+    <details
+      data-tour={tour}
+      className={`group rounded-card border border-rule bg-slab ${className}`}
+    >
       <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2">
         <Chevron />
         <span className="font-mono text-micro uppercase tracking-[0.13em] text-graphite transition group-hover:text-signal">

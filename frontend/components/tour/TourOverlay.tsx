@@ -89,6 +89,35 @@ function mostlyHidden(rect: DOMRect): boolean {
   return shown < Math.min(rect.height, window.innerHeight) * 0.6;
 }
 
+/**
+ * Is this element actually being displayed?
+ *
+ * `getBoundingClientRect` is not an answer to that question, and the gap is not
+ * academic: the content of a closed `<details>` is hidden, yet Chrome reports a
+ * full-size rectangle for it in empty space below the summary. A step aimed at
+ * such an element drew its ring around nothing, and then scrolled the page to
+ * bring that nothing into view — observed on the lesson's code citations, which
+ * are a disclosure in every phase.
+ *
+ * `checkVisibility` answers it properly (measured: `false` for exactly that
+ * element). `opacityProperty` is deliberately off — a target mid-fade is on its
+ * way to being visible and must not be declared absent.
+ */
+function isVisible(el: Element): boolean {
+  const check = (el as Element & { checkVisibility?: (options?: object) => boolean })
+    .checkVisibility;
+  if (typeof check === "function") {
+    return check.call(el, {
+      checkVisibilityCSS: true,
+      contentVisibilityAuto: true,
+      opacityProperty: false,
+      visibilityProperty: true,
+    });
+  }
+  // Older engines: the coarse version of the same question.
+  return el.getClientRects().length > 0;
+}
+
 /** Every scrollable box between an element and the document, innermost first. */
 function scrollParents(el: Element): HTMLElement[] {
   const found: HTMLElement[] = [];
@@ -148,7 +177,9 @@ function useTargetRect(step: TourStep, onMissing: () => void): Rect | null {
 
     const measure = () => {
       const el = document.querySelector(selector);
-      if (!el) {
+      // Hidden counts as absent. A target that is in the document but not being
+      // displayed is not something a spotlight can point at.
+      if (!el || !isVisible(el)) {
         // Absent long enough to mean it: the step has nothing to point at, and
         // the tour walks past it rather than dimming the page over nothing.
         if (!reported && performance.now() - lastSeen > MISSING_AFTER_MS) {
