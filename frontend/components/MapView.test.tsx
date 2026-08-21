@@ -1,136 +1,126 @@
-import { render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, test, vi } from "vitest";
 import MapView from "@/components/MapView";
 import { node, seq } from "@/test/factories";
 import { t } from "@/lib/strings";
-import type { Pattern, Progress, UnderstandingProfile } from "@/lib/api";
 
 /**
- * One claim, found from a live console rather than from reading the code: a
- * pattern's evidence chips must all render.
+ * The map is the route, and only the route.
  *
- * `node_id` + `attempt_index` looks unique and is not. A pattern groups by kind,
- * and a single answer can contain two gaps of the same kind on the same unit, so
- * the backend legitimately sends two refs with both fields equal and React saw two
- * children under one key. Found in a live console, not by reading the code.
+ * It used to be the route plus the two progress measures, three outcome bands, the
+ * pattern layer, two breakdown panels and a session-log column — all of which moved
+ * to `AnalysisView` when route mode split into two tabs. The pattern-chip claims
+ * moved with them, into `AnalysisView.test.tsx`.
  *
- * What it did NOT do is drop a chip — verified by putting the duplicate key back,
- * which fails only the warning test below. Duplicate keys are documented as
- * unsupported ("may cause children to be duplicated and/or omitted"), so the bug
- * is relying on a guarantee we did not hold; the count beside the chips comes from
- * `evidence.length`, and a dropped chip would mean the row says "2 answers behind
- * this" over one openable chip. Both claims are asserted separately for that
- * reason: the visible one, and the warning that says we were owed it by luck.
+ * What is asserted here is the boundary from this side: the stops are navigable, and
+ * the dashboard is gone. Re-merging is the easy accident — one measure added "for
+ * context" and the map is a dashboard again — so it is a test rather than a comment.
+ *
+ * "Navigable" now means through the stop card. The claims about what the card SAYS
+ * live in `StopCard.test.tsx`; what is here is only that the map opens one and that
+ * the card is the single way out of the map into a lesson.
  */
 
 const NODES = [node("n1", { title: "The adapter contract" }), node("n2", { title: "Pool keys" })];
 
-/** Two refs, same unit, same attempt — what the duplicate key collided on. */
-const PATTERN: Pattern = {
-  template: "gap_outcomes",
-  detail: { opened: 2, closed: 0 },
-  evidence: [
-    { node_id: "n1", attempt_index: 0 },
-    { node_id: "n1", attempt_index: 0 },
-  ],
-};
-
-const PROFILE: UnderstandingProfile = {
-  patterns: [],
-  gap_patterns: [PATTERN],
-  totals: { understood: 0, partial: 1, failed: 0, not_started: 1 },
-  assessed: 1,
-  total: 2,
-  by_area: {},
-  by_kind: {},
-  needs_work: [],
-  set_aside: [],
-  recovered: [],
-  nodes: [],
-} as unknown as UnderstandingProfile;
-
-/** Complete rather than cast-and-hope: the view reads most of these. */
-const PROGRESS: Progress = {
-  goal_readiness: 0.5,
-  core_total: 2,
-  core_demonstrated: 1,
-  core_in_progress: 0,
-  core_unassessed: 1,
-  journey_progress: 0.5,
-  stops_settled: 1,
-  stops_total: 2,
-  assessed_coverage: 0.5,
-  assessed: 1,
-  detours: [],
-  skipped: 0,
-  optional_total: 0,
-  optional_completed: 0,
-};
-
-function view() {
-  return render(
-    <MapView
-      nodes={NODES}
-      edges={[seq("n1", "n2")]}
-      currentNodeId="n1"
-      progress={PROGRESS}
-      understanding={PROFILE}
-      onNodeClick={vi.fn()}
-      onOpenEvidence={vi.fn()}
-    />
-  );
-}
-
-let errors: unknown[][];
-
-beforeEach(() => {
-  errors = [];
-  vi.spyOn(console, "error").mockImplementation((...args) => {
-    errors.push(args);
-  });
-});
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
-
-describe("every piece of evidence a pattern claims is reachable", () => {
-  test("two refs on the same unit and attempt render two chips", () => {
-    view();
-    // Labelled `1 of 2` / `2 of 2` — a bare "1" is the whole accessible name
-    // otherwise, which is why the label carries the position.
-    expect(screen.getByRole("button", { name: t.map.evidenceRef(1, 2) })).toBeTruthy();
-    expect(screen.getByRole("button", { name: t.map.evidenceRef(2, 2) })).toBeTruthy();
-  });
-
-  test("the count beside the chips matches how many there are", () => {
-    view();
-    expect(screen.getByText(t.map.patternEvidence(2))).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: /^Open the evidence for answer/ })).toHaveLength(2);
-  });
-
-  test("no duplicate-key warning — the keys are actually distinct", () => {
-    view();
-    const duplicate = errors.filter((args) =>
-      args.some((a) => typeof a === "string" && a.includes("same key"))
-    );
-    expect(duplicate).toEqual([]);
-  });
-
-  test("each chip opens the unit its ref names", () => {
-    const onOpenEvidence = vi.fn();
-    render(
+// `null` rather than `undefined` for the no-handler case: a default parameter
+// cannot tell "omitted" from "passed as undefined", and the recap depends on the
+// difference.
+function view(onGoToLesson: ((n: unknown) => void) | null = vi.fn()) {
+  return {
+    onGoToLesson,
+    ...render(
       <MapView
         nodes={NODES}
         edges={[seq("n1", "n2")]}
         currentNodeId="n1"
-        progress={PROGRESS}
-        understanding={PROFILE}
-        onNodeClick={vi.fn()}
-        onOpenEvidence={onOpenEvidence}
+        repoUrl="https://github.com/psf/requests"
+        onGoToLesson={onGoToLesson ?? undefined}
       />
-    );
-    screen.getAllByRole("button", { name: /^Open the evidence for answer/ })[1].click();
-    expect(onOpenEvidence).toHaveBeenCalledWith("n1");
+    ),
+  };
+}
+
+/** The stop row in the route list, as distinct from the same title inside the card. */
+const row = (title: string) =>
+  screen.getAllByText(title).map((el) => el.closest("button")).find(Boolean)!;
+
+describe("the route", () => {
+  test("every stop is on it, under the journey heading", () => {
+    view();
+    expect(screen.getByText(t.map.journeyTitle)).toBeTruthy();
+    expect(screen.getByText("The adapter contract")).toBeTruthy();
+    expect(screen.getByText("Pool keys")).toBeTruthy();
+  });
+
+  test("the repository is named, without the host and the .git", () => {
+    view();
+    expect(screen.getByText("psf/requests")).toBeTruthy();
+  });
+});
+
+describe("a stop opens before it moves you", () => {
+  test("clicking a stop opens its card and jumps nowhere", () => {
+    const { onGoToLesson } = view();
+    fireEvent.click(row("Pool keys"));
+
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(onGoToLesson).not.toHaveBeenCalled();
+  });
+
+  test("the card is the way to the lesson", () => {
+    const { onGoToLesson } = view();
+    fireEvent.click(row("Pool keys"));
+    fireEvent.click(screen.getByRole("button", { name: t.map.stop.goToLesson }));
+
+    expect(onGoToLesson).toHaveBeenCalledWith(expect.objectContaining({ id: "n2" }));
+    // And it leaves, rather than sitting over the lesson it sent you to.
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  test("the stop you are standing on offers the way back, not a jump", () => {
+    view();
+    fireEvent.click(row("The adapter contract"));
+    expect(screen.getByRole("button", { name: t.map.stop.returnToLesson })).toBeTruthy();
+  });
+
+  test("closing leaves you exactly where you were", () => {
+    const { onGoToLesson } = view();
+    fireEvent.click(row("Pool keys"));
+    fireEvent.click(screen.getByRole("button", { name: t.map.stop.close }));
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(onGoToLesson).not.toHaveBeenCalled();
+  });
+
+  test("Escape closes it too", () => {
+    view();
+    fireEvent.click(row("Pool keys"));
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  // The completion recap renders this same component with no handler. The card is
+  // still worth reading there; the walk is over, so there is nowhere to walk to.
+  test("with no handler the card describes the stop and offers no jump", () => {
+    view(null);
+    fireEvent.click(row("Pool keys"));
+
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: t.map.stop.goToLesson })).toBeNull();
+    expect(screen.queryByRole("button", { name: t.map.stop.returnToLesson })).toBeNull();
+  });
+});
+
+describe("the analysis is not here", () => {
+  test("no measures", () => {
+    view();
+    expect(screen.queryByText(t.map.demonstratedLabel)).toBeNull();
+    expect(screen.queryByText(t.map.moreBreakdowns)).toBeNull();
+  });
+
+  test("no session log", () => {
+    view();
+    expect(screen.queryByText(t.log.label)).toBeNull();
   });
 });

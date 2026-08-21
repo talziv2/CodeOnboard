@@ -261,10 +261,37 @@ export const t = {
       lesson: "Lesson",
       understanding: "Understanding",
       map: "Map",
+      // The half of the old Map tab that was never a map: the measures, the
+      // outcome bands, the patterns, the breakdowns and the session log.
+      // `Analysis` over `Progress`, which the session header already reports at
+      // all times, and over `Insights`, which promises interpretation this layer
+      // does not do — everything in it is a count over evidence the learner can
+      // open.
+      analysis: "Analysis",
     } as Record<string, string>,
+    /**
+     * The two modes, and the switch that holds them.
+     *
+     * Verbs for what the learner is DOING, not nouns for what is on screen: the
+     * tabs already name the views, and a switch labelled with two more nouns
+     * would read as four peer destinations again — which is the arrangement it
+     * replaces. `Route` over `Navigate` because the product's own vocabulary is
+     * route, stop, rail, journey, and over `Map` because the map is one of the
+     * two tabs inside it.
+     */
+    mode: {
+      learn: "Learn",
+      route: "Route",
+    } as Record<string, string>,
+    // Names the group for a screen reader, which otherwise hears two unexplained
+    // toggles ahead of the tabs.
+    modeLabel: "What you're doing",
     tabChanged: (label: string) => `${label} has changed since you last looked`,
+    // "go there" until stops opened a card instead of jumping. The hint has to
+    // describe what the click actually does, or it promises a navigation the
+    // learner then has to take a second step to get.
     mapHint: (count: number) =>
-      `${count} concepts · click any stop to go there · esc to return`,
+      `${count} concepts · click any stop to read it · esc to return`,
     loading: "Loading session…",
     loadFailed: "Couldn't load this session.",
     retryLoad: "Try loading again",
@@ -758,7 +785,10 @@ export const t = {
 
   // --- map view ---
   map: {
+    // `label` now heads the Analysis tab; the map keeps `routeLabel`. The split
+    // is why they differ: one names evidence, the other names a place.
     label: "What you understand so far",
+    routeLabel: "The route through this repository",
     thisCodebase: "This codebase",
     conceptsUnderstood: (understood: number, total: number) =>
       `${understood} of ${total} concepts understood`,
@@ -926,6 +956,40 @@ export const t = {
     whereInRepo: "Where in the repository",
     theRoute: "The route",
     unlocks: (title: string) => `· unlocks “${title}”`,
+
+    // --- the stop card (the map's summary of one stop) ---
+    //
+    // Clicking a stop used to jump into its lesson immediately. That made the map
+    // a set of links rather than a map: the one surface whose whole job is
+    // deciding where to go was the only one that would not tell you anything
+    // about a place before taking you there. The card answers "what is this one?"
+    // and then offers the jump as a separate, deliberate act.
+    //
+    // Every line of it is ALREADY IN THE GRAPH — the objective the Planner wrote,
+    // the anchors, the tags, the evidence state. Nothing here is generated, and
+    // nothing is a claim the rest of the app does not already make.
+    stop: {
+      label: "Stop",
+      // The eyebrow, when the stop consumes no number: a warm-up, or depth the
+      // learner did not ask for. Both are reachable, neither is on the walk.
+      offRoute: "Off the default walk",
+      objective: "What this stop is for",
+      // Said rather than left blank: a pre-B3 graph has no `objective`, and an
+      // empty space would read as "nothing to learn here".
+      noObjective: "No objective was recorded for this stop.",
+      where: "Where in the code",
+      concepts: "Concepts",
+      // The card states evidence; it never asks for any. Both counters are read
+      // out as facts, because the map is not where an answer is given.
+      untouched: "No answers recorded here yet",
+      optional: "Optional — off the default walk, still reachable",
+      // Two labels for one button, because the act differs. From anywhere else
+      // this moves the session pointer; on the stop you are already standing on
+      // it just puts the lesson back in front of you.
+      goToLesson: "Go to lesson",
+      returnToLesson: "Back to this lesson",
+      close: "Close",
+    },
     understoodOfTotal: (understood: number, total: number) =>
       `${understood} of ${total} understood`,
   },
