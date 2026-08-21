@@ -371,6 +371,7 @@ export default function RouteRail({
      */
     return (
       <aside
+        data-tour="rail"
         aria-label={t.rail.title}
         className="flex h-full min-h-0 flex-col items-center gap-2 overflow-y-auto border-e border-rule bg-trench py-4"
       >
@@ -426,6 +427,7 @@ export default function RouteRail({
 
   return (
     <aside
+      data-tour="rail"
       aria-label={t.rail.title}
       className="flex h-full min-h-0 flex-col gap-3 border-e border-rule bg-trench py-4"
     >

@@ -10,6 +10,7 @@ import SectionOverview from "@/components/SectionOverview";
 import LessonPanel from "@/components/LessonPanel";
 import CodeViewer from "@/components/CodeViewer";
 import SessionHeader from "@/components/SessionHeader";
+import SessionTour from "@/components/tour/SessionTour";
 import SurfaceTabs from "@/components/lesson/SurfaceTabs";
 import { getSession, jump, sessionStart, setScope } from "@/lib/api";
 import type { GraphNode, SessionGraph } from "@/lib/api";
@@ -159,6 +160,10 @@ export default function SessionPage() {
   // note beside `arrivalDismissed` for why this is not a boolean.
   const [dismissedArrivalAt, setDismissedArrivalAt] = useState<string | null>(null);
   const [scopeNote, setScopeNote] = useState<string | null>(null);
+  // A nonce rather than a boolean: `Replay the tour` has to be able to fire a
+  // second time after the first replay has ended, and a flag that is already
+  // true announces nothing.
+  const [tourReplay, setTourReplay] = useState(0);
   // Sections already introduced this visit. Kept in a ref because it must not
   // cause a render, and paired with an evidence guard below — a section with
   // stops behind it is not new, whatever this page happens to remember.
@@ -412,6 +417,7 @@ export default function SessionPage() {
         scopeNote={scopeNote}
         onScope={adjustScope}
         onBriefing={() => router.push(`/session/${id}/welcome`)}
+        onReplayTour={() => setTourReplay((n) => n + 1)}
         restarting={restarting}
         onStartOver={async () => {
           setRestarting(true);
@@ -606,7 +612,7 @@ export default function SessionPage() {
                it now sits in Analysis where the rest of the account of the journey
                is. */
             <div className="flex min-h-0 flex-1">
-              <div className="min-h-0 flex-1">
+              <div data-tour="surface" className="min-h-0 flex-1">
                 {tab === "map" ? (
                   <MapView
                     nodes={graph.nodes}
@@ -668,6 +674,23 @@ export default function SessionPage() {
             onClose={() => setShowCode(false)}
           />
         )}
+
+        {/* THE TOUR, over everything. Mounted inside the grid rather than beside
+            it only because that is where the page's other overlays live; it is
+            `fixed`, so the grid does not place it.
+
+            It is handed the two pieces of session state it is allowed to watch and
+            the two it is allowed to move — and it moves the tab through the SAME
+            `dispatchTab` every other caller uses, so R5 holds for the tour as well
+            (see `lib/surfaceTabs.ts`). */}
+        <SessionTour
+          ready={!!currentNodeId}
+          fresh={graph.progress.stops_settled === 0}
+          replay={tourReplay}
+          ctx={{ tab, sourceOpen: showCode }}
+          onTabEvent={dispatchTab}
+          onSource={setShowCode}
+        />
 
         {/* The route, in the band where it has no column of its own. Same
             component and the same handlers — jumping closes it, because the

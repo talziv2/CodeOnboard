@@ -25,7 +25,7 @@ export default function TracePath({
   const isPath = anchors.length > 1;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div data-tour="code-links" className="flex flex-col gap-2">
       <SectionLabel>{isPath ? t.lesson.tracePath : t.lesson.codeLocation}</SectionLabel>
       <ol className="flex flex-col gap-1">
         {anchors.map((a, i) => (

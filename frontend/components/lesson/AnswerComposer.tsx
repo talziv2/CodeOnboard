@@ -35,7 +35,7 @@ export default function AnswerComposer({
   error: string | null;
 }) {
   return (
-    <div className="flex flex-col gap-3">
+    <div data-tour="composer" className="flex flex-col gap-3">
       {/* The question is markdown too — Teaching writes `**Anchor 1:**` and
           backticked identifiers into it constantly, and the one string the
           learner has to parse to answer at all was the worst place to print

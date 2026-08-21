@@ -100,7 +100,7 @@ export default function CodeViewer({
   }
 
   return (
-    <aside className="relative flex min-h-0 flex-col bg-trench">
+    <aside data-tour="source-pane" className="relative flex min-h-0 flex-col bg-trench">
       <DockDivider width={source.dockWidth} onCommit={(dockWidth) => onSourceChange({ dockWidth })} />
       {header}
       {body}
@@ -358,6 +358,7 @@ function FloatShell({
   return (
     <div
       ref={panel}
+      data-tour="source-pane"
       role="dialog"
       aria-label={t.source.window}
       style={{ left: placed.x, top: placed.y, width: placed.w, height: placed.h }}
