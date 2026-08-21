@@ -115,8 +115,32 @@ describe("blocks that have nothing to show are absent, not empty", () => {
 
   test("no gaps means no gap block, in any phase", () => {
     for (const phase of ["STUDY", "FEEDBACK", "VERIFY", "RESOLVED"] as const) {
-      expect(lessonBlocks({ ...base, phase, openGapCount: 0 }).gaps).toBe("absent");
+      expect(
+        lessonBlocks({ ...base, phase, openGapCount: 0, gapCount: 0 }).gaps
+      ).toBe("absent");
     }
+  });
+
+  // The ledger's whole point: clearing the last gap must not delete the record
+  // of having cleared it. Absent is reserved for a stop that never had one.
+  test("a fully settled ledger stays, collapsed, in every phase", () => {
+    for (const phase of ["STUDY", "FEEDBACK", "VERIFY", "RESOLVED"] as const) {
+      expect(
+        lessonBlocks({ ...base, phase, openGapCount: 0, gapCount: 3 }).gaps
+      ).toBe("collapsed");
+    }
+  });
+
+  test("outstanding gaps still open the block while studying", () => {
+    expect(
+      lessonBlocks({ ...base, phase: "STUDY", openGapCount: 1, gapCount: 3 }).gaps
+    ).toBe("open");
+  });
+
+  // Every caller predating the ledger passes only the open count.
+  test("without a total, the open count decides existence as it always did", () => {
+    expect(lessonBlocks({ ...base, phase: "STUDY", openGapCount: 0 }).gaps).toBe("absent");
+    expect(lessonBlocks({ ...base, phase: "STUDY", openGapCount: 2 }).gaps).toBe("open");
   });
 
   test("a first attempt has no history to collapse", () => {

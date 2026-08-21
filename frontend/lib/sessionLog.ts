@@ -97,13 +97,11 @@ function fromGaps(graph: SessionGraph): LogEntry[] {
   const out: LogEntry[] = [];
   for (const node of graph.nodes) {
     for (const gap of node.gaps ?? []) {
-      // `NodeGap` on the node wire carries no timestamps — those live on
-      // `GapDetail`, which only the evidence drawer fetches. So a gap contributes a
-      // row only when the shape it arrived in can say WHEN, and the rest are left
-      // to the drawer rather than given a made-up position in a chronology.
-      const opened = (gap as { opened_at?: string }).opened_at;
-      const closed = (gap as { closed_at?: string | null }).closed_at;
-      const status = (gap as { status?: string }).status;
+      // A gap contributes a row only when it can say WHEN. The node wire carries
+      // the timestamps now — before the ledger it did not, and these three reads
+      // were casts against a shape that never arrived, so the log had no gap rows
+      // at all. A graph stored before that still has none, hence the guards.
+      const { opened_at: opened, closed_at: closed, status } = gap;
       if (opened) {
         out.push({ kind: "gap_opened", at: opened, subject: node.title, count: 1 });
       }

@@ -128,13 +128,41 @@ describe("the reading blocks", () => {
 describe("the state blocks", () => {
   const GAP: NodeGap = { id: "g1", kind: "wrong_model", claim: "A connected graph cannot fail.", blocking: true };
 
-  test("gaps are named, not counted, and each can be set aside", async () => {
+  test("gaps are named, not counted, and each can be cleared or set aside", async () => {
     const onWaive = vi.fn();
-    render(<GapList gaps={[GAP]} onWaive={onWaive} />);
+    const onSolve = vi.fn();
+    render(<GapList gaps={[GAP]} onSolve={onSolve} onWaive={onWaive} />);
 
     expect(screen.getByText("A connected graph cannot fail.")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: t.lesson.gapSolve }));
+    expect(onSolve).toHaveBeenCalledWith("g1");
     await userEvent.click(screen.getByRole("button", { name: t.lesson.waiveOne }));
     expect(onWaive).toHaveBeenCalledWith("g1");
+  });
+
+  // The defect the ledger exists to fix: a resolved gap used to leave the wire,
+  // so the one act the learner can perform on a gap made its row disappear.
+  test("a resolved gap keeps its row, marked, and loses the give-up verb", () => {
+    const resolved: NodeGap = { ...GAP, id: "g2", claim: "Retries are free.", status: "verified" };
+    render(<GapList gaps={[GAP, resolved]} onSolve={vi.fn()} onWaive={vi.fn()} />);
+
+    expect(screen.getByText("Retries are free.")).toBeTruthy();
+    expect(screen.getByText(t.lesson.gapStatusVerified)).toBeTruthy();
+    expect(screen.getByText(t.lesson.gapsTally(1, 2))).toBeTruthy();
+    // One open gap, so exactly one of each verb — the resolved row offers neither.
+    expect(screen.getAllByRole("button", { name: t.lesson.waiveOne })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: t.lesson.gapSolve })).toHaveLength(1);
+  });
+
+  // Waiving is a choice, never evidence, so it must stay reversible.
+  test("a waived gap can still be cleared", () => {
+    const waived: NodeGap = { ...GAP, status: "waived" };
+    render(<GapList gaps={[waived]} onSolve={vi.fn()} onWaive={vi.fn()} />);
+
+    expect(screen.getByText(t.lesson.gapStatusWaived)).toBeTruthy();
+    expect(screen.getByText(t.lesson.gapsTally(0, 1))).toBeTruthy();
+    expect(screen.getByRole("button", { name: t.lesson.gapSolve })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: t.lesson.waiveOne })).toBeNull();
   });
 
   test("the history counts what it was given and opens to the answer", async () => {

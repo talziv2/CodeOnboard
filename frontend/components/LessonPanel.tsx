@@ -8,6 +8,7 @@ import {
   advance,
   retry,
   requestVerification,
+  openOnly,
   respondToVerification,
   waive,
 } from "@/lib/api";
@@ -110,6 +111,9 @@ export default function LessonPanel({
   // definition absent from it — the claims have to come from the question that
   // targeted them.
   const [checked, setChecked] = useState<{ answer: string; targeted: NodeGap[] } | null>(null);
+  // Which gap the learner asked to clear, while its question is being written.
+  // Row-scoped so the spinner lands on the row they pressed rather than on all.
+  const [solvingGapId, setSolvingGapId] = useState<string | null>(null);
   // The Mutator refused a warm-up for THIS node. Kept out of `result` on purpose:
   // it outlives any one answer, because what it records is a fact about the
   // stop's surroundings rather than about the attempt that asked.
@@ -277,11 +281,17 @@ export default function LessonPanel({
   // Ask for a FRESH question about the leading gap. Not a retry: the learner
   // has already been shown the reasoning for the question they answered, so
   // re-asking it would test recall (§18.7).
-  const onCheckUnderstanding = async () => {
+  //
+  // `gapId` is the learner naming one from the ledger; omitting it lets the
+  // server pick the leading gap, which is what the panel's own CTA does. The
+  // named form also reaches a gap the system has stopped proposing for — the
+  // cap bounds the nagging, not the learner (see `/verify`).
+  const onCheckUnderstanding = async (gapId?: string) => {
     setVerifying(true);
+    setSolvingGapId(gapId ?? null);
     setError(null);
     try {
-      setVerification(await requestVerification(sessionId, nodeId));
+      setVerification(await requestVerification(sessionId, nodeId, gapId));
       onSurfaceChanged?.("understanding");
       setAnswer("");
       setResult(null);
@@ -289,6 +299,7 @@ export default function LessonPanel({
       setError(e instanceof Error ? errorText(e.message) : t.lesson.warmUpFailed);
     } finally {
       setVerifying(false);
+      setSolvingGapId(null);
     }
   };
 
@@ -392,9 +403,13 @@ export default function LessonPanel({
   // pointless friction rather than pedagogy.
   const revealed = Boolean(result) || attempts.length > 0;
 
-  // What the learner still does not know here, preferring the just-graded reply
-  // over the graph, which lags by one refresh on the warm-up path.
-  const openGaps: NodeGap[] = result?.gaps ?? node.gaps ?? [];
+  // Every gap on this stop, settled ones included, preferring the just-graded
+  // reply over the graph, which lags by one refresh on the warm-up path.
+  const allGaps: NodeGap[] = result?.gaps ?? node.gaps ?? [];
+  // OUTSTANDING work only. Split from `allGaps` rather than filtered at source:
+  // the ledger needs both halves to show progress, and every counter here means
+  // "still wrong" and would be inflated by the resolved rows.
+  const openGaps: NodeGap[] = openOnly(allGaps);
 
   // One region, three contents — the eyebrow is what says which.
   const practiceLabel = verification
@@ -505,6 +520,7 @@ export default function LessonPanel({
     phase,
     locationCount: locations.length,
     openGapCount: openGaps.length,
+    gapCount: allGaps.length,
     attemptCount: attempts.length,
     revealed,
     hasReveal: isSplit && Boolean(lesson.lesson.reveal),
@@ -653,7 +669,16 @@ export default function LessonPanel({
               // A count on "Where this lives in the code" would always read "(1)".
               tracePathCount: locations.length > 1 ? locations.length : undefined,
               gaps: t.lesson.gapsHeading,
-              gapsCount: openGaps.length,
+              // The OPEN count, on a list that also holds settled rows. The
+              // collapsed label is a call to action — "2" means two things still
+              // want answering — and counting the cleared ones there would make
+              // the number grow as the learner fixed things.
+              //
+              // Dropped entirely at zero rather than shown as "0": a settled
+              // ledger is a record, and a disclosure badged "0" reads as an
+              // empty block nobody should bother opening. The tally inside says
+              // "3 of 3 resolved", which is the thing actually worth knowing.
+              gapsCount: openGaps.length || undefined,
               attempts: t.lesson.yourAnswers(attempts.length),
               earlier: t.lesson.earlierExplanations(superseded.length),
               question: t.lesson.questionAsked,
@@ -681,7 +706,13 @@ export default function LessonPanel({
             tracePath={<TracePath anchors={locations} onFileClick={onFileClick} />}
             gaps={
               <div id="lesson-gaps">
-                <GapList gaps={openGaps} onWaive={onWaive} disabled={loading} />
+                <GapList
+                  gaps={allGaps}
+                  onSolve={onCheckUnderstanding}
+                  onWaive={onWaive}
+                  disabled={loading || verifying}
+                  solvingGapId={solvingGapId}
+                />
               </div>
             }
             attempts={

@@ -5,7 +5,7 @@ import { buildRoute } from "@/lib/graph-layout";
 import { splitJourney } from "@/lib/route-sections";
 import { node } from "@/test/factories";
 import { t } from "@/lib/strings";
-import type { Area, GraphEdge, GraphNode } from "@/lib/api";
+import type { Area, GraphEdge, GraphNode, NodeGap } from "@/lib/api";
 
 /**
  * The rail, after the six notes that came out of walking a real session.
@@ -353,5 +353,60 @@ describe("the heading and the chevron are two controls, not one", () => {
     fireEvent.click(screen.getByText("Explain the Session–adapter handoff"));
     expect(onJump).toHaveBeenCalled();
     expect(onJump.mock.calls[0][0].id).toBe("n1");
+  });
+});
+
+/**
+ * The rail counts OUTSTANDING work. The node wire now also carries settled gaps
+ * — that is what lets the lesson show a cleared gap as cleared instead of
+ * deleting it — so the rail has to filter, or clearing a gap would leave the
+ * stop still reading "2 unresolved" forever.
+ */
+describe("the rail counts what is still unresolved", () => {
+  // `unresolved` is what puts the caption on screen at all — the rail only
+  // captions a stop the server has classified that way.
+  const withGaps = (gaps: NodeGap[]) =>
+    ({ ...stop("n1", "Explain the Session–adapter handoff", "a1", "requests/sessions.py"),
+       understanding: "unresolved", gaps }) as GraphNode;
+
+  const railOf = (target: GraphNode) => {
+    const nodes = [target, ...NODES.slice(1)];
+    const edges: GraphEdge[] = nodes.slice(0, -1).map((n, i) => ({
+      from_id: n.id, to_id: nodes[i + 1].id, kind: "sequence",
+    }));
+    const journey = splitJourney(buildRoute(nodes, edges), AREAS, "n2");
+    return render(
+      <RouteRail
+        sections={journey.sections}
+        optional={journey.optional}
+        currentNodeId="n2"
+        openSectionId={null}
+        onJump={vi.fn()}
+        onOpenSection={vi.fn()}
+        onExpand={vi.fn()}
+      />
+    );
+  };
+
+  const GAP = (id: string, status: string): NodeGap => ({
+    id, kind: "wrong_model", claim: `claim ${id}`, blocking: true, status,
+  });
+
+  test("a settled gap does not count against the stop", () => {
+    railOf(withGaps([GAP("a", "open"), GAP("b", "verified"), GAP("c", "waived")]));
+    expect(screen.getByText(t.rail.unresolvedCount(1))).toBeTruthy();
+  });
+
+  test("a stop whose gaps were all cleared is not captioned as unresolved work", () => {
+    railOf(withGaps([GAP("a", "verified"), GAP("b", "verified")]));
+    expect(screen.queryByText(t.rail.unresolvedCount(2))).toBeNull();
+    expect(screen.queryByText(t.rail.unresolvedCount(0))).toBeNull();
+  });
+
+  test("only outstanding claims are named in the hover", () => {
+    railOf(withGaps([GAP("a", "open"), GAP("b", "verified")]));
+    const row = screen.getByText("Explain the Session–adapter handoff").closest("[title]");
+    expect(row?.getAttribute("title")).toContain("claim a");
+    expect(row?.getAttribute("title")).not.toContain("claim b");
   });
 });

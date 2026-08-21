@@ -282,9 +282,25 @@ to choose the intervention (hint / re-teach / prerequisite / follow-up) and what
 the Mutator's `Diagnosis` carries. A flag-on session can therefore receive a
 different response than the same session flag-off. Measured direction: `gap_kind`
 agreement 47–48/48 against a baseline of 45, `missing_prerequisite` 4/6 → 6/6.
-Gaps are collected but never shown to the learner until gap-model M6 ships
-verification — until then nothing can close one, so a displayed list could only
-ever grow. Decided in `learning-graph.md` §11 OQ-4.
+Gaps were withheld from the learner until M6 shipped verification, because until
+something could close one a displayed list could only ever grow
+(`learning-graph.md` §11 OQ-4). They are now shown, as a **ledger**: every gap
+on the stop with its `status`, open ones first with a `Clear this` button,
+settled ones below, struck through and marked. The condition that justified
+hiding them is the same one that shapes the surface — a list you can only add to
+is a scoreboard of failures, and one you can close entries on is a record of
+repair.
+
+Two rules follow from that, and both are load-bearing:
+
+- **Only a fresh verification answer produces `verified`.** `Gap.mark_verified`
+  is called from exactly one place. Re-answering the lesson's own question can
+  match or open gaps, never close one — the reveal already gave the reasoning
+  away, so that would test recall (§18.7).
+- **The attempt cap bounds the system, not the learner.**
+  `VERIFICATION_ATTEMPT_CAP` removes a gap from the *active set*, so `/verify`
+  stops offering it. A learner who names it — `POST /verify {gap_id}` from the
+  ledger — still gets a question. Asking is a different act from being nagged.
 
 ---
 

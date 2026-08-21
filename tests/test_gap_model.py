@@ -284,14 +284,15 @@ def test_the_flag_defaults_to_off(monkeypatch):
 # ── M1 is inert ──────────────────────────────────────────────────────────────
 
 
-def test_open_gaps_reach_the_api_payload_by_name():
-    """Inverted when M9 landed; through M1–M8 this asserted the opposite.
+def test_gaps_reach_the_api_payload_by_name_and_keep_their_status():
+    """Inverted twice. Through M1–M8 this asserted that nothing surfaced at all;
+    M9 flipped it to OPEN gaps only; the ledger flips the second half again.
 
-    M1's contract was that nothing observable changed, and the wire was part of
-    that — "gaps surface in M9" was the note. M9 is where they surface, so the
-    expectation flips. What is asserted now is the shape M9 promised: OPEN gaps,
-    named, with the `blocking` flag the UI needs to distinguish "holding this
-    stop back" from "worth knowing".
+    Settled gaps now ship too, because this payload is what the lesson falls
+    back to between answers — filtering them out here is what made a gap the
+    learner CLEARED vanish from the list that had just named it. `status` is how
+    a consumer tells outstanding work from repaired work; the rail filters on it
+    to keep its count meaning "still unresolved".
 
     The internal container still does not leak: `gap_state` is storage, `gaps`
     is the wire.
@@ -303,13 +304,19 @@ def test_open_gaps_reach_the_api_payload_by_name():
     assert "gap_state" not in node_payload
     assert {g["claim"] for g in node_payload["gaps"]} == {CLAIM_A, CLAIM_B}
     assert all(g["blocking"] is True for g in node_payload["gaps"])
+    assert all(g["status"] == "open" for g in node_payload["gaps"])
 
-    # Settled gaps are not outstanding work and do not appear.
+    # A settled gap KEEPS its row, and says how it settled.
     node.gap_state.gaps[0].waive()
+    node.gap_state.gaps[1].mark_verified(0)
     reshown = next(
         n for n in graph.to_dict()["nodes"] if n["id"] == node.id
     )["gaps"]
-    assert [g["claim"] for g in reshown] == [CLAIM_B]
+    assert {g["claim"]: g["status"] for g in reshown} == {
+        CLAIM_A: "waived", CLAIM_B: "verified",
+    }
+    # And when it settled, which is what the session log's gap rows read.
+    assert all(g["closed_at"] for g in reshown)
 
 
 def test_gaps_now_hold_back_understanding_and_readiness():

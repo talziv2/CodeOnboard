@@ -352,11 +352,19 @@ class WaiveRequest(BaseModel):
 
 
 def _gaps_payload(node) -> list[dict]:
-    """The node's OPEN gaps, for the learner to see.
+    """The node's gaps, for the learner to see — SETTLED ONES INCLUDED.
 
     §18.10 calls this "the product's most honest surface: it tells the learner
-    what they still do not know, by name". Open only — a `verified` gap is closed
-    and a `waived` one is what they asked to stop hearing about.
+    what they still do not know, by name". It used to send open gaps only, and
+    that made the surface honest about the debt and silent about the repayment:
+    a gap the learner CLOSED vanished from the wire the moment it closed, so the
+    one trace of the work was an ephemeral feedback card. A ledger that deletes
+    the settled rows cannot show progress, only debt.
+
+    So `status` decides how a gap renders, not whether it exists. Every consumer
+    filters for itself — `is_open` here would take the choice away from all of
+    them, and the two that want open-only (the stop counter, the check-available
+    test) say so in one expression.
 
     `blocking` is included even though it is derivable from `kind`, because the
     frontend needs to distinguish "this is holding the node back" from "this is
@@ -372,9 +380,10 @@ def _gaps_payload(node) -> list[dict]:
             "blocking": gap.is_blocking,
             "verification_attempts": gap.verification_attempts,
             "exhausted": gap.is_exhausted,
+            "opened_at": gap.opened_at,
+            "closed_at": gap.closed_at,
         }
         for gap in node.gaps
-        if gap.is_open
     ]
 
 
@@ -771,27 +780,49 @@ def session_verify(session_id: str, body: dict | None = None) -> dict:
     Replaces "Try again", which re-showed the answered question after `reveal`
     had already given away the reasoning — a memory check (§18.7).
 
-    Aimed at ONE gap: the highest-precedence open blocking gap that still has
-    verification budget. Asking about three at once would let an answer address
-    one and appear to have addressed all three, which is the partial answer that
+    Aimed at ONE gap. Asking about three at once would let an answer address one
+    and appear to have addressed all three, which is the partial answer that
     looks like completion.
+
+    WHICH one depends on who asked. Omit `gap_id` and the system chooses: the
+    highest-precedence open blocking gap that still has verification budget.
+    Supply `gap_id` and the learner chose, from the gap list, by name.
+
+    That distinction is also what decides the attempt cap. `VERIFICATION_ATTEMPT_CAP`
+    exists so the SYSTEM stops proposing for a gap it has already asked about
+    twice (gaps.py, §18.16.1) — it was never a limit on the learner's own
+    appetite. A learner who reads "you still believe X" and asks to be tested on
+    it again is performing a different act than the system nagging, so an
+    exhausted gap is still reachable by name. It remains absent from the active
+    set, so nothing about the system's own offering changes.
     """
-    node_id = (body or {}).get("node_id")
+    body = body or {}
+    node_id = body.get("node_id")
+    gap_id = body.get("gap_id")
     graph = _load_session_or_404(session_id)
     current = node_id or graph.current_node_id
     if current is None or current not in graph.nodes:
         raise HTTPException(status_code=404, detail="node_not_found")
     node = graph.nodes[current]
 
-    plan = adaptation.decide_all(
-        "partial", list(node.gaps),
-        remediation_rounds=node.gap_state.remediation_rounds,
-    )
-    # The active set is already precedence-ordered and cap-filtered, so an
-    # exhausted gap is not offered — the system has stopped proposing for it.
-    target = plan.active_set[0] if plan.active_set else None
-    if target is None:
-        raise HTTPException(status_code=409, detail="nothing_to_verify")
+    if gap_id:
+        # By name, so precedence and the cap are both bypassed — but not
+        # `is_open`. A verified gap has nothing left to demonstrate and a waived
+        # one is what they asked to stop hearing about; re-asking either would
+        # spend a call to re-close something already closed.
+        target = next((g for g in node.gaps if g.id == gap_id and g.is_open), None)
+        if target is None:
+            raise HTTPException(status_code=404, detail="gap_not_found")
+    else:
+        plan = adaptation.decide_all(
+            "partial", list(node.gaps),
+            remediation_rounds=node.gap_state.remediation_rounds,
+        )
+        # The active set is already precedence-ordered and cap-filtered, so an
+        # exhausted gap is not offered — the system has stopped proposing for it.
+        target = plan.active_set[0] if plan.active_set else None
+        if target is None:
+            raise HTTPException(status_code=409, detail="nothing_to_verify")
 
     client = _new_client()
     state = OnboardState(repo_url=graph.repo_url, goal=graph.goal, client=client)

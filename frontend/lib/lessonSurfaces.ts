@@ -57,7 +57,11 @@ export const SURFACE_OF: Record<BlockName, Surface> = {
   question: "understanding",
   /** The verdict: key point, rationale, consequence, actions. */
   feedback: "understanding",
-  /** Named misconceptions, with their per-gap set-aside control. */
+  /**
+   * Named misconceptions and their status — open, cleared, set aside — with the
+   * per-gap controls for clearing one or setting it aside. Understanding's,
+   * because a claim the learner made is evidence about them, not material.
+   */
   gaps: "understanding",
   /** Previously graded answers. Evidence about the learner. */
   attempts: "understanding",

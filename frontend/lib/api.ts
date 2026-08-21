@@ -432,9 +432,13 @@ export interface GraphNode {
   has_lesson: boolean;
   attempts: Attempt[];
   /**
-   * What the learner still does not know here, by name (gap-model M9). OPEN
-   * gaps only — a verified one is closed and a waived one is what they asked to
-   * stop hearing about, so neither is outstanding work.
+   * What the learner does not know here, by name (gap-model M9) — and what they
+   * have since PUT RIGHT. Every gap on the stop, whatever its status.
+   *
+   * This used to be open-only, which made the list a debt column: a gap the
+   * learner closed left the wire the instant it closed, so the ledger could
+   * only ever grow or silently shrink. Filter on `status` for outstanding work
+   * (`openOnly` below); render the rest as the record of what was fixed.
    *
    * This is what lets a stop carrying unresolved misconceptions read differently
    * from one nobody has touched; before M9 both rendered as "not done".
@@ -442,7 +446,7 @@ export interface GraphNode {
   gaps?: NodeGap[];
 }
 
-/** A misconception, as a stop carries it. */
+/** A misconception, as a stop carries it, with its lifecycle. */
 export interface NodeGap {
   id: string;
   /** "wrong_model" | "missing_prerequisite" | "right_idea_wrong_altitude". */
@@ -451,7 +455,28 @@ export interface NodeGap {
   claim: string;
   /** Does it hold the stop back from counting as demonstrated? */
   blocking: boolean;
+  /**
+   * "open" | "verified" | "waived". Only `verified` permits `understood`, and
+   * only a fresh verification answer can produce it. Optional because a session
+   * graded before the status reached this payload has none.
+   */
+  status?: string;
+  /** Which clause of the objective the claim violates. May be empty. */
+  objective_part?: string;
+  /** How many verification questions have been spent on it. */
+  verification_attempts?: number;
+  /**
+   * The SYSTEM has stopped proposing checks for this one. It does not stop the
+   * learner asking: "Check this" targets a gap by id, which bypasses the cap.
+   */
+  exhausted?: boolean;
+  opened_at?: string;
+  closed_at?: string | null;
 }
+
+/** Outstanding work only. A gap with no `status` predates the field and is open. */
+export const openOnly = (gaps: NodeGap[] | undefined): NodeGap[] =>
+  (gaps ?? []).filter((g) => (g.status ?? "open") === "open");
 
 /** A gap with its full lifecycle, as the evidence drawer receives it. */
 export interface GapDetail extends NodeGap {
@@ -593,7 +618,7 @@ export interface RespondResult {
   mutation: Mutation;
   adaptation?: Adaptation;
   current_node_id: string | null;
-  /** Still-open gaps on the graded stop, after this answer. */
+  /** Every gap on the graded stop after this answer, settled ones included. */
   gaps?: NodeGap[];
   /** Journey completion — separate from readiness, and neither gates the other. */
   complete?: boolean;
@@ -620,8 +645,16 @@ export interface VerificationPrompt {
   gaps: NodeGap[];
 }
 
-export const requestVerification = (session_id: string, node_id?: string) =>
-  post<VerificationPrompt>(`/session/${session_id}/verify`, { node_id });
+/**
+ * Ask for a check. Omit `gap_id` and the server picks the leading gap; pass one
+ * and the learner picked it from the list by name, which also bypasses the
+ * two-question cap — that cap bounds the system's nagging, not their appetite.
+ */
+export const requestVerification = (
+  session_id: string,
+  node_id?: string,
+  gap_id?: string,
+) => post<VerificationPrompt>(`/session/${session_id}/verify`, { node_id, gap_id });
 
 /** Answer a verification question. Graded against the gaps, not the objective. */
 export const respondToVerification = (

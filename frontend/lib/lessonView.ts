@@ -91,7 +91,16 @@ export interface ViewInput {
    * throwing away the number the renderer needed anyway.
    */
   locationCount: number;
+  /** Gaps still outstanding. Decides whether the block is worth OPENING. */
   openGapCount: number;
+  /**
+   * Every gap on the stop, settled ones included. Decides whether the block
+   * EXISTS — which is a different question, and keying both off the open count
+   * is what used to delete the whole ledger the moment the last gap was cleared.
+   * Success made the record of the success disappear. Omit and it falls back to
+   * the open count, which is the pre-ledger behaviour.
+   */
+  gapCount?: number;
   attemptCount: number;
   /** The reveal is unlocked — a graded answer exists, or this is a revisit. */
   revealed: boolean;
@@ -105,6 +114,7 @@ export function lessonBlocks({
   phase,
   locationCount,
   openGapCount,
+  gapCount,
   attemptCount,
   revealed,
   hasReveal,
@@ -139,9 +149,20 @@ export function lessonBlocks({
     // saying where this unit lives. Collapsed it is one labelled row and one click.
     tracePath: locationCount === 0 ? "absent" : "collapsed",
 
-    // Open where they are the subject, collapsed where the key point has already
-    // named the leading one.
-    gaps: openGapCount === 0 ? "absent" : phase === "STUDY" ? "open" : "collapsed",
+    // Present whenever the stop has a ledger AT ALL; open only where the gaps
+    // are the subject and something is still outstanding.
+    //
+    // The two counts answer two questions. A stop where every gap is settled
+    // still has a record worth keeping — "you got these wrong and then cleared
+    // them" is the one place the learner sees their own repair — so it stays,
+    // collapsed, as the record it now is. A stop that never had a gap has
+    // nothing to collapse.
+    gaps:
+      (gapCount ?? openGapCount) === 0
+        ? "absent"
+        : phase === "STUDY" && openGapCount > 0
+          ? "open"
+          : "collapsed",
 
     // A record, always consulted rather than read. The count lives in the brief.
     attempts: attemptCount === 0 ? "absent" : "collapsed",

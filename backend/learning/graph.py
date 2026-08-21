@@ -761,15 +761,29 @@ class LearningGraph:
                     "weak_spot": n.weak_spot,
                     "has_lesson": n.cached_lesson is not None,
                     "attempts": n.attempts,
-                    # OPEN gaps only (gap-model M9). What the learner still does
-                    # not know, by name — the rail marks these distinctly from
-                    # untouched stops, which previously both read as "not done".
-                    # Settled gaps are omitted: a verified one is closed, and a
-                    # waived one is what they asked to stop hearing about.
+                    # EVERY gap, settled ones included, each with its `status`.
+                    # What the learner does not know here by name — and what
+                    # they have since put right.
+                    #
+                    # This sent open gaps only, and it is the payload the lesson
+                    # falls back to between answers. So a gap the learner CLOSED
+                    # was visible for exactly one render of the feedback card and
+                    # then gone: the single act they can perform on a gap deleted
+                    # its own evidence. Consumers that mean "outstanding work" —
+                    # the rail's count, its hover — filter on `status`, which is
+                    # a thing they can now do and previously could not.
+                    #
+                    # `opened_at` / `closed_at` also unblock the session log's
+                    # gap rows, which were written against this shape and had
+                    # nothing to read.
                     "gaps": [
                         {"id": g.id, "kind": g.kind, "claim": g.claim,
-                         "blocking": g.is_blocking}
-                        for g in n.gaps if g.is_open
+                         "objective_part": g.objective_part,
+                         "status": g.status, "blocking": g.is_blocking,
+                         "verification_attempts": g.verification_attempts,
+                         "exhausted": g.is_exhausted,
+                         "opened_at": g.opened_at, "closed_at": g.closed_at}
+                        for g in n.gaps
                     ],
                 }
                 for n in self.nodes.values()

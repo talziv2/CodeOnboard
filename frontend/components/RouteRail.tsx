@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { GraphNode } from "@/lib/api";
+import { openOnly, type GraphNode } from "@/lib/api";
 import type { RouteStop } from "@/lib/graph-layout";
 import { isComplete, isSettled, type RouteSection } from "@/lib/route-sections";
 import { understandingLabel } from "@/lib/tags";
@@ -117,10 +117,16 @@ function Stop({
       // The detail the row no longer spends a line on stays one hover away.
       // Open gaps are named here too: a stop with unresolved misconceptions and
       // an untouched stop both read as "not done" otherwise (§18.10).
+      //
+      // `openOnly`, because the wire now carries settled gaps as well — the rail
+      // reports OUTSTANDING work, so a stop whose gaps were all cleared must
+      // read as clear rather than as three unresolved misconceptions.
       title={
-        (node.gaps?.length ?? 0) > 0
-          ? `${node.title} · ${node.file} — ${state} · ${t.rail.unresolved}: ${node
-              .gaps!.map((g) => g.claim)
+        openOnly(node.gaps).length > 0
+          ? `${node.title} · ${node.file} — ${state} · ${t.rail.unresolved}: ${openOnly(
+              node.gaps
+            )
+              .map((g) => g.claim)
               .join("; ")}`
           : `${node.title} · ${node.file} — ${state}`
       }
@@ -185,7 +191,7 @@ function Stop({
           <span
             className="font-mono text-micro tracking-[0.05em] text-rust"
             title={
-              (node.gaps?.length ?? 0) > 0
+              openOnly(node.gaps).length > 0
                 ? t.rail.unresolvedHint
                 : node.disposition === "waived"
                   ? t.rail.setAsideHint
@@ -197,8 +203,8 @@ function Stop({
                 set aside, and a genuine rough patch. Only the last is a
                 weakness, and saying so for all three is what M3a.1 set out to
                 stop. */}
-            {(node.gaps?.length ?? 0) > 0
-              ? t.rail.unresolvedCount(node.gaps!.length)
+            {openOnly(node.gaps).length > 0
+              ? t.rail.unresolvedCount(openOnly(node.gaps).length)
               : node.disposition === "waived"
                 ? t.rail.setAside
                 : state}

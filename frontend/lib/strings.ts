@@ -585,8 +585,24 @@ export const t = {
     briefGaps: (count: number) => (count === 1 ? "1 unresolved" : `${count} unresolved`),
     briefAttempts: (count: number) =>
       count === 1 ? "1 answer" : `${count} answers`,
-    gapsHeading: "Still unresolved",
-    gapsHelp: "You can check these now, or carry on and come back.",
+    gapsHeading: "What you got wrong here",
+    gapsHelp:
+      "Each one stays on the record. Clear it by answering a fresh question about it — it then reads as resolved rather than disappearing.",
+    /** The ledger's own tally: resolved over total, never a bare count of debt. */
+    gapsTally: (resolved: number, total: number) =>
+      `${resolved} of ${total} resolved`,
+    /** Per-gap actions and status. */
+    gapSolve: "Clear this",
+    gapSolveBusy: "Writing a question…",
+    gapStatusOpen: "Unresolved",
+    gapStatusVerified: "Resolved",
+    gapStatusWaived: "Set aside",
+    gapSettledHeading: "Settled",
+    /** Shown on a resolved gap: what closed it, and that only an answer could. */
+    gapResolvedNote: "You answered a check on this correctly.",
+    gapWaivedNote: "You chose to stop being asked. It can still be cleared.",
+    /** The system stopped offering; the learner can still ask. */
+    gapAskedTwice: "Asked twice already — you can still try again.",
     gapBlocking: "Holding this stop back",
     gapNonBlocking: "Worth knowing",
     gapWaived: "You set this aside",
