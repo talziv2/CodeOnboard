@@ -23,6 +23,7 @@ import {
   nextTab, surfaceForTab, tabsFor, type SessionTab, type TabEvent,
 } from "@/lib/surfaceTabs";
 import { unseenRouteChanges } from "@/lib/sessionLog";
+import { arrivalNotice } from "@/lib/arrival";
 import { errorText, t } from "@/lib/strings";
 
 export default function SessionPage() {
@@ -146,6 +147,13 @@ export default function SessionPage() {
   // walk running out, and `Finish session` in the header menu.
   const [finished, setFinished] = useState(false);
   const [scoping, setScoping] = useState(false);
+  // Going back to the route. Its own flag rather than reusing a jump spinner: the
+  // notice's button is the only thing that shows it, and it must not be disabled
+  // by an unrelated navigation.
+  const [returning, setReturning] = useState(false);
+  // The arrival the learner has said "Stay here" to, by its timestamp. See the
+  // note beside `arrivalDismissed` for why this is not a boolean.
+  const [dismissedArrivalAt, setDismissedArrivalAt] = useState<string | null>(null);
   const [scopeNote, setScopeNote] = useState<string | null>(null);
   // Sections already introduced this visit. Kept in a ref because it must not
   // cause a render, and paired with an evidence guard below — a section with
@@ -253,6 +261,21 @@ export default function SessionPage() {
     [graph]
   );
 
+  // How the learner reached the current stop, said on the stop itself.
+  //
+  // Derived HERE because it is a statement about the route, and this is where the
+  // route lives — the same `stops` the rail is numbered from, so the notice cannot
+  // quote a position the rail disagrees with.
+  //
+  // Dismissal is keyed on `arrival.at` rather than being a boolean: a later jump
+  // is a new fact and must be said again, and a boolean would silence every
+  // arrival for the rest of the session after the first "Stay here".
+  const arrival = useMemo(
+    () => arrivalNotice(graph?.arrival, graph?.current_node_id ?? null, stops),
+    [graph?.arrival, graph?.current_node_id, stops]
+  );
+  const arrivalDismissed = dismissedArrivalAt === graph?.arrival?.at;
+
   // Journey → section → stop, derived from the same graph the rail walks.
   const journey = useMemo(
     () => splitJourney(stops, graph?.areas ?? [], graph?.current_node_id ?? null),
@@ -305,6 +328,25 @@ export default function SessionPage() {
       await loadGraph();
     } catch (e: unknown) {
       setError(e instanceof Error ? errorText(e.message) : t.session.jumpFailed);
+    }
+  };
+
+  // Rejoining the route. Same endpoint as a jump, with the intent that tells the
+  // server this is the opposite act: it clears the arrival notice instead of
+  // raising another one, while still being recorded — a log showing only
+  // departures would imply the learner never came back.
+  const handleReturnToRoute = async (nodeId: string) => {
+    setReturning(true);
+    setViewingFile(null);
+    setViewingRange(null);
+    setFocusKey((k) => k + 1);
+    try {
+      await jump(id, nodeId, "resume");
+      await loadGraph();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? errorText(e.message) : t.session.jumpFailed);
+    } finally {
+      setReturning(false);
     }
   };
 
@@ -508,6 +550,12 @@ export default function SessionPage() {
                   total={spineLength(stops)}
                   isPrerequisite={currentStop?.isPrerequisite ?? false}
                   graph={graph}
+                  arrival={arrivalDismissed ? null : arrival}
+                  onReturnToRoute={handleReturnToRoute}
+                  onDismissArrival={() =>
+                    setDismissedArrivalAt(graph.arrival?.at ?? null)
+                  }
+                  returningToRoute={returning}
                   onFileClick={(file, lineStart, lineEnd) => {
                     setViewingFile(file);
                     setViewingRange(

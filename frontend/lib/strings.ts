@@ -504,6 +504,12 @@ export const t = {
         subject ? `A misconception was named on ${subject}` : "A misconception was named",
       gap_closed: (_count, subject) =>
         subject ? `You cleared a misconception on ${subject}` : "You cleared a misconception",
+      // Phrased as the learner's own act, because it was one. The log is a record
+      // of what happened to this journey, and "you moved" belongs in it beside
+      // "the system moved something" — the omission was what made jumping the one
+      // navigation act with no trace.
+      jumped: (_count, subject) =>
+        subject ? `You jumped to ${subject}` : "You jumped to another stop",
     } as Record<string, (count: number, subject: string | null) => string>,
   },
 
@@ -511,6 +517,42 @@ export const t = {
   lesson: {
     writing: "Writing this lesson…",
     warmUpHeading: "Warm-up · added after confusion",
+    // --- the arrival notice, on a stop the learner jumped to ---
+    //
+    // WORDING RULE: it reports MOVEMENT and never judges it. Jumping is allowed —
+    // no stop is locked and dependencies are not enforced — so nothing here may
+    // read as a reprimand or as a warning that something will go wrong. What it
+    // exists to fix is that departing from the route used to be silent, so the
+    // rail's order looked decorative.
+    //
+    // Composed from a place phrase rather than written out per case: three
+    // movements (ahead / back / unknown) times two places (a numbered station and
+    // a stop the rail does not number) is six sentences to keep in step, and they
+    // drifted the moment one of them was edited.
+    arrival: {
+      label: "Off the route",
+      place: (position: number, total: number) => `stop ${position} of ${total}`,
+      // A warm-up or an `optional` unit. The rail counts neither, so quoting a
+      // number would promise a position it does not show.
+      placeAside: "a stop off the default walk",
+      ahead: (place: string, passed: number) =>
+        passed === 0
+          ? `You jumped ahead to ${place}.`
+          : `You jumped ahead to ${place}, passing ${passed === 1 ? "1 stop" : `${passed} stops`}.`,
+      // "Already taken" is a claim about evidence, so it is said only where the
+      // stop was actually visited — jumping back to something never reached is
+      // perfectly possible.
+      back: (place: string, revisited: boolean) =>
+        revisited
+          ? `You came back to ${place} — already taken.`
+          : `You went back to ${place}.`,
+      // Said when the stop they left is no longer in the graph. Reports where they
+      // are and stops there, rather than guessing which way they came.
+      here: (place: string) => `You jumped to ${place}.`,
+      returnTo: (title: string) => `Return to “${title}”`,
+      returning: "Going back…",
+      dismiss: "Stay here",
+    },
     stopOf: (position: number, total: number) => `Stop ${position} of ${total}`,
     lines: (start: number, end: number) => `lines ${start}–${end}`,
     recoveredLabel: "The warm-up worked",

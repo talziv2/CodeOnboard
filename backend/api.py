@@ -641,6 +641,11 @@ def session_advance(session_id: str, body: AdvanceRequest) -> dict:
     if current not in graph.nodes:
         raise HTTPException(status_code=404, detail="node_not_found")
     graph.set_current(current)
+    # Walking on IS rejoining the route, so whatever brought the learner to this
+    # stop stops being news. Cleared for BOTH signals and before either branch:
+    # skipping forward is still moving along the path, and a notice that survived
+    # an advance would keep claiming they are off-route from a stop they left.
+    graph.clear_arrival()
 
     if body.signal == "skip":
         client = _new_client()
@@ -1169,15 +1174,72 @@ def session_retry(session_id: str, body: dict) -> dict:
     return {"current_node_id": graph.current_node_id, "inserted": True, "lesson": lesson}
 
 
+class JumpRequest(BaseModel):
+    node_id: str
+    # WHY the learner moved. `study` is the ordinary case — they picked a stop off
+    # the map or the rail and went to it. `resume` is the return offered by the
+    # arrival notice, and it is separate because it is the opposite act: it
+    # rejoins the route, so it clears the notice rather than raising another one.
+    #
+    # Defaulted rather than required: every existing caller sends only `node_id`,
+    # and an ordinary jump is what they all mean.
+    intent: str = history.JUMP_STUDY
+
+
 @app.post("/session/{session_id}/jump")
-def session_jump(session_id: str, body: dict) -> dict:
-    node_id = body.get("node_id")
+def session_jump(session_id: str, body: JumpRequest) -> dict:
+    """Move to a stop that is not the next one — and leave a record that it happened.
+
+    Jumping stays UNCONDITIONAL. Dependencies are not enforced here and no stop is
+    ever locked: the learner may study the codebase in whatever order they like,
+    and `goal_readiness` already prices disorder in honestly (it is demonstrated
+    coverage of the required set, so walking past every question reads 0%).
+
+    What was missing was not a gate but a TRACE. This was the only navigation act
+    in the system that left none — `/advance`'s skip stamps `user_override` and
+    every scope change writes a journey event — so a session spent jumping around
+    was, afterwards, indistinguishable from one spent walking the path. Two things
+    are recorded, for two different readers:
+
+      `journey_events`  the permanent record, read by the session log.
+      `arrival`         the one live fact, read by the notice on the stop landed
+                        on. Cleared by `/advance`, because walking on IS rejoining
+                        the route.
+    """
+    if body.intent not in history.JUMP_INTENTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unsupported intent {body.intent!r}; supported: "
+                   f"{', '.join(sorted(history.JUMP_INTENTS))}",
+        )
+
     graph = _load_session_or_404(session_id)
-    if not node_id or node_id not in graph.nodes:
+    if body.node_id not in graph.nodes:
         raise HTTPException(status_code=404, detail="node_not_found")
-    graph.set_current(node_id)
+
+    # Read BEFORE the move: this is the stop the learner is leaving, and it is
+    # what makes "return to where you were" answerable.
+    left = graph.current_node_id
+    graph.set_current(body.node_id)
+
+    # Recorded for both intents. A return is as much a navigation decision as a
+    # departure, and a log that showed only departures would imply the learner
+    # never came back.
+    graph.record_journey_event(
+        history.JUMPED,
+        nodes=[body.node_id],
+        from_node_id=left,
+        intent=body.intent,
+    )
+    if body.intent == history.JUMP_RESUME:
+        graph.clear_arrival()
+    else:
+        graph.record_arrival(
+            body.node_id, kind=history.JUMPED, from_node_id=left
+        )
+
     learning_store.save_graph(graph, SESSIONS_DB_PATH)
-    return {"current_node_id": node_id}
+    return {"current_node_id": body.node_id, "arrival": graph.arrival}
 
 
 class ScopeRequest(BaseModel):

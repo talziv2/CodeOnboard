@@ -11,9 +11,15 @@ import type { GraphNode, JourneyEvent, SessionGraph } from "@/lib/api";
  * ── Two sources, and one that is deliberately not invented ────────────────────
  *
  * ROUTE SHAPE comes from `journey_events`, which the backend already ships in
- * `to_dict()`. Exactly four kinds exist and the set is frozen in
- * `JOURNEY_EVENT_KINDS`: `prune_ahead`, `scope_shorter`, `scope_deeper`,
- * `remediation_inserted`.
+ * `to_dict()`. The set is frozen in `JOURNEY_EVENT_KINDS`: `prune_ahead`,
+ * `scope_shorter`, `scope_deeper`, `remediation_inserted`, `jumped`.
+ *
+ * `jumped` is the learner's own movement rather than a change of shape, and the
+ * backend widened that category deliberately to hold it — see `history.py`. It
+ * belongs in this log for the reason the log exists: it is a thing that happened
+ * to this journey which the learner would otherwise have no record of. It was, in
+ * fact, the ONLY navigation act that left no trace at all, which is what made the
+ * rail's order look decorative.
  *
  * GAP LIFECYCLE comes from the gaps themselves — `opened_at`, `closed_at`, `status`
  * — which is what the evidence drawer already reads.
@@ -35,6 +41,7 @@ export type LogKind =
   | "scope_shorter"
   | "scope_deeper"
   | "remediation_inserted"
+  | "jumped"
   | "gap_opened"
   | "gap_closed";
 
@@ -73,7 +80,8 @@ function fromJourneyEvents(graph: SessionGraph): LogEntry[] {
       event.kind !== "prune_ahead" &&
       event.kind !== "scope_shorter" &&
       event.kind !== "scope_deeper" &&
-      event.kind !== "remediation_inserted"
+      event.kind !== "remediation_inserted" &&
+      event.kind !== "jumped"
     ) {
       continue;
     }
@@ -86,7 +94,11 @@ function fromJourneyEvents(graph: SessionGraph): LogEntry[] {
       subject:
         event.kind === "remediation_inserted"
           ? titleOf(graph, event.unlocks) ?? titleOf(graph, event.nodes?.[0])
-          : titleOf(graph, event.cause?.node_id),
+          // A jump is about the stop LANDED ON — "you jumped to X" is the
+          // sentence — and it has no `cause`, because no answer triggered it.
+          : event.kind === "jumped"
+            ? titleOf(graph, event.nodes?.[0])
+            : titleOf(graph, event.cause?.node_id),
       count: event.nodes?.length ?? 0,
     });
   }
@@ -133,6 +145,10 @@ export function sessionLog(graph: SessionGraph): LogEntry[] {
  * and this is the set that drives it: only the kinds that MOVED something, because
  * a mark on the rail is a claim that the rail looks different. A gap opening changes
  * what is outstanding, not what the route is.
+ *
+ * `jumped` is excluded for a different reason from the gap kinds: the route did not
+ * change, and the learner is the one who moved. Marking the rail `new` for their own
+ * action would be the app telling them something they just did.
  */
 export function unseenRouteChanges(graph: SessionGraph, seenAt: string | null): LogEntry[] {
   const shape: LogKind[] = [

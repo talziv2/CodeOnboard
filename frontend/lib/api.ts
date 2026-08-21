@@ -369,6 +369,10 @@ export interface JourneyEvent {
   cause?: { node_id: string; attempt_index: number };
   origin?: Origin;
   unlocks?: string;
+  /** `jumped` only: the stop left behind, null when there was none. */
+  from_node_id?: string | null;
+  /** `jumped` only: `"study"` left the route, `"resume"` rejoined it. */
+  intent?: string;
 }
 
 export const getEvidence = (session_id: string, node_id: string) =>
@@ -523,6 +527,28 @@ export interface SessionGraph {
   progress: Progress;
   understanding: UnderstandingProfile;
   journey_events?: JourneyEvent[];
+  /**
+   * How the learner reached the current stop, when that is worth saying — null
+   * whenever they simply walked here, and on every session written before this
+   * existed. See `lib/arrival.ts` for what is derived from it.
+   */
+  arrival?: Arrival | null;
+}
+
+/**
+ * The raw arrival fact, straight off the wire. Deliberately carries no direction,
+ * position or count: those are read off the ROUTE by `arrivalNotice`, using the
+ * same `buildRoute` that numbers the rail, so the notice and the rail cannot
+ * disagree about which stop this is.
+ */
+export interface Arrival {
+  /** The stop landed on. Compared against `current_node_id` before anything is shown. */
+  node_id: string;
+  /** Only `"jumped"` today. Named rather than boolean so a later kind is additive. */
+  kind: string;
+  /** The stop left behind, or null when there was none to leave. */
+  from_node_id: string | null;
+  at: string;
 }
 
 export const getSession = (session_id: string) =>
@@ -702,8 +728,23 @@ export interface ScopeResult {
 export const setScope = (session_id: string, direction: "shorter" | "deeper") =>
   post<ScopeResult>(`/session/${session_id}/scope`, { direction });
 
-export const jump = (session_id: string, node_id: string) =>
-  post(`/session/${session_id}/jump`, { node_id });
+/**
+ * Move to a stop that is not the next one.
+ *
+ * `intent` is the difference between leaving the route and rejoining it:
+ * `"study"` raises the arrival notice on the stop landed on, `"resume"` clears it.
+ * Both are recorded — a log that showed only departures would imply the learner
+ * never came back.
+ */
+export const jump = (
+  session_id: string,
+  node_id: string,
+  intent: "study" | "resume" = "study"
+) =>
+  post<{ current_node_id: string; arrival: Arrival | null }>(
+    `/session/${session_id}/jump`,
+    { node_id, intent }
+  );
 
 export const retry = (session_id: string, node_id?: string) =>
   post<{ current_node_id: string; inserted: boolean }>(`/session/${session_id}/retry`, { node_id });

@@ -639,3 +639,157 @@ def test_list_sessions_empty_for_unknown_repo(client):
     resp = client.get("/sessions", params={"repo_url": "https://github.com/none/none"})
     assert resp.status_code == 200
     assert resp.json()["sessions"] == []
+
+
+# ── /session/{id}/jump — the record a jump leaves ───────────────────────────
+#
+# Jumping stays unconditional: no stop is locked and dependencies are not
+# enforced. What these pin is that it stops being INVISIBLE. Before this it was
+# the only navigation act in the system that wrote nothing at all, so a session
+# spent jumping around was afterwards indistinguishable from one spent walking.
+#
+# Two records, two readers, and the tests are separate because the difference is
+# the design: `journey_events` is permanent (the session log reads it) and
+# `arrival` is the one live fact (the notice on the stop reads it, and it must go
+# stale the moment the learner rejoins the route).
+
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_jump_records_a_journey_event_naming_both_stops(mock_pipeline, client):
+    start = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()
+    session_id = start["session_id"]
+    first_node = start["graph"]["current_node_id"]
+    other = next(
+        n["id"] for n in start["graph"]["nodes"] if n["id"] != first_node
+    )
+
+    client.post(f"/session/{session_id}/jump", json={"node_id": other})
+
+    events = client.get(f"/session/{session_id}").json()["journey_events"]
+    jumps = [e for e in events if e["kind"] == "jumped"]
+    assert len(jumps) == 1
+    # Both ends, because "they jumped" without saying from where cannot answer
+    # the only question the log is opened with.
+    assert jumps[0]["nodes"] == [other]
+    assert jumps[0]["from_node_id"] == first_node
+    assert jumps[0]["intent"] == "study"
+
+
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_jump_records_the_arrival_for_the_notice(mock_pipeline, client):
+    start = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()
+    session_id = start["session_id"]
+    first_node = start["graph"]["current_node_id"]
+    other = next(
+        n["id"] for n in start["graph"]["nodes"] if n["id"] != first_node
+    )
+
+    resp = client.post(f"/session/{session_id}/jump", json={"node_id": other})
+    assert resp.status_code == 200
+    assert resp.json()["arrival"]["node_id"] == other
+    assert resp.json()["arrival"]["from_node_id"] == first_node
+
+    # And it SURVIVES a reload: a learner who refreshes is still off-route, so
+    # the notice cannot be component state that a remount forgets.
+    arrival = client.get(f"/session/{session_id}").json()["arrival"]
+    assert arrival["node_id"] == other
+    assert arrival["kind"] == "jumped"
+
+
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_a_fresh_session_has_no_arrival(mock_pipeline, client):
+    # Null means "nothing to say", and the first stop of a journey is reached by
+    # starting rather than by jumping.
+    start = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()
+    assert start["graph"]["arrival"] is None
+
+
+@patch("backend.api.clone_repo", return_value="data/repos/requests")
+@patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_advancing_clears_the_arrival(mock_pipeline, mock_teaching, mock_clone, client):
+    """Walking on IS rejoining the route, so the notice stops being true.
+
+    THE FAILURE THIS PREVENTS: an arrival that outlived an advance would keep
+    telling the learner they are off-route from a stop they have already left,
+    and the only way to silence it would be to jump again.
+    """
+    start = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()
+    session_id = start["session_id"]
+    first_node = start["graph"]["current_node_id"]
+    other = next(
+        n["id"] for n in start["graph"]["nodes"] if n["id"] != first_node
+    )
+
+    client.post(f"/session/{session_id}/jump", json={"node_id": other})
+    client.post(f"/session/{session_id}/advance", json={"signal": "next"})
+
+    graph = client.get(f"/session/{session_id}").json()
+    assert graph["arrival"] is None
+    # The permanent record is untouched — clearing the notice is not forgetting
+    # that it happened.
+    assert [e["kind"] for e in graph["journey_events"]].count("jumped") == 1
+
+
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_resuming_clears_the_arrival_but_is_still_recorded(mock_pipeline, client):
+    """The return offered by the notice is the opposite act, and recorded as one.
+
+    It clears the notice (they are back on the route) yet still writes an event:
+    a log that recorded only departures would imply the learner never came back.
+    """
+    start = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()
+    session_id = start["session_id"]
+    first_node = start["graph"]["current_node_id"]
+    other = next(
+        n["id"] for n in start["graph"]["nodes"] if n["id"] != first_node
+    )
+
+    client.post(f"/session/{session_id}/jump", json={"node_id": other})
+    resp = client.post(
+        f"/session/{session_id}/jump",
+        json={"node_id": first_node, "intent": "resume"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["arrival"] is None
+
+    graph = client.get(f"/session/{session_id}").json()
+    assert graph["arrival"] is None
+    assert graph["current_node_id"] == first_node
+    intents = [e.get("intent") for e in graph["journey_events"] if e["kind"] == "jumped"]
+    assert intents == ["study", "resume"]
+
+
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_jump_rejects_an_unknown_intent(mock_pipeline, client):
+    start = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()
+    session_id = start["session_id"]
+    node = start["graph"]["current_node_id"]
+
+    resp = client.post(
+        f"/session/{session_id}/jump", json={"node_id": node, "intent": "teleport"}
+    )
+    assert resp.status_code == 400
+    assert "teleport" in resp.json()["detail"]
+
+
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_jump_to_an_unknown_node_is_a_404(mock_pipeline, client):
+    start = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()
+    resp = client.post(
+        f"/session/{start['session_id']}/jump", json={"node_id": "nope"}
+    )
+    assert resp.status_code == 404

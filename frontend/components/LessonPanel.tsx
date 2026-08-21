@@ -35,8 +35,10 @@ import Button from "@/components/ui/Button";
 import { isSplitSurfaces, lessonUi } from "@/lib/flags";
 import { lessonPhase } from "@/lib/lessonPhase";
 import { lessonBlocks } from "@/lib/lessonView";
+import type { ArrivalNotice as Arrival } from "@/lib/arrival";
 import type { Surface } from "@/lib/lessonSurfaces";
 import EarlierExplanations from "@/components/lesson/EarlierExplanations";
+import ArrivalNotice from "@/components/lesson/ArrivalNotice";
 import { materialIsNew, supersededExplanations } from "@/lib/lessonHistory";
 import { FAILED } from "@/lib/verdict";
 import { errorText, t } from "@/lib/strings";
@@ -64,6 +66,19 @@ interface Props {
   /** Leave the session entirely, from the completion screen. */
   onLeave: () => void;
   /**
+   * How the learner got here, when that is worth saying — null when they walked.
+   *
+   * DERIVED BY THE PAGE, not here. It is a statement about the ROUTE, and the
+   * page is what holds the route (`buildRoute`); this component sees one stop and
+   * could not compute "passing 4 stops" without building the walk a second time.
+   */
+  arrival?: Arrival | null;
+  /** Rejoin the route — a jump back to the stop the learner left. */
+  onReturnToRoute?: (nodeId: string) => void;
+  /** Stop saying it, for this arrival. */
+  onDismissArrival?: () => void;
+  returningToRoute?: boolean;
+  /**
    * Which surface to render, under `surfaces` only.
    *
    * Owned by the session page because the TAB is owned there — R5 keeps tab
@@ -86,6 +101,7 @@ interface Props {
 
 export default function LessonPanel({
   sessionId, nodeId, node, position, total, isPrerequisite,
+  arrival = null, onReturnToRoute, onDismissArrival, returningToRoute = false,
   graph, onFileClick, onAdvance, onRespond, finished, onFinish, onLeave, surface,
   onSurfaceChanged, onGoToSurface,
 }: Props) {
@@ -643,6 +659,19 @@ export default function LessonPanel({
           {/* S5's `new` marking. On Lesson, above the material, because that is
               what it is about — and only there: on Understanding the consequence
               line already said it, in the card that caused it. */}
+          {/* FIRST in the canvas, above the material and above `new`: the fact
+              that the learner is not where the route put them frames everything
+              under it, and a notice below the walkthrough would be read after the
+              thing it is about. */}
+          {arrival && onReturnToRoute && onDismissArrival && (
+            <ArrivalNotice
+              notice={arrival}
+              onReturn={onReturnToRoute}
+              onDismiss={onDismissArrival}
+              returning={returningToRoute}
+            />
+          )}
+
           {rewritten && (
             <Callout tone="signal" label={t.lesson.newMaterialLabel}>
               <p className="text-meta text-chalk">{t.lesson.newMaterialBody}</p>
