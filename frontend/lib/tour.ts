@@ -74,8 +74,15 @@ export type TourStepId =
   | "back"
   | "progress";
 
-/** Where the bubble prefers to sit relative to its target. */
-export type Side = "center" | "start" | "end" | "top" | "bottom";
+/**
+ * Where the bubble prefers to sit relative to its target.
+ *
+ * `inset` is the one that is not "beside": it puts the bubble INSIDE the target,
+ * against its top-right corner. Some targets are the whole working area — the map
+ * column is 980×600 of a 1280×720 screen — and there is no outside to sit in, so
+ * the fallback was a card marooned in the middle of the view it was describing.
+ */
+export type Side = "center" | "inset" | "start" | "end" | "top" | "bottom";
 
 /**
  * What the tour is allowed to know about the session.
@@ -129,7 +136,9 @@ export const TOUR_STEPS: readonly TourStep[] = [
     side: "bottom",
     reached: (c) => modeOf(c.tab) === "route",
   },
-  { id: "map", target: "surface", side: "center" },
+  // `inset`, not `center`: this target is the entire column, so the bubble sits in
+  // its top corner and leaves the map itself legible underneath.
+  { id: "map", target: "surface", side: "inset" },
   {
     id: "back",
     target: "mode-learn",
@@ -296,6 +305,8 @@ export interface Placement {
 const GAP = 14;
 /** Never closer to the viewport edge than this. */
 const MARGIN = 12;
+/** How far inside a target's corner an `inset` bubble sits. */
+const INSET = 20;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), Math.max(min, max));
@@ -324,23 +335,39 @@ export function placeBubble(
     };
   }
 
-  const fits: Record<Exclude<Side, "center">, boolean> = {
+  // Inside the target, top corner. No fitting logic and no fallbacks: a target
+  // asks for this precisely when it is large enough that nothing else applies.
+  if (preferred === "inset") {
+    return {
+      top: clamp(target.y + INSET, MARGIN, viewport.height - bubble.height - MARGIN),
+      left: clamp(
+        target.x + target.width - bubble.width - INSET,
+        MARGIN,
+        viewport.width - bubble.width - MARGIN
+      ),
+      side: "inset",
+    };
+  }
+
+  type Beside = Exclude<Side, "center" | "inset">;
+
+  const fits: Record<Beside, boolean> = {
     end: target.x + target.width + GAP + bubble.width + MARGIN <= viewport.width,
     start: target.x - GAP - bubble.width - MARGIN >= 0,
     bottom: target.y + target.height + GAP + bubble.height + MARGIN <= viewport.height,
     top: target.y - GAP - bubble.height - MARGIN >= 0,
   };
 
-  const opposite: Record<Exclude<Side, "center">, Exclude<Side, "center">> = {
+  const opposite: Record<Beside, Beside> = {
     end: "start",
     start: "end",
     bottom: "top",
     top: "bottom",
   };
 
-  const order: Exclude<Side, "center">[] = [
-    preferred as Exclude<Side, "center">,
-    opposite[preferred as Exclude<Side, "center">],
+  const order: Beside[] = [
+    preferred as Beside,
+    opposite[preferred as Beside],
     "bottom",
     "end",
     "top",

@@ -289,6 +289,25 @@ describe("placeBubble", () => {
     }
   });
 
+  test("`inset` sits inside the target's top corner, not beside it", () => {
+    // The map column: too big to have an outside, which is what `inset` is for.
+    const column = { x: 306, y: 124, width: 974, height: 596 };
+    const at = placeBubble(column, bubble, viewport, "inset");
+    expect(at.side).toBe("inset");
+    // Inside the target, near its top and its trailing edge.
+    expect(at.top).toBeGreaterThanOrEqual(column.y);
+    expect(at.top).toBeLessThan(column.y + 60);
+    expect(at.left + bubble.width).toBeGreaterThan(column.x + column.width - 60);
+    expect(at.left + bubble.width).toBeLessThanOrEqual(viewport.width);
+  });
+
+  test("an inset bubble still stays on screen when the target runs off it", () => {
+    const overflowing = { x: 306, y: 124, width: 1200, height: 596 };
+    const at = placeBubble(overflowing, bubble, viewport, "inset");
+    expect(at.left + bubble.width).toBeLessThanOrEqual(viewport.width);
+    expect(at.top + bubble.height).toBeLessThanOrEqual(viewport.height);
+  });
+
   test("clamps rather than vanishing when nothing fits at all", () => {
     const tiny = { width: 360, height: 260 };
     const at = placeBubble({ x: 10, y: 10, width: 340, height: 240 }, bubble, tiny, "end");

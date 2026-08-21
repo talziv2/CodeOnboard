@@ -61,6 +61,8 @@ const PAD = 6;
 const MISSING_AFTER_MS = 600;
 /** The slow clock. See `useTargetRect`. */
 const POLL_MS = 120;
+/** Attempts to bring one target into view before letting it be. */
+const MAX_SCROLLS = 4;
 const BUBBLE_WIDTH = 320;
 
 function sameRect(a: Rect | null, b: DOMRect): boolean {
@@ -73,8 +75,53 @@ function sameRect(a: Rect | null, b: DOMRect): boolean {
   );
 }
 
-function offScreen(rect: DOMRect): boolean {
-  return rect.top < 0 || rect.bottom > window.innerHeight;
+/**
+ * Is the learner being shown a ring around something they cannot see?
+ *
+ * A FRACTION rather than "fully inside the viewport", because several targets
+ * are taller than the viewport by design — the rail, the source pane, the map
+ * column — and demanding full visibility would have the tour scrolling to chase
+ * something that can never fit. What matters is whether enough of it is on
+ * screen to be the thing the bubble is pointing at.
+ */
+function mostlyHidden(rect: DOMRect): boolean {
+  const shown = Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0);
+  return shown < Math.min(rect.height, window.innerHeight) * 0.6;
+}
+
+/** Every scrollable box between an element and the document, innermost first. */
+function scrollParents(el: Element): HTMLElement[] {
+  const found: HTMLElement[] = [];
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const overflow = getComputedStyle(p).overflowY;
+    if (/(auto|scroll|overlay)/.test(overflow) && p.scrollHeight > p.clientHeight + 1) {
+      found.push(p);
+    }
+  }
+  return found;
+}
+
+/**
+ * Centre an element in each scrollport that contains it, right now.
+ *
+ * NOT `scrollIntoView`, and this is the fourth thing in this file to lose an
+ * animation for the same reason. Even at `behavior: "auto"` the scroll is
+ * performed at a rendering opportunity rather than synchronously, so in a
+ * document the browser is not painting it does nothing at all — measured, with
+ * `scrollTop` unchanged and the element still hundreds of pixels below the fold,
+ * while assigning `scrollTop` directly on the same element moved it immediately.
+ *
+ * Writing `scrollTop` is also the version whose failure mode is benign: the
+ * browser clamps it to the scrollable range, so a target that cannot be centred
+ * ends up as close as the container allows instead of nowhere.
+ */
+function centreInView(el: Element) {
+  for (const scroller of scrollParents(el)) {
+    // Re-measured per scroller: each scroll moves the element for the next one.
+    const box = el.getBoundingClientRect();
+    const port = scroller.getBoundingClientRect();
+    scroller.scrollTop += box.top + box.height / 2 - (port.top + port.height / 2);
+  }
 }
 
 /**
@@ -97,7 +144,7 @@ function useTargetRect(step: TourStep, onMissing: () => void): Rect | null {
     const selector = tourSelector(step.target);
     let lastSeen = performance.now();
     let reported = false;
-    let scrolled = false;
+    let scrolls = 0;
 
     const measure = () => {
       const el = document.querySelector(selector);
@@ -112,20 +159,22 @@ function useTargetRect(step: TourStep, onMissing: () => void): Rect | null {
       }
       lastSeen = performance.now();
       const box = el.getBoundingClientRect();
-      // Once per step: bring the target into view if the learner would otherwise
-      // be looking at a ring they have to scroll to find.
+      // BRING THE TARGET TO THE LEARNER. The page is frozen, so they cannot
+      // scroll to it themselves — a ring below the fold is a spotlight on
+      // nothing, and the lesson's citations are exactly that: several screens
+      // down a column the tour has just dimmed.
       //
-      // INSTANT, not smooth, for the third time in this file and the same reason
-      // every time — a smooth scroll is an animation, and an animation that does
-      // not run leaves the ring exactly where it should not be: off the bottom of
-      // the screen, with the bubble clamped to an edge pointing at nothing. The
-      // scroll is not something the learner asked for and has nothing to show
-      // them on the way; it is the tour putting its subject in front of them.
-      if (!scrolled) {
-        scrolled = true;
-        if (offScreen(box)) {
-          el.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
-        }
+      // Re-checked on every tick rather than done once. The first sighting of an
+      // element is not a reliable moment to judge its position: `entryFix` may
+      // still be swapping the surface underneath it, the source pane may be
+      // opening beside it, and a single early measurement that happened to look
+      // fine used to disable the scroll for the whole step. Bounded, so a target
+      // that cannot be brought into view does not get chased forever.
+      //
+      // See `centreInView` for why the scroll is written by hand and instant.
+      if (scrolls < MAX_SCROLLS && mostlyHidden(box)) {
+        scrolls += 1;
+        centreInView(el);
       }
       setRect((current) =>
         sameRect(current, box)
