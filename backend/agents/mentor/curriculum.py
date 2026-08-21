@@ -275,13 +275,27 @@ def band_report(selected: list[ObjectiveWire], code_depth: str) -> str | None:
 # ── ordering ───────────────────────────────────────────────────────────────────
 
 
-def order(objectives: list[ObjectiveWire]) -> list[ObjectiveWire]:
-    """Topological over `depends_on`, with the model's order as the tiebreak.
+def order(
+    objectives: list[ObjectiveWire], areas: list[AreaWire] | None = None
+) -> list[ObjectiveWire]:
+    """Topological over `depends_on`, area order then the model's order as tiebreak.
 
     The result is still mostly a chain — but a chain that came from a dependency
     structure rather than from a model emitting nodes in some order (§6.4).
     Within a tier the model decides, because sequencing two independent concepts
     pedagogically is judgement, not computation.
+
+    THE AREA OUTRANKS THE MODEL'S SEQUENCING, and that is the whole reason this
+    takes `areas` at all. Areas are the chapters the learner is shown — the rail
+    groups by them, the overview introduces them one at a time — while the walk
+    is what "stop 3 of 12" counts. Ordering the chain on model order alone let
+    the two disagree: the planner would emit an area-2 objective second, so the
+    rail drew it fourth (first stop of the second chapter) while its own header
+    called it stop 2. Sorting ready objectives by area first makes each chapter a
+    contiguous run of the walk, which is what makes those two numbers the same
+    number. Dependencies still win over both — a cross-area `depends_on` is a
+    real constraint, and being taught in the wrong chapter is a smaller cost than
+    being taught before the thing it needs.
 
     A dependency cycle cannot be ordered. Rather than fail the curriculum, the
     remaining objectives are appended in model order: a bad edge should cost the
@@ -289,6 +303,13 @@ def order(objectives: list[ObjectiveWire]) -> list[ObjectiveWire]:
     """
     position = {o.id: i for i, o in enumerate(objectives)}
     by_id = {o.id: o for o in objectives}
+    # An objective naming no declared area sorts after every declared one — the
+    # same place the rail puts it, in the trailing ungrouped bucket.
+    area_rank = {a.id: a.order for a in (areas or [])}
+    unplaced = max(area_rank.values(), default=0) + 1
+    rank = {
+        o.id: (area_rank.get(o.area_id, unplaced), position[o.id]) for o in objectives
+    }
     pending = {
         o.id: {d for d in o.depends_on if d in by_id and d != o.id}
         for o in objectives
@@ -299,14 +320,20 @@ def order(objectives: list[ObjectiveWire]) -> list[ObjectiveWire]:
         ready = [oid for oid, deps in pending.items() if not deps]
         if not ready:
             ordered.extend(
-                by_id[oid] for oid in sorted(pending, key=lambda i: position[i])
+                by_id[oid] for oid in sorted(pending, key=lambda i: rank[i])
             )
             break
-        for oid in sorted(ready, key=lambda i: position[i]):
-            ordered.append(by_id[oid])
-            del pending[oid]
-            for deps in pending.values():
-                deps.discard(oid)
+        # ONE AT A TIME, not a tier at a time. Emitting a whole dependency tier
+        # sorted by area still interleaves: with a0 → a1 in area 1 and a free b1
+        # in area 2, the first tier is {a0, b1} and the second is {a1}, so area 1
+        # ends up split around b1. Taking the lowest-ranked ready objective and
+        # re-reading readiness keeps a chapter running for as long as its own
+        # dependencies allow.
+        oid = min(ready, key=lambda i: rank[i])
+        ordered.append(by_id[oid])
+        del pending[oid]
+        for deps in pending.values():
+            deps.discard(oid)
     return ordered
 
 
@@ -867,7 +894,7 @@ def run(state: OnboardState, client: anthropic.Anthropic | None = None) -> Onboa
             f"curriculum: planner reports incomplete coverage — {output.coverage_note}"
         )
 
-    ordered = order(selected)
+    ordered = order(selected, output.areas)
     graph = build_graph(state, output.areas, ordered)
     state.graph = graph
     state.learning_path = to_learning_path(graph)

@@ -69,13 +69,23 @@ function sectionKeyOf(
 }
 
 /**
- * Split the route into sections, preserving WALK ORDER within each.
+ * Split the route into sections, preserving WALK ORDER — within each, and
+ * between them.
  *
  * Grouping is a rendering concern only: the stops keep the order `buildRoute`
  * produced. A stop whose `area_id` names no declared area, and which no
  * inheritance rule places, falls into a trailing ungrouped bucket rather than
  * being hidden — a graph the planner never grouped must still render whole, and
  * every pre-B3 graph is in exactly that shape.
+ *
+ * SECTIONS ARE ORDERED BY WHERE THEY START ON THE WALK, not by `area.order`.
+ * The planner sorts its chain by area, so on a well-formed graph the two agree
+ * and this changes nothing. They come apart when a cross-area dependency forces
+ * a stop out of its chapter's run, and there the walk has to win: the walk is
+ * what numbers the stops, so a rail sorted by the declared order would draw
+ * "stop 2 of 12" below "stop 4 of 12". A rail that disagrees with its own
+ * numbers is a worse lie than a chapter listed out of the order the planner
+ * hoped for.
  */
 export function buildSections(
   stops: RouteStop[],
@@ -91,16 +101,25 @@ export function buildSections(
   const areaById = new Map(stops.map((s) => [s.node.id, s.node.area_id ?? ""]));
 
   const buckets = new Map<string, RouteStop[]>(ordered.map((a) => [a.id, []]));
+  const startsAt = new Map<string, number>();
   const ungrouped: RouteStop[] = [];
-  for (const stop of stops) {
+  stops.forEach((stop, index) => {
     const key = sectionKeyOf(stop, declared, areaById);
-    if (key) buckets.get(key)!.push(stop);
-    else ungrouped.push(stop);
-  }
+    if (!key) {
+      ungrouped.push(stop);
+      return;
+    }
+    buckets.get(key)!.push(stop);
+    if (!startsAt.has(key)) startsAt.set(key, index);
+  });
 
-  const groups: { area: Area | null; stops: RouteStop[] }[] = ordered
-    .map((area) => ({ area, stops: buckets.get(area.id)! }))
-    .filter((g) => g.stops.length > 0);
+  const staffed = ordered
+    .filter((area) => buckets.get(area.id)!.length > 0)
+    .sort((a, b) => startsAt.get(a.id)! - startsAt.get(b.id)!);
+
+  const groups: { area: Area | null; stops: RouteStop[] }[] = staffed.map(
+    (area) => ({ area, stops: buckets.get(area.id)! })
+  );
   if (ungrouped.length > 0) groups.push({ area: null, stops: ungrouped });
 
   // Which section the learner is in decides past / current / upcoming, and so
