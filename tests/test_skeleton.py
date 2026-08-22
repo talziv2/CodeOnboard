@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from backend.repo.cloner import repo_dir
 from backend.repo.skeleton import (
     Skeleton,
     build_skeleton,
@@ -157,14 +158,32 @@ def test_subsystems_exclude_non_source_roles(skeleton):
 # alphabetical module map silently dropped fastapi/security/) as a permanent
 # guard on the deterministic inventory.
 
-REQUESTS = Path("data/repos/requests")
-FASTAPI = Path("data/repos/fastapi")
+# Resolved through `repo_dir` rather than spelled out, so these keep running
+# after the M0 checkout move (`data/repos/<name>` -> `data/repos/<owner>/<name>`).
+# A hardcoded flat path would not fail after that move — it would silently SKIP,
+# which is the worst outcome for an opportunistic integration test: it would look
+# like it had passed.
+REQUESTS = repo_dir("https://github.com/psf/requests")
+FASTAPI = repo_dir("https://github.com/fastapi/fastapi")
+
+
+def _is_checkout(path: Path) -> bool:
+    """A real clone, not merely a directory that happens to be there.
+
+    `Path.exists()` was enough while checkouts were flat. It stopped being
+    enough the moment they moved to `<owner>/<name>`: `data/repos/fastapi/fastapi`
+    is the destination for the fastapi checkout AND the name of the source
+    package inside the old flat one, so a bare existence check matched a
+    directory full of source and ran the test against it. Requiring `.git`
+    distinguishes a checkout from anything else that shares its path.
+    """
+    return (path / ".git").exists()
 
 requires_requests = pytest.mark.skipif(
-    not REQUESTS.exists(), reason="data/repos/requests not cloned"
+    not _is_checkout(REQUESTS), reason="psf/requests not cloned"
 )
 requires_fastapi = pytest.mark.skipif(
-    not FASTAPI.exists(), reason="data/repos/fastapi not cloned"
+    not _is_checkout(FASTAPI), reason="fastapi/fastapi not cloned"
 )
 
 
