@@ -58,6 +58,43 @@ from backend.learning.graph import (
 # beats loadable-and-half-broken (session-reset.md D8). The v2 fixtures the
 # measurement scripts pin were copied to `data/sessions-fixtures.db` first.
 SCHEMA_VERSION = 3
+
+# Versions this build can READ. A session is WRITTEN at `SCHEMA_VERSION` and read
+# back if its stored version is in here — two separate questions, which is the
+# whole of the change (multi-user.md OPEN-14, decided 2026-08-22).
+#
+# ## Why 2 is in the set
+#
+# The bump to 3 was right about the plan tables and had a consequence nobody had
+# costed: strict equality made every session written before it INVISIBLE, and all
+# 90 sessions in the live database are version 2 — the manual-E2E corpus behind
+# `docs/planning/phases/evidence/`. `load_graph` returned None for every one.
+#
+# The rule that resolves it keeps both features whole:
+#
+#   a version-2 session LOADS and RESUMES, with its state exactly as it is;
+#   `Start over` is UNAVAILABLE for it, because it genuinely has no plan;
+#   nothing is ever synthesised from a v2 session's current state.
+#
+# That last line is the one worth being emphatic about. A plan reconstructed from
+# a half-walked graph is not the plan — it is wherever the learner had got to,
+# relabelled — so restoring it would return them to a mid-journey state while
+# calling it a fresh start. Absent is honest; fabricated is not.
+#
+# ## What this does NOT widen
+#
+# `load_plan` keeps a STRICT `== SCHEMA_VERSION` check, deliberately, at the
+# session-reset workstream's request: "v2 loads but cannot be reset" is then true
+# by two independent routes — the version, and the absence of plan rows — and
+# neither route synthesises anything. Defence in depth against the one state that
+# must never arise.
+#
+# The cost is worth naming: at the NEXT bump, a version-3 session with a real
+# plan silently stops being resettable, which is this same bug one version later.
+# Whoever moves SCHEMA_VERSION to 4 must revisit that check — and
+# `test_legacy_session_compatibility.py` says so where it will be read.
+SUPPORTED_SCHEMA_VERSIONS: frozenset[int] = frozenset({2, 3})
+
 DEFAULT_DB_PATH = Path("data/sessions.db")
 
 
@@ -492,7 +529,17 @@ def _write_graph(
             journey_events_json = excluded.journey_events_json,
             briefing_json       = excluded.briefing_json,
             arrival_json        = excluded.arrival_json,
-            schema_version      = excluded.schema_version,
+            -- SCHEMA_VERSION IS NOT REWRITTEN BY A SAVE.
+            --
+            -- `excluded.schema_version` here would relabel a version-2 session
+            -- as version 3 the first time its learner answered anything, while
+            -- `plan_nodes` stayed empty — a row CLAIMING a plan it does not
+            -- have. `load_plan` gates on the rows so `Start over` would still
+            -- refuse, but the stored version would be a lie about why.
+            --
+            -- A version describes the shape a row was WRITTEN in. Only an insert
+            -- sets it; nothing upgrades a row in place, because nothing can give
+            -- an existing session the plan it never had.
             -- OWNERSHIP IS NOT REASSIGNED BY A SAVE. `sessions.user_id` keeps
             -- whatever it already holds: an update is the owner working on
             -- their session, never a change of owner. Writing
@@ -665,9 +712,24 @@ def load_plan(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> LearningGraph
         if session_row is None or session_row["schema_version"] != SCHEMA_VERSION:
             return None
 
-        node_rows = conn.execute(
-            "SELECT * FROM plan_nodes WHERE session_id = ?", (session_id,)
-        ).fetchall()
+        try:
+            node_rows = conn.execute(
+                "SELECT * FROM plan_nodes WHERE session_id = ?", (session_id,)
+            ).fetchall()
+        except sqlite3.OperationalError as exc:
+            # A database file older than the plan tables themselves — a restored
+            # backup, or the live file before anything has written to it and run
+            # `init_db`. "No `plan_nodes` table" and "no plan for this session"
+            # are the same answer to the only question being asked, and `/reset`
+            # already turns None into a 409 with a reason. Raising made that a
+            # 500 instead: the same refusal delivered as a malfunction.
+            #
+            # Found by running against a copy of the real database rather than a
+            # fixture — every fixture creates the tables on the way past, so this
+            # state cannot occur in one.
+            if "no such table" in str(exc).lower():
+                return None
+            raise
         if not node_rows:
             return None
 
@@ -729,7 +791,7 @@ def load_graph(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> LearningGrap
         ).fetchone()
         if session_row is None:
             return None
-        if session_row["schema_version"] != SCHEMA_VERSION:
+        if session_row["schema_version"] not in SUPPORTED_SCHEMA_VERSIONS:
             # Different schema — treat as missing. No silent migration.
             return None
         raw_doc = session_row["doc_context_json"]
@@ -747,9 +809,22 @@ def load_graph(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> LearningGrap
         # Can this session be started over? One row's existence answers it, and
         # asking here means every consumer of a loaded graph gets the answer
         # without a second query or a version comparison of its own.
-        graph.has_plan = conn.execute(
-            "SELECT 1 FROM plan_nodes WHERE session_id = ? LIMIT 1", (session_id,)
-        ).fetchone() is not None
+        #
+        # A database older than the plan tables has no `plan_nodes` to ask, and
+        # the answer for it is False rather than an exception: it is precisely
+        # the pre-plan session this reports on. Without this, widening
+        # `load_graph` to accept version 2 turned every read of the real
+        # database into `no such table: plan_nodes` — the field meant to say
+        # "you cannot start this over" became the reason the session would not
+        # load at all.
+        try:
+            graph.has_plan = conn.execute(
+                "SELECT 1 FROM plan_nodes WHERE session_id = ? LIMIT 1", (session_id,)
+            ).fetchone() is not None
+        except sqlite3.OperationalError as exc:
+            if "no such table" not in str(exc).lower():
+                raise
+            graph.has_plan = False
         for node_row in conn.execute(
             "SELECT * FROM nodes WHERE session_id = ?", (session_id,)
         ):
@@ -781,10 +856,10 @@ def list_sessions_for_repo(
             """
             SELECT session_id, goal_json, current_node_id, created_at, updated_at
             FROM sessions
-            WHERE repo_url = ? AND schema_version = ?
+            WHERE repo_url = ? AND schema_version IN (SELECT value FROM json_each(?))
             ORDER BY updated_at DESC
             """,
-            (repo_url, SCHEMA_VERSION),
+            (repo_url, json.dumps(sorted(SUPPORTED_SCHEMA_VERSIONS))),
         ).fetchall()
         return [
             {
@@ -828,11 +903,11 @@ def list_sessions_for_user(
                    archived_at, readiness_cached, stops_settled_cached,
                    stops_total_cached
             FROM sessions
-            WHERE user_id = ? AND schema_version = ?
+            WHERE user_id = ? AND schema_version IN (SELECT value FROM json_each(?))
               {"" if include_archived else "AND archived_at IS NULL"}
             ORDER BY COALESCE(last_active_at, updated_at) DESC
             """,
-            (user_id, SCHEMA_VERSION),
+            (user_id, json.dumps(sorted(SUPPORTED_SCHEMA_VERSIONS))),
         ).fetchall()
         return [
             {

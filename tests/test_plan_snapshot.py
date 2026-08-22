@@ -387,8 +387,32 @@ def test_a_session_from_an_older_schema_has_no_plan(db_path):
     conn.commit()
     conn.close()
 
+    # THE SECOND ASSERTION CHANGED (multi-user.md OPEN-14, decided 2026-08-22).
+    #
+    # It used to require that a version-2 session did not load AT ALL, and that
+    # cost more than it protected: all 91 sessions in the live database are
+    # version 2, so the bump made the entire manual-E2E corpus invisible rather
+    # than merely un-resettable.
+    #
+    # The rule now separates the two questions it had conflated. A v2 session
+    # LOADS and RESUMES with its state exactly as it is; it simply has no plan,
+    # so `Start over` is unavailable — which is what the `load_plan` assertion,
+    # the one that matters to this feature, has always said. Nothing is
+    # synthesised either way.
+    #
+    # The fixture builds a GENUINE v2 session: relabelled AND without plan rows.
+    # Relabelling alone leaves the plan behind, which is a state that cannot
+    # exist — the plan tables arrived WITH version 3.
+    conn = sqlite3.connect(db_path)
+    conn.execute("DELETE FROM plan_nodes WHERE session_id = ?", (graph.session_id,))
+    conn.execute("DELETE FROM plan_edges WHERE session_id = ?", (graph.session_id,))
+    conn.commit()
+    conn.close()
+
     assert load_plan(graph.session_id, db_path) is None
-    assert load_graph(graph.session_id, db_path) is None
+    restored = load_graph(graph.session_id, db_path)
+    assert restored is not None
+    assert restored.has_plan is False
 
 
 def test_the_plan_cascades_when_a_session_is_deleted(db_path):

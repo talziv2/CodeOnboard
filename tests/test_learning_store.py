@@ -115,12 +115,21 @@ def test_load_with_no_db_file_returns_none(tmp_path):
     assert load_graph("anything", tmp_path / "never_created.db") is None
 
 
-def test_schema_version_mismatch_returns_none(db_path, monkeypatch):
-    # Write at the current version, then bump the in-memory constant — the
-    # row written previously now looks "old" and should be treated as missing.
+def test_an_unsupported_schema_version_returns_none(db_path, monkeypatch):
+    """A row written by a schema this build does not understand reads as MISSING.
+
+    Still the rule, and still deliberate — no silent migration. What changed
+    (multi-user.md OPEN-14) is that "understood" is now a SET rather than one
+    constant: version 2 and version 3 are both readable, so the check is
+    membership and this test patches the set rather than the version.
+
+    Patching `SCHEMA_VERSION` no longer proves anything here, because what a row
+    is written AT and what this build can READ are now separate questions —
+    which is the whole point of the change.
+    """
     g, _, _ = _make_graph_with_two_nodes()
     save_graph(g, db_path)
-    monkeypatch.setattr(store_module, "SCHEMA_VERSION", SCHEMA_VERSION + 1)
+    monkeypatch.setattr(store_module, "SUPPORTED_SCHEMA_VERSIONS", frozenset({99}))
     assert load_graph(g.session_id, db_path) is None
 
 
