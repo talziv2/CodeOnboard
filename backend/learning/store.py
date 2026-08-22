@@ -282,6 +282,10 @@ def create_session(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> Non
     with _connect(db_path) as conn:
         _write_graph(conn, graph)
         _write_plan(conn, graph)
+    # Said on the object the caller still holds, because it is now true of it.
+    # Without this the payload `/session/start` returns would claim a fresh
+    # session cannot be started over.
+    graph.has_plan = True
 
 
 def _write_graph(conn: sqlite3.Connection, graph: LearningGraph) -> None:
@@ -486,6 +490,7 @@ def load_plan(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> LearningGraph
             areas=_json_or_default(session_row, "areas_json", []),
             briefing=_json_or_default(session_row, "briefing_json", None),
         )
+        graph.has_plan = True  # it was built out of the plan rows
         for row in node_rows:
             graph.nodes[row["node_id"]] = _row_to_plan_node(row)
         for row in conn.execute(
@@ -549,6 +554,12 @@ def load_graph(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> LearningGrap
             briefing=_json_or_default(session_row, "briefing_json", None),
             arrival=_json_or_default(session_row, "arrival_json", None),
         )
+        # Can this session be started over? One row's existence answers it, and
+        # asking here means every consumer of a loaded graph gets the answer
+        # without a second query or a version comparison of its own.
+        graph.has_plan = conn.execute(
+            "SELECT 1 FROM plan_nodes WHERE session_id = ? LIMIT 1", (session_id,)
+        ).fetchone() is not None
         for node_row in conn.execute(
             "SELECT * FROM nodes WHERE session_id = ?", (session_id,)
         ):

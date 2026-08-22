@@ -43,6 +43,7 @@ export default function SessionHeader({
   onReplayTour,
   onStartOver,
   startingOver,
+  canStartOver,
   onRebuild,
   rebuilding,
   onFinish,
@@ -58,6 +59,7 @@ export default function SessionHeader({
   onReplayTour: () => void;
   onStartOver: () => void;
   startingOver: boolean;
+  canStartOver: boolean;
   onRebuild: () => void;
   rebuilding: boolean;
   onFinish: () => void;
@@ -145,6 +147,7 @@ export default function SessionHeader({
           onReplayTour={onReplayTour}
           onStartOver={onStartOver}
           startingOver={startingOver}
+          canStartOver={canStartOver}
           onRebuild={onRebuild}
           rebuilding={rebuilding}
           onFinish={onFinish}

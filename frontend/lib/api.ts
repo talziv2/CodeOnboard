@@ -556,6 +556,15 @@ export interface SessionGraph {
   repo_url: string;
   goal: Record<string, string>;
   current_node_id: string | null;
+  /**
+   * Whether this session has its original plan on disk, and therefore whether
+   * `Start over` can work at all.
+   *
+   * False for sessions planned before routes were snapshotted. Nothing is ever
+   * fabricated for them — the honest answer is that this action is unavailable,
+   * and rebuilding is the way to a route that can be restarted.
+   */
+  has_plan?: boolean;
   nodes: GraphNode[];
   edges: GraphEdge[];
   areas?: Area[];

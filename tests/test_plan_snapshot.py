@@ -497,3 +497,64 @@ def test_create_session_is_called_from_exactly_one_place():
         "must be a deliberate decision: see session-reset.md §4.2"
     )
     assert calls[0][0] == "backend/api.py"
+
+
+# --- can this session be started over? ----------------------------------------
+#
+# The gate is PLAN-ROW PRESENCE, not `schema_version`. Coordinated with the
+# multi-user workstream, which is widening `load_graph` to accept v2 sessions so
+# the manual-E2E corpus stays loadable: a v2 session has no plan rows, so it
+# reports `has_plan` false and the UI disables `Start over` with a reason. That
+# stays correct however the version numbers move, which a comparison would not.
+
+def test_a_created_session_knows_it_has_a_plan(db_path):
+    graph = _planned_graph()
+
+    create_session(graph, db_path)
+
+    # On the in-memory object too, because that is the payload /session/start
+    # returns — it must not claim a fresh session cannot be started over.
+    assert graph.has_plan is True
+    assert load_graph(graph.session_id, db_path).has_plan is True
+    assert load_graph(graph.session_id, db_path).to_dict()["has_plan"] is True
+
+
+def test_a_session_with_no_plan_rows_says_so(db_path):
+    """The shape of every session written before the plan tables existed."""
+    graph = _planned_graph()
+    save_graph(graph, db_path)  # deliberately not create_session
+
+    loaded = load_graph(graph.session_id, db_path)
+
+    assert loaded.has_plan is False
+    assert loaded.to_dict()["has_plan"] is False
+
+
+def test_has_plan_is_never_persisted(db_path):
+    """It is a fact about the database, not a column in it.
+
+    Persisting it would create a second source of truth that could disagree with
+    the plan tables — and the disagreement would surface as a `Start over` button
+    that 409s, or one that is hidden on a session that could be restored.
+    """
+    graph = _planned_graph()
+    create_session(graph, db_path)
+    conn = sqlite3.connect(db_path)
+    try:
+        columns = {r[1] for r in conn.execute("PRAGMA table_info(sessions)")}
+    finally:
+        conn.close()
+    assert "has_plan" not in columns
+
+    # A lie on the in-memory object does not survive a round trip.
+    live = load_graph(graph.session_id, db_path)
+    live.has_plan = False
+    save_graph(live, db_path)
+    assert load_graph(graph.session_id, db_path).has_plan is True
+
+
+def test_a_graph_built_from_the_plan_has_a_plan(db_path):
+    graph = _planned_graph()
+    create_session(graph, db_path)
+
+    assert load_plan(graph.session_id, db_path).has_plan is True

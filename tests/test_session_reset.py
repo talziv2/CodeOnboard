@@ -545,3 +545,64 @@ def test_the_session_is_usable_after_a_reset(client, monkeypatch):
     assert resp.status_code == 200
     assert resp.json()["lesson"] == _lesson("stop1")
     llm.messages.create.assert_not_called()
+
+
+# ── availability, for the multi-user integration ─────────────────────────────
+#
+# `load_graph` is being widened by the multi-user workstream to accept schema v2,
+# so that the 90 stored sessions behind docs/planning/phases/evidence/ stay
+# loadable and resumable. These pin this feature's half of that contract: such a
+# session is NOT resettable, the wire says so before the learner clicks, and
+# nothing fabricates a plan for it.
+
+def test_the_wire_says_whether_a_session_can_be_started_over(client):
+    db = api.SESSIONS_DB_PATH
+    planned = _planned(db)
+
+    assert client.get(f"/session/{planned.session_id}").json()["has_plan"] is True
+
+
+def test_a_planless_session_reports_unavailable_rather_than_failing_on_click(client):
+    """The gate the UI reads, and the 409 behind it, must agree.
+
+    Disagreement is the bad outcome in either direction: an offered button that
+    409s, or a hidden button on a session that could be restored.
+    """
+    db = api.SESSIONS_DB_PATH
+    planned = _planned(db)
+    conn = sqlite3.connect(db)
+    conn.execute("DELETE FROM plan_nodes WHERE session_id = ?", (planned.session_id,))
+    conn.commit()
+    conn.close()
+
+    assert client.get(f"/session/{planned.session_id}").json()["has_plan"] is False
+    assert client.post(f"/session/{planned.session_id}/reset").status_code == 409
+
+
+def test_a_refused_reset_changes_nothing(client):
+    """No half-reset, and no fabricated plan.
+
+    The refusal happens before `reset_to_plan` is reached, so the learner's work
+    is still there afterwards — which is what makes the 409 safe to surface as a
+    disabled button rather than as a destructive attempt.
+    """
+    db = api.SESSIONS_DB_PATH
+    planned = _planned(db)
+    live = learning_store.load_graph(planned.session_id, db)
+    _work_the_session(live, list(planned.nodes))
+    learning_store.save_graph(live, db)
+    # Dropping the plan rows is this test's SETUP — it is how a v2 session looks —
+    # so the baseline is taken after it. Snapshotting first would compare across
+    # the test's own edit and fail on `has_plan`, which is correct to change here.
+    conn = sqlite3.connect(db)
+    conn.execute("DELETE FROM plan_nodes WHERE session_id = ?", (planned.session_id,))
+    conn.commit()
+    conn.close()
+    before = _wire(learning_store.load_graph(planned.session_id, db))
+
+    assert client.post(f"/session/{planned.session_id}/reset").status_code == 409
+
+    after = learning_store.load_graph(planned.session_id, db)
+    assert _wire(after) == before
+    # And still no plan: a refusal must never synthesise one from live state.
+    assert learning_store.load_plan(planned.session_id, db) is None

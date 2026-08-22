@@ -297,6 +297,23 @@ class LearningGraph:
     # existed. Both are the absence of a positive claim, which is what a notice
     # requires. Cleared by `/advance` — walking on is rejoining the route.
     arrival: dict | None = None
+    # Does this session have its ORIGINAL PLAN on disk? Set by the store, which is
+    # the only layer that can know, and reported on the wire as `has_plan`.
+    #
+    # It answers one product question: can this session be started over? `Start
+    # over` restores from the plan snapshot, so a session without one cannot be
+    # restarted at all — and a menu must not offer an action that cannot work.
+    #
+    # Deliberately keyed on THE PLAN EXISTING rather than on `schema_version`. The
+    # plan tables are the actual precondition; a version comparison is a proxy for
+    # it that goes stale the next time versions move. Sessions written before the
+    # plan tables existed load with False (session-reset.md D8), and nothing ever
+    # synthesises a plan for them: a plan invented from a half-walked session is
+    # not the plan that learner was given.
+    #
+    # NOT learner state, and not persisted — it is a fact about what the database
+    # holds, so `save_graph` never writes it and every reader gets it fresh.
+    has_plan: bool = False
 
     # --- construction helpers ---
 
@@ -745,6 +762,11 @@ class LearningGraph:
             "repo_url": self.repo_url,
             "goal": self.goal,
             "current_node_id": self.current_node_id,
+            # Whether `Start over` is available at all. Named for the fact rather
+            # than for the button, like `has_lesson` on a node — the UI decides
+            # what to do about it, and one name beats a model field and a wire
+            # field that mean the same thing.
+            "has_plan": self.has_plan,
             # RETAINED, and equal to `progress.goal_readiness`. Every existing
             # consumer keeps working; the two-measure view lives in `progress`.
             "readiness": self.readiness(),

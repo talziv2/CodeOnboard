@@ -29,6 +29,7 @@ const props = () => ({
   onBriefing: vi.fn(),
   onStartOver: vi.fn(),
   startingOver: false,
+  canStartOver: true,
   onRebuild: vi.fn(),
   rebuilding: false,
   onFinish: vi.fn(),
@@ -138,6 +139,41 @@ describe("starting over", () => {
     expect(item.hasAttribute("disabled")).toBe(true);
     await userEvent.click(item);
     expect(p.onStartOver).not.toHaveBeenCalled();
+  });
+});
+
+describe("a session with no stored plan", () => {
+  test("Start over is shown, disabled, and says why", async () => {
+    // Shown rather than hidden: a control that vanishes leaves someone hunting
+    // for a feature they have used before. And the reason names the way out,
+    // which is the rebuild sitting right below it.
+    await open({ canStartOver: false });
+
+    const item = screen.getByRole("button", { name: t.session.startOver });
+    expect(item.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText(t.errors.no_plan_snapshot)).toBeTruthy();
+  });
+
+  test("it cannot be confirmed into happening", async () => {
+    await open({ canStartOver: false });
+
+    await userEvent.click(screen.getByRole("button", { name: t.session.startOver }));
+
+    expect(screen.queryByText(t.session.startOverConfirm)).toBeNull();
+    expect(p.onStartOver).not.toHaveBeenCalled();
+  });
+
+  test("rebuilding is still offered — it is the way to a restartable route", async () => {
+    await open({ canStartOver: false });
+
+    expect(
+      screen.getByRole("button", { name: t.session.rebuild }).hasAttribute("disabled")
+    ).toBe(false);
+  });
+
+  test("a session WITH a plan shows no such note", async () => {
+    await open({ canStartOver: true });
+    expect(screen.queryByText(t.errors.no_plan_snapshot)).toBeNull();
   });
 });
 

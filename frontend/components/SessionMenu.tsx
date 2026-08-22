@@ -51,6 +51,7 @@ export default function SessionMenu({
   onReplayTour,
   onStartOver,
   startingOver,
+  canStartOver,
   onRebuild,
   rebuilding,
   onFinish,
@@ -66,6 +67,13 @@ export default function SessionMenu({
   /** Restore the SAME route and clear the learner's work. Fast, no model call. */
   onStartOver: () => void;
   startingOver: boolean;
+  /**
+   * False for a session with no stored plan to restore — one created before
+   * routes were snapshotted. The action is shown and disabled, with the reason,
+   * rather than hidden: a control that vanishes leaves someone hunting for a
+   * feature they have used before, and the reason names the way out.
+   */
+  canStartOver: boolean;
   /** Plan a NEW route for the same goal. The two-to-four-minute one. */
   onRebuild: () => void;
   rebuilding: boolean;
@@ -194,9 +202,21 @@ export default function SessionMenu({
                 onNo={() => setConfirming(null)}
               />
             ) : (
-              <MenuItem onClick={() => setConfirming("startOver")} disabled={busy}>
-                {startingOver ? t.session.startingOver : t.session.startOver}
-              </MenuItem>
+              <>
+                <MenuItem
+                  onClick={() => setConfirming("startOver")}
+                  disabled={busy || !canStartOver}
+                >
+                  {startingOver ? t.session.startingOver : t.session.startOver}
+                </MenuItem>
+                {/* Why it is unavailable, where the unavailable control is. A
+                    disabled item with no explanation reads as a bug. */}
+                {!canStartOver && (
+                  <span className="text-micro text-graphite">
+                    {t.errors.no_plan_snapshot}
+                  </span>
+                )}
+              </>
             )}
 
             {confirming === "rebuild" ? (

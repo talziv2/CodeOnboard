@@ -546,6 +546,10 @@ export default function SessionPage() {
         onReplayTour={() => setTourReplay((n) => n + 1)}
         onStartOver={startOver}
         startingOver={startingOver}
+        // Absent on a payload from an older backend, which is the same situation
+        // as a session with no plan — so it defaults to unavailable rather than
+        // offering an action that would 409.
+        canStartOver={graph.has_plan === true}
         onRebuild={rebuild}
         rebuilding={rebuilding}
         onFinish={() => setFinished(true)}
