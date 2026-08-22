@@ -26,16 +26,21 @@ async function fail(res: Response): Promise<never> {
 async function send(path: string, init?: RequestInit): Promise<Response> {
   try {
     return await fetch(`${BASE}${path}`, init);
-  } catch {
+  } catch (e: unknown) {
+    // An abort is the CALLER'S decision, not a failure to reach the server, and
+    // collapsing the two would make "I changed my mind" render as "the backend
+    // is down". Rethrown as-is so callers can recognise it by name.
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
     throw new Error("server_unreachable");
   }
 }
 
-async function post<T>(path: string, body?: unknown): Promise<T> {
+async function post<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const res = await send(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal,
   });
   if (!res.ok) await fail(res);
   return res.json();
@@ -105,13 +110,19 @@ export const sessionStart = (
   goal: Record<string, string>,
   force_new = false,
   progress_id?: string,
+  /**
+   * Abandon the wait. The run itself is NOT cancelled — the backend keeps
+   * cloning and planning, and the session it writes is simply never navigated
+   * to. That is the honest shape of it: the only thing a client can withdraw
+   * here is its own interest in the answer.
+   */
+  signal?: AbortSignal,
 ) =>
-  post<SessionStartResponse>("/session/start", {
-    repo_url,
-    goal,
-    force_new,
-    progress_id,
-  });
+  post<SessionStartResponse>(
+    "/session/start",
+    { repo_url, goal, force_new, progress_id },
+    signal,
+  );
 
 /** Live progress of an in-flight /session/start, polled with the same
  *  `progress_id` that request was sent with.
@@ -133,6 +144,35 @@ export interface PipelineProgress {
 
 export const sessionProgress = (progress_id: string) =>
   get<PipelineProgress>(`/session/progress/${encodeURIComponent(progress_id)}`);
+
+/** What a reset threw away. Counts, not content — nothing is archived. */
+export interface DiscardedWork {
+  stops: number;
+  attempts: number;
+  gaps: number;
+  remedial_nodes: number;
+  lessons_restored: number;
+}
+
+export interface ResetResponse {
+  session_id: string;
+  graph: SessionGraph;
+  discarded: DiscardedWork;
+}
+
+/**
+ * Start over: the same learning path, restored, with none of the learner's work.
+ *
+ * Nothing like `sessionStart(force_new)`, which is the *rebuild* — this runs no
+ * pipeline, spends no model call, keeps the session id and returns in
+ * milliseconds. It carries no progress id and needs no abort signal for the same
+ * reason: there is no wait to report on, and nothing to withdraw from.
+ *
+ * The response carries the whole graph, in the shape `getSession` returns, so the
+ * caller swaps it in rather than re-fetching.
+ */
+export const resetSession = (session_id: string) =>
+  post<ResetResponse>(`/session/${encodeURIComponent(session_id)}/reset`);
 
 // --- Learning graph ---
 

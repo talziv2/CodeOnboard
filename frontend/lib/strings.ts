@@ -223,8 +223,47 @@ export const t = {
     readiness: "Readiness",
     hideSource: "Hide source",
     showSource: "Show source",
-    startingOver: "Starting over…",
+    // ── two different actions, and they used to be one ──────────────────────
+    //
+    // `Start over` re-ran the whole pipeline: two to four minutes, and a
+    // DIFFERENT route than the one on screen. That is a rebuild, not a restart,
+    // so they are now separate controls with separate confirmations.
+    //
+    // The copy carries the whole distinction, because the two sit one click apart
+    // and the difference between them is minutes and money. This one names what
+    // is KEPT, since "will I lose the route?" is the actual question.
     startOver: "Start over",
+    startingOver: "Starting over…",
+    startOverConfirm:
+      "Walk this same route again from the first stop? The stops, their order and their lessons stay exactly as they are. Your progress, answers, feedback, gaps and any warm-ups added along the way are cleared.",
+    startOverYes: "Start over",
+    startOverNo: "Keep my progress",
+    // The old `Start over`, named for what it does. The wording has to earn the
+    // wait rather than spring it on someone.
+    rebuild: "Rebuild learning path",
+    rebuilding: "Rebuilding…",
+    rebuildConfirm:
+      "Plan a brand-new route for the same repository and the same answers? This reads the repository again, takes two to four minutes, and the new route will not be the same as this one. Your current session is kept until the new one is ready.",
+    rebuildYes: "Rebuild it",
+    rebuildNo: "Never mind",
+    // ── the rebuild's own wait ──────────────────────────────────────────────
+    //
+    // A rebuild re-runs the entire pipeline, which is the same two-to-four
+    // minutes the landing page warns about. It used to say so nowhere: the menu
+    // item greyed out and the session sat there, which is indistinguishable from
+    // a click that did nothing.
+    rebuildWaitLabel: "Rebuilding your route",
+    // Says what survives, because that is the question someone watching a
+    // three-minute wait actually has.
+    rebuildWaitNote:
+      "Same repository, same answers — the route is planned again from scratch. Your current session stays exactly as it is until the new one is ready.",
+    rebuildWaitFailed: "Couldn't build the new route.",
+    rebuildWaitReassurance:
+      "Nothing happened to the session you were in — it is still here, and still where you left it.",
+    rebuildWaitRetry: "Try again",
+    // Withdraws the WAIT, not the run: the backend finishes either way, and
+    // saying "cancel" would promise a stop we cannot deliver.
+    rebuildWaitCancel: "Keep the session I have",
     // The session-level actions, behind one control. Named for what they act on
     // rather than what they look like: "⋯" is not a word.
     menu: "Session actions",

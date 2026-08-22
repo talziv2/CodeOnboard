@@ -11,8 +11,9 @@ import LessonPanel from "@/components/LessonPanel";
 import CodeViewer from "@/components/CodeViewer";
 import SessionHeader from "@/components/SessionHeader";
 import SessionTour from "@/components/tour/SessionTour";
+import RebuildingOverlay from "@/components/RebuildingOverlay";
 import SurfaceTabs from "@/components/lesson/SurfaceTabs";
-import { getSession, jump, sessionStart, setScope } from "@/lib/api";
+import { getSession, jump, resetSession, sessionStart, setScope } from "@/lib/api";
 import type { GraphNode, SessionGraph } from "@/lib/api";
 import { buildRoute, spineLength } from "@/lib/graph-layout";
 import { currentSection, splitJourney } from "@/lib/route-sections";
@@ -147,7 +148,31 @@ export default function SessionPage() {
   // Which unit's evidence chain is open, if any. Null = closed.
   const [evidenceNodeId, setEvidenceNodeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [restarting, setRestarting] = useState(false);
+  // ── starting over, and rebuilding: two actions, two waits ──────────────────
+  //
+  // `Start over` restores the same route from its persisted plan: no model call,
+  // no new session id, milliseconds. `Rebuild learning path` is the old
+  // behaviour — the whole pipeline, two to four minutes, a different route — and
+  // it is the only one of the two that needs a progress surface.
+  const [startingOver, setStartingOver] = useState(false);
+  const [rebuilding, setRebuilding] = useState(false);
+  const [rebuildRunId, setRebuildRunId] = useState("");
+  const [rebuildError, setRebuildError] = useState<string | null>(null);
+  // Held so dismissing the rebuild's wait can drop the request rather than leave
+  // a fetch resolving into a page that has moved on. The RUN is not cancelled —
+  // see `sessionStart` — only our interest in its answer.
+  const rebuildAbort = useRef<AbortController | null>(null);
+  /**
+   * Bumped by a reset, and used as a React `key` on the session body.
+   *
+   * A reset keeps the URL and the session id, so React would keep every child
+   * mounted and its state alive — `LessonPanel`'s typed answer and its verdict
+   * card, the open evidence drawer, the chapter overview. Remounting on a key is
+   * deliberately preferred over clearing those one by one: the field-by-field
+   * version is a list, and the next component with local state is the one nobody
+   * remembers to add to it.
+   */
+  const [epoch, setEpoch] = useState(0);
   // Owned here, not in LessonPanel, because two things end the journey now: the
   // walk running out, and `Finish session` in the header menu.
   const [finished, setFinished] = useState(false);
@@ -193,6 +218,95 @@ export default function SessionPage() {
       setScoping(false);
     }
   };
+
+  /**
+   * START OVER — the same route, from the first stop, with none of the work.
+   *
+   * One request, no model call, no new session id. The server returns the whole
+   * restored graph in the shape `getSession` returns, so this swaps it in rather
+   * than re-fetching, and the swap plus the epoch bump are the entire client-side
+   * reset: `epoch` remounts the session body, which discards every child's local
+   * state (see its declaration). What the key cannot reach is reset beside it —
+   * page-level state, and the per-session "have I looked at the rail" mark, which
+   * is about a history that no longer exists.
+   *
+   * `introduced` is cleared because chapter introductions are shown once per
+   * visit to a chapter with nothing behind it, and after a reset there is nothing
+   * behind any of them again. Leaving it would silently skip every introduction
+   * for the rest of the session.
+   */
+  const startOver = useCallback(async () => {
+    if (startingOver) return;
+    setStartingOver(true);
+    setError(null);
+    try {
+      const { graph: restored } = await resetSession(id);
+      setGraph(restored);
+      setFinished(false);
+      introduced.current.clear();
+      setDismissedArrivalAt(null);
+      setOverviewAreaId(null);
+      setEvidenceNodeId(null);
+      setUnseen([]);
+      setScopeNote(null);
+      window.localStorage.removeItem(`codeonboard:rail-seen:${id}`);
+      setRailSeenAt(null);
+      setEpoch((n) => n + 1);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? errorText(e.message) : t.session.loadFailed);
+    } finally {
+      setStartingOver(false);
+    }
+  }, [id, startingOver]);
+
+  /**
+   * REBUILD — a new route for the same repository and the same answers.
+   *
+   * What `Start over` used to do, and the reason it needed splitting: this runs
+   * the whole pipeline, so it is the landing page's two-to-four-minute wait
+   * happening on top of a session the learner is already reading. It reports that
+   * through `RebuildingOverlay`, on this run's own `progress_id`.
+   */
+  const rebuild = useCallback(async () => {
+    if (!graph || rebuilding) return;
+    const runId = crypto.randomUUID();
+    const controller = new AbortController();
+    rebuildAbort.current = controller;
+    setRebuildRunId(runId);
+    setRebuildError(null);
+    setRebuilding(true);
+    try {
+      const { session_id } = await sessionStart(
+        graph.repo_url, graph.goal, true, runId, controller.signal
+      );
+      // The overlay stays up across the push and is cleared by arrival — see the
+      // effect below. Clearing it here would flash the old session in between.
+      router.push(`/session/${session_id}`);
+    } catch (e: unknown) {
+      // Dismissed rather than failed: the learner already has the session they
+      // asked to keep, and an error card about a wait they abandoned would report
+      // their own decision back to them as a problem.
+      if (controller.signal.aborted) return;
+      setRebuildError(
+        e instanceof Error ? errorText(e.message) : t.home.pipelineFailed
+      );
+    }
+  }, [graph, rebuilding, router]);
+
+  /**
+   * Arriving at a different session ends the rebuild, whether it succeeded or not.
+   *
+   * `router.push` moves to a different `id` on the SAME route, so React keeps this
+   * component mounted and a flag set before the push would survive it — leaving
+   * the new session showing the old one's progress overlay. Keyed on `id` so the
+   * state cannot outlive the session it described.
+   */
+  useEffect(() => {
+    setRebuilding(false);
+    setRebuildRunId("");
+    setRebuildError(null);
+    rebuildAbort.current = null;
+  }, [id]);
 
   const loadGraph = useCallback(async () => {
     try {
@@ -418,20 +532,19 @@ export default function SessionPage() {
         onScope={adjustScope}
         onBriefing={() => router.push(`/session/${id}/welcome`)}
         onReplayTour={() => setTourReplay((n) => n + 1)}
-        restarting={restarting}
-        onStartOver={async () => {
-          setRestarting(true);
-          try {
-            const { session_id } = await sessionStart(graph.repo_url, graph.goal, true);
-            router.push(`/session/${session_id}`);
-          } catch {
-            setRestarting(false);
-          }
-        }}
+        onStartOver={startOver}
+        startingOver={startingOver}
+        onRebuild={rebuild}
+        rebuilding={rebuilding}
         onFinish={() => setFinished(true)}
       />
 
+      {/* `key={epoch}` is the reset (see the `epoch` declaration): a restore keeps
+          the URL and the session id, so without it React would keep every child
+          below mounted and holding the previous walk's state — a typed answer, a
+          verdict card, an open drawer. */}
       <div
+        key={epoch}
         className="grid min-h-0 flex-1"
         style={{
           // The map wants the room, so the source column steps aside on that tab.
@@ -733,6 +846,27 @@ export default function SessionPage() {
           </div>
         )}
       </div>
+
+      {/* The REBUILD's wait, over everything including the tour: the session
+          underneath is about to be replaced, so it must not be answerable while
+          that happens. `Start over` has no equivalent and needs none — it returns
+          in milliseconds. */}
+      {rebuilding && (
+        <RebuildingOverlay
+          repoUrl={graph.repo_url}
+          goal={graph.goal}
+          progressId={rebuildRunId}
+          error={rebuildError}
+          onRetry={rebuild}
+          onDismiss={() => {
+            rebuildAbort.current?.abort();
+            rebuildAbort.current = null;
+            setRebuilding(false);
+            setRebuildRunId("");
+            setRebuildError(null);
+          }}
+        />
+      )}
     </main>
   );
 }
