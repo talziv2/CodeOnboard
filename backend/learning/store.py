@@ -156,16 +156,190 @@ CREATE TABLE IF NOT EXISTS plan_edges (
 """
 
 
+# How long a connection waits for a write lock before giving up. Five seconds is
+# chosen against what actually contends here: `save_graph` rewrites every node
+# and edge of one session, which is milliseconds at these sizes, so anything
+# short of a stuck process clears well inside the window — and a caller that
+# does wait five seconds is better served by a slow response than by an error.
+BUSY_TIMEOUT_MS = 5000
+
+
+def _configure(conn: sqlite3.Connection) -> None:
+    """The pragmas every connection to this database needs.
+
+    ## Why WAL, and why it is a multi-user concern rather than a tuning knob
+
+    SQLite's default rollback journal takes an exclusive lock on the whole
+    database for the duration of a write, and readers are locked out while it is
+    held. With one learner that is invisible — there is never a second request in
+    flight. With two, one learner submitting an answer blocks the other's page
+    load, and with the default `busy_timeout` of ZERO the blocked one does not
+    wait at all: it raises `database is locked` immediately.
+
+    WAL lets readers run concurrently with a writer, so the common collision —
+    someone reading while someone else writes — stops being a collision. Two
+    simultaneous *writers* still serialise, which is what `busy_timeout` is for:
+    wait for the lock instead of failing on it.
+
+    `journal_mode` is persistent — a property of the database file, not the
+    connection — so setting it on every connect is idempotent and costs one
+    pragma. It is done here anyway rather than once at startup, because the test
+    suite creates fresh databases constantly and "the file was made by whichever
+    code path got there first" is not a property worth relying on.
+
+    `survey_store` and `dossier_store` import this rather than restating it: they
+    write the same file, and two modules configuring one database differently is
+    the kind of disagreement that surfaces as `database is locked` from only one
+    of them.
+    """
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
+    try:
+        conn.execute("PRAGMA journal_mode = WAL")
+    except sqlite3.Error:
+        # WAL is unavailable on some network filesystems. The default journal
+        # still works — it is only less concurrent — so this must not be the
+        # thing that stops the app from starting.
+        pass
+
+
 @contextmanager
 def _connect(db_path: Path):
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA foreign_keys = ON")
+    conn = sqlite3.connect(db_path, timeout=BUSY_TIMEOUT_MS / 1000)
+    _configure(conn)
     try:
         yield conn
         conn.commit()
     finally:
         conn.close()
+
+
+_ADDITIVE_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    # The Documentation Agent's context, carried on the session so Teaching can
+    # reach it when state is reconstructed from the persisted graph.
+    ("sessions", "doc_context_json", "TEXT"),
+    # Per-node answer history. Existing sessions simply start with none.
+    ("nodes", "attempts_json", "TEXT"),
+    # Symbol identity alongside the resolved line range (repo-understanding
+    # Stage 0). Nodes written before symbol resolution load with symbol = NULL.
+    ("nodes", "symbol", "TEXT"),
+    # The curriculum's area list — the ONE additive column the learning-engine
+    # phase spends (LD6). Everything else it needed (objective, kind, priority,
+    # area_id, anchors, gap_kind) went into JSON payloads that already existed,
+    # because nothing queries by them. Areas get a column only because they
+    # belong to the session rather than to any one node.
+    ("sessions", "areas_json", "TEXT"),
+    # Outstanding gaps and the per-node remediation counter (gap-model.md M1).
+    #
+    # Written and read UNCONDITIONALLY. `CODEONBOARD_GAPS` gates behaviour, never
+    # storage (gap-model.md §3.8): a flag-off save that loads a gap-bearing
+    # graph, changes something unrelated and writes it back must not destroy the
+    # gaps. Making persistence conditional is the one way to break that, so this
+    # path does not read the flag at all — and a test asserts that structurally,
+    # so the contract cannot rot.
+    ("nodes", "gaps_json", "TEXT"),
+    # PLAN-SCOPED history — prune-ahead, scope changes, remediation insertions
+    # (learning-graph.md M2). A column for exactly the reason `areas_json` got
+    # one: it belongs to the SESSION rather than to any one node.
+    ("sessions", "journey_events_json", "TEXT"),
+    # The welcome briefing, session-scoped for the same reason. A graph written
+    # before the welcome page loads with briefing = None.
+    ("sessions", "briefing_json", "TEXT"),
+    # How the learner reached the current stop, when that is worth a notice. A
+    # session column rather than a node one because it describes the session's
+    # POSITION, not any unit.
+    ("sessions", "arrival_json", "TEXT"),
+
+    # ── the account layer (multi-user M1) ─────────────────────────────────────
+    #
+    # Additive and nullable like every column above, and for the same reason:
+    # SCHEMA_VERSION must not move. `load_graph` treats a version mismatch as
+    # MISSING, so a bump would make all 90 sessions in the live database
+    # invisible rather than migrating them.
+    #
+    # They are filled by `backend/migrations/001_multi_user.py` for existing
+    # rows and stamped by `_write_graph` for new ones. Nothing ENFORCES them
+    # yet — enforcement is M3, and doing it here would break every route while
+    # there is still no way to log in.
+    ("sessions", "user_id", "TEXT"),
+    ("sessions", "repo_id", "TEXT"),
+    # What the learner sees on the dashboard. Nullable because a session planned
+    # before titles existed has none; the migration derives one.
+    ("sessions", "title", "TEXT"),
+    # "generating" | "active" | "completed" | "failed" | "archived".
+    # `completed` is DERIVED from the graph on read (`is_complete()`), never a
+    # second source of truth — this column records only what the engine cannot
+    # say for itself.
+    ("sessions", "status", "TEXT"),
+    ("sessions", "last_active_at", "TEXT"),
+    ("sessions", "archived_at", "TEXT"),
+
+    # A CACHE of `progress.summary()`, not a second definition of it. The
+    # dashboard lists every session at once, and loading each graph to compute
+    # three numbers would mean reading 907 node rows to render a list. Written
+    # from `summary()` itself (M4), so there is still exactly one implementation
+    # of what these mean — `progress.py` is emphatic that there must be.
+    ("sessions", "readiness_cached", "REAL"),
+    ("sessions", "stops_settled_cached", "INTEGER"),
+    ("sessions", "stops_total_cached", "INTEGER"),
+)
+
+
+def _existing_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    return {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+
+
+def _add_missing_columns(conn: sqlite3.Connection) -> None:
+    """Apply `_ADDITIVE_COLUMNS`, skipping the ones already there.
+
+    Every column here is additive and nullable, which is what lets
+    SCHEMA_VERSION stay put: `load_graph` treats a version mismatch as MISSING,
+    so bumping it would make every session written before the bump invisible
+    rather than migrating it.
+
+    ## Why this asks first instead of trying and swallowing
+
+    Each of these used to be its own `try: ALTER … except Exception: pass`, on
+    the reasoning that SQLite has no `ADD COLUMN IF NOT EXISTS` and the error it
+    raises for an existing column is harmless.
+
+    That is right about the error it was written for and wrong about every other
+    error `ALTER TABLE` can raise — and one of those became reachable the moment
+    this database got a second concurrent writer. `database is locked` is an
+    `OperationalError` too, so under contention a bare `except` silently skips
+    the column, `init_db` reports success, and the very next `save_graph` fails
+    on a column that does not exist. A migration that can half-apply itself and
+    say nothing is the worst possible shape for one.
+
+    ## And why the duplicate-column error is STILL tolerated
+
+    Checking first is a check-then-act, and `init_db` runs on every `save_graph`,
+    so two concurrent first-writes can both read "absent" and both ALTER. The
+    second loses with `duplicate column name: areas_json` — reproduced
+    intermittently by `test_concurrent_writers_all_succeed` the first time this
+    file had genuinely concurrent writers, and invisible before only because the
+    blanket catch was swallowing it.
+
+    So exactly one message is tolerated: the one that means "another writer
+    already did this", which is a success, just not ours. Everything else
+    propagates, which is the whole point of having narrowed the catch.
+    """
+    for table in ("sessions", "nodes"):
+        present = _existing_columns(conn, table)
+        for target_table, column, column_type in _ADDITIVE_COLUMNS:
+            if target_table != table or column in present:
+                continue
+            try:
+                conn.execute(
+                    f"ALTER TABLE {table} ADD COLUMN {column} {column_type}"
+                )
+            except sqlite3.OperationalError as exc:
+                # Message sniffing, because SQLite gives no error code that
+                # distinguishes this from any other OperationalError. Narrow on
+                # purpose: anything else is re-raised.
+                if "duplicate column name" not in str(exc).lower():
+                    raise
 
 
 def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
@@ -177,93 +351,57 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
         conn.execute(_CREATE_EDGES)
         conn.execute(_CREATE_PLAN_NODES)
         conn.execute(_CREATE_PLAN_EDGES)
-        # Add the doc_context_json column to existing databases that were
-        # created before schema v2. SQLite has no ADD COLUMN IF NOT EXISTS,
-        # so we catch the OperationalError that fires when the column already
-        # exists rather than checking first.
-        try:
-            conn.execute("ALTER TABLE sessions ADD COLUMN doc_context_json TEXT")
-        except Exception:
-            pass
-        # Same additive trick for the per-node answer history. Adding a column
-        # rather than bumping SCHEMA_VERSION keeps existing sessions loadable —
-        # they simply start with an empty history.
-        try:
-            conn.execute("ALTER TABLE nodes ADD COLUMN attempts_json TEXT")
-        except Exception:
-            pass
-        # Symbol identity alongside the resolved line range (Stage 0 of the
-        # repo-understanding migration). Additive and nullable for the same
-        # reason as the columns above: sessions written before symbol resolution
-        # existed still load, with symbol = NULL.
-        try:
-            conn.execute("ALTER TABLE nodes ADD COLUMN symbol TEXT")
-        except Exception:
-            pass
-        # The curriculum's area list — the ONE additive column the learning-engine
-        # phase spends (LD6). Everything else it needed (objective, kind,
-        # priority, area_id, anchors, gap_kind) went into JSON payloads that
-        # already existed, because nothing queries by them. Areas get a column
-        # only because they belong to the session rather than to any one node.
-        try:
-            conn.execute("ALTER TABLE sessions ADD COLUMN areas_json TEXT")
-        except Exception:
-            pass
-        # Outstanding gaps and the per-node remediation counter (gap-model.md
-        # M1). Additive and nullable like every column above, so SCHEMA_VERSION
-        # does not move and a graph written before the gap model loads with an
-        # empty GapState — which reads correctly as "no outstanding gaps".
+        # The eight additive columns this used to add with eight
+        # `try: ALTER … except Exception: pass` blocks. `_add_missing_columns`
+        # applies exactly the same eight — verified column by column against the
+        # chain it replaces — and differs only in HOW it tolerates a column that
+        # is already there: it reads `PRAGMA table_info` first and then swallows
+        # nothing but `duplicate column name`.
         #
-        # Written and read UNCONDITIONALLY. `CODEONBOARD_GAPS` gates behaviour,
-        # never storage (gap-model.md §3.8): a flag-off save that loads a
-        # gap-bearing graph, changes something unrelated and writes it back must
-        # not destroy the gaps. Making persistence conditional is the one way to
-        # break that, so this path does not read the flag at all — and a test
-        # asserts that structurally, so the contract cannot rot.
-        try:
-            conn.execute("ALTER TABLE nodes ADD COLUMN gaps_json TEXT")
-        except Exception:
-            pass
-        # PLAN-SCOPED history — prune-ahead, scope changes, remediation
-        # insertions (learning-graph.md M2). A column for exactly the reason
-        # `areas_json` got one: it belongs to the SESSION rather than to any one
-        # node, so there is no node payload it could ride in, and the only
-        # session payloads that exist are owned by other producers (`goal_json`
-        # is the agents' source of truth, `doc_context_json` the Documentation
-        # Agent's). Nothing queries it, so it stays JSON in one column rather
-        # than becoming a table.
-        try:
-            conn.execute("ALTER TABLE sessions ADD COLUMN journey_events_json TEXT")
-        except Exception:
-            pass
-        # The welcome briefing, for the same reason `areas_json` gets a column:
-        # it belongs to the SESSION, not to any node, and the session payloads
-        # that already exist are owned by other producers. Additive and nullable,
-        # so a graph written before the welcome page loads with briefing = None
-        # and simply writes one the first time that page is opened.
-        try:
-            conn.execute("ALTER TABLE sessions ADD COLUMN briefing_json TEXT")
-        except Exception:
-            pass
-        # How the learner reached the current stop, when that is worth a notice.
-        # A session column rather than a node one because it describes the
-        # session's POSITION, not any unit — a node-scoped flag would have to be
-        # cleared on every other node every time the learner moved, and the one
-        # that got missed would show a stale notice.
-        try:
-            conn.execute("ALTER TABLE sessions ADD COLUMN arrival_json TEXT")
-        except Exception:
-            pass
+        # That distinction is why the chain went rather than the helper. A bare
+        # `except Exception` also swallows `database is locked`, which became
+        # reachable the moment this file got a second concurrent writer: the
+        # column is silently skipped, `init_db` reports success, and the next
+        # `save_graph` fails on a column that does not exist.
+        _add_missing_columns(conn)
 
 
-def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
-    """Persist the LIVE graph. Never touches a plan table — see the header."""
+def save_graph(
+    graph: LearningGraph,
+    db_path: Path = DEFAULT_DB_PATH,
+    *,
+    user_id: str | None = None,
+) -> None:
+    """Persist the LIVE graph. Never touches a plan table — see the header.
+
+    ## `user_id`, and why it is optional in M1 and required in M3
+
+    OWNERSHIP IS DECIDED AT THIS BOUNDARY, not in the routes (multi-user.md §4).
+    The endpoint layer names whose session this is; below here, a graph cannot
+    be written without an owner having been named. That is what makes "no user
+    can touch another user's session" structural rather than a habit sixteen
+    routes have to keep.
+
+    In M1 it is optional and defaults to the legacy user, because there is still
+    no way to log in: making it required now would break every route in the name
+    of a rule nothing can yet satisfy. M3 removes the default, at which point
+    omitting it is a TypeError rather than a silent fallback.
+
+    `repo_id` is not a parameter at all — it is derived from `graph.repo_url`,
+    which is the only correct source for it.
+    """
     init_db(db_path)
+    owner, repo_id = _resolve_ownership(graph, db_path, user_id)
     with _connect(db_path) as conn:
-        _write_graph(conn, graph)
+        _write_graph(conn, graph, owner=owner, repo_id=repo_id)
 
 
-def create_session(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
+def create_session(
+    graph: LearningGraph,
+    db_path: Path = DEFAULT_DB_PATH,
+    *,
+    user_id: str | None = None,
+) -> None:
     """Persist a NEWLY PLANNED graph, and its plan, in ONE transaction.
 
     The only writer of `plan_nodes` / `plan_edges` apart from
@@ -279,8 +417,9 @@ def create_session(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> Non
     module must never do.
     """
     init_db(db_path)
+    owner, repo_id = _resolve_ownership(graph, db_path, user_id)
     with _connect(db_path) as conn:
-        _write_graph(conn, graph)
+        _write_graph(conn, graph, owner=owner, repo_id=repo_id)
         _write_plan(conn, graph)
     # Said on the object the caller still holds, because it is now true of it.
     # Without this the payload `/session/start` returns would claim a fresh
@@ -288,7 +427,47 @@ def create_session(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> Non
     graph.has_plan = True
 
 
-def _write_graph(conn: sqlite3.Connection, graph: LearningGraph) -> None:
+
+def _resolve_ownership(
+    graph: LearningGraph, db_path: Path, user_id: str | None
+) -> tuple[str, str | None]:
+    """(owner, repo_id) for a write — resolved BEFORE the write transaction opens.
+
+    Both lookups may INSERT (a first-time repository, the legacy user on a fresh
+    database), so they need their own connection. Doing that from inside
+    `_write_graph` would mean opening a second connection to the same file while
+    a write transaction is already held on it — a self-inflicted lock, and one
+    that WAL makes worse rather than better because the second connection would
+    wait the full `busy_timeout` before failing. Resolving first means the write
+    transaction stays a single short write, which is what §1.10 says the
+    contended resource actually is.
+
+    `repo_id` is DERIVED, never passed in: `graph.repo_url` is the only thing
+    that knows which repository this is, and `ensure_repository` maps every
+    spelling of it onto one row.
+    """
+    from backend.auth.identity import ensure_legacy_user, ensure_repository
+
+    owner = user_id or ensure_legacy_user(db_path)
+    try:
+        repo_id = ensure_repository(graph.repo_url, db_path)
+    except ValueError:
+        # A `repo_url` the cloner would now refuse. Rows written before that
+        # validation existed can hold one, and refusing to SAVE such a session
+        # would lose a learner's work over a URL policy introduced after they
+        # started. The row simply carries no `repo_id`; the startup check
+        # reports it rather than the save failing.
+        repo_id = None
+    return owner, repo_id
+
+
+def _write_graph(
+    conn: sqlite3.Connection,
+    graph: LearningGraph,
+    *,
+    owner: str,
+    repo_id: str | None,
+) -> None:
     """The live-side write, without its own transaction.
 
     Extracted so `create_session` can put it and the plan write inside one
@@ -301,8 +480,9 @@ def _write_graph(conn: sqlite3.Connection, graph: LearningGraph) -> None:
         INSERT INTO sessions
             (session_id, repo_url, goal_json, current_node_id,
              doc_context_json, areas_json, journey_events_json, briefing_json,
-             arrival_json, schema_version)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             arrival_json, schema_version, user_id, repo_id, last_active_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                strftime('%Y-%m-%dT%H:%M:%S', 'now'))
         ON CONFLICT(session_id) DO UPDATE SET
             repo_url            = excluded.repo_url,
             goal_json           = excluded.goal_json,
@@ -313,6 +493,14 @@ def _write_graph(conn: sqlite3.Connection, graph: LearningGraph) -> None:
             briefing_json       = excluded.briefing_json,
             arrival_json        = excluded.arrival_json,
             schema_version      = excluded.schema_version,
+            -- OWNERSHIP IS NOT REASSIGNED BY A SAVE. `sessions.user_id` keeps
+            -- whatever it already holds: an update is the owner working on
+            -- their session, never a change of owner. Writing
+            -- `excluded.user_id` here would make every save a silent chance to
+            -- take someone else's session, which is precisely the hole M3
+            -- exists to close.
+            repo_id             = COALESCE(sessions.repo_id, excluded.repo_id),
+            last_active_at      = excluded.last_active_at,
             updated_at       = strftime('%Y-%m-%d %H:%M:%f', 'now')
         """,
         (
@@ -326,6 +514,8 @@ def _write_graph(conn: sqlite3.Connection, graph: LearningGraph) -> None:
             json.dumps(graph.briefing) if graph.briefing is not None else None,
             json.dumps(graph.arrival) if graph.arrival is not None else None,
             SCHEMA_VERSION,
+            owner,
+            repo_id,
         ),
     )
     # Nodes and edges: replace wholesale rather than diff. Sessions are
@@ -608,11 +798,86 @@ def list_sessions_for_repo(
         ]
 
 
+def list_sessions_for_user(
+    user_id: str,
+    db_path: Path = DEFAULT_DB_PATH,
+    *,
+    include_archived: bool = False,
+) -> list[dict]:
+    """Lightweight summaries of one user's sessions, newest activity first.
+
+    THE OWNER-SCOPED REPLACEMENT for `list_sessions_for_repo`, which took a
+    repository and returned every session on it belonging to ANYONE. That was
+    correct while there was one learner and is a corpus-wide disclosure with two
+    (multi-user.md §2 P2). The old function is still here because
+    `POST /session/start` calls it; M3 removes both.
+
+    Deliberately does NOT load graphs. A dashboard listing forty sessions would
+    otherwise read every node row of all forty to show three numbers, which is
+    what the `*_cached` columns exist to avoid. They are NULL until M4 fills
+    them, so callers must treat them as unknown rather than as zero.
+    """
+    if not Path(db_path).exists():
+        return []
+    with _connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            f"""
+            SELECT session_id, repo_url, repo_id, goal_json, title, status,
+                   current_node_id, created_at, updated_at, last_active_at,
+                   archived_at, readiness_cached, stops_settled_cached,
+                   stops_total_cached
+            FROM sessions
+            WHERE user_id = ? AND schema_version = ?
+              {"" if include_archived else "AND archived_at IS NULL"}
+            ORDER BY COALESCE(last_active_at, updated_at) DESC
+            """,
+            (user_id, SCHEMA_VERSION),
+        ).fetchall()
+        return [
+            {
+                "session_id": r["session_id"],
+                "repo_url": r["repo_url"],
+                "repo_id": r["repo_id"],
+                "goal": json.loads(r["goal_json"]),
+                "title": r["title"],
+                "status": r["status"],
+                "current_node_id": r["current_node_id"],
+                "created_at": r["created_at"],
+                "updated_at": r["updated_at"],
+                "last_active_at": r["last_active_at"],
+                "archived_at": r["archived_at"],
+                "progress": {
+                    "goal_readiness": r["readiness_cached"],
+                    "stops_settled": r["stops_settled_cached"],
+                    "stops_total": r["stops_total_cached"],
+                },
+            }
+            for r in rows
+        ]
+
+
 def delete_session(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> None:
-    if not db_path.exists():
+    """Remove a session and everything scoped to it.
+
+    `nodes`, `edges`, `plan_nodes` and `plan_edges` cascade — they carry a
+    foreign key to `sessions`. **`investigation` does not**
+    (`dossier_store.py`: `session_id TEXT PRIMARY KEY`, no FK clause), so
+    deleting a session used to leave its Dossier behind forever, keyed to an id
+    nothing would ever ask for again.
+
+    Deleted explicitly here rather than by adding the missing foreign key,
+    because adding one to an existing SQLite table means rebuilding it. The
+    rebuild is recorded as debt (multi-user.md OPEN-9); this closes the leak
+    without it.
+    """
+    if not Path(db_path).exists():
         return
+    from backend.repo import dossier_store
+
     with _connect(db_path) as conn:
         conn.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
+    dossier_store.delete_investigation(session_id, db_path)
 
 
 def _node_row(session_id: str, node: LearningNode) -> tuple:
