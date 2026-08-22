@@ -867,3 +867,65 @@ def test_jump_to_an_unknown_node_is_a_404(mock_pipeline, client):
         f"/session/{start['session_id']}/jump", json={"node_id": "nope"}
     )
     assert resp.status_code == 404
+
+
+
+# ── /session/{id}/file containment (multi-user M0) ────────────────────────────
+
+
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_the_file_endpoint_serves_a_file_inside_the_checkout(
+    mock_pipeline, client, tmp_path
+):
+    checkout = tmp_path / "requests"
+    (checkout / "requests").mkdir(parents=True)
+    (checkout / "requests" / "sessions.py").write_text("class Session: pass\n")
+
+    session_id = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()["session_id"]
+
+    with patch("backend.api.clone_repo", return_value=str(checkout)):
+        response = client.get(
+            f"/session/{session_id}/file", params={"path": "requests/sessions.py"}
+        )
+
+    assert response.status_code == 200
+    assert "class Session" in response.json()["content"]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        # THE ONE THE OLD CHECK LET THROUGH. `startswith` compared strings, and
+        # "requests-private" starts with "requests", so a sibling checkout was
+        # inside the repository as far as the guard was concerned. Harmless
+        # while every checkout was one public repo in a flat directory; not
+        # harmless once checkouts are per-owner and sessions belong to people.
+        "../requests-private/secrets.py",
+        "../../etc/passwd",
+        "requests/../../escape.txt",
+        "/etc/passwd",
+    ],
+)
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_the_file_endpoint_refuses_to_escape_the_checkout(
+    mock_pipeline, client, tmp_path, path
+):
+    checkout = tmp_path / "requests"
+    (checkout / "requests").mkdir(parents=True)
+    (checkout / "requests" / "sessions.py").write_text("ok\n")
+    sibling = tmp_path / "requests-private"
+    sibling.mkdir()
+    (sibling / "secrets.py").write_text("SECRET = 'do not read me'\n")
+    (tmp_path / "escape.txt").write_text("outside\n")
+
+    session_id = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()["session_id"]
+
+    with patch("backend.api.clone_repo", return_value=str(checkout)):
+        response = client.get(f"/session/{session_id}/file", params={"path": path})
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "invalid_path"

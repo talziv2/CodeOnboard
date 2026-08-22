@@ -68,6 +68,7 @@ from backend.repo.cloner import (
     clone_repo,
     get_commit_sha,
     parse_repo_url,
+    resolve_within,
 )
 
 # `.env` FILLS GAPS; IT DOES NOT WIN.
@@ -206,6 +207,13 @@ class RepoCheckRequest(BaseModel):
 def repo_check(body: RepoCheckRequest) -> dict:
     # Catches an unclonable URL before the user answers five questions, rather
     # than surfacing it as a pipeline failure minutes later.
+    #
+    # `check_repo_reachable` now validates the URL against the scheme/host
+    # allow-list BEFORE it reaches git, so a URL pointing anywhere but GitHub is
+    # refused without an outbound request being made. That matters here more than
+    # anywhere else in the API: this endpoint's entire job is to make the server
+    # fetch a URL a caller supplied, which is a server-side request forgery
+    # primitive unless something bounds where it may point.
     reason = check_repo_reachable(body.repo_url)
     return {"ok": reason is None, "reason": reason}
 
@@ -1397,11 +1405,16 @@ def session_evidence(session_id: str, node_id: str) -> dict:
 def session_file(session_id: str, path: str) -> dict:
     graph = _load_session_or_404(session_id)
     repo_path = clone_repo(graph.repo_url)
-    full_path = os.path.join(repo_path, path)
-    # Prevent path traversal outside the repo
-    if not os.path.abspath(full_path).startswith(os.path.abspath(repo_path)):
+    # Containment is decided by `resolve_within`, which resolves both sides and
+    # compares path ANCESTRY. The check here used to be a string prefix, which
+    # let a sibling directory whose name merely started the same way through —
+    # see the note on `cloner.resolve_within`. The resolved path is then the one
+    # that gets opened, so there is no window between checking one path and
+    # reading another.
+    full_path = resolve_within(repo_path, path)
+    if full_path is None:
         raise HTTPException(status_code=400, detail="invalid_path")
-    if not os.path.isfile(full_path):
+    if not full_path.is_file():
         raise HTTPException(status_code=404, detail="file_not_found")
     with open(full_path, encoding="utf-8", errors="replace") as f:
         content = f.read()
