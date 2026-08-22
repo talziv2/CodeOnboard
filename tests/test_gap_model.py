@@ -177,9 +177,24 @@ def test_a_bare_list_payload_degrades_rather_than_losing_the_gaps():
     assert state.remediation_rounds == 0
 
 
-def test_schema_version_did_not_move():
-    """A bump would make every existing session invisible to this code."""
-    assert learning_store.SCHEMA_VERSION == 2
+def test_schema_version_moves_only_deliberately():
+    """A bump makes every session written before it invisible to this code.
+
+    Pinned at 2 for the whole Gap Model phase, whose persistence was additive by
+    design: `gaps_json` arrived as a nullable column precisely so that stored
+    sessions kept loading.
+
+    **It moved to 3 for the plan snapshot** (session-reset.md D8) — and that is
+    the decision this guard exists to force someone to make out loud. A session
+    written before `plan_nodes` has no plan, so `Start over` cannot work for it,
+    and a row that loads but cannot be reset is worse than one that does not
+    load. The 90 v2 development sessions were copied to
+    `data/sessions-fixtures.db` first, and the measurement scripts that pin
+    session ids now read that file.
+
+    Kept rather than deleted: it still fails on the NEXT bump, which is the point.
+    """
+    assert learning_store.SCHEMA_VERSION == 3
 
 
 # ── the flag contract (gap-model.md §3.8) ────────────────────────────────────

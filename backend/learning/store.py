@@ -1,12 +1,38 @@
 # SQLite persistence for the learning graph.
 #
-# One file (data/sessions.db) with three tables: sessions, nodes, edges.
+# One file (data/sessions.db) with five tables: sessions, nodes, edges — the LIVE
+# graph — and plan_nodes, plan_edges, which hold the ORIGINAL PLAN.
 # Standard-library sqlite3 only — no new dependency.
 #
 # Schema versioning: the sessions row carries `schema_version`. A mismatch
 # means the row was written by a different schema; load_graph treats it as
 # missing (returns None) rather than trying to migrate. Bump SCHEMA_VERSION
 # when the on-disk shape changes; old rows become invisible to the new code.
+#
+# ── THE TWO SIDES OF THIS FILE (session-reset.md) ─────────────────────────────
+#
+# `nodes` / `edges` are the LIVE graph, and learning mutates them freely:
+# priorities move, warm-ups are spliced in, lessons are re-taught, answers and
+# gaps accumulate.
+#
+# `plan_nodes` / `plan_edges` are what the planner produced, before the learner
+# touched it. They exist so `Start over` can RESTORE the plan rather than
+# reconstruct it by inverting every mutation — the rejected design, and why it
+# was rejected, are in session-reset.md §1. For this module it reduces to one
+# rule, and the rule is the whole contract:
+#
+#     `save_graph` NEVER writes a plan table. The only writers are
+#     `create_session` — once, in the same transaction as the session itself —
+#     and `record_plan_lesson`, which is physically unable to overwrite.
+#
+# Two further properties are deliberate:
+#
+#   - The plan tables' COLUMN LIST *is* the plan/state partition. It is not a
+#     frozenset in a test file, because the boundary should be readable in
+#     `.schema` by someone who has never seen the phase doc.
+#   - Their primary key is `(session_id, node_id)`, not the live `nodes` table's
+#     global `(node_id)`. That global key is the reason a plan cannot be copied
+#     into a second session today; it is not repeated here.
 #
 # Phase 3 Part 1 scope: single-user, repo URLs stored as-is. Multi-user
 # identity and URL normalization are deferred to Part 7 — they belong with
@@ -26,7 +52,12 @@ from backend.learning.graph import (
 )
 
 
-SCHEMA_VERSION = 2
+# 3: the plan tables. Bumped rather than added additively, because a session
+# written before them has NO PLAN — and a session whose plan cannot be restored
+# is one where `Start over` is a button that cannot work. Invisible-and-honest
+# beats loadable-and-half-broken (session-reset.md D8). The v2 fixtures the
+# measurement scripts pin were copied to `data/sessions-fixtures.db` first.
+SCHEMA_VERSION = 3
 DEFAULT_DB_PATH = Path("data/sessions.db")
 
 
@@ -84,6 +115,47 @@ CREATE TABLE IF NOT EXISTS edges (
 """
 
 
+# ── the original plan ─────────────────────────────────────────────────────────
+#
+# A mirror of `nodes` with every LEARNER-STATE column removed, plus `lesson_json`
+# for the unit's first rendered lesson. Reading the two CREATE statements side by
+# side is the fastest way to see what this system considers plan and what it
+# considers state.
+#
+# `lesson_json` is NULL at creation because lessons are rendered lazily, one stop
+# at a time, long after planning. It is filled exactly once, by
+# `record_plan_lesson`. See that function for why the plan is append-only rather
+# than sealed, and for the four properties that keep "append-only" from meaning
+# "mutable".
+_CREATE_PLAN_NODES = """
+CREATE TABLE IF NOT EXISTS plan_nodes (
+    session_id        TEXT NOT NULL,
+    node_id           TEXT NOT NULL,
+    title             TEXT NOT NULL,
+    file              TEXT NOT NULL,
+    line_start        INTEGER NOT NULL,
+    line_end          INTEGER NOT NULL,
+    symbol            TEXT,
+    concept_tags_json TEXT NOT NULL,
+    lesson_brief_json TEXT NOT NULL,
+    lesson_json       TEXT,
+    PRIMARY KEY (session_id, node_id),
+    FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+)
+"""
+
+_CREATE_PLAN_EDGES = """
+CREATE TABLE IF NOT EXISTS plan_edges (
+    session_id   TEXT NOT NULL,
+    from_node_id TEXT NOT NULL,
+    to_node_id   TEXT NOT NULL,
+    kind         TEXT NOT NULL,
+    PRIMARY KEY (session_id, from_node_id, to_node_id, kind),
+    FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+)
+"""
+
+
 @contextmanager
 def _connect(db_path: Path):
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -103,6 +175,8 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
         conn.execute(_CREATE_NODES)
         conn.execute(_CREATE_NODES_INDEX)
         conn.execute(_CREATE_EDGES)
+        conn.execute(_CREATE_PLAN_NODES)
+        conn.execute(_CREATE_PLAN_EDGES)
         # Add the doc_context_json column to existing databases that were
         # created before schema v2. SQLite has no ADD COLUMN IF NOT EXISTS,
         # so we catch the OperationalError that fires when the column already
@@ -183,60 +257,271 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
 
 
 def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
+    """Persist the LIVE graph. Never touches a plan table — see the header."""
     init_db(db_path)
     with _connect(db_path) as conn:
-        conn.execute(
-            """
-            INSERT INTO sessions
-                (session_id, repo_url, goal_json, current_node_id,
-                 doc_context_json, areas_json, journey_events_json, briefing_json,
-                 arrival_json, schema_version)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(session_id) DO UPDATE SET
-                repo_url            = excluded.repo_url,
-                goal_json           = excluded.goal_json,
-                current_node_id     = excluded.current_node_id,
-                doc_context_json    = excluded.doc_context_json,
-                areas_json          = excluded.areas_json,
-                journey_events_json = excluded.journey_events_json,
-                briefing_json       = excluded.briefing_json,
-                arrival_json        = excluded.arrival_json,
-                schema_version      = excluded.schema_version,
-                updated_at       = strftime('%Y-%m-%d %H:%M:%f', 'now')
-            """,
+        _write_graph(conn, graph)
+
+
+def create_session(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
+    """Persist a NEWLY PLANNED graph, and its plan, in ONE transaction.
+
+    The only writer of `plan_nodes` / `plan_edges` apart from
+    `record_plan_lesson`, and the reason it exists rather than being two calls to
+    two functions: **a session that exists without a plan is a session where
+    `Start over` cannot work**, and that has to be unrepresentable rather than
+    merely unlikely. Two transactions would leave a window — a crash, a killed
+    process, a raised exception between them — where exactly that session exists
+    on disk, permanently, with no way to notice.
+
+    Every other caller keeps using `save_graph`. A graph that is *saved* rather
+    than *created* has a plan already, and rewriting it is the one thing this
+    module must never do.
+    """
+    init_db(db_path)
+    with _connect(db_path) as conn:
+        _write_graph(conn, graph)
+        _write_plan(conn, graph)
+
+
+def _write_graph(conn: sqlite3.Connection, graph: LearningGraph) -> None:
+    """The live-side write, without its own transaction.
+
+    Extracted so `create_session` can put it and the plan write inside one
+    transaction. It takes a connection rather than a path for exactly that
+    reason, and it is private because no caller outside this module should be
+    choosing its own transaction boundary here.
+    """
+    conn.execute(
+        """
+        INSERT INTO sessions
+            (session_id, repo_url, goal_json, current_node_id,
+             doc_context_json, areas_json, journey_events_json, briefing_json,
+             arrival_json, schema_version)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(session_id) DO UPDATE SET
+            repo_url            = excluded.repo_url,
+            goal_json           = excluded.goal_json,
+            current_node_id     = excluded.current_node_id,
+            doc_context_json    = excluded.doc_context_json,
+            areas_json          = excluded.areas_json,
+            journey_events_json = excluded.journey_events_json,
+            briefing_json       = excluded.briefing_json,
+            arrival_json        = excluded.arrival_json,
+            schema_version      = excluded.schema_version,
+            updated_at       = strftime('%Y-%m-%d %H:%M:%f', 'now')
+        """,
+        (
+            graph.session_id,
+            graph.repo_url,
+            json.dumps(graph.goal),
+            graph.current_node_id,
+            json.dumps(graph.doc_context) if graph.doc_context is not None else None,
+            json.dumps(graph.areas) if graph.areas else None,
+            json.dumps(graph.journey_events) if graph.journey_events else None,
+            json.dumps(graph.briefing) if graph.briefing is not None else None,
+            json.dumps(graph.arrival) if graph.arrival is not None else None,
+            SCHEMA_VERSION,
+        ),
+    )
+    # Nodes and edges: replace wholesale rather than diff. Sessions are
+    # small (under a hundred nodes) and writes happen at human cadence
+    # (one per user action), so the simplicity wins over efficiency.
+    conn.execute("DELETE FROM nodes WHERE session_id = ?", (graph.session_id,))
+    conn.execute("DELETE FROM edges WHERE session_id = ?", (graph.session_id,))
+    conn.executemany(
+        """
+        INSERT INTO nodes (
+            node_id, session_id, title, file, line_start, line_end,
+            concept_tags_json, lesson_brief_json, understanding_state,
+            visited, weak_spot, user_override, cached_lesson_json,
+            attempts_json, symbol, gaps_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [_node_row(graph.session_id, n) for n in graph.nodes.values()],
+    )
+    conn.executemany(
+        "INSERT INTO edges (session_id, from_node_id, to_node_id, kind) VALUES (?, ?, ?, ?)",
+        [(graph.session_id, e.from_node_id, e.to_node_id, e.kind) for e in graph.edges],
+    )
+
+
+def _write_plan(conn: sqlite3.Connection, graph: LearningGraph) -> None:
+    """The plan-side write. Called ONCE per session, from `create_session`.
+
+    `INSERT OR IGNORE`, not a plain INSERT and not an upsert. If this ever runs
+    twice for the same session — a retry, a caller that should not exist — the
+    second run must be a no-op rather than either an exception or an overwrite.
+    Refusing to overwrite is the property; failing loudly on a duplicate would
+    only convert a silent corruption into a broken request, and the plan being
+    already-written is not an error.
+    """
+    conn.executemany(
+        """
+        INSERT OR IGNORE INTO plan_nodes (
+            session_id, node_id, title, file, line_start, line_end,
+            symbol, concept_tags_json, lesson_brief_json, lesson_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+        """,
+        [
             (
                 graph.session_id,
-                graph.repo_url,
-                json.dumps(graph.goal),
-                graph.current_node_id,
-                json.dumps(graph.doc_context) if graph.doc_context is not None else None,
-                json.dumps(graph.areas) if graph.areas else None,
-                json.dumps(graph.journey_events) if graph.journey_events else None,
-                json.dumps(graph.briefing) if graph.briefing is not None else None,
-                json.dumps(graph.arrival) if graph.arrival is not None else None,
-                SCHEMA_VERSION,
-            ),
-        )
-        # Nodes and edges: replace wholesale rather than diff. Sessions are
-        # small (under a hundred nodes) and writes happen at human cadence
-        # (one per user action), so the simplicity wins over efficiency.
-        conn.execute("DELETE FROM nodes WHERE session_id = ?", (graph.session_id,))
-        conn.execute("DELETE FROM edges WHERE session_id = ?", (graph.session_id,))
-        conn.executemany(
+                node.id,
+                node.title,
+                node.code_anchor.file,
+                node.code_anchor.line_start,
+                node.code_anchor.line_end,
+                node.code_anchor.symbol,
+                json.dumps(node.concept_tags),
+                json.dumps(node.lesson_brief),
+            )
+            for node in graph.nodes.values()
+        ],
+    )
+    conn.executemany(
+        """
+        INSERT OR IGNORE INTO plan_edges (session_id, from_node_id, to_node_id, kind)
+        VALUES (?, ?, ?, ?)
+        """,
+        [
+            (graph.session_id, e.from_node_id, e.to_node_id, e.kind)
+            for e in graph.edges
+        ],
+    )
+
+
+def record_plan_lesson(
+    session_id: str,
+    node_id: str,
+    lesson: dict,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> bool:
+    """Fill this unit's ORIGINAL lesson slot. At most once, ever.
+
+    Lessons are rendered lazily, one stop at a time, so the plan cannot carry
+    them at creation. This is what makes the plan **append-only rather than
+    sealed** — and the four properties below are what keep "append-only" from
+    quietly meaning "mutable":
+
+      1. `WHERE lesson_json IS NULL` makes overwriting *physically impossible*,
+         not merely unattempted. It also removes the read-modify-write a single
+         JSON blob would have needed, so two stops rendering concurrently cannot
+         lose one another's lesson.
+      2. Only a SUCCESSFUL render calls this. A Teaching failure leaves the slot
+         NULL so a later render can fill it, rather than sealing "this lesson
+         could not be generated" into the plan forever. That is strictly better
+         than the live side, where the fallback sits in `cached_lesson` until
+         something overwrites it.
+      3. A re-teach never calls this, and could not overwrite if it did. A node's
+         first render can never *be* a re-teach: `/respond` refuses to grade
+         without a `cached_lesson`, so a graded answer implies a prior render.
+      4. A REMEDIAL node is not in `plan_nodes` at all, so its render matches
+         zero rows and is a harmless no-op. This is precisely why the statement
+         is an UPDATE and not an upsert — an upsert would quietly add
+         learner-created nodes to the plan, and `Start over` would then restore
+         the warm-ups it exists to remove.
+
+    Returns whether this call was the one that filled the slot, so a caller can
+    log it. Nothing depends on the return value.
+    """
+    if not db_path.exists():
+        return False
+    with _connect(db_path) as conn:
+        cursor = conn.execute(
             """
-            INSERT INTO nodes (
-                node_id, session_id, title, file, line_start, line_end,
-                concept_tags_json, lesson_brief_json, understanding_state,
-                visited, weak_spot, user_override, cached_lesson_json,
-                attempts_json, symbol, gaps_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            UPDATE plan_nodes SET lesson_json = ?
+             WHERE session_id = ? AND node_id = ? AND lesson_json IS NULL
             """,
-            [_node_row(graph.session_id, n) for n in graph.nodes.values()],
+            (json.dumps(lesson), session_id, node_id),
         )
-        conn.executemany(
-            "INSERT INTO edges (session_id, from_node_id, to_node_id, kind) VALUES (?, ?, ?, ?)",
-            [(graph.session_id, e.from_node_id, e.to_node_id, e.kind) for e in graph.edges],
+        return cursor.rowcount > 0
+
+
+def load_plan(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> LearningGraph | None:
+    """The graph AS PLANNED — the restore source for `Start over`.
+
+    Every learner-state field is at its dataclass default, because the plan
+    tables have no column for any of them. That is the point, and it is why a new
+    state field on `LearningNode` needs no reset code: whatever it is, it lands
+    here at its default by construction.
+
+    `cached_lesson` comes from `lesson_json`, so a restored graph reads with the
+    ORIGINAL prose rather than a re-taught replacement — and with None for any
+    stop the learner never reached, which is exactly the state a fresh session is
+    in for those stops.
+
+    The session-level columns come from the same `sessions` row the live graph
+    uses (`repo_url`, `goal`, `doc_context`, `areas`, `briefing`), because
+    nothing in the learning loop writes them and duplicating them into the plan
+    would create two copies that could disagree. `current_node_id`, `arrival` and
+    `journey_events` are deliberately NOT carried across: they are the session's
+    position and history, which is what a reset discards.
+
+    Returns None when the session is absent, is a different schema version, or
+    has no plan rows — the last being every pre-v3 session (D8). The caller
+    decides what to do about it; this does not reconstruct anything.
+    """
+    if not db_path.exists():
+        return None
+    with _connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        session_row = conn.execute(
+            "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
+        ).fetchone()
+        if session_row is None or session_row["schema_version"] != SCHEMA_VERSION:
+            return None
+
+        node_rows = conn.execute(
+            "SELECT * FROM plan_nodes WHERE session_id = ?", (session_id,)
+        ).fetchall()
+        if not node_rows:
+            return None
+
+        raw_doc = session_row["doc_context_json"]
+        graph = LearningGraph(
+            repo_url=session_row["repo_url"],
+            goal=json.loads(session_row["goal_json"]),
+            session_id=session_row["session_id"],
+            doc_context=json.loads(raw_doc) if raw_doc is not None else None,
+            areas=_json_or_default(session_row, "areas_json", []),
+            briefing=_json_or_default(session_row, "briefing_json", None),
         )
+        for row in node_rows:
+            graph.nodes[row["node_id"]] = _row_to_plan_node(row)
+        for row in conn.execute(
+            "SELECT * FROM plan_edges WHERE session_id = ?", (session_id,)
+        ):
+            graph.edges.append(
+                LearningEdge(
+                    from_node_id=row["from_node_id"],
+                    to_node_id=row["to_node_id"],
+                    kind=row["kind"],
+                )
+            )
+        return graph
+
+
+def _row_to_plan_node(row: sqlite3.Row) -> LearningNode:
+    """A planned node: plan columns from the row, everything else at its default.
+
+    Every learner-state argument is left unpassed rather than passed explicitly
+    as a default value. If `LearningNode` grows a state field, this function is
+    already correct for it — spelling the defaults out here would mean a second
+    place that has to be remembered.
+    """
+    return LearningNode(
+        id=row["node_id"],
+        title=row["title"],
+        code_anchor=CodeAnchor(
+            file=row["file"],
+            line_start=row["line_start"],
+            line_end=row["line_end"],
+            symbol=row["symbol"],
+        ),
+        concept_tags=json.loads(row["concept_tags_json"]),
+        lesson_brief=json.loads(row["lesson_brief_json"]),
+        cached_lesson=_json_or_default(row, "lesson_json", None),
+    )
 
 
 def load_graph(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> LearningGraph | None:

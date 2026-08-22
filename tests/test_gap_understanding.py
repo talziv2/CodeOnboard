@@ -40,6 +40,27 @@ REPO = "https://github.com/psf/requests"
 GOAL = {"primary_goal": "x", "goal_type": "understand_component"}
 LIVE_DB = Path("data/sessions.db")
 
+
+def _live_sessions_available() -> bool:
+    """Is there a real local database with sessions in it?
+
+    Not merely "does the file exist". `dossier_store` shares this filename and
+    creates it with only its own `investigation` table, so a run that touches a
+    dossier and nothing else leaves a file behind that satisfies `exists()` and
+    has no `sessions` table at all — which turned the gate below from a skip into
+    an `OperationalError` on a fresh checkout, and only on the SECOND run.
+    """
+    if not LIVE_DB.exists():
+        return False
+    try:
+        with sqlite3.connect(LIVE_DB) as conn:
+            return bool(conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sessions'"
+            ).fetchone())
+    except sqlite3.Error:
+        return False
+
+
 # Every module that may touch `node.understanding_state` directly, and why.
 _RAW_ACCESS_ALLOWED = {
     # Defines the derivation and records the assessment it reads.
@@ -270,7 +291,7 @@ def test_resume_point_will_not_pass_an_unverified_prerequisite():
 # ── the compatibility gate, over real stored sessions ────────────────────────
 
 
-@pytest.mark.skipif(not LIVE_DB.exists(), reason="no local sessions.db")
+@pytest.mark.skipif(not _live_sessions_available(), reason="no local sessions.db")
 def test_every_stored_gap_free_node_derives_its_stored_state():
     """gap-model.md M7's compatibility gate, exactly as specified.
 

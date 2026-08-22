@@ -40,7 +40,14 @@ from backend.learning import store as learning_store  # noqa: E402
 from backend.pipeline.state import OnboardState  # noqa: E402
 from backend.repo.cloner import clone_repo  # noqa: E402
 
-DB = Path("data/sessions.db")
+# The FROZEN v2 fixture database, not the live one.
+#
+# This probe measures against specific stored sessions — its value is that the
+# numbers are reproducible against the sessions the phase was measured on. The
+# live database moved to schema v3 (`docs/planning/phases/session-reset.md` D8),
+# which makes every v2 session invisible to `load_graph`, so pointing here is
+# what keeps these fixtures readable rather than merely archived.
+DB = Path("data/sessions-fixtures.db")
 
 # (session, node prefix, what this case exercises)
 TARGETS = [

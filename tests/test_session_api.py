@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import backend.api as api
+from backend.learning import store as learning_store
 from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
 from backend.pipeline import progress as pipeline_progress
 
@@ -114,6 +115,79 @@ def test_session_start_500_when_no_graph(mock_pipeline, client):
     resp = client.post("/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL})
     assert resp.status_code == 500
     assert "boom" in str(resp.json()["detail"])
+
+
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_session_start_persists_the_original_plan(mock_pipeline, client):
+    """The endpoint must use `create_session`, not `save_graph` (session-reset.md §4.2).
+
+    Asserted at the HTTP boundary rather than only against the store, because this
+    is the call site that can silently regress: swapping back to `save_graph` here
+    would leave every store-level test passing and every new session unresettable.
+    """
+    session_id = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()["session_id"]
+
+    plan = learning_store.load_plan(session_id, api.SESSIONS_DB_PATH)
+    assert plan is not None
+    live = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    assert set(plan.nodes) == set(live.nodes)
+
+
+@patch("backend.api.clone_repo", return_value="/tmp/repo")
+@patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_the_first_render_fills_the_plan_lesson_slot(mock_p, mock_t, mock_c, client):
+    session_id = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()["session_id"]
+    node_id = client.get(f"/session/{session_id}").json()["current_node_id"]
+
+    assert learning_store.load_plan(session_id, api.SESSIONS_DB_PATH) \
+        .nodes[node_id].cached_lesson is None
+
+    client.get(f"/session/{session_id}/lesson")
+
+    assert learning_store.load_plan(session_id, api.SESSIONS_DB_PATH) \
+        .nodes[node_id].cached_lesson == FAKE_LESSON
+
+
+@patch("backend.api.clone_repo", return_value="/tmp/repo")
+@patch("backend.api.run_teaching")
+@patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
+def test_a_teaching_failure_does_not_seal_the_fallback_into_the_plan(
+    mock_p, mock_teaching, mock_c, client
+):
+    """The fallback lesson is a system outage, not the unit's original lesson.
+
+    Recording it would make `Start over` restore "this lesson could not be
+    generated" forever. The slot must stay NULL so a later real render fills it.
+    """
+    def fails(state, client=None):
+        state.current_lesson = None
+        state.errors = ["teaching: boom"]
+        return state
+
+    mock_teaching.side_effect = fails
+    session_id = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()["session_id"]
+    node_id = client.get(f"/session/{session_id}").json()["current_node_id"]
+
+    client.get(f"/session/{session_id}/lesson")
+
+    plan = learning_store.load_plan(session_id, api.SESSIONS_DB_PATH)
+    assert plan.nodes[node_id].cached_lesson is None
+    # The LIVE side still got the fallback, so the session is not blocked.
+    live = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    assert live.nodes[node_id].cached_lesson is not None
+
+    # And a later successful render fills the slot the outage left empty.
+    mock_teaching.side_effect = _teaching_side_effect
+    client.get(f"/session/{session_id}/lesson")
+    assert learning_store.load_plan(session_id, api.SESSIONS_DB_PATH) \
+        .nodes[node_id].cached_lesson == FAKE_LESSON
 
 
 # ── /session/progress/{id} ───────────────────────────────────────────────────

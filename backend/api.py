@@ -436,6 +436,23 @@ def _render_current_lesson(graph, client) -> dict:
     run_teaching(state, client=client)
     # Persist whatever changed (cached_lesson on the node, etc.).
     learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    if state.current_lesson is not None:
+        # THE ORIGINAL LESSON, recorded once (session-reset.md §4.3).
+        #
+        # Here rather than inside Teaching, and only on the success path, for two
+        # reasons that are the same reason: this is where "the render worked" is
+        # known. The fallback below must NOT be recorded — a Teaching outage would
+        # otherwise seal "this lesson could not be generated" into the plan
+        # permanently, and every later `Start over` would restore it.
+        #
+        # A no-op for every subsequent render of the same stop, and for a remedial
+        # node, which has no plan row to update. See `record_plan_lesson`.
+        learning_store.record_plan_lesson(
+            graph.session_id,
+            graph.current_node_id,
+            state.current_lesson,
+            SESSIONS_DB_PATH,
+        )
     if state.current_lesson is None:
         # Surface why teaching failed — state.errors is otherwise discarded.
         logger.warning(
@@ -493,7 +510,12 @@ def _run_session_start(body: SessionStartRequest, pid: str) -> dict:
             status_code=500,
             detail={"error": "no_graph", "errors": state.errors},
         )
-    learning_store.save_graph(state.graph, SESSIONS_DB_PATH)
+    # `create_session`, not `save_graph`: this is the one moment a plan exists and
+    # has not yet been touched, so it is the only moment the immutable copy can be
+    # taken. Both writes land in ONE transaction, because a session that exists
+    # without a plan is a session where `Start over` cannot work
+    # (session-reset.md §4.2).
+    learning_store.create_session(state.graph, SESSIONS_DB_PATH)
     # The dossier outlives the request that produced it: Teaching and the
     # Mutator run later in the session and need the same understanding. Keyed to
     # this session and this commit, so goal-specific understanding is never
