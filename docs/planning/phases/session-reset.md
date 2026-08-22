@@ -1,6 +1,28 @@
 # Session reset — the plan is persisted, not reconstructed
 
-**Phase status: PLANNED. Nothing implemented.**
+**Phase status: IMPLEMENTED, awaiting manual end-to-end validation.**
+M1–M3 done on branch `feat/session-reset-m1` (commits `190c2cd`, `09d6743`,
+`d68660a`), built in an isolated worktree because another stream was working in
+the same backend files. 1374 backend tests, 595 frontend tests, `tsc` clean.
+
+Three deviations from the plan below, each with its reason:
+
+| # | planned | shipped |
+|---|---|---|
+| 1 | `history.RESET` in M1 | deferred to M2. It is unused until a reset exists, and `history.py` was being actively edited by the other stream — adding an unused constant would have bought only a merge conflict |
+| 2 | `_write_plan` uses `INSERT` | `INSERT OR IGNORE`. A double call must be a no-op, not an `IntegrityError`: the plan already being written is not an error, and refusing to overwrite is the property that matters |
+| 3 | "one transaction" | precise about DATA, not DDL. `create_session` calls `init_db` first, which opens its own connection for `CREATE TABLE IF NOT EXISTS`. All four data writes are in one transaction, asserted by `test_creation_is_one_transaction` |
+
+Two things the plan did not anticipate, both recorded here because they cost time
+to find:
+
+- **`/lesson` serves a cached lesson through Teaching's own early return**, not by
+  bypassing Teaching. So a test that mocks `run_teaching` to prove "no work
+  happens" deletes the mechanism it is testing. The test asserts the consequence
+  instead — the Anthropic client is never called.
+- **The graph helpers do not write journey events; the endpoints do.** A fixture
+  that calls `scope.shorten()` directly under-represents a real session's history,
+  which is the thing a reset has to clear.
 
 `Start over` currently re-runs the entire repository-analysis pipeline and
 creates a new session: two to four minutes, a fresh Sonnet planning call, and a
@@ -251,7 +273,9 @@ no model requests. Not mitigated further here.
 **Menu.** `Start over` gains an inline confirmation (D5) in the pattern
 `Finish session` uses. `Rebuild learning path` becomes a second, separately
 confirmed item wired to the existing `sessionStart(force_new)` +
-`RestartingOverlay`, which is already the progress surface a rebuild needs.
+`RebuildingOverlay`, which is the progress surface a rebuild needs. (It was
+`RestartingOverlay` while it belonged to the old combined action; renamed with the
+split, since it now reports only the rebuild.)
 
 **Session page.** The URL and `id` do not change, so React keeps every child
 mounted and its state alive: `LessonPanel`'s answer text and verdict, `finished`,
@@ -318,7 +342,7 @@ matches the live graph, walk it, assert the plan did not move).
 | 4 | `save_graph` grows a plan-table write | it has one caller set today; the byte-identity test fails if it does |
 | 5 | Frontend keeps the previous verdict / answer on screen after a reset | the epoch key, not a field-by-field reset |
 | 6 | **The `SCHEMA_VERSION` bump orphans the probe fixtures.** `scripts/m10_acceptance.py`, `reteach_probe.py` and `verification_probe.py` pin session ids (`431af315…`, `a3234f41…`) that become unreadable | Accepted per D8. Copy `data/sessions.db` aside before migrating and point those scripts' `DB` constant at the copy |
-| 7 | `Rebuild learning path` loses the progress surface in the move | it reuses `RestartingOverlay` unchanged; its existing tests stand |
+| 7 | `Rebuild learning path` loses the progress surface in the move | it reuses `RebuildingOverlay`, whose eight tests stand unchanged |
 
 ## 8. Cost
 
