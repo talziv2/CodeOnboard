@@ -238,6 +238,11 @@ export const t = {
       "Walk this same route again from the first stop? The stops, their order and their lessons stay exactly as they are. Your progress, answers, feedback, gaps and any warm-ups added along the way are cleared.",
     startOverYes: "Start over",
     startOverNo: "Keep my progress",
+    // Shown when the reset itself failed. It leads with what did NOT happen,
+    // because the learner's first question is whether their work is gone — and it
+    // is not: a failed reset changes nothing on the server.
+    startOverFailed: "Couldn't start over, and nothing has changed — your progress is exactly where it was.",
+    dismiss: "Dismiss",
     // The old `Start over`, named for what it does. The wording has to earn the
     // wait rather than spring it on someone.
     rebuild: "Rebuild learning path",
@@ -1147,6 +1152,11 @@ export const t = {
   // FastAPI raises these as `detail`; they reach the UI verbatim otherwise.
   errors: {
     session_not_found: "That session no longer exists.",
+    // A session planned before the route was snapshotted, so there is nothing to
+    // restore it to. Says what to do instead, because the learner cannot fix this
+    // one and rebuilding genuinely is the way out.
+    no_plan_snapshot:
+      "This session was created before routes could be restored, so it can't be started over. Rebuilding the learning path will give you a fresh one.",
     node_not_found: "That stop isn't part of this session.",
     session_has_no_current_node: "This session has no current stop.",
     no_lesson_rendered_yet: "The lesson hasn't loaded yet — give it a moment.",

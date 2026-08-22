@@ -173,6 +173,16 @@ export default function SessionPage() {
    * remembers to add to it.
    */
   const [epoch, setEpoch] = useState(0);
+  /**
+   * A reset that failed, reported without taking the session down.
+   *
+   * Deliberately NOT the page-level `error`, which replaces the whole session
+   * with a full-screen "couldn't load" and a retry button. That is right for a
+   * graph that would not load and wrong for this: a failed reset changes nothing
+   * on the server, so the learner is still mid-session with all their work — and
+   * being thrown to an error page would suggest otherwise.
+   */
+  const [startOverError, setStartOverError] = useState<string | null>(null);
   // Owned here, not in LessonPanel, because two things end the journey now: the
   // walk running out, and `Finish session` in the header menu.
   const [finished, setFinished] = useState(false);
@@ -238,7 +248,7 @@ export default function SessionPage() {
   const startOver = useCallback(async () => {
     if (startingOver) return;
     setStartingOver(true);
-    setError(null);
+    setStartOverError(null);
     try {
       const { graph: restored } = await resetSession(id);
       setGraph(restored);
@@ -253,7 +263,9 @@ export default function SessionPage() {
       setRailSeenAt(null);
       setEpoch((n) => n + 1);
     } catch (e: unknown) {
-      setError(e instanceof Error ? errorText(e.message) : t.session.loadFailed);
+      setStartOverError(
+        e instanceof Error ? errorText(e.message) : t.session.startOverFailed
+      );
     } finally {
       setStartingOver(false);
     }
@@ -538,6 +550,26 @@ export default function SessionPage() {
         rebuilding={rebuilding}
         onFinish={() => setFinished(true)}
       />
+
+      {/* A failed reset, said in place. The session behind it is untouched and
+          still usable, which is why this is a strip rather than a screen. */}
+      {startOverError && (
+        <div
+          role="alert"
+          className="flex shrink-0 items-center justify-between gap-4 border-b border-rust/40 bg-rust/10 px-5 py-2"
+        >
+          <span className="text-meta text-paper">
+            {t.session.startOverFailed} {startOverError}
+          </span>
+          <Button
+            variant="chrome"
+            size="xs"
+            onClick={() => setStartOverError(null)}
+          >
+            {t.session.dismiss}
+          </Button>
+        </div>
+      )}
 
       {/* `key={epoch}` is the reset (see the `epoch` declaration): a restore keeps
           the URL and the session id, so without it React would keep every child
