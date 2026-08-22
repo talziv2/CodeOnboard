@@ -58,6 +58,7 @@ from backend.learning import scope
 from backend.learning import store as learning_store
 from backend.learning import understanding
 from backend.learning.graph import understanding_of
+from backend.learning.reset import reset_to_plan
 from backend.pipeline import progress as pipeline_progress
 from backend.pipeline.runner import run_pipeline
 from backend.repo import dossier_store, survey_store
@@ -588,6 +589,47 @@ def list_sessions(repo_url: str) -> dict:
 def session_get(session_id: str) -> dict:
     graph = _load_session_or_404(session_id)
     return graph.to_dict()
+
+
+@app.post("/session/{session_id}/reset")
+def session_reset(session_id: str) -> dict:
+    """Start over: the same learning path, restored, with none of the learner's work.
+
+    What this endpoint deliberately does NOT do — each one was what `Start over`
+    did before, and each is why it took two to four minutes and came back with a
+    different curriculum:
+
+      - no pipeline run, no clone, no model call of any kind;
+      - no new session id, so the URL, the Dossier and the briefing all survive;
+      - nothing derived from the learner's own history.
+
+    It is a restore from the snapshot M1 persisted, so it is deterministic: the
+    same session reset twice yields the same graph.
+
+    409 rather than 404 when the plan is missing: the session exists and was
+    found, and the reason this cannot proceed is a property of that session
+    (written before schema v3 — session-reset.md D8), not a bad URL. No
+    reconstruction is attempted, by design.
+
+    Returns the same graph shape as `GET /session/{id}` so the client can swap it
+    in without a second fetch, plus what was discarded — which is the honest thing
+    to show after an irreversible action.
+    """
+    graph = _load_session_or_404(session_id)
+    plan = learning_store.load_plan(session_id, SESSIONS_DB_PATH)
+    if plan is None:
+        raise HTTPException(status_code=409, detail="no_plan_snapshot")
+
+    summary = reset_to_plan(graph, plan)
+    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    logger.info(
+        "session reset: session=%s discarded=%s", session_id, summary.to_dict()
+    )
+    return {
+        "session_id": session_id,
+        "graph": graph.to_dict(),
+        "discarded": summary.to_dict(),
+    }
 
 
 @app.get("/session/{session_id}/welcome")
