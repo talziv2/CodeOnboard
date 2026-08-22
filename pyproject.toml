@@ -20,6 +20,9 @@ dependencies = [
     "tree-sitter-python>=0.23.0",
     # Pipeline orchestration
     "langgraph>=0.2.0",
+    # Password hashing — Argon2id. The one part of authentication that must
+    # never be hand-rolled, and the only dependency M2 adds.
+    "argon2-cffi>=23.1.0",
 ]
 
 # Stage 5 removed the embedding/vector stack with the retrieval layer it served:

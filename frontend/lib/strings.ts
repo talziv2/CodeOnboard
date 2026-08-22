@@ -11,6 +11,40 @@ export const t = {
     "Build a real understanding of an unfamiliar codebase, one anchored concept at a time.",
 
   // --- home: repo step ---
+  // ── authentication (multi-user M2) ──────────────────────────────────────
+  //
+  // The two failure messages are deliberately incurious. "Email or password is
+  // incorrect" and "that email cannot be used" say nothing about whether an
+  // account exists, because "is this person a user here" is not a question an
+  // anonymous visitor gets to ask. The backend returns exactly these; they are
+  // repeated here as the fallback when it cannot be reached.
+  auth: {
+    emailLabel: "Email",
+    passwordLabel: "Password",
+    nameLabel: "Name (optional)",
+    passwordHint: "At least 10 characters. Length beats punctuation.",
+    login: {
+      title: "Sign in",
+      subtitle: "Sign in to pick up where you left off.",
+      submit: "Sign in",
+      busy: "Signing in…",
+      failed: "Could not sign in. Try again.",
+      switchPrompt: "No account yet?",
+      switchAction: "Create one",
+    },
+    signup: {
+      title: "Create an account",
+      subtitle: "Create an account to keep your learning sessions.",
+      submit: "Create account",
+      busy: "Creating…",
+      failed: "Could not create the account. Try again.",
+      switchPrompt: "Already have an account?",
+      switchAction: "Sign in",
+    },
+    signOut: "Sign out",
+    checking: "Checking your session…",
+  },
+
   home: {
     repoLabel: "Repository to read",
     repoPlaceholder: "https://github.com/psf/requests",
@@ -1152,6 +1186,17 @@ export const t = {
   // FastAPI raises these as `detail`; they reach the UI verbatim otherwise.
   errors: {
     session_not_found: "That session no longer exists.",
+    // ── auth (multi-user M2) ──────────────────────────────────────────────
+    //
+    // Both of these are deliberately incurious. The backend returns one refusal
+    // for a wrong password and for an email that has no account, because "is
+    // this person a user here" is not a question an anonymous visitor gets to
+    // ask; the copy must not undo that by being more specific than the API.
+    not_authenticated: "Your session has ended. Sign in again.",
+    too_many_attempts: "Too many attempts. Wait a moment, then try again.",
+    "Email or password is incorrect.": "Email or password is incorrect.",
+    "That email cannot be used to register.":
+      "That email can't be used. Try signing in instead.",
     // A session planned before the route was snapshotted, so there is nothing to
     // restore it to. Says what to do instead, because the learner cannot fix this
     // one and rebuilding genuinely is the way out.

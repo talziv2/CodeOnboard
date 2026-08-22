@@ -8,6 +8,7 @@ user" and "which repository" from.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 import time
 from pathlib import Path
@@ -180,3 +181,162 @@ def get_repository(repo_id: str, db_path: Path = DEFAULT_DB_PATH) -> dict | None
             return None
         raise
     return dict(row) if row else None
+
+
+# ── auth identities (multi-user M2) ───────────────────────────────────────────
+#
+# `users` is WHO someone is; `auth_identities` is HOW they prove it. One row per
+# (provider, subject): a password identity's subject is the normalised email, a
+# Google identity's is the `sub` claim. A third provider later is a new row kind,
+# not a schema change.
+
+PASSWORD = "password"
+GOOGLE = "google"
+
+
+def normalize_email(email: str) -> str:
+    """The form an email is stored and compared in.
+
+    Lower-cased and stripped, and nothing cleverer. Gmail's dot-and-plus
+    equivalence is real but is NOT ours to apply: `a.b@gmail.com` and
+    `ab@gmail.com` are one mailbox at Google and two different strings
+    everywhere else, so normalising them here would silently merge two people's
+    accounts on a provider-specific rule we would then have to maintain per
+    domain.
+    """
+    return email.strip().lower()
+
+
+# Deliberately permissive: one @, something either side, no whitespace, a dot in
+# the domain. It is a SHAPE check, not a validity check.
+#
+# `email-validator` (what pydantic's `EmailStr` pulls in) would be more precise
+# and is not worth a dependency here, because nothing in this system ever sends
+# mail — D-5 ships no verification and no reset — so the address is contact
+# information a person may one day read, not an endpoint we rely on. Rejecting
+# an unusual-but-real address would cost more than accepting an unusable one,
+# which is why this errs toward accepting.
+_EMAIL_SHAPE = re.compile(r"^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$")
+
+
+class InvalidEmailError(ValueError):
+    """The string is not shaped like an email address."""
+
+
+def validate_email(email: str) -> str:
+    """Normalise and shape-check, or raise. Returns the stored form."""
+    normalised = normalize_email(email)
+    if not normalised or len(normalised) > 254 or not _EMAIL_SHAPE.match(normalised):
+        raise InvalidEmailError("Enter a valid email address.")
+    return normalised
+
+
+def find_identity(
+    provider: str, subject: str, db_path: Path = DEFAULT_DB_PATH
+) -> dict | None:
+    """The identity row for this (provider, subject), or None.
+
+    THE LOGIN LOOKUP. Answers None where the table does not exist yet, so a
+    database from before accounts is "nobody is registered" rather than a crash.
+    """
+    if not Path(db_path).exists():
+        return None
+    try:
+        with _connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM auth_identities WHERE provider = ? AND subject = ?",
+                (provider, subject),
+            ).fetchone()
+    except sqlite3.OperationalError as exc:
+        if "no such table" in str(exc).lower():
+            return None
+        raise
+    return dict(row) if row else None
+
+
+def add_identity(
+    user_id: str,
+    provider: str,
+    subject: str,
+    *,
+    secret_hash: str | None = None,
+    email_verified: bool = False,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> str:
+    """Attach a way of proving identity to an existing user.
+
+    Raises `sqlite3.IntegrityError` when this (provider, subject) already belongs
+    to someone — the unique index is what makes one identity resolve to one user,
+    and letting a second row through would be the whole security model gone.
+    """
+    init_auth_schema(db_path)
+    identity_id = new_id()
+    with _connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO auth_identities "
+            "(identity_id, user_id, provider, subject, secret_hash, "
+            " email_verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (identity_id, user_id, provider, subject, secret_hash,
+             int(email_verified), _now()),
+        )
+    return identity_id
+
+
+def set_password_hash(
+    user_id: str, subject: str, secret_hash: str, db_path: Path = DEFAULT_DB_PATH
+) -> None:
+    """Replace the stored hash on a password identity.
+
+    Two callers: rehash-on-login when the parameters have been raised, and
+    `scripts/set_password.py`. Never an endpoint — with no email verification
+    shipping (D-5) there is no safe way to authenticate a reset request.
+    """
+    with _connect(db_path) as conn:
+        conn.execute(
+            "UPDATE auth_identities SET secret_hash = ? "
+            "WHERE user_id = ? AND provider = ? AND subject = ?",
+            (secret_hash, user_id, PASSWORD, subject),
+        )
+
+
+def identities_for(user_id: str, db_path: Path = DEFAULT_DB_PATH) -> list[dict]:
+    """Every way this user can sign in. Used by M6's "unlink" guard."""
+    if not Path(db_path).exists():
+        return []
+    try:
+        with _connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT identity_id, provider, subject, email_verified, created_at "
+                "FROM auth_identities WHERE user_id = ? ORDER BY created_at",
+                (user_id,),
+            ).fetchall()
+    except sqlite3.OperationalError as exc:
+        if "no such table" in str(exc).lower():
+            return []
+        raise
+    return [dict(r) for r in rows]
+
+
+def get_user(user_id: str, db_path: Path = DEFAULT_DB_PATH) -> dict | None:
+    if not Path(db_path).exists():
+        return None
+    try:
+        with _connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM users WHERE user_id = ?", (user_id,)
+            ).fetchone()
+    except sqlite3.OperationalError as exc:
+        if "no such table" in str(exc).lower():
+            return None
+        raise
+    return dict(row) if row else None
+
+
+def touch_login(user_id: str, db_path: Path = DEFAULT_DB_PATH) -> None:
+    with _connect(db_path) as conn:
+        conn.execute(
+            "UPDATE users SET last_login_at = ? WHERE user_id = ?", (_now(), user_id)
+        )

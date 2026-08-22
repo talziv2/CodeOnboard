@@ -11,7 +11,10 @@ import { resetSession, sessionStart } from "@/lib/api";
  * cheap one's whole promise is what it does NOT do.
  */
 
-const BASE = "http://localhost:8000";
+// The API is reached through the Next.js rewrite now (multi-user.md D-2), so the
+// browser only ever calls its own origin and the auth cookie is first-party.
+// This was `http://localhost:8000`, which was `NEXT_PUBLIC_API_URL`'s default.
+const BASE = "/api";
 
 let fetchMock: ReturnType<typeof vi.fn>;
 

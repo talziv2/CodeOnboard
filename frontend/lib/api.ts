@@ -1,4 +1,13 @@
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+/**
+ * Every call goes through the Next.js rewrite (see `next.config.ts`), so the
+ * browser only ever talks to its own origin and the auth cookie is first-party.
+ *
+ * There is no `NEXT_PUBLIC_API_URL` any more: that value was baked into the
+ * browser bundle at build time, which both published the API's address and made
+ * it impossible to change without a rebuild. The server-side `API_ORIGIN` in
+ * `next.config.ts` replaces it.
+ */
+const BASE = "/api";
 
 /** FastAPI puts the useful part in `detail`, which may be a string or an
  *  object carrying the pipeline's error list. Raw JSON in a UI is useless, so
@@ -23,9 +32,28 @@ async function fail(res: Response): Promise<never> {
  *  origin its CORS list doesn't allow. The browser collapses both into an
  *  opaque `TypeError: Failed to fetch`, so translate it into a slug the UI can
  *  render as something a person can act on. */
+/** Thrown on any 401. The auth layer catches it once, centrally. */
+export class NotAuthenticatedError extends Error {
+  constructor() {
+    super("not_authenticated");
+    this.name = "NotAuthenticatedError";
+  }
+}
+
+/** Notified whenever a request comes back 401, so the app reacts in ONE place. */
+let onUnauthenticated: (() => void) | null = null;
+export function setUnauthenticatedHandler(handler: (() => void) | null) {
+  onUnauthenticated = handler;
+}
+
 async function send(path: string, init?: RequestInit): Promise<Response> {
+  let res: Response;
   try {
-    return await fetch(`${BASE}${path}`, init);
+    // `credentials: "include"` on every request, in the ONE place every request
+    // passes through. Per-call would work until the call somebody adds next
+    // month forgets it — and that call would fail as "not signed in" rather
+    // than as a missing option, which is a long way from its cause.
+    res = await fetch(`${BASE}${path}`, { ...init, credentials: "include" });
   } catch (e: unknown) {
     // An abort is the CALLER'S decision, not a failure to reach the server, and
     // collapsing the two would make "I changed my mind" render as "the backend
@@ -33,6 +61,13 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
     if (e instanceof DOMException && e.name === "AbortError") throw e;
     throw new Error("server_unreachable");
   }
+  if (res.status === 401) {
+    // The session is gone — expired, revoked, or never there. Reported once,
+    // here, so no caller has to remember that 401 is the special one.
+    onUnauthenticated?.();
+    throw new NotAuthenticatedError();
+  }
+  return res;
 }
 
 async function post<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
@@ -807,3 +842,45 @@ export interface FileContent {
 
 export const getFile = (session_id: string, path: string) =>
   get<FileContent>(`/session/${session_id}/file?path=${encodeURIComponent(path)}`);
+
+
+// --- Authentication (multi-user M2) ---
+
+export interface AuthUser {
+  user_id: string;
+  email: string | null;
+  display_name: string | null;
+}
+
+export const register = (email: string, password: string, display_name?: string) =>
+  post<AuthUser>("/auth/register", { email, password, display_name });
+
+export const login = (email: string, password: string) =>
+  post<AuthUser>("/auth/login", { email, password });
+
+/**
+ * Who is calling, or null when nobody is. The whole client-side auth model.
+ *
+ * Returns null rather than throwing on 401: "not signed in" is the expected
+ * ANSWER to this question, not a failure to answer it. Every other endpoint
+ * treats a 401 as exceptional, which is why this one unwraps it here.
+ */
+export const me = async (): Promise<AuthUser | null> => {
+  try {
+    return await get<AuthUser>("/auth/me");
+  } catch (err) {
+    if (err instanceof NotAuthenticatedError) return null;
+    throw err;
+  }
+};
+
+/** Ends this session. Never fails from the caller's point of view. */
+export const logout = async (): Promise<void> => {
+  try {
+    await send("/auth/logout", { method: "POST" });
+  } catch {
+    /* already signed out, or the server is unreachable — either way, done */
+  }
+};
+
+export const logoutEverywhere = () => post<void>("/auth/logout/all");

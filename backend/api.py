@@ -58,6 +58,7 @@ from backend.learning import progress
 from backend.learning import scope
 from backend.learning import store as learning_store
 from backend.learning import understanding
+from backend.auth.routes import router as auth_router
 from backend.auth.startup import run_startup_checks
 from backend.learning.graph import understanding_of
 from backend.learning.reset import reset_to_plan
@@ -139,12 +140,24 @@ ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 
+# `allow_credentials` is what lets the browser send the auth cookie on a
+# cross-origin call. It is needed only for DIRECT access to :8000 — the Next.js
+# `/api/*` rewrite (D-2) makes the app's own requests first-party, so CORS is not
+# load-bearing for it any more.
+#
+# Kept configured anyway, because `tests/test_cors.py` pins it and because curl,
+# Swagger and the smoke scripts all talk to :8000 directly. Never `*` alongside
+# credentials — browsers reject that combination, and the explicit list is what
+# makes it safe.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
 
 # In-memory session store: session_id → GoalSession (goal dialogue only).
 # Learning-graph sessions live in SQLite (learning_store) — different lifecycle:
