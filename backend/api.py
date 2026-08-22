@@ -29,6 +29,7 @@
 
 import logging
 import os
+from contextlib import asynccontextmanager
 
 import anthropic
 from dotenv import load_dotenv
@@ -57,6 +58,7 @@ from backend.learning import progress
 from backend.learning import scope
 from backend.learning import store as learning_store
 from backend.learning import understanding
+from backend.auth.startup import run_startup_checks
 from backend.learning.graph import understanding_of
 from backend.learning.reset import reset_to_plan
 from backend.pipeline import progress as pipeline_progress
@@ -91,7 +93,34 @@ from backend.repo.cloner import (
 # now.
 load_dotenv()
 logger = logging.getLogger(__name__)
-app = FastAPI(title="CodeOnboard API")
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    """Checked once, before the process serves anything (multi-user M1).
+
+    The ownership check is a REFUSAL rather than a warning. Once M3's filter is
+    in place a session with no `user_id` is unreachable by every user forever,
+    and the person who notices is a learner whose work has vanished from their
+    dashboard — a log line would not be read, a process that will not start is.
+
+    The Dossier sweep is the opposite: it repairs quietly, because an orphaned
+    dossier is unreachable derived data and D12 already makes "absent" a
+    supported state for every consumer.
+
+    A lifespan handler rather than `@app.on_event("startup")`, which FastAPI
+    deprecates.
+    """
+    result = run_startup_checks(SESSIONS_DB_PATH)
+    if result["orphaned_investigations_removed"]:
+        logger.info(
+            "startup: removed %d orphaned investigation row(s)",
+            result["orphaned_investigations_removed"],
+        )
+    yield
+
+
+app = FastAPI(title="CodeOnboard API", lifespan=_lifespan)
 
 # The dev frontend's origins. `localhost` and `127.0.0.1` are the same machine
 # but different *origins* to a browser, so both have to be listed: opening the

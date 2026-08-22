@@ -250,6 +250,39 @@ _ADDITIVE_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # session column rather than a node one because it describes the session's
     # POSITION, not any unit.
     ("sessions", "arrival_json", "TEXT"),
+
+    # ── the account layer (multi-user M1) ─────────────────────────────────────
+    #
+    # Additive and nullable like every column above, and for the same reason:
+    # SCHEMA_VERSION must not move. `load_graph` treats a version mismatch as
+    # MISSING, so a bump would make all 90 sessions in the live database
+    # invisible rather than migrating them.
+    #
+    # They are filled by `backend/migrations/001_multi_user.py` for existing
+    # rows and stamped by `_write_graph` for new ones. Nothing ENFORCES them
+    # yet — enforcement is M3, and doing it here would break every route while
+    # there is still no way to log in.
+    ("sessions", "user_id", "TEXT"),
+    ("sessions", "repo_id", "TEXT"),
+    # What the learner sees on the dashboard. Nullable because a session planned
+    # before titles existed has none; the migration derives one.
+    ("sessions", "title", "TEXT"),
+    # "generating" | "active" | "completed" | "failed" | "archived".
+    # `completed` is DERIVED from the graph on read (`is_complete()`), never a
+    # second source of truth — this column records only what the engine cannot
+    # say for itself.
+    ("sessions", "status", "TEXT"),
+    ("sessions", "last_active_at", "TEXT"),
+    ("sessions", "archived_at", "TEXT"),
+
+    # A CACHE of `progress.summary()`, not a second definition of it. The
+    # dashboard lists every session at once, and loading each graph to compute
+    # three numbers would mean reading 907 node rows to render a list. Written
+    # from `summary()` itself (M4), so there is still exactly one implementation
+    # of what these mean — `progress.py` is emphatic that there must be.
+    ("sessions", "readiness_cached", "REAL"),
+    ("sessions", "stops_settled_cached", "INTEGER"),
+    ("sessions", "stops_total_cached", "INTEGER"),
 )
 
 
@@ -333,14 +366,42 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
         _add_missing_columns(conn)
 
 
-def save_graph(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
-    """Persist the LIVE graph. Never touches a plan table — see the header."""
+def save_graph(
+    graph: LearningGraph,
+    db_path: Path = DEFAULT_DB_PATH,
+    *,
+    user_id: str | None = None,
+) -> None:
+    """Persist the LIVE graph. Never touches a plan table — see the header.
+
+    ## `user_id`, and why it is optional in M1 and required in M3
+
+    OWNERSHIP IS DECIDED AT THIS BOUNDARY, not in the routes (multi-user.md §4).
+    The endpoint layer names whose session this is; below here, a graph cannot
+    be written without an owner having been named. That is what makes "no user
+    can touch another user's session" structural rather than a habit sixteen
+    routes have to keep.
+
+    In M1 it is optional and defaults to the legacy user, because there is still
+    no way to log in: making it required now would break every route in the name
+    of a rule nothing can yet satisfy. M3 removes the default, at which point
+    omitting it is a TypeError rather than a silent fallback.
+
+    `repo_id` is not a parameter at all — it is derived from `graph.repo_url`,
+    which is the only correct source for it.
+    """
     init_db(db_path)
+    owner, repo_id = _resolve_ownership(graph, db_path, user_id)
     with _connect(db_path) as conn:
-        _write_graph(conn, graph)
+        _write_graph(conn, graph, owner=owner, repo_id=repo_id)
 
 
-def create_session(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> None:
+def create_session(
+    graph: LearningGraph,
+    db_path: Path = DEFAULT_DB_PATH,
+    *,
+    user_id: str | None = None,
+) -> None:
     """Persist a NEWLY PLANNED graph, and its plan, in ONE transaction.
 
     The only writer of `plan_nodes` / `plan_edges` apart from
@@ -356,12 +417,53 @@ def create_session(graph: LearningGraph, db_path: Path = DEFAULT_DB_PATH) -> Non
     module must never do.
     """
     init_db(db_path)
+    owner, repo_id = _resolve_ownership(graph, db_path, user_id)
     with _connect(db_path) as conn:
-        _write_graph(conn, graph)
+        _write_graph(conn, graph, owner=owner, repo_id=repo_id)
         _write_plan(conn, graph)
 
 
-def _write_graph(conn: sqlite3.Connection, graph: LearningGraph) -> None:
+
+def _resolve_ownership(
+    graph: LearningGraph, db_path: Path, user_id: str | None
+) -> tuple[str, str | None]:
+    """(owner, repo_id) for a write — resolved BEFORE the write transaction opens.
+
+    Both lookups may INSERT (a first-time repository, the legacy user on a fresh
+    database), so they need their own connection. Doing that from inside
+    `_write_graph` would mean opening a second connection to the same file while
+    a write transaction is already held on it — a self-inflicted lock, and one
+    that WAL makes worse rather than better because the second connection would
+    wait the full `busy_timeout` before failing. Resolving first means the write
+    transaction stays a single short write, which is what §1.10 says the
+    contended resource actually is.
+
+    `repo_id` is DERIVED, never passed in: `graph.repo_url` is the only thing
+    that knows which repository this is, and `ensure_repository` maps every
+    spelling of it onto one row.
+    """
+    from backend.auth.identity import ensure_legacy_user, ensure_repository
+
+    owner = user_id or ensure_legacy_user(db_path)
+    try:
+        repo_id = ensure_repository(graph.repo_url, db_path)
+    except ValueError:
+        # A `repo_url` the cloner would now refuse. Rows written before that
+        # validation existed can hold one, and refusing to SAVE such a session
+        # would lose a learner's work over a URL policy introduced after they
+        # started. The row simply carries no `repo_id`; the startup check
+        # reports it rather than the save failing.
+        repo_id = None
+    return owner, repo_id
+
+
+def _write_graph(
+    conn: sqlite3.Connection,
+    graph: LearningGraph,
+    *,
+    owner: str,
+    repo_id: str | None,
+) -> None:
     """The live-side write, without its own transaction.
 
     Extracted so `create_session` can put it and the plan write inside one
@@ -374,8 +476,9 @@ def _write_graph(conn: sqlite3.Connection, graph: LearningGraph) -> None:
         INSERT INTO sessions
             (session_id, repo_url, goal_json, current_node_id,
              doc_context_json, areas_json, journey_events_json, briefing_json,
-             arrival_json, schema_version)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             arrival_json, schema_version, user_id, repo_id, last_active_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                strftime('%Y-%m-%dT%H:%M:%S', 'now'))
         ON CONFLICT(session_id) DO UPDATE SET
             repo_url            = excluded.repo_url,
             goal_json           = excluded.goal_json,
@@ -386,6 +489,14 @@ def _write_graph(conn: sqlite3.Connection, graph: LearningGraph) -> None:
             briefing_json       = excluded.briefing_json,
             arrival_json        = excluded.arrival_json,
             schema_version      = excluded.schema_version,
+            -- OWNERSHIP IS NOT REASSIGNED BY A SAVE. `sessions.user_id` keeps
+            -- whatever it already holds: an update is the owner working on
+            -- their session, never a change of owner. Writing
+            -- `excluded.user_id` here would make every save a silent chance to
+            -- take someone else's session, which is precisely the hole M3
+            -- exists to close.
+            repo_id             = COALESCE(sessions.repo_id, excluded.repo_id),
+            last_active_at      = excluded.last_active_at,
             updated_at       = strftime('%Y-%m-%d %H:%M:%f', 'now')
         """,
         (
@@ -399,6 +510,8 @@ def _write_graph(conn: sqlite3.Connection, graph: LearningGraph) -> None:
             json.dumps(graph.briefing) if graph.briefing is not None else None,
             json.dumps(graph.arrival) if graph.arrival is not None else None,
             SCHEMA_VERSION,
+            owner,
+            repo_id,
         ),
     )
     # Nodes and edges: replace wholesale rather than diff. Sessions are
@@ -674,11 +787,86 @@ def list_sessions_for_repo(
         ]
 
 
+def list_sessions_for_user(
+    user_id: str,
+    db_path: Path = DEFAULT_DB_PATH,
+    *,
+    include_archived: bool = False,
+) -> list[dict]:
+    """Lightweight summaries of one user's sessions, newest activity first.
+
+    THE OWNER-SCOPED REPLACEMENT for `list_sessions_for_repo`, which took a
+    repository and returned every session on it belonging to ANYONE. That was
+    correct while there was one learner and is a corpus-wide disclosure with two
+    (multi-user.md §2 P2). The old function is still here because
+    `POST /session/start` calls it; M3 removes both.
+
+    Deliberately does NOT load graphs. A dashboard listing forty sessions would
+    otherwise read every node row of all forty to show three numbers, which is
+    what the `*_cached` columns exist to avoid. They are NULL until M4 fills
+    them, so callers must treat them as unknown rather than as zero.
+    """
+    if not Path(db_path).exists():
+        return []
+    with _connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            f"""
+            SELECT session_id, repo_url, repo_id, goal_json, title, status,
+                   current_node_id, created_at, updated_at, last_active_at,
+                   archived_at, readiness_cached, stops_settled_cached,
+                   stops_total_cached
+            FROM sessions
+            WHERE user_id = ? AND schema_version = ?
+              {"" if include_archived else "AND archived_at IS NULL"}
+            ORDER BY COALESCE(last_active_at, updated_at) DESC
+            """,
+            (user_id, SCHEMA_VERSION),
+        ).fetchall()
+        return [
+            {
+                "session_id": r["session_id"],
+                "repo_url": r["repo_url"],
+                "repo_id": r["repo_id"],
+                "goal": json.loads(r["goal_json"]),
+                "title": r["title"],
+                "status": r["status"],
+                "current_node_id": r["current_node_id"],
+                "created_at": r["created_at"],
+                "updated_at": r["updated_at"],
+                "last_active_at": r["last_active_at"],
+                "archived_at": r["archived_at"],
+                "progress": {
+                    "goal_readiness": r["readiness_cached"],
+                    "stops_settled": r["stops_settled_cached"],
+                    "stops_total": r["stops_total_cached"],
+                },
+            }
+            for r in rows
+        ]
+
+
 def delete_session(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> None:
-    if not db_path.exists():
+    """Remove a session and everything scoped to it.
+
+    `nodes`, `edges`, `plan_nodes` and `plan_edges` cascade — they carry a
+    foreign key to `sessions`. **`investigation` does not**
+    (`dossier_store.py`: `session_id TEXT PRIMARY KEY`, no FK clause), so
+    deleting a session used to leave its Dossier behind forever, keyed to an id
+    nothing would ever ask for again.
+
+    Deleted explicitly here rather than by adding the missing foreign key,
+    because adding one to an existing SQLite table means rebuilding it. The
+    rebuild is recorded as debt (multi-user.md OPEN-9); this closes the leak
+    without it.
+    """
+    if not Path(db_path).exists():
         return
+    from backend.repo import dossier_store
+
     with _connect(db_path) as conn:
         conn.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
+    dossier_store.delete_investigation(session_id, db_path)
 
 
 def _node_row(session_id: str, node: LearningNode) -> tuple:
