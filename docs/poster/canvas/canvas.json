@@ -1,0 +1,17 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1400,
+      "h": 1980,
+      "title": "CodeOnBoard poster",
+      "print": "fixed"
+    }
+  ],
+  "launch": {
+    "view": "focused",
+    "file": "Main.dc.html"
+  }
+}
