@@ -315,5 +315,38 @@ Two rules follow from that, and both are load-bearing:
 - **No source, no lesson.** Grounding is verified at plan time but *read* at lesson time, and the two can disagree. If **some** of a unit's anchors fail to load, Teaching degrades and teaches from the rest. If **all** of them fail, Teaching must **fail the lesson** — never render one. With no source the model has only the objective, and it will write a fluent, confident, entirely ungrounded lesson from it; nothing in the output looks wrong, which is why this is refused at the point of reading. See `learning-engine.md` §4.1.2.
 - **`optional` means excluded from the default walk, not removed.** `/advance` steps over an optional unit, `resume_point()` skips it, the stop counter and `readiness()`'s denominator exclude it, and the rail collapses it — but it stays in the graph, in `path_order()`, and teaches and grades normally when reached from the rail. `optional` describes the *promised journey*, not the graph. A unit with no `priority` at all is **not** optional and stays on the walk. See `learning-engine.md` §6.3.
 - **Progress is two measures, and neither is `completed / total`.** `backend/learning/progress.py` owns both. **Goal readiness** is evidence-weighted mastery of the `required` set — the planner's dependency-closed floor, which is by construction "the goal is not met without this". **Journey progress** is how much of the promised walk has been dealt with. Remedial warm-ups are excluded from *both* and reported as detours; `readiness()` delegates and the `readiness` wire key is retained as an alias for goal readiness. The invariant, tested in `tests/test_progress.py`: **goal readiness may fall only when evidence about the learner changes, never because the system changed the plan.** Before this, inserting a remedial prerequisite dropped the gauge from 0.50 to 0.33 — the system's decision to help looked like the learner losing ground. See `learning-graph.md` §5.
+- **A retry question never ships its own answer.** The unit's own prompt is
+  answerable exactly ONCE — before its `reveal` has been shown — and every later
+  assessment comes from a freshly generated question that carries no answer:
+  `/verify` for a named gap, `/reassess` for the objective. This is sharper than
+  "don't re-ask", and the code is why: Teaching's contract for `reveal` is *"the
+  explanation — now you may answer it"* and `lessonView` opens it after ANY graded
+  answer, `off-topic` included. A re-teach does not escape it either — it
+  regenerates the whole lesson, so its better new prompt arrives with a new
+  `reveal` that answers it. `backend/learning/retry.py` owns the dispatch and the
+  learner sees one action, *Ask me again*; which mechanism serves it is never
+  surfaced. The rule also closes the revisit back door: once anything is graded,
+  a return shows the question read-only with the retry beside it.
+- **The frontend renders learning decisions; it does not compute them.** The retry
+  offer, the reason there is none, and whether the objective is met all arrive from
+  the server. The one exception, stated at both ends, is **"have I looked at Lesson
+  since it changed"** (`lib/materialSeen.ts`) — not a fact about understanding, and
+  not observable server-side. Reading is guidance and never evidence: it cannot
+  close a gap, move a state, or count toward readiness.
+- **A learner decision is never evidence of understanding.** `understanding.py`'s
+  two dimensions — what the evidence demonstrates, and what the learner decided —
+  are load-bearing, and every surface that blurred them has been closed.
+  `Move on anyway` writes `user_override = "continue"` and never touches
+  `understanding_state`; `mark_understood` records an assertion (`disposition:
+  asserted`) and never writes `understood`, with settlement coming from
+  `SETTLING_OVERRIDES` instead. `mark_weak` is the deliberate asymmetry: agreeing
+  with a shortfall can only lower the claim being made about the learner, so it
+  still writes state and leaves the disposition `active`. The condition for
+  recording "I moved on" is **an unmet objective plus at least one assessment** —
+  presence is not a decision, so a refresh or a scroll-past still records
+  nothing. Before this, an `off-topic` answer (which opens no gaps by policy) left
+  a stop that was settled by nothing, rendered like a stop nobody had opened, and
+  made `is_complete()` unreachable for the whole session. See
+  `docs/planning/phases/learning-loop.md`.
 - **A learning unit is grounded by one *or more* verified anchors.** A flow crossing three files is anchored on all three. `nodes.file` / `line_start` / `line_end` hold a *derived display projection*; `lesson_brief["anchors"]` is the semantic truth. The invariant, asserted in tests and in the sanity script: the display columns always equal one member of `anchors`.
 - **Interactive learning graph (Phase 3, future).** The current Mentor Agent will retire; its responsibilities split across a Planner Agent (owns and mutates the learning graph), a Teaching Agent (expands a node into the actual lesson), and a Grader Agent (classifies user responses). The current step JSON becomes the *lesson brief*, not the lesson itself. The Planner's learning graph is also the **user's understanding graph** — the same object, persisted across sessions and surfaced to the user as the product's centerpiece artifact (this is the project's X-factor). Strategic positioning: CodeOnboard complements AI code generation by training humans to understand, critique, and direct it — Grader scope expands to critique-of-AI-output tasks, and a new AI-Assisted Development Mode operationalizes this. See `docs/planning/phases/roadmap.md` for the full Phase 3 description and the deferred design decisions.
