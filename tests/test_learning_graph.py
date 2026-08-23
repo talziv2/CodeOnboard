@@ -106,12 +106,24 @@ def test_weak_spot_is_sticky_across_recovery():
     assert g.nodes[a.id].weak_spot is True
 
 
-def test_override_mark_understood():
+def test_override_mark_understood_records_the_claim_not_the_state():
+    """M0: an assertion goes in the disposition channel, never the evidence one."""
     g = _make_graph()
     a = g.add_node(_make_node())
     g.override(a.id, "mark_understood")
-    assert g.nodes[a.id].understanding_state == "understood"
+    assert g.nodes[a.id].understanding_state == "not_started"
     assert g.nodes[a.id].user_override == "mark_understood"
+
+
+def test_override_mark_weak_still_writes_state():
+    """The asymmetry is deliberate. `mark_weak` is the learner AGREEING with a
+    shortfall — it can only ever lower the claim being made about them — so it
+    is not the same act wearing a different hat."""
+    g = _make_graph()
+    a = g.add_node(_make_node())
+    g.override(a.id, "mark_weak")
+    assert g.nodes[a.id].understanding_state == "failed"
+    assert g.nodes[a.id].weak_spot is True
 
 
 def test_override_skip_marks_visited():

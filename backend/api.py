@@ -50,10 +50,12 @@ from backend.agents.grader.verification import grade_verification
 from backend.agents.mentor.mutator import Diagnosis, mutate as mutate_graph
 from backend.agents.teaching import run as run_teaching
 from backend.agents.teaching import respond as teaching_respond
+from backend.agents.teaching import reassess as teaching_reassess
 from backend.agents.teaching import verify as teaching_verify
 from backend.learning import adaptation
 from backend.learning import history
 from backend.learning import progress
+from backend.learning import retry as retry_model
 from backend.learning import scope
 from backend.learning import store as learning_store
 from backend.learning import understanding
@@ -337,9 +339,19 @@ class AdvanceRequest(BaseModel):
 class RespondRequest(BaseModel):
     response: str
     node_id: str | None = None  # if provided, grade this node instead of current
-    # "assessment" (the lesson's own question) or "verification" (a fresh question
-    # about one gap, from POST /verify). Defaulted, so every existing client keeps
-    # working without knowing verification exists (§18.10).
+    # WHICH QUESTION this answers:
+    #   "assessment"   the lesson's own prompt
+    #   "verification" a fresh question about one gap, from POST /verify
+    #   "reassessment" a fresh question about the OBJECTIVE, from POST /reassess
+    #
+    # The third is graded as an ORDINARY ASSESSMENT — it is an answer to the
+    # objective, so it moves `understanding_state` exactly as the first attempt
+    # did. It is a distinct request kind only so the endpoint knows which pending
+    # question is being answered and can record the right `question_source`; it is
+    # NOT a third `history` attempt kind, and pooling it with assessments is
+    # correct rather than a shortcut.
+    #
+    # Defaulted, so every existing client keeps working (§18.10).
     kind: str = history.ASSESSMENT
 
 
@@ -621,7 +633,40 @@ def session_lesson(session_id: str) -> dict:
     _render_current_lesson(graph, _new_client())
     node = graph.nodes[graph.current_node_id]
 
-    return {"node_id": graph.current_node_id, "lesson": node.cached_lesson}
+    return {
+        "node_id": graph.current_node_id,
+        "lesson": node.cached_lesson,
+        # WHAT TO DO HERE, on the one call every arrival and every reload makes.
+        # Without it the offer existed only in a grading reply, so a refresh lost
+        # it — and "the learner refreshed" is not a decision about their
+        # understanding, so it must not change what is on offer.
+        "retry": retry_model.to_wire(node),
+        # An outstanding question, so a reload puts the learner back in front of
+        # it rather than in front of the composer for a prompt that is spent.
+        # Both are `{question, ...}` and shipped without any answer.
+        "pending": _pending_question(node),
+    }
+
+
+def _pending_question(node) -> dict | None:
+    """The question this stop is waiting on, if any, with which kind it is.
+
+    ONE key rather than two, because the client's job is the same either way —
+    show this question, post the answer back with this `kind` — and a client that
+    had to check two fields to find one question would eventually check only one.
+    """
+    state = node.gap_state
+    if state.pending_verification:
+        return {
+            "kind": history.VERIFICATION,
+            "question": state.pending_verification.get("question", ""),
+        }
+    if state.pending_reassessment:
+        return {
+            "kind": history.SOURCE_REASSESSMENT,
+            "question": state.pending_reassessment.get("question", ""),
+        }
+    return None
 
 
 @app.post("/session/{session_id}/advance")
@@ -729,6 +774,10 @@ def _respond_to_verification(
     if not node.gap_state.pending_verification:
         raise HTTPException(status_code=409, detail="no_pending_verification")
 
+    # Snapshot before grading: `grade_verification` clears the pending question.
+    asked_verification = str(
+        (node.gap_state.pending_verification or {}).get("question") or ""
+    )
     before_gaps = {g.id for g in node.gaps}
     result = grade_verification(state, node, body.response, client=client)
     if result.get("failed"):
@@ -744,6 +793,13 @@ def _respond_to_verification(
         classification="",
         rationale=result.get("rationale") or "",
         kind=history.VERIFICATION,
+        # THE QUESTION, kept (M1). `grade_verification` clears
+        # `pending_verification` whatever the outcome — the question is spent once
+        # asked, and re-showing it would be the "Try again" defect §18.7 removed —
+        # so before this it existed NOWHERE afterwards. Read from the snapshot
+        # taken above rather than from the node, which has already been cleared.
+        question=asked_verification,
+        question_source=history.SOURCE_VERIFICATION,
     )
     # The verification's own envelope, on the verification attempt. `action` is
     # `none` because verification produces no adaptation — the outcome is a gap
@@ -767,6 +823,7 @@ def _respond_to_verification(
         "rationale": result.get("rationale"),
         "gaps": _gaps_payload(node),
         "understanding_state": understanding_of(node),
+        "retry": retry_model.to_wire(node),
         "current_node_id": graph.current_node_id,
         # Present so the shape overlaps the assessment reply rather than being a
         # disjoint union the client has to switch on before it can read anything.
@@ -853,6 +910,72 @@ def session_verify(session_id: str, body: dict | None = None) -> dict:
         "question": stored["question"],
         "targets": stored["targets"],
         "gaps": _gaps_payload(node),
+        "retry": retry_model.to_wire(node),
+        "errors": state.errors,
+    }
+
+
+@app.post("/session/{session_id}/reassess")
+def session_reassess(session_id: str, body: dict | None = None) -> dict:
+    """Generate a FRESH question about the OBJECTIVE, after a shortfall.
+
+    The sibling of `/verify`, one level up, and the route for the shortfall that
+    named no gap — which is most of them: 27 of the 34 real unmet stops in the
+    stored sessions have no open blocking gap, so `/verify` has nothing to aim at
+    and there was no way back to `understood` at all.
+
+    Aimed at the objective, generated against the questions already asked and the
+    recorded shortfall, and shipping **no answer** — see `teaching/reassess.py`
+    for why re-asking anything from `cached_lesson` cannot work.
+
+    Charged on ISSUE, like `pending_verification`: an unanswered question has
+    still been asked, and a learner who could refresh their way to fresh
+    questions would turn the measure from mastery into persistence.
+    """
+    body = body or {}
+    graph = _load_session_or_404(session_id)
+    current = body.get("node_id") or graph.current_node_id
+    if current is None or current not in graph.nodes:
+        raise HTTPException(status_code=404, detail="node_not_found")
+    node = graph.nodes[current]
+
+    # The dispatch decides; this endpoint does not re-derive it. Called by name it
+    # still has to obey the budget — unlike `/verify`, where naming a gap
+    # deliberately bypasses the cap because asking about a named misconception is
+    # a different act from being nagged. There is no equivalent here: the target
+    # is always the same objective, so a second door onto it would just be the cap
+    # with extra steps.
+    if retry_model.reassessments_left(node) <= 0:
+        raise HTTPException(status_code=409, detail="reassessment_budget_spent")
+    if node.gap_state.pending_reassessment or node.gap_state.pending_verification:
+        raise HTTPException(status_code=409, detail="question_already_pending")
+    if understanding_of(node) == "understood":
+        raise HTTPException(status_code=409, detail="objective_already_met")
+
+    client = _new_client()
+    state = OnboardState(repo_url=graph.repo_url, goal=graph.goal, client=client)
+    state.graph = graph
+    try:
+        source = _node_source(graph, node)
+    except Exception as exc:
+        # §4.1.2. With no source the model invents the scenario, and this answer
+        # is an ORDINARY ASSESSMENT — so failing an imaginary question would move
+        # `understanding_state` on the strength of imaginary code.
+        raise HTTPException(status_code=409, detail="source_unavailable") from exc
+
+    prompt = teaching_reassess.reassess(state, node, source, client=client)
+    if prompt is None:
+        # Nothing is charged: a question we could not generate is not one the
+        # learner spent.
+        raise HTTPException(status_code=503, detail="reassessment_unavailable")
+
+    stored = teaching_reassess.store(node, prompt)
+    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    return {
+        "node_id": current,
+        # No reveal and no expected answer — the whole point.
+        "question": stored["question"],
+        "retry": retry_model.to_wire(node),
         "errors": state.errors,
     }
 
@@ -892,6 +1015,7 @@ def session_waive(session_id: str, body: WaiveRequest) -> dict:
         "waived": waived,
         "gaps": _gaps_payload(node),
         "understanding_state": understanding_of(node),
+        "retry": retry_model.to_wire(node),
         "readiness": graph.readiness(),
         "complete": graph.is_complete(),
     }
@@ -917,6 +1041,48 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
     if body.kind == history.VERIFICATION:
         return _respond_to_verification(graph, state, current, body, client)
 
+    # A RE-ASSESSMENT ANSWER IS AN ORDINARY ASSESSMENT, and everything below it
+    # runs unchanged — the Grader marks it against the same objective, the verdict
+    # moves `understanding_state`, and `decide_all` responds to it exactly as it
+    # would to a first answer. That is the whole design: a second question about
+    # the objective is not a special kind of evidence, it is more of the same kind.
+    #
+    # The only thing that differs is WHICH question it answered, and the pending
+    # question is cleared here because it is now spent.
+    reassessment = None
+    # `SOURCE_REASSESSMENT`, deliberately — the client is naming WHICH QUESTION it
+    # is answering, not claiming a third attempt kind. The attempt this produces is
+    # an `ASSESSMENT`, because that is what it is evidence about.
+    if body.kind == history.SOURCE_REASSESSMENT:
+        reassessment = graph.nodes[current].gap_state.pending_reassessment
+        if not reassessment:
+            raise HTTPException(status_code=409, detail="no_pending_reassessment")
+        graph.nodes[current].gap_state.pending_reassessment = None
+
+    # THE QUESTION THEY ANSWERED, captured before anything can replace it (M1).
+    #
+    # Read here rather than after grading for a reason that only bites on one
+    # path: a `reteach` later in THIS request assigns `node.cached_lesson`
+    # wholesale, so by the time the attempt is recorded the prompt the learner
+    # actually saw is gone. Reading it late would file every re-taught answer
+    # against the question that replaced the one it answered — the exact
+    # misattribution this milestone exists to make impossible.
+    #
+    # `question_source` distinguishes the unit's ORIGINAL prompt from one a
+    # previous re-teach installed. Both are assessments of the same objective and
+    # they are not the same question: a re-taught prompt is built so it cannot be
+    # answered while still holding the diagnosed misconception.
+    if reassessment is not None:
+        asked = str(reassessment.get("question") or "")
+        asked_source = history.SOURCE_REASSESSMENT
+    else:
+        asked = (graph.nodes[current].cached_lesson or {}).get("prompt") or ""
+        asked_source = (
+            history.SOURCE_RETEACH
+            if history.lesson_was_retaught(graph.nodes[current].attempts)
+            else history.SOURCE_LESSON
+        )
+
     # Which gaps this ANSWER opened, as a fact rather than a count. Taken as a
     # before/after delta because the Grader mints ids internally; asking it to
     # report them too would be a second source of the same truth.
@@ -939,6 +1105,8 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
         # fixed rationale; recorded here so the two are distinguishable forever
         # after, instead of a system outage counting as half a learner's grasp.
         graded=bool(grade.get("graded", True)),
+        question=asked,
+        question_source=asked_source,
     )
 
     # WHAT the answer earns is decided deterministically from why it fell short
@@ -1122,6 +1290,10 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
         # unchanged, so an un-updated client keeps working and simply does not
         # render it.
         "gaps": _gaps_payload(graph.nodes[current]),
+        # WHAT "ASK ME AGAIN" WOULD DO HERE, computed from the learning state
+        # rather than reconstructed by the client from four partial flags. The
+        # frontend renders this; it no longer decides it.
+        "retry": retry_model.to_wire(graph.nodes[current]),
         "complete": graph.is_complete(),
     }
 

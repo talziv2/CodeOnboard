@@ -77,7 +77,15 @@ ASSERTED = "asserted"
 
 # Dispositions that mean "the learner has closed this question". A node carrying
 # one is never presented as work outstanding, whatever its understanding state.
-SETTLING_DISPOSITIONS = frozenset({CONTINUED, WAIVED, SKIPPED})
+#
+# `ASSERTED` joins them in M0. It always meant "the learner closed this question"
+# — that is what asserting understanding IS — and it was absent only because
+# `override` used to write `understanding_state = "understood"`, so an asserted
+# node was already excluded from both bands by looking demonstrated. Now that the
+# write is gone (a decision is not evidence), the node reads `unresolved` or
+# `insufficient`, and without this line it would reappear as outstanding work the
+# learner is still expected to fix — nagging them about a decision they made.
+SETTLING_DISPOSITIONS = frozenset({CONTINUED, WAIVED, SKIPPED, ASSERTED})
 
 _DISPOSITION_BY_OVERRIDE = {
     "continue": CONTINUED,
@@ -138,6 +146,12 @@ def classify(node: "LearningNode") -> str:
     return RECOVERED if fell_short else STRENGTH
 
 
+# The two classes that are NOT demonstrated understanding. `is_demonstrated` is
+# the complement — `STRENGTH` and `RECOVERED` — and stating the negative side once
+# here is what stops the two bands below drifting apart from each other.
+NOT_DEMONSTRATED = frozenset({UNRESOLVED, INSUFFICIENT})
+
+
 def is_needs_work(node: "LearningNode") -> bool:
     """Is this an OPEN task the learner is still expected to act on?
 
@@ -145,18 +159,38 @@ def is_needs_work(node: "LearningNode") -> bool:
     product requirement: a learner who chose to continue or waive still has
     unresolved understanding — that truth is preserved in `classify` — but they
     are not nagged about a decision they already made.
+
+    Deliberately `UNRESOLVED` ALONE, where `is_set_aside` below now takes
+    `INSUFFICIENT` too. The asymmetry is the point and it is not an oversight:
+    "we have no evidence either way" is not an open task, and widening this side
+    would make every unopened stop in the journey read as work outstanding.
     """
     return classify(node) == UNRESOLVED and disposition_of(node) not in SETTLING_DISPOSITIONS
 
 
 def is_set_aside(node: "LearningNode") -> bool:
-    """Unresolved, and the learner deliberately closed the question.
+    """Not demonstrated, and the learner deliberately closed the question.
 
     A third band rather than a filter on either side: dropping these from view
     would hide real unresolved understanding, and leaving them in `needs work`
     would nag about a decision already taken.
+
+    WIDENED IN M0 from `UNRESOLVED` to "not demonstrated", which brings in
+    `INSUFFICIENT`, and the case that forced it is the commonest failure the
+    system sees. An `off-topic` answer is excluded from evidence by
+    `history.is_evidence` — deliberately, and that rule is untouched — so a stop
+    answered only off-topic classifies `INSUFFICIENT`. Press "Move on anyway" and
+    it landed in NEITHER band: not needing work, not set aside, simply absent from
+    the profile while `is_complete()` quietly refused to fire.
+
+    A deliberate `skip` was in the same position for the same reason, and it is
+    just as clearly set aside: the learner closed the question without opening it.
+
+    The two dimensions still do their own jobs. `classify` is untouched, so the
+    node remains honestly "no usable evidence" — nobody is claiming they lack
+    understanding, and nobody is claiming they have it.
     """
-    return classify(node) == UNRESOLVED and disposition_of(node) in SETTLING_DISPOSITIONS
+    return classify(node) in NOT_DEMONSTRATED and disposition_of(node) in SETTLING_DISPOSITIONS
 
 
 # ── per-node summary ──────────────────────────────────────────────────────────
@@ -298,6 +332,12 @@ def evidence(graph: "LearningGraph", node_id: str) -> dict:
         timeline.append({
             "index": index,
             "kind": attempt.get("kind", history.DEFAULT_KIND),
+            # WHAT WAS ASKED (M1). The drawer's job is to make a state traceable,
+            # and an answer with no question above it is the one link in that
+            # chain that was missing. `null` where unrecorded — every attempt
+            # written before M1 — and never a guess at which question it was.
+            "question": history.question_of(attempt),
+            "question_source": history.question_source_of(attempt),
             "answer": attempt.get("answer", ""),
             "classification": attempt.get("classification", ""),
             "rationale": attempt.get("rationale", ""),

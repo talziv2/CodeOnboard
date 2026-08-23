@@ -150,14 +150,25 @@ class LearningNode:
 # Overrides that mean "the learner has dealt with this stop", and therefore
 # settle it for JOURNEY COMPLETION (§18.16.3). Each is an explicit act:
 #
-#   continue         they read the gaps and chose to move on anyway
+#   continue         they read the verdict and chose to move on anyway
 #   waive_remaining  they chose to stop remediating this node
 #   skip             they never engaged with it, deliberately
+#   mark_understood  they asserted they already know it
 #
 # `mark_weak` is absent on purpose: "I don't get this" is the opposite of having
-# dealt with it. `mark_understood` is absent because it is migration debt that M8
-# routes elsewhere (see `LearningGraph.override`).
-SETTLING_OVERRIDES: frozenset[str] = frozenset({"continue", "waive_remaining", "skip"})
+# dealt with it.
+#
+# `mark_understood` WAS absent, on the reasoning that M8 routed it elsewhere. That
+# was only ever true of a gap-bearing node: on a gap-free one `override` wrote
+# `understanding_state = "understood"` directly, and settlement came from that
+# write rather than from the intent. M0 stops the write — an assertion is not a
+# demonstration, and the single invariant this milestone exists to enforce is that
+# **a learner decision is never evidence of understanding**. Settlement therefore
+# has to come from the intent, which is what this line now says. Without it,
+# removing the write would silently make every asserted node block completion.
+SETTLING_OVERRIDES: frozenset[str] = frozenset(
+    {"continue", "waive_remaining", "skip", "mark_understood"}
+)
 
 
 def is_settled(node: LearningNode) -> bool:
@@ -330,7 +341,34 @@ class LearningGraph:
         gap_kind: str = "none",
         kind: str = history.ASSESSMENT,
         graded: bool = True,
+        question: str = "",
+        question_source: str = "",
     ) -> dict:
+        """One graded answer, and THE QUESTION IT ANSWERED (M1).
+
+        The question was not recorded before, and its absence was load-bearing in
+        a way that only shows up later. Three things make an attempt's question
+        unrecoverable after the fact:
+
+          - a re-teach REPLACES `cached_lesson`, so the prompt the learner
+            actually answered survives only inside `response.superseded_lesson`,
+            and only for the one attempt that caused the rewrite;
+          - `grade_verification` clears `pending_verification` whatever the
+            outcome, so a verification question existed nowhere once answered;
+          - `/reassess` (M5) will put a THIRD question against the same node.
+
+        So "which question produced this verdict?" was unanswerable for every
+        stored attempt — which makes every claim about whether two questions
+        assess the same knowledge unfalsifiable, and that claim is the whole
+        subject of the objective-model decision this pass has to make.
+
+        `question_source` names WHICH mechanism asked, because the four are
+        graded differently and mean different things about the learner:
+        `history.QUESTION_SOURCES`.
+
+        Both default to empty, which reads as UNKNOWN — every attempt written
+        before M1 — and never as "there was no question".
+        """
         # Append-only: a re-answer on a revisited node adds to the record rather
         # than replacing it, so the history survives a change of state.
         attempt = {
@@ -351,6 +389,13 @@ class LearningGraph:
             "graded": graded,
             "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
+        # Omitted rather than nulled when unknown, like every other optional key
+        # in this record: an absent key means "not recorded", and a present empty
+        # one would mean "asked nothing".
+        if question:
+            attempt["question"] = question
+        if question_source:
+            attempt["question_source"] = question_source
         node = self.nodes[node_id]
         node.attempts.append(attempt)
         # A new answer WITHDRAWS a prior `continue` (M8, §3.6). "I chose to move
@@ -449,20 +494,54 @@ class LearningGraph:
     # --- learner intents over gaps (M8) ---
 
     def continue_past(self, node_id: str) -> bool:
-        """Record that the learner chose to move on with gaps still open.
+        """Record that the learner chose to move on without reaching the objective.
 
-        Returns whether anything was recorded. **Only fires when the node
-        actually has open blocking gaps** — otherwise there is nothing to
-        continue past, and stamping every ordinary advance with an override
-        would make the record meaningless and settle stops nobody decided about.
+        Returns whether anything was recorded.
 
-        This is what makes journey completion reachable (§18.16.3): walking to
-        the end settles every stop by construction, because leaving unfinished
-        work behind is an explicit button press. A refresh does not advance, so a
-        refresh records nothing.
+        THE CONDITION IS "UNMET OBJECTIVE, AND THEY TRIED", not "open blocking
+        gaps". The gap test was correct when gaps were the only representation of
+        unfinished work; they are not, and the gap where they are not is the
+        common case rather than the edge:
+
+          - an `off-topic` answer opens NO gaps at all, by explicit policy
+            (`Gap.create` refuses `no_attempt`, and `_record_gaps` returns early)
+          - a `confused` or `partial` answer whose Grader named no FALSE
+            STATEMENT opens none either — an omission is not a gap
+
+        In every one of those cases the learner answered, fell short, pressed
+        "Move on anyway", and this recorded nothing. The node then had no
+        settling override, so `is_settled` stayed False and `is_complete()` was
+        permanently unreachable for the whole session — silently, with the stop
+        rendering as though it had never been opened.
+
+        **The attempt clause is what keeps the record meaningful.** Stamping every
+        advance would settle stops nobody decided about, which is what the gap
+        test was really protecting; presence is not a decision, so a refresh, a
+        scroll-past and a plain walk-through still record nothing. An ANSWER plus
+        a button press is a decision, and that is exactly what this now requires.
+
+        Assessments only. A verification answer is evidence about one gap rather
+        than an attempt at the objective, and it cannot occur without a prior
+        assessment anyway — reading it through `history.assessments` keeps this
+        function agreeing with `understanding.classify` about what "they tried"
+        means instead of quietly using a second definition.
+
+        STRICTLY WIDER BY CONSTRUCTION. The old gap test is kept as a second
+        trigger rather than replaced, so nothing that fired before can stop
+        firing. In production it is redundant — a gap is minted only by grading,
+        which records an assessment in the same request — but "redundant" is an
+        argument about reachability, and keeping the clause makes the guarantee a
+        property of the code instead. It costs one condition and it is the reason
+        every stranding test above continues to mean what it meant.
+
+        Never touches understanding: `user_override` is the disposition channel
+        and `understanding_state` is the evidence channel (understanding.py's two
+        dimensions). Moving on records a DECISION, and a decision is not evidence.
         """
         node = self.nodes[node_id]
-        if not has_open_blocking_gaps(node):
+        if understanding_of(node) == "understood":
+            return False
+        if not history.assessments(node.attempts) and not has_open_blocking_gaps(node):
             return False
         node.user_override = "continue"
         return True
@@ -532,27 +611,47 @@ class LearningGraph:
         return bool(walk) and all(is_settled(n) for n in walk)
 
     def override(self, node_id: str, action: str) -> None:
-        # User-driven graph edit ("mark understood" / "mark weak" / "skip").
-        # We record the override and reflect it in understanding_state so the
-        # rest of the system doesn't need a special code path for overrides.
+        """A user-driven graph edit: "mark understood" / "mark weak" / "skip".
+
+        **`mark_understood` NEVER writes `understanding_state`.** That is the M0
+        invariant, and it is the whole of what changed here: an assertion is not a
+        demonstration, so it is recorded in the DISPOSITION channel
+        (`user_override`, read as `understanding.ASSERTED`) and nowhere else.
+
+        §18.16.2 half-closed this door already, and the half it left open was the
+        consequential one. `mark_understood` was routed to `waive_remaining` on a
+        gap-bearing node — but on a GAP-FREE node it still wrote `understood`
+        straight into the evidence channel. On an *unassessed* node that was
+        harmless, because `classify` returns `insufficient` with no evidence
+        whatever the stored state says. On an *assessed* one it was not. Measured
+        on a node whose only answer was graded `confused`:
+
+            before:  classify=unresolved  demonstrated=False  goal_readiness=0.0
+            after :  classify=strength    demonstrated=True   goal_readiness=1.0
+
+        A failed node became a STRENGTH — not even `recovered` — and moved the
+        product's centrepiece measure to 100%, on a button press. Goal readiness
+        is defined as evidence-weighted mastery; this was the one door through
+        which a decision entered it as evidence.
+
+        `mark_weak` still writes `failed`, and that is not the same thing wearing
+        a different hat. It is the learner AGREEING with a shortfall — it can only
+        ever lower the claim being made about them, never raise it — which is why
+        `disposition_of` leaves it `active` rather than treating it as settled.
+
+        Settlement for `mark_understood` now comes from `SETTLING_OVERRIDES`
+        rather than from the state write, so completion and resume behave exactly
+        as they did.
+        """
         node = self.nodes[node_id]
-        # MIGRATION (§18.16.2): `mark_understood` predates the gap model and sets
-        # `understanding_state` directly, which would let a learner claim mastery
-        # over unverified gaps by a different door. On a gap-bearing node it is
-        # therefore READ AS `waive_remaining` — the honest version of the same
-        # intent, since the learner is saying "stop asking me", not "I have
-        # demonstrated this".
-        #
-        # On a node with no gap records it keeps working exactly as it always has:
-        # vacuously nothing is bypassed. That is the whole compatibility rule, and
-        # it is why every session written before this phase is unaffected.
+        # On a gap-bearing node the honest name for the intent is "stop asking me"
+        # — so it is recorded as `waive_remaining`, which also settles the gaps
+        # themselves rather than leaving them open behind an assertion.
         if action == "mark_understood" and node.gaps:
             self.waive_remaining(node_id)
             return
         node.user_override = action
-        if action == "mark_understood":
-            node.understanding_state = "understood"
-        elif action == "mark_weak":
+        if action == "mark_weak":
             node.understanding_state = "failed"
             node.weak_spot = True
         elif action == "skip":
@@ -793,6 +892,19 @@ class LearningGraph:
                     # recovered unit as a current weakness forever (M3a.1).
                     "understanding": understanding_model.classify(n),
                     "disposition": understanding_model.disposition_of(n),
+                    # DID THEY TRY? A third fact, and it is not derivable from
+                    # the other two: `insufficient` covers both "never opened"
+                    # and "answered, and the answer told us nothing", and those
+                    # are the two stops a learner most needs to tell apart.
+                    #
+                    # Server-owned rather than counted from `attempts` in the
+                    # client, because "which attempts count" is a rule this
+                    # codebase already owns — assessments only, since a
+                    # verification answer is evidence about a gap rather than an
+                    # attempt at the objective. A second definition in the rail
+                    # is exactly how `weak_spot` came to caption recovered units
+                    # as weaknesses.
+                    "attempted": bool(history.assessments(n.attempts)),
                     # "planned" | "system_remediation" | "learner_request",
                     # resolved through the structural fallback for graphs
                     # written before the key existed.
