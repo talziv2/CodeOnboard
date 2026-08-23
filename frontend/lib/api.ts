@@ -26,16 +26,21 @@ async function fail(res: Response): Promise<never> {
 async function send(path: string, init?: RequestInit): Promise<Response> {
   try {
     return await fetch(`${BASE}${path}`, init);
-  } catch {
+  } catch (e: unknown) {
+    // An abort is the CALLER'S decision, not a failure to reach the server, and
+    // collapsing the two would make "I changed my mind" render as "the backend
+    // is down". Rethrown as-is so callers can recognise it by name.
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
     throw new Error("server_unreachable");
   }
 }
 
-async function post<T>(path: string, body?: unknown): Promise<T> {
+async function post<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const res = await send(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal,
   });
   if (!res.ok) await fail(res);
   return res.json();
@@ -105,13 +110,19 @@ export const sessionStart = (
   goal: Record<string, string>,
   force_new = false,
   progress_id?: string,
+  /**
+   * Abandon the wait. The run itself is NOT cancelled — the backend keeps
+   * cloning and planning, and the session it writes is simply never navigated
+   * to. That is the honest shape of it: the only thing a client can withdraw
+   * here is its own interest in the answer.
+   */
+  signal?: AbortSignal,
 ) =>
-  post<SessionStartResponse>("/session/start", {
-    repo_url,
-    goal,
-    force_new,
-    progress_id,
-  });
+  post<SessionStartResponse>(
+    "/session/start",
+    { repo_url, goal, force_new, progress_id },
+    signal,
+  );
 
 /** Live progress of an in-flight /session/start, polled with the same
  *  `progress_id` that request was sent with.
@@ -163,6 +174,21 @@ export interface Attempt {
    */
   kind?: string;
   /**
+   * THE QUESTION THIS ANSWERED, and which mechanism asked it.
+   *
+   * Optional, and absent means UNRECORDED rather than "there was no question":
+   * every attempt written before M1 has neither. A surface must therefore fall
+   * back to showing nothing, never to showing the node's CURRENT prompt — after
+   * a re-teach that is a different question from the one the learner answered,
+   * and captioning an old answer with it would be a confident lie.
+   *
+   * `question_source` is "lesson" | "reteach" | "verification" | "reassessment".
+   * Three of the four produce an assessment, so this is a separate axis from
+   * `kind`, not a restatement of it.
+   */
+  question?: string;
+  question_source?: string;
+  /**
    * What the system DID about this answer.
    *
    * Already on the wire — `to_dict` ships `n.attempts` as recorded, and
@@ -175,6 +201,19 @@ export interface Attempt {
     action?: string;
     retaught?: boolean;
     text?: string;
+    /**
+     * The gap ids this response was written to correct.
+     *
+     * Already on the wire — `record_response` has written it since M2 of the gap
+     * model — and undeclared until now. Joined against `node.gaps` it is what
+     * lets a rewritten lesson say WHICH misconception it answers, rather than
+     * only that something changed. No new field, no new model call: the two
+     * halves were simply never put together.
+     */
+    gaps_addressed?: string[];
+    gaps_opened?: string[];
+    /** On a VERIFICATION attempt: the gaps this answer actually closed. */
+    gaps_resolved?: string[];
     superseded_lesson?: {
       setup?: string | null;
       walkthrough?: string | null;
@@ -339,6 +378,15 @@ export interface UnderstandingProfile {
 export interface EvidenceStep {
   index: number;
   kind: string;
+  /**
+   * What was asked, and by which mechanism. `null` where unrecorded (pre-M1).
+   *
+   * The link the chain was missing: the drawer exists to make a state traceable,
+   * and an answer with no question above it leaves the reader guessing which of
+   * up to three different questions on this node produced the verdict.
+   */
+  question: string | null;
+  question_source: string | null;
   answer: string;
   classification: Classification;
   rationale: string;
@@ -428,6 +476,19 @@ export interface GraphNode {
    */
   understanding?: UnderstandingClass;
   disposition?: Disposition;
+  /**
+   * Has the learner answered this stop's own question at least once?
+   *
+   * The third fact, and not derivable from the two above: `insufficient` covers
+   * both "never opened" and "answered, and the answer told us nothing" — an
+   * `off-topic` answer is deliberately excluded from evidence — and those are the
+   * two stops a learner most needs to tell apart. Assessments only, decided
+   * server-side, so no surface counts `attempts` with a rule of its own.
+   *
+   * Optional: absent on a graph served by a build older than this field.
+   * `standingOf` reads that as "not attempted", which is the pre-M0 rendering.
+   */
+  attempted?: boolean;
   understanding_state: UnderstandingState;
   visited: boolean;
   /** Sticky: true once the learner ever failed here. HISTORY, not current
@@ -608,9 +669,50 @@ export interface LessonBody {
   ownership?: string;
 }
 
+/**
+ * What "Ask me again" would do here — computed by the backend, never by us.
+ *
+ * The panel used to reconstruct this from four partial flags (`canAnswerAgain`,
+ * `checkAvailable`, `canRequestWarmUp`, `warmUpDeclined`), each derived from a
+ * different slice of the grading reply, and every one of this pass's defects was
+ * a seam between them. The facts they were approximating — gaps, budgets,
+ * remediation rounds, which questions have been answered — all live on the
+ * server, so the decision does too. See `backend/learning/retry.py`.
+ */
+export interface RetryOffer {
+  available: boolean;
+  /**
+   * "verify"    a fresh question about one named misconception
+   * "reassess"  a fresh question about the objective
+   * "answer"    the unit's own prompt, never yet answered — the FIRST attempt,
+   *             not a retry, and offered only while its reveal has never shown
+   * null        nothing on offer; `reason` says why
+   */
+  mechanism: "verify" | "reassess" | "answer" | null;
+  /** "objective_met" | "budget_spent" | "already_asked" | "not_applicable" | "" */
+  reason: string;
+  gap_id: string | null;
+  reassessments_left: number;
+}
+
+/**
+ * A question the stop is waiting on, shipped WITHOUT its answer.
+ *
+ * One shape for both mechanisms, because the client's job is identical either
+ * way — show this, post the answer back with this `kind`. Two fields would mean
+ * two places to look for one question, and eventually only one of them checked.
+ */
+export interface PendingQuestion {
+  kind: "verification" | "reassessment";
+  question: string;
+}
+
 export interface Lesson {
   node_id: string;
   lesson: LessonBody;
+  /** Absent from a backend older than M2. */
+  retry?: RetryOffer;
+  pending?: PendingQuestion | null;
 }
 
 export const getLesson = (session_id: string) =>
@@ -652,6 +754,8 @@ export interface RespondResult {
   kind?: string;
   resolved?: string[];
   unresolved?: string[];
+  /** What to offer next, recomputed after this answer. Absent pre-M2. */
+  retry?: RetryOffer;
 }
 
 export const respond = (session_id: string, answer: string, node_id?: string) =>
@@ -681,6 +785,35 @@ export const requestVerification = (
   node_id?: string,
   gap_id?: string,
 ) => post<VerificationPrompt>(`/session/${session_id}/verify`, { node_id, gap_id });
+
+/**
+ * Ask for a fresh question about the OBJECTIVE, after a shortfall.
+ *
+ * The sibling of `requestVerification`, one level up, and the route for the
+ * shortfall that named no gap — which is most of them. Ships no answer, and is
+ * charged on issue.
+ */
+export const requestReassessment = (session_id: string, node_id?: string) =>
+  post<{ node_id: string; question: string; retry: RetryOffer }>(
+    `/session/${session_id}/reassess`,
+    { node_id },
+  );
+
+/**
+ * Answer a re-assessment. Graded as an ORDINARY ASSESSMENT of the objective —
+ * same standard, same effect on state — which is the whole point: a second
+ * question about the objective is not a special kind of evidence.
+ */
+export const respondToReassessment = (
+  session_id: string,
+  answer: string,
+  node_id?: string,
+) =>
+  post<RespondResult>(`/session/${session_id}/respond`, {
+    response: answer,
+    node_id,
+    kind: "reassessment",
+  });
 
 /** Answer a verification question. Graded against the gaps, not the objective. */
 export const respondToVerification = (

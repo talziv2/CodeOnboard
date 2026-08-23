@@ -81,6 +81,30 @@ describe("what the menu holds", () => {
   });
 });
 
+describe("starting over", () => {
+  test("fires the restart and gets out of the way", async () => {
+    // The wait is reported on its own full-screen surface now. A popup left
+    // standing behind it would show a stale, disabled `Starting over…` under the
+    // screen that replaced it — which is the state this whole fix is about.
+    await open();
+
+    await userEvent.click(screen.getByRole("button", { name: t.session.startOver }));
+
+    expect(p.onStartOver).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(t.session.startOver)).toBeNull();
+  });
+
+  test("a restart already in flight cannot be fired twice", async () => {
+    await open({ restarting: true });
+
+    const item = screen.getByRole("button", { name: t.session.startingOver });
+    expect(item.hasAttribute("disabled")).toBe(true);
+
+    await userEvent.click(item);
+    expect(p.onStartOver).not.toHaveBeenCalled();
+  });
+});
+
 describe("finishing the session", () => {
   test("asks first, and says what survives", async () => {
     await open();

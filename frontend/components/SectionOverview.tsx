@@ -133,6 +133,8 @@ export default function SectionOverview({
                 >
                   <StatePin
                     understanding={node.understanding}
+                    disposition={node.disposition}
+                    attempted={node.attempted}
                     isCurrent={isCurrent}
                     role="list"
                     className="mt-[calc(4rem/16)]"

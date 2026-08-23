@@ -161,7 +161,18 @@ export default function SessionMenu({
                 {t.tour.replay}
               </MenuItem>
             )}
-            <MenuItem onClick={onStartOver} disabled={restarting}>
+            {/* Closes the menu, because the wait is no longer reported here. A
+                restart re-runs the whole pipeline; that now happens on its own
+                full-screen surface with the real stages on it, and leaving this
+                popup open behind it would put a stale, disabled copy of the
+                label under the screen that replaced it. */}
+            <MenuItem
+              onClick={() => {
+                onStartOver();
+                setOpen(false);
+              }}
+              disabled={restarting}
+            >
               {restarting ? t.session.startingOver : t.session.startOver}
             </MenuItem>
           </div>

@@ -121,6 +121,8 @@ export default function StopCard({
           <span className="flex flex-wrap items-center gap-2">
             <StatePin
               understanding={node.understanding}
+              disposition={node.disposition}
+              attempted={node.attempted}
               isCurrent={isCurrent}
               role="list"
             />

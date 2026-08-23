@@ -41,6 +41,43 @@ vi.mock("@/lib/api", async (importOriginal) => ({
   ...api,
 }));
 
+/**
+ * The server's retry offer, which M2 made the single source of "what now".
+ *
+ * `answer` while the unit's own prompt is still live — before any graded answer,
+ * which is the only time it may be answered — and `verify`/`reassess` afterwards.
+ * Supplied on the fixtures because the panel no longer derives any of this: the
+ * budgets and the answered-question history it depends on are server-side.
+ */
+const LIVE_PROMPT = {
+  available: true,
+  mechanism: "answer" as const,
+  reason: "",
+  gap_id: null,
+  reassessments_left: 2,
+};
+const CAN_VERIFY = {
+  available: true,
+  mechanism: "verify" as const,
+  reason: "",
+  gap_id: "g1",
+  reassessments_left: 2,
+};
+const CAN_REASSESS = {
+  available: true,
+  mechanism: "reassess" as const,
+  reason: "",
+  gap_id: null,
+  reassessments_left: 2,
+};
+const NOTHING_LEFT = {
+  available: false,
+  mechanism: null,
+  reason: "objective_met",
+  gap_id: null,
+  reassessments_left: 2,
+};
+
 const LESSON: Lesson = {
   node_id: "n1",
   lesson: {
@@ -51,6 +88,7 @@ const LESSON: Lesson = {
     reveal: "The explanation, withheld until an answer exists.",
     takeaway: "The takeaway.",
   },
+  retry: LIVE_PROMPT,
 };
 
 const GAP = { id: "g1", kind: "wrong_model", claim: "A connected graph cannot fail.", blocking: true };
@@ -63,6 +101,7 @@ const CONFUSED: RespondResult = {
   adaptation: { kind: "hint", text: "Look at what h() returns." },
   current_node_id: "n1",
   gaps: [GAP],
+  retry: CAN_VERIFY,
 };
 
 const PROMPT: VerificationPrompt = {
@@ -219,7 +258,7 @@ describe("VERIFY and RESOLVED", () => {
     await renderNext();
     await user.type(textareas()[0], "A wrong answer.");
     await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
-    await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
+    await user.click(await screen.findByRole("button", { name: t.lesson.askAgain }));
     await screen.findByText(PROMPT.question);
 
     expect(textareas()).toHaveLength(1);
@@ -258,7 +297,7 @@ describe("VERIFY and RESOLVED", () => {
     await screen.findByText(LESSON.lesson.prompt);
     await user.type(textareas()[0], "A wrong answer.");
     await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
-    await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
+    await user.click(await screen.findByRole("button", { name: t.lesson.askAgain }));
     await screen.findByText(PROMPT.question);
 
     const second = node("n2", { title: "A different stop", objective: "Something else." });
@@ -277,7 +316,7 @@ describe("VERIFY and RESOLVED", () => {
     await renderNext();
     await user.type(textareas()[0], "A wrong answer.");
     await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
-    await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
+    await user.click(await screen.findByRole("button", { name: t.lesson.askAgain }));
     await screen.findByText(PROMPT.question);
 
     await user.type(textareas()[0], "An answer to the check.");
@@ -298,7 +337,7 @@ describe("VERIFY and RESOLVED", () => {
     await renderNext();
     await user.type(textareas()[0], "A wrong answer.");
     await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
-    await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
+    await user.click(await screen.findByRole("button", { name: t.lesson.askAgain }));
     await screen.findByText(PROMPT.question);
     await user.type(textareas()[0], "The right answer.");
     await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
@@ -371,12 +410,13 @@ describe("the feedback card, on the next path", () => {
     expect(screen.getByText(CONFUSED.rationale!)).toBeTruthy();
   });
 
-  test("the primary is a check, not Try again, while a gap is open", async () => {
+  test("the primary is the retry, and the spent prompt is not re-offered", async () => {
     await answerOnce();
 
-    // §18.7: re-asking the question whose answer the reveal gave away proves only
-    // that the page was read.
-    expect(primaries()[0].textContent).toBe(t.lesson.verifyCta);
+    // §18.7, generalised by M2: the unit's prompt is answerable exactly once,
+    // before its reveal has been shown. Whatever comes next is a question that
+    // ships no answer, and there is exactly one button for it.
+    expect(primaries()[0].textContent).toBe(t.lesson.askAgain);
     expect(screen.queryByRole("button", { name: t.lesson.tryAgain })).toBeNull();
   });
 
@@ -433,7 +473,7 @@ describe("the feedback card, on the next path", () => {
     await user.type(textareas()[0], "A wrong answer.");
     await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
     await screen.findByText(CONFUSED.rationale!);
-    await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
+    await user.click(await screen.findByRole("button", { name: t.lesson.askAgain }));
     await screen.findByText(PROMPT.question);
     await user.type(textareas()[0], "The gap, addressed.");
     await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
@@ -457,7 +497,7 @@ describe("the feedback card, on the next path", () => {
     await user.type(textareas()[0], "A wrong answer.");
     await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
     await screen.findByText(CONFUSED.rationale!);
-    await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
+    await user.click(await screen.findByRole("button", { name: t.lesson.askAgain }));
     await screen.findByText(PROMPT.question);
     await user.type(textareas()[0], "The gap, addressed.");
     await user.click(screen.getAllByRole("button", { name: t.lesson.submit })[0]);
@@ -514,6 +554,10 @@ describe("the feedback card, on the next path", () => {
       rationale: "Exactly right.",
       gaps: [],
       adaptation: undefined,
+      // The server reports the objective met — which is what decides this row,
+      // rather than the classification, since `understanding_of` can withhold
+      // `understood` while a blocking gap is unverified.
+      retry: NOTHING_LEFT,
     });
     await renderNext();
     await user.type(textareas()[0], "The right answer.");

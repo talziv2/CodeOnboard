@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest";
 import { node, prereq, seq } from "@/test/factories";
-import { buildRoute, isStation, spineLength } from "@/lib/graph-layout";
+import {
+  buildRoute,
+  isStation,
+  remedialUnlockFor,
+  spineLength,
+} from "@/lib/graph-layout";
 
 const titles = (stops: ReturnType<typeof buildRoute>) => stops.map((s) => s.node.id);
 
@@ -95,5 +100,58 @@ describe("position", () => {
     const byId = Object.fromEntries(stops.map((s) => [s.node.id, s.position]));
 
     expect(byId).toEqual({ a: 1, w: 2, b: 2 });
+  });
+});
+
+// ── remedialUnlockFor ────────────────────────────────────────────────────────
+
+describe("telling a warm-up from a planned dependency", () => {
+  /**
+   * Found in a manual run, on a healthy 16-stop aima-python graph: recovering on
+   * stop 2 announced "The warm-up worked — you got this one after studying
+   * 'Identify the public entry points and return type' first". No warm-up
+   * existed. That was simply stop 1.
+   *
+   * The objective-first planner emits a `prerequisite` edge for every
+   * `depends_on`, so that graph had 29 of them and zero warm-ups. Matching "any
+   * prerequisite edge" therefore invented a causal story about how the learner
+   * recovered — on essentially every recovery, in every objective-first graph.
+   */
+  const planned = (id: string) => node(id, { origin: "planned" as const });
+  const warmUp = (id: string) => node(id, { origin: "system_remediation" as const });
+
+  test("a planned dependency is NOT a warm-up", () => {
+    const nodes = [planned("a"), planned("b")];
+    expect(remedialUnlockFor(nodes, [prereq("a", "b")], "b")).toBeNull();
+  });
+
+  test("a spliced warm-up is", () => {
+    const nodes = [warmUp("w"), planned("b")];
+    expect(remedialUnlockFor(nodes, [prereq("w", "b")], "b")?.id).toBe("w");
+  });
+
+  test("a learner-requested warm-up counts too", () => {
+    // "I chose to step back" and "the system sent me back" are different facts
+    // about the journey and the same fact about this claim: a warm-up ran.
+    const nodes = [node("w", { origin: "learner_request" as const }), planned("b")];
+    expect(remedialUnlockFor(nodes, [prereq("w", "b")], "b")?.id).toBe("w");
+  });
+
+  test("finds the warm-up even when a planned dependency is also present", () => {
+    const nodes = [planned("a"), warmUp("w"), planned("b")];
+    const edges = [prereq("a", "b"), prereq("w", "b")];
+    expect(remedialUnlockFor(nodes, edges, "b")?.id).toBe("w");
+  });
+
+  test("an unknown origin makes no claim", () => {
+    // The flourish this powers is optional; declining to make it beats making a
+    // false one. Same direction as every other unknown in this codebase.
+    const nodes = [node("a"), node("b")];
+    expect(remedialUnlockFor(nodes, [prereq("a", "b")], "b")).toBeNull();
+  });
+
+  test("edges pointing elsewhere are ignored", () => {
+    const nodes = [warmUp("w"), planned("b"), planned("c")];
+    expect(remedialUnlockFor(nodes, [prereq("w", "b")], "c")).toBeNull();
   });
 });

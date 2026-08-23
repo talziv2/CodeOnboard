@@ -11,6 +11,7 @@ import LessonPanel from "@/components/LessonPanel";
 import CodeViewer from "@/components/CodeViewer";
 import SessionHeader from "@/components/SessionHeader";
 import SessionTour from "@/components/tour/SessionTour";
+import RestartingOverlay from "@/components/RestartingOverlay";
 import SurfaceTabs from "@/components/lesson/SurfaceTabs";
 import { getSession, jump, sessionStart, setScope } from "@/lib/api";
 import type { GraphNode, SessionGraph } from "@/lib/api";
@@ -144,10 +145,30 @@ export default function SessionPage() {
   // below — because the point of the dot is "you have not seen this", and looking
   // at it is what makes that false.
   const [unseen, setUnseen] = useState<SessionTab[]>([]);
+  // Rewritten material the learner has not read. Durable, panel-owned — see
+  // `onMaterialUnread` below and `lib/materialSeen.ts`.
+  const [materialUnread, setMaterialUnread] = useState(false);
   // Which unit's evidence chain is open, if any. Null = closed.
   const [evidenceNodeId, setEvidenceNodeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // ── starting over (the menu item that looked dead) ───────────────────────────
+  //
+  // A restart re-runs the entire pipeline, so it is the landing page's two-to-four
+  // minute wait happening on top of a session the learner is already reading. It
+  // used to report that with nothing but a disabled menu item, and to report
+  // FAILURE with nothing at all.
+  //
+  // Three pieces of state rather than one flag, because the wait has three facts
+  // in it: that it is running, which run to poll for progress, and how it ended.
+  // `restartRunId` is invented per attempt, so a retry never shows the previous
+  // attempt's stages.
   const [restarting, setRestarting] = useState(false);
+  const [restartRunId, setRestartRunId] = useState("");
+  const [restartError, setRestartError] = useState<string | null>(null);
+  // Held so dismissing the wait can drop the request rather than leave a fetch
+  // resolving into a page that has moved on. The RUN is not cancelled — see
+  // `sessionStart`'s note — only our interest in its answer.
+  const restartAbort = useRef<AbortController | null>(null);
   // Owned here, not in LessonPanel, because two things end the journey now: the
   // walk running out, and `Finish session` in the header menu.
   const [finished, setFinished] = useState(false);
@@ -193,6 +214,59 @@ export default function SessionPage() {
       setScoping(false);
     }
   };
+
+  /**
+   * Build a fresh session on the same repository and the same answers.
+   *
+   * Sent with a `progress_id` — the whole point of the fix. Without one the
+   * backend's run reports nothing and there is nothing for the overlay to show,
+   * which is how this ended up as a three-minute blank in the first place.
+   *
+   * The failure path SETS something. It used to be a bare `setRestarting(false)`,
+   * which put the menu back to "Start over" and told the learner nothing about
+   * why they were still in the old session.
+   */
+  const startOver = useCallback(async () => {
+    if (!graph) return;
+    const runId = crypto.randomUUID();
+    const controller = new AbortController();
+    restartAbort.current = controller;
+    setRestartRunId(runId);
+    setRestartError(null);
+    setRestarting(true);
+    try {
+      const { session_id } = await sessionStart(
+        graph.repo_url, graph.goal, true, runId, controller.signal
+      );
+      // The overlay stays up across the push and is cleared by arrival — see the
+      // effect below. Clearing it here would flash the old session in between.
+      router.push(`/session/${session_id}`);
+    } catch (e: unknown) {
+      // Dismissed rather than failed: the learner already has the session they
+      // asked to keep, and an error card about a wait they abandoned would be
+      // reporting their own decision back to them as a problem.
+      if (controller.signal.aborted) return;
+      setRestartError(
+        e instanceof Error ? errorText(e.message) : t.home.pipelineFailed
+      );
+    }
+  }, [graph, router]);
+
+  /**
+   * Arriving anywhere ends the restart, whether it is the new session or not.
+   *
+   * `restarting` had no reset at all: `router.push` moves to a different `id` on
+   * the same route, so React keeps this component mounted and the flag survived
+   * the navigation — a SUCCESSFUL restart could land on its new session with the
+   * menu item still greyed out and reading "Starting over…". Keyed on `id` so the
+   * state cannot outlive the session it described.
+   */
+  useEffect(() => {
+    setRestarting(false);
+    setRestartRunId("");
+    setRestartError(null);
+    restartAbort.current = null;
+  }, [id]);
 
   const loadGraph = useCallback(async () => {
     try {
@@ -419,15 +493,7 @@ export default function SessionPage() {
         onBriefing={() => router.push(`/session/${id}/welcome`)}
         onReplayTour={() => setTourReplay((n) => n + 1)}
         restarting={restarting}
-        onStartOver={async () => {
-          setRestarting(true);
-          try {
-            const { session_id } = await sessionStart(graph.repo_url, graph.goal, true);
-            router.push(`/session/${session_id}`);
-          } catch {
-            setRestarting(false);
-          }
-        }}
+        onStartOver={startOver}
         onFinish={() => setFinished(true)}
       />
 
@@ -482,9 +548,15 @@ export default function SessionPage() {
             // from S4 (something landed where you were not looking), and the Map
             // tab additionally carries A1's route mark when the SHAPE of the
             // journey changed. Different claims, so they are not merged.
-            changed={
-              routeChanges.length > 0 && tab !== "map" ? [...unseen, "map" as SessionTab] : unseen
-            }
+            changed={[
+              ...unseen,
+              // Durable, and additive to `unseen` rather than replacing it: the
+              // two answer different questions and a dot is one bit either way.
+              ...(materialUnread && !unseen.includes("lesson")
+                ? ["lesson" as SessionTab]
+                : []),
+              ...(routeChanges.length > 0 && tab !== "map" ? ["map" as SessionTab] : []),
+            ]}
             onPick={(picked) => dispatchTab({ kind: "picked", tab: picked })}
             onSwitchMode={(picked) => dispatchTab({ kind: "switchedMode", mode: picked })}
             /* The right side of the lesson bar, as one group rather than three
@@ -597,6 +669,15 @@ export default function SessionPage() {
                       current.includes(changed) ? current : [...current, changed]
                     );
                   }}
+                  /* THE DURABLE HALF (M3). `unseen` is transient by design — a
+                     verdict landing while you are on another tab is news that
+                     stops being news once seen, and React state is right for it.
+                     Rewritten material is different: it stays unread until the
+                     learner actually looks, across reloads, so the panel owns
+                     that fact (localStorage, keyed by node) and reports it here
+                     rather than the page inferring it from a grading reply it
+                     will forget. */
+                  onMaterialUnread={setMaterialUnread}
                   // The consequence line's `Read it`. A learner click, so R5 is
                   // satisfied by the same reducer everything else goes through.
                   onGoToSurface={(target) => dispatchTab({ kind: "picked", tab: target })}
@@ -733,6 +814,26 @@ export default function SessionPage() {
           </div>
         )}
       </div>
+
+      {/* Over everything, including the tour: the session underneath is being
+          replaced, so it must not be answerable while that happens. Last in the
+          tree and highest in z-order for the same reason. */}
+      {restarting && (
+        <RestartingOverlay
+          repoUrl={graph.repo_url}
+          goal={graph.goal}
+          progressId={restartRunId}
+          error={restartError}
+          onRetry={startOver}
+          onDismiss={() => {
+            restartAbort.current?.abort();
+            restartAbort.current = null;
+            setRestarting(false);
+            setRestartRunId("");
+            setRestartError(null);
+          }}
+        />
+      )}
     </main>
   );
 }

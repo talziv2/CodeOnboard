@@ -58,6 +58,44 @@ function unlockTargetOf(edges: GraphEdge[], nodeId: string): string | null {
   return outgoing(edges, nodeId, "prerequisite");
 }
 
+/**
+ * The REMEDIAL warm-up spliced in before `nodeId`, if there is one.
+ *
+ * ── Why this is not just "a prerequisite edge" ────────────────────────────────
+ *
+ * It was, and that was wrong in a way that only showed up on real curricula. The
+ * objective-first planner emits a `prerequisite` edge for every `depends_on` it
+ * writes — those are PLANNED dependencies between ordinary stops, and a healthy
+ * 16-stop graph has 29 of them and not one warm-up. So "find a prerequisite edge
+ * into this node" matched the stop before it, every time.
+ *
+ * Live consequence, found in a manual run: recovering on stop 2 announced *"The
+ * warm-up worked — you got this one after studying 'Identify the public entry
+ * points and return type' first"*. No warm-up existed; that was simply stop 1.
+ * The system invented a causal story about how the learner recovered, and it
+ * would have done so on essentially every recovery in every objective-first
+ * graph. M2 made it far more visible by making recovery routine — before it,
+ * a gap-free stop had almost no route back to `understood` at all.
+ *
+ * `origin` is the authoritative answer and has been on the wire all along:
+ * `planned` for an ordinary stop, `system_remediation` or `learner_request` for a
+ * warm-up. An ABSENT origin returns null rather than falling back to the
+ * structural guess — the claim this powers is an optional flourish, and declining
+ * to make it is strictly safer than making a false one.
+ */
+export function remedialUnlockFor(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  nodeId: string
+): GraphNode | null {
+  for (const edge of edges) {
+    if (edge.kind !== "prerequisite" || edge.to_id !== nodeId) continue;
+    const source = nodes.find((n) => n.id === edge.from_id);
+    if (source?.origin && source.origin !== "planned") return source;
+  }
+  return null;
+}
+
 function findHead(nodes: GraphNode[], edges: GraphEdge[]): GraphNode | null {
   if (nodes.length === 0) return null;
   const hasIncoming = new Set(edges.map((e) => e.to_id));

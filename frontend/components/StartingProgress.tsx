@@ -41,9 +41,18 @@ interface Props {
    * that has not got one.
    */
   goal?: Record<string, string> | null;
+  /**
+   * Overrides the kicker above the repository name.
+   *
+   * The stages, the tool calls and the elapsed clock are the same work whoever
+   * asked for it, so a restart reuses this screen whole — but it is not the
+   * first read of the repository, and a screen that said so would be wrong
+   * about the one thing the learner already knows.
+   */
+  label?: string;
 }
 
-export default function StartingProgress({ repoUrl, progressId, goal }: Props) {
+export default function StartingProgress({ repoUrl, progressId, goal, label }: Props) {
   const [snapshot, setSnapshot] = useState<PipelineProgress | null>(null);
   const [ticks, setTicks] = useState(0);
   const [hint, setHint] = useState(0);
@@ -131,7 +140,7 @@ export default function StartingProgress({ repoUrl, progressId, goal }: Props) {
     <div className="flex w-full max-w-md flex-col gap-5">
       <div className="flex flex-col gap-1.5">
         <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
-          {t.starting.label}
+          {label ?? t.starting.label}
         </span>
         <h2 className="font-display text-head font-medium tracking-tight text-chalk">
           {repoUrl.replace(/^https?:\/\/github\.com\//, "")}

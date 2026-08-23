@@ -225,6 +225,25 @@ export const t = {
     showSource: "Show source",
     startingOver: "Starting over…",
     startOver: "Start over",
+    // ── the restart's own wait ──────────────────────────────────────────────
+    //
+    // Start over re-runs the entire pipeline, which is the same two-to-four
+    // minutes the landing page warns about. It used to say so nowhere: the menu
+    // item greyed out and the session sat there, which is indistinguishable from
+    // a click that did nothing. These are the words on the screen that replaced
+    // that silence.
+    restartLabel: "Starting over",
+    // Says what survives, because that is the question someone watching a
+    // three-minute wait actually has.
+    restartNote:
+      "Same repository, same answers — the route is planned again from scratch. Your current session stays exactly as it is until the new one is ready.",
+    restartFailed: "Couldn't build the new session.",
+    restartReassurance:
+      "Nothing happened to the session you were in — it is still here, and still where you left it.",
+    restartRetry: "Try again",
+    // Withdraws the WAIT, not the run: the backend finishes either way, and
+    // saying "cancel" would promise a stop we cannot deliver.
+    restartCancel: "Keep the session I have",
     // The session-level actions, behind one control. Named for what they act on
     // rather than what they look like: "⋯" is not a word.
     menu: "Session actions",
@@ -504,6 +523,20 @@ export const t = {
     unresolvedHint: "Named misconceptions still open here",
     setAside: "◦ set aside",
     setAsideHint: "You chose to stop being asked about this",
+    /**
+     * Answered, and the answer said nothing either way.
+     *
+     * Deliberately not "needs work" and not "failed". An off-topic answer is
+     * evidence of neither understanding nor misunderstanding, so the caption
+     * reports what happened — they tried — and makes no claim about what they
+     * know. The alternative is what shipped before M0: a stop the learner
+     * answered reading exactly like one they had never opened.
+     */
+    attempted: "◦ attempted",
+    attemptedHint: "You answered here, but the answer didn't show either way",
+    /** Why a stop is settled without being demonstrated. */
+    movedOnHint: "You chose to move on without demonstrating this",
+    assertedHint: "You marked this as already known — not demonstrated",
     title: "Your route",
     /**
      * The briefing, at the head of the route.
@@ -794,6 +827,11 @@ export const t = {
     // this is what makes the claim good for a learner who arrives later, and it is
     // why it reads from the attempt history rather than from the live result.
     newMaterialLabel: "Rewritten",
+    /** The misconceptions the rewrite was written to correct. */
+    rewriteAnswers: "This version answers",
+    compareEarlier: "The version you read before is under “Earlier explanations”.",
+    /** The primary action while rewritten material is unread. */
+    readWhatChanged: "Read what changed",
     newMaterialBody: "This stop was rewritten after your last answer.",
     // The control on the consequence line. Deliberately not "Go to Lesson": it
     // names what the learner would DO there, and the tab it lands on is visible.
@@ -816,6 +854,34 @@ export const t = {
     yourAnswers: (count: number) => `Your answers (${count})`,
     youWrote: "You wrote",
     feedback: "Feedback",
+    /**
+     * The question an answer was answering.
+     *
+     * Shown above the answer, never beside the node's CURRENT prompt: after a
+     * re-teach those are different questions, and the whole point of recording
+     * this is that an old answer must not be captioned with a question it never
+     * saw.
+     */
+    youWereAsked: "You were asked",
+    /**
+     * A check, in the answer list.
+     *
+     * Shown INSTEAD of a verdict word, because a check has none: it is graded
+     * per gap, and `understanding_of` — not this answer — decides whether the
+     * stop is demonstrated. Labelling it is what let checks stop being hidden.
+     */
+    checkRow: "Check",
+    checkRowCleared: (count: number) =>
+      count === 1 ? "cleared 1" : `cleared ${count}`,
+    checkRowClearedNone: "nothing cleared",
+    /** Which mechanism put the question. Absent for the unit's original prompt —
+     *  that is the unmarked case and a badge saying so would be noise on every
+     *  row. */
+    askedBy: {
+      reteach: "rewritten question",
+      verification: "check question",
+      reassessment: "fresh question",
+    } as Record<string, string>,
     checkUnderstanding: "Check your understanding",
     answerPlaceholder: "Write your answer…",
     grading: "Grading…",
@@ -824,6 +890,31 @@ export const t = {
     submitHint: "⌘↵ to submit",
     loadingShort: "Loading…",
     nextStop: "Next stop →",
+    /**
+     * THE ONE RETRY. Which mechanism serves it — a check on a named
+     * misconception, or a fresh question about the objective — is ours to
+     * decide, and a learner asked to pick between them is being asked to
+     * diagnose themselves before they are allowed another go.
+     */
+    askAgain: "Ask me again",
+    /** Shown where the composer used to be, once the unit's prompt is spent. */
+    promptAnswered:
+      "You've answered this one, and the explanation is on the Lesson tab. To show it again you'll get a different question.",
+    askAgainBusy: "Writing a question…",
+    /** Why there is no retry. Each is something to act on or accept, never a
+     *  malfunction, so each is said rather than the control silently vanishing. */
+    retryReason: {
+      objective_met: "You've shown this one — nothing left to check here.",
+      budget_spent:
+        "You've used both fresh questions on this stop. It stays open — set it aside or move on.",
+      already_asked: "There's a question waiting for you above.",
+      not_applicable: "There's nothing to assess on this stop.",
+    } as Record<string, string>,
+    /** How many fresh objective questions remain. Shown only on the last one —
+     *  a running counter on every verdict would be pressure, not information. */
+    lastAskLeft: "Last fresh question on this stop.",
+    /** The heading over a fresh objective-scoped question. */
+    reassessmentHeading: "A different question, same objective",
     buildWarmUp: "Build me a warm-up",
     startWarmUp: "Start the warm-up →",
     skipItMoveOn: "Skip it, move on",

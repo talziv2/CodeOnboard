@@ -47,6 +47,43 @@ vi.mock("@/lib/api", async (importOriginal) => ({
   ...api,
 }));
 
+/**
+ * The server's retry offer, which M2 made the single source of "what now".
+ *
+ * `answer` while the unit's own prompt is still live — before any graded answer,
+ * which is the only time it may be answered — and `verify`/`reassess` afterwards.
+ * Supplied on the fixtures because the panel no longer derives any of this: the
+ * budgets and the answered-question history it depends on are server-side.
+ */
+const LIVE_PROMPT = {
+  available: true,
+  mechanism: "answer" as const,
+  reason: "",
+  gap_id: null,
+  reassessments_left: 2,
+};
+const CAN_VERIFY = {
+  available: true,
+  mechanism: "verify" as const,
+  reason: "",
+  gap_id: "g1",
+  reassessments_left: 2,
+};
+const CAN_REASSESS = {
+  available: true,
+  mechanism: "reassess" as const,
+  reason: "",
+  gap_id: null,
+  reassessments_left: 2,
+};
+const NOTHING_LEFT = {
+  available: false,
+  mechanism: null,
+  reason: "objective_met",
+  gap_id: null,
+  reassessments_left: 2,
+};
+
 const LESSON: Lesson = {
   node_id: "n1",
   lesson: {
@@ -57,6 +94,7 @@ const LESSON: Lesson = {
     reveal: "The explanation, withheld until an answer exists.",
     takeaway: "The takeaway.",
   },
+  retry: LIVE_PROMPT,
 };
 
 const GAP = { id: "g1", kind: "wrong_model", claim: "A connected graph cannot fail.", blocking: true };
@@ -70,6 +108,7 @@ const RETAUGHT: RespondResult = {
   adaptation: { kind: "reteach", retaught: true },
   current_node_id: "n1",
   gaps: [GAP],
+  retry: CAN_VERIFY,
 };
 
 const PROMPT: VerificationPrompt = {
@@ -224,7 +263,7 @@ describe("R5 · phase transitions never move the tab", () => {
     await screen.findByText(LESSON.lesson.setup!);
     await answerFrom(user, "Understanding");
 
-    await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
+    await user.click(await screen.findByRole("button", { name: t.lesson.askAgain }));
     await screen.findByText(PROMPT.question);
 
     // FEEDBACK → VERIFY.

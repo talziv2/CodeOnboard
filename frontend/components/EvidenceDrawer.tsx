@@ -187,6 +187,24 @@ export default function EvidenceDrawer({
                     )}
                   </span>
 
+                  {/* WHAT WAS ASKED (M1). The drawer's whole job is to make a
+                      state traceable, and up to three different questions can
+                      produce an answer on one node — the unit's prompt, one a
+                      re-teach installed, and a gap check. Without this the chain
+                      it draws skips a link. `null` where unrecorded; never
+                      substituted from the node's current prompt. */}
+                  {step.question && (
+                    <p className="text-meta italic text-graphite">
+                      {step.question_source &&
+                        t.lesson.askedBy[step.question_source] && (
+                          <span className="me-1.5 font-mono text-micro uppercase not-italic tracking-[0.13em] text-signal">
+                            {t.lesson.askedBy[step.question_source]}
+                          </span>
+                        )}
+                      {step.question}
+                    </p>
+                  )}
+
                   <p className="border-s-2 border-rule ps-2.5 text-meta text-paper">
                     {step.answer}
                   </p>
