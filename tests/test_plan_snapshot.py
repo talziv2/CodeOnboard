@@ -423,7 +423,7 @@ def test_the_plan_cascades_when_a_session_is_deleted(db_path):
     graph = _planned_graph()
     create_session(graph, db_path, user_id=TEST_USER_ID)
 
-    delete_session(graph.session_id, db_path)
+    delete_session(graph.session_id, TEST_USER_ID, db_path)
 
     assert _plan_rows(db_path) == ([], [])
 

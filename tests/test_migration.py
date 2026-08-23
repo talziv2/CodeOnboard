@@ -359,7 +359,7 @@ def test_deleting_a_session_removes_its_dossier(db):
     )
     assert dossier_store.load_investigation(graph.session_id, "abc123", db) is not None
 
-    delete_session(graph.session_id, db)
+    delete_session(graph.session_id, TEST_USER_ID, db)
 
     assert dossier_store.load_investigation(graph.session_id, "abc123", db) is None
 
@@ -413,20 +413,42 @@ def test_listing_hides_archived_sessions_by_default(db):
     assert len(list_sessions_for_user(legacy, db, include_archived=True)) == 1
 
 
-def test_listing_reports_progress_as_unknown_until_it_is_cached(db):
+def test_listing_reports_progress_as_unknown_when_it_has_never_been_cached(db):
     """NULL means "not computed", and must not read as zero.
 
-    The dashboard fills these in M4 from `progress.summary()`. A caller that
-    treated the absent value as 0.0 would show every migrated session as 0%
-    ready, which is a claim about the learner rather than about the cache.
+    M4 fills these on every `save_graph`, from `progress.summary()` — so a live
+    session always has them. A session that was MIGRATED and never saved since
+    does not, and that is the case this pins: a caller treating the absent value
+    as 0.0 would show it as 0% ready, which is a claim about the learner rather
+    than about the cache.
     """
     _legacy_db(db, ["https://github.com/psf/requests"])
     migration.migrate(db, apply=True)
+    # The migration assigns ownership; it does not compute progress. The fixture
+    # saved the graph first, so clear the cache to reproduce a genuinely
+    # never-saved-since row.
+    with sqlite3.connect(db) as conn:
+        conn.execute("UPDATE sessions SET readiness_cached = NULL, "
+                     "stops_settled_cached = NULL, stops_total_cached = NULL")
     legacy = identity.get_legacy_user_id(db)
 
     row = list_sessions_for_user(legacy, db)[0]
     assert row["progress"]["goal_readiness"] is None
     assert row["progress"]["stops_total"] is None
+
+
+def test_saving_a_migrated_session_fills_the_cache(db):
+    """And the moment it IS saved, the numbers appear — from `summary()`."""
+    graphs = _legacy_db(db, ["https://github.com/psf/requests"])
+    migration.migrate(db, apply=True)
+    legacy = identity.get_legacy_user_id(db)
+    graph = load_graph(graphs[0].session_id, legacy, db)
+
+    save_graph(graph, db, user_id=legacy)
+
+    row = list_sessions_for_user(legacy, db)[0]
+    assert row["progress"]["goal_readiness"] is not None
+    assert row["progress"]["stops_total"] is not None
 
 
 # ── new sessions, written after the migration ─────────────────────────────────

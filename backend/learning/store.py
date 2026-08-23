@@ -40,6 +40,7 @@
 
 import json
 import sqlite3
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -465,6 +466,36 @@ def create_session(
 
 
 
+def _progress_cache(graph: LearningGraph) -> tuple[float | None, int | None, int | None]:
+    """The three numbers the dashboard shows, computed by the ONE thing that owns them.
+
+    `progress.summary()` is emphatic that there must be exactly one
+    implementation of these definitions — the header and the map once disagreed
+    because the frontend recomputed its own. So this does not recompute
+    anything; it calls `summary()` and keeps the answer, because a dashboard
+    listing forty sessions would otherwise read every node row of all forty to
+    show three numbers per card.
+
+    A CACHE OF A DERIVED VALUE, not a second source of truth. Anything that
+    reads these must treat NULL as "not computed" rather than as zero — a
+    migrated session that has never been saved since has no cache, and calling
+    that 0% would be a claim about the learner rather than about the cache.
+    """
+    try:
+        from backend.learning import progress as progress_model
+
+        summary = progress_model.summary(graph)
+        return (
+            summary.get("goal_readiness"),
+            summary.get("stops_settled"),
+            summary.get("stops_total"),
+        )
+    except Exception:
+        # Progress is a view of the work, never a participant in it: a graph
+        # shape this cannot summarise must still be saveable.
+        return (None, None, None)
+
+
 def _resolve_ownership(
     graph: LearningGraph, db_path: Path, user_id: str | None
 ) -> tuple[str, str | None]:
@@ -522,9 +553,10 @@ def _write_graph(
         INSERT INTO sessions
             (session_id, repo_url, goal_json, current_node_id,
              doc_context_json, areas_json, journey_events_json, briefing_json,
-             arrival_json, schema_version, user_id, repo_id, last_active_at)
+             arrival_json, schema_version, user_id, repo_id, last_active_at,
+             readiness_cached, stops_settled_cached, stops_total_cached)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                strftime('%Y-%m-%dT%H:%M:%S', 'now'))
+                strftime('%Y-%m-%dT%H:%M:%S', 'now'), ?, ?, ?)
         ON CONFLICT(session_id) DO UPDATE SET
             repo_url            = excluded.repo_url,
             goal_json           = excluded.goal_json,
@@ -553,6 +585,9 @@ def _write_graph(
             -- exists to close.
             repo_id             = COALESCE(sessions.repo_id, excluded.repo_id),
             last_active_at      = excluded.last_active_at,
+            readiness_cached     = excluded.readiness_cached,
+            stops_settled_cached = excluded.stops_settled_cached,
+            stops_total_cached   = excluded.stops_total_cached,
             updated_at       = strftime('%Y-%m-%d %H:%M:%f', 'now')
         """,
         (
@@ -568,6 +603,7 @@ def _write_graph(
             SCHEMA_VERSION,
             owner,
             repo_id,
+            *_progress_cache(graph),
         ),
     )
     # Nodes and edges: replace wholesale rather than diff. Sessions are
@@ -972,7 +1008,61 @@ def list_sessions_for_user(
         ]
 
 
-def delete_session(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> None:
+def update_session(
+    session_id: str,
+    user_id: str,
+    db_path: Path = DEFAULT_DB_PATH,
+    *,
+    title: str | None = None,
+    archived: bool | None = None,
+) -> bool:
+    """Rename or archive one of the caller's sessions. False when not theirs.
+
+    Owner-scoped in the UPDATE itself rather than by loading first and checking:
+    a load-then-write leaves a window, and the window is the whole vulnerability.
+    `rowcount == 0` covers "not yours" and "not there" alike, which is what the
+    route turns into one 404.
+
+    ARCHIVING IS NOT DELETING. It sets a timestamp that hides the session from
+    the default listing and nothing else — the graph, the lessons, the answers
+    and the gaps are all still there, and un-archiving is setting the column back
+    to NULL. A learner who tidies their dashboard has not thrown anything away.
+    """
+    sets, params = [], []
+    if title is not None:
+        sets.append("title = ?")
+        params.append(title.strip()[:120] or None)
+    if archived is not None:
+        sets.append("archived_at = ?")
+        params.append(
+            time.strftime("%Y-%m-%dT%H:%M:%S") if archived else None
+        )
+    if not sets:
+        return True
+    params.extend([session_id, user_id])
+    with _connect(db_path) as conn:
+        return conn.execute(
+            f"UPDATE sessions SET {', '.join(sets)} "
+            "WHERE session_id = ? AND user_id = ?",
+            params,
+        ).rowcount > 0
+
+
+def get_session_summary(
+    session_id: str, user_id: str, db_path: Path = DEFAULT_DB_PATH
+) -> dict | None:
+    """One row of what `list_sessions_for_user` returns, for one session."""
+    for row in list_sessions_for_user(user_id, db_path, include_archived=True):
+        if row["session_id"] == session_id:
+            return row
+    return None
+
+
+def delete_session(
+    session_id: str,
+    user_id: str | None = None,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> bool:
     """Remove a session and everything scoped to it.
 
     `nodes`, `edges`, `plan_nodes` and `plan_edges` cascade — they carry a
@@ -987,12 +1077,25 @@ def delete_session(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> None:
     without it.
     """
     if not Path(db_path).exists():
-        return
+        return False
     from backend.repo import dossier_store
 
+    # `user_id=None` is the ADMINISTRATIVE path — migrations and console tools
+    # that legitimately act on a session without a caller. Every route passes a
+    # real owner, and `test_ownership.py` proves a stranger cannot reach this.
     with _connect(db_path) as conn:
-        conn.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
-    dossier_store.delete_investigation(session_id, db_path)
+        if user_id is None:
+            removed = conn.execute(
+                "DELETE FROM sessions WHERE session_id = ?", (session_id,)
+            ).rowcount
+        else:
+            removed = conn.execute(
+                "DELETE FROM sessions WHERE session_id = ? AND user_id = ?",
+                (session_id, user_id),
+            ).rowcount
+    if removed:
+        dossier_store.delete_investigation(session_id, db_path)
+    return removed > 0
 
 
 def _node_row(session_id: str, node: LearningNode) -> tuple:

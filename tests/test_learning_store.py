@@ -169,7 +169,7 @@ def test_list_sessions_filters_by_repo(db_path):
 def test_delete_session_removes_nodes_and_edges(db_path):
     g, _, _ = _make_graph_with_two_nodes()
     save_graph(g, db_path, user_id=TEST_USER_ID)
-    delete_session(g.session_id, db_path)
+    delete_session(g.session_id, TEST_USER_ID, db_path)
     assert load_graph(g.session_id, TEST_USER_ID, db_path) is None
     # And the cascade actually removed nodes/edges, not just the session row.
     rows = list_sessions_for_repo(g.repo_url, db_path)

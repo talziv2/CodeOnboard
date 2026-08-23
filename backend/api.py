@@ -33,7 +33,7 @@ from contextlib import asynccontextmanager
 
 import anthropic
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.routing import Match
@@ -763,6 +763,73 @@ def list_sessions(
     if repo_url:
         summaries = [s for s in summaries if s["repo_url"] == repo_url]
     return {"sessions": summaries}
+
+
+class SessionPatch(BaseModel):
+    """What a learner may change about a session from the dashboard.
+
+    Not the goal, not the repository, not the graph. Renaming and archiving are
+    the two things that are about the CARD rather than about the learning, and
+    everything else on a session is either the learner's own work or the
+    planner's output.
+    """
+    title: str | None = None
+    archived: bool | None = None
+
+
+@app.get("/sessions/{session_id}")
+def session_summary(
+    session_id: str, user: CurrentUser = Depends(current_user)
+) -> dict:
+    """One dashboard row, without loading the graph.
+
+    `GET /session/{id}` returns the whole graph — every node, every attempt —
+    which is what the workspace needs and far more than a card does. This is the
+    cheap read for "did that session finish generating yet".
+    """
+    summary = learning_store.get_session_summary(
+        session_id, user.user_id, SESSIONS_DB_PATH
+    )
+    if summary is None:
+        raise HTTPException(status_code=404, detail="session_not_found")
+    return summary
+
+
+@app.patch("/sessions/{session_id}")
+def session_patch(
+    session_id: str, body: SessionPatch, user: CurrentUser = Depends(current_user)
+) -> dict:
+    """Rename or archive. Owner-scoped in the UPDATE, not by loading first."""
+    changed = learning_store.update_session(
+        session_id, user.user_id, SESSIONS_DB_PATH,
+        title=body.title, archived=body.archived,
+    )
+    if not changed:
+        raise HTTPException(status_code=404, detail="session_not_found")
+    return learning_store.get_session_summary(
+        session_id, user.user_id, SESSIONS_DB_PATH
+    ) or {}
+
+
+@app.delete("/sessions/{session_id}", status_code=204)
+def session_delete(
+    session_id: str, user: CurrentUser = Depends(current_user)
+) -> Response:
+    """Delete a session and everything scoped to it. Irreversible.
+
+    `nodes`, `edges`, `plan_nodes` and `plan_edges` cascade on the foreign key.
+    `investigation` does NOT — it has no FK to `sessions` (`dossier_store.py`) —
+    so `delete_session` removes it explicitly. Without that, every deleted
+    session left a full exploration payload behind, keyed to an id nothing would
+    ever ask for again.
+
+    Archiving is the reversible option and is what the dashboard offers first;
+    this is for a learner who means it.
+    """
+    if not learning_store.delete_session(session_id, user.user_id, SESSIONS_DB_PATH):
+        raise HTTPException(status_code=404, detail="session_not_found")
+    logger.info("session deleted: session=%s by user=%s", session_id, user.user_id)
+    return Response(status_code=204)
 
 
 @app.get("/session/{session_id}")
