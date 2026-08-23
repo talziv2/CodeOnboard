@@ -81,6 +81,16 @@ async function post<T>(path: string, body?: unknown, signal?: AbortSignal): Prom
   return res.json();
 }
 
+async function patch<T>(path: string, body?: unknown): Promise<T> {
+  const res = await send(path, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) await fail(res);
+  return res.json();
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await send(path);
   if (!res.ok) await fail(res);
@@ -884,3 +894,55 @@ export const logout = async (): Promise<void> => {
 };
 
 export const logoutEverywhere = () => post<void>("/auth/logout/all");
+
+
+// --- The session list (multi-user M4/M5) ---
+
+/**
+ * One dashboard card's worth of a session.
+ *
+ * `progress` values are NULLABLE and null means NOT COMPUTED — a session
+ * migrated from before the cache existed and not saved since. Rendering that as
+ * 0% would be a claim about the learner rather than about the cache, so the UI
+ * shows nothing at all for it.
+ */
+export interface SessionSummary {
+  session_id: string;
+  repo_url: string;
+  repo_id: string | null;
+  goal: Record<string, string>;
+  title: string | null;
+  status: string | null;
+  current_node_id: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  last_active_at: string | null;
+  archived_at: string | null;
+  progress: {
+    goal_readiness: number | null;
+    stops_settled: number | null;
+    stops_total: number | null;
+  };
+}
+
+export const listSessions = (includeArchived = false) =>
+  get<{ sessions: SessionSummary[] }>(
+    `/sessions${includeArchived ? "?include_archived=true" : ""}`,
+  );
+
+export const getSessionSummary = (session_id: string) =>
+  get<SessionSummary>(`/sessions/${encodeURIComponent(session_id)}`);
+
+export const renameSession = (session_id: string, title: string) =>
+  patch<SessionSummary>(`/sessions/${encodeURIComponent(session_id)}`, { title });
+
+export const archiveSession = (session_id: string, archived: boolean) =>
+  patch<SessionSummary>(`/sessions/${encodeURIComponent(session_id)}`, { archived });
+
+/** Irreversible. The dashboard confirms before calling this. */
+export const deleteSession = async (session_id: string): Promise<void> => {
+  const res = await send(`/sessions/${encodeURIComponent(session_id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) await fail(res);
+};

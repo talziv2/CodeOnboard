@@ -18,6 +18,38 @@ export const t = {
   // account exists, because "is this person a user here" is not a question an
   // anonymous visitor gets to ask. The backend returns exactly these; they are
   // repeated here as the fallback when it cannot be reached.
+  // ── the dashboard (multi-user M5) ───────────────────────────────────────
+  //
+  // The empty state INVITES rather than apologises: a learner with no sessions
+  // has not lost anything, they simply have not started one yet.
+  dashboard: {
+    title: "My learning sessions",
+    loading: "Loading your sessions…",
+    loadFailed: "Couldn't load your sessions. Try again.",
+    empty: "No sessions yet. Point CodeOnboard at a repository and it will build you a route through it.",
+    noneArchived: "Nothing archived.",
+    startFirst: "Start your first session",
+    startNew: "Start a new session",
+    backToDashboard: "Back to my sessions",
+    continue: "Continue",
+    rename: "Rename",
+    renameLabel: "Session name",
+    save: "Save",
+    cancel: "Cancel",
+    archive: "Archive",
+    unarchive: "Unarchive",
+    archived: "archived",
+    showArchived: "Show archived",
+    hideArchived: "Hide archived",
+    delete: "Delete",
+    // Named as irreversible, because it is. Archiving keeps everything and is
+    // offered first; this is for someone who means it.
+    deleteConfirm: "Delete permanently?",
+    deleteYes: "Delete",
+    ready: (percent: number) => `${percent}% ready`,
+    stops: (settled: number, total: number) => `${settled} of ${total} stops`,
+  },
+
   auth: {
     emailLabel: "Email",
     passwordLabel: "Password",
