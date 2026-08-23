@@ -24,6 +24,12 @@ from fastapi.testclient import TestClient
 import backend.api as api
 from backend.auth import identity, passwords, throttle, tokens
 
+# THIS SUITE OPTS OUT of conftest's signed-in-by-default fixture. It is the one
+# that tests authentication, so a stubbed caller would make every assertion here
+# vacuous — a logout that "works" against a caller the fixture keeps signing back
+# in proves nothing.
+pytestmark = pytest.mark.real_auth
+
 EMAIL = "shira@example.com"
 PASSWORD = "a-long-enough-passphrase"
 

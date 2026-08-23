@@ -17,6 +17,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from tests.conftest import TEST_USER_ID
+
 from backend.agents.mentor import agent as mentor_agent
 from backend.agents.mentor import curriculum
 from backend.learning import store as learning_store
@@ -291,8 +293,8 @@ def test_areas_reach_the_graph_in_order(repo):
 def test_areas_survive_a_round_trip_through_sqlite(tmp_path, repo):
     state = plan(repo)
     db = tmp_path / "s.db"
-    learning_store.save_graph(state.graph, db)
-    loaded = learning_store.load_graph(state.graph.session_id, db)
+    learning_store.save_graph(state.graph, db, user_id=TEST_USER_ID)
+    loaded = learning_store.load_graph(state.graph.session_id, TEST_USER_ID, db)
     assert [a["id"] for a in loaded.areas] == ["a1", "a2"]
     node = next(n for n in loaded.nodes.values() if n.title == "Learn n2")
     assert len(node.lesson_brief["anchors"]) == 3
@@ -302,8 +304,8 @@ def test_a_graph_with_no_areas_still_saves_and_loads(tmp_path, repo):
     # Every session planned before B3 has none.
     state = plan(repo, areas=[])
     db = tmp_path / "s.db"
-    learning_store.save_graph(state.graph, db)
-    assert learning_store.load_graph(state.graph.session_id, db).areas == []
+    learning_store.save_graph(state.graph, db, user_id=TEST_USER_ID)
+    assert learning_store.load_graph(state.graph.session_id, TEST_USER_ID, db).areas == []
 
 
 # ── sizing, without a node count anywhere ─────────────────────────────────────

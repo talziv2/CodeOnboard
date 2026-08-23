@@ -22,6 +22,8 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from tests.conftest import TEST_USER_ID
 from fastapi.testclient import TestClient
 
 import backend.api as api
@@ -377,9 +379,9 @@ def test_remediates_round_trips_through_the_store(tmp_path):
                       "remediates": [gap.id]},
     ))
     graph.set_current(warm_up.id)
-    learning_store.save_graph(graph, db)
+    learning_store.save_graph(graph, db, user_id=TEST_USER_ID)
 
-    reloaded = learning_store.load_graph(graph.session_id, db)
+    reloaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
     assert reloaded.nodes[warm_up.id].lesson_brief["remediates"] == [gap.id]
 
 

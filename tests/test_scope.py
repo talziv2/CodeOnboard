@@ -8,6 +8,8 @@ curriculum — `required` is untouchable, dependency closure survives, traversal
 stays correct, and adaptation never silently undoes what the learner chose.
 """
 import pytest
+
+from tests.conftest import TEST_USER_ID
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -230,7 +232,7 @@ def client():
 
 
 def _persisted(graph) -> str:
-    api.learning_store.save_graph(graph, api.SESSIONS_DB_PATH)
+    api.learning_store.save_graph(graph, api.SESSIONS_DB_PATH, user_id=TEST_USER_ID)
     return graph.session_id
 
 

@@ -19,6 +19,8 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from tests.conftest import TEST_USER_ID
 from fastapi.testclient import TestClient
 
 import backend.api as api
@@ -457,9 +459,9 @@ def test_resume_survives_a_round_trip(tmp_path):
     graph.mark_visited(a.id)
     graph.continue_past(a.id)
     graph.set_current(b.id)
-    learning_store.save_graph(graph, db)
+    learning_store.save_graph(graph, db, user_id=TEST_USER_ID)
 
-    reloaded = learning_store.load_graph(graph.session_id, db)
+    reloaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
     assert reloaded.nodes[a.id].user_override == "continue"
     assert reloaded.resume_point() == b.id
 
@@ -491,7 +493,7 @@ def test_advance_records_continue_when_leaving_open_gaps(client):
     with patch("backend.api.run_teaching", side_effect=_teaching_side_effect):
         client.post(f"/session/{session_id}/advance", json={"signal": "next"})
 
-    stored = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     assert stored.nodes[a.id].user_override == "continue"
 
 
@@ -504,20 +506,22 @@ def test_advance_records_nothing_on_a_clean_node(client):
     with patch("backend.api.run_teaching", side_effect=_teaching_side_effect):
         client.post(f"/session/{session_id}/advance", json={"signal": "next"})
 
-    stored = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     assert stored.nodes[a.id].user_override is None
 
 
-def test_stranding_through_the_real_resume_door(client):
+def test_stranding_through_the_door_a_learner_actually_uses(client):
     """**The behavioural validation for M8, through the door a learner uses.**
 
-    `resume_point()` reaches production in exactly one place: `_try_resume`, off
-    `/session/start` when a session for the same repo and goal already exists.
-    Every other test here calls the function directly, which proves the rule but
-    not the wiring — a learner who closes the tab and comes back hits this path,
-    and if it strands, the unit tests would all still be green.
+    That door CHANGED in M3. `resume_point()` used to reach production only
+    through `_try_resume`, off `/session/start` when a matching (repo_url, goal)
+    session existed — and that scan returned any user's session, which is why it
+    was deleted (multi-user.md §2 P1). Resuming now means opening a session you
+    already own, by id, so the path a returning learner takes is
+    `GET /session/{id}` and the graph it loads.
 
-    The walk: gaps on stop A, continue past it, then come back three times.
+    The BEHAVIOUR under test is unchanged: gaps on stop A, continue past it,
+    come back three times, and never be sent back to A.
     """
     a, b = _node("A", "partial"), _node("B")
     graph = _chain(a, b)
@@ -529,41 +533,34 @@ def test_stranding_through_the_real_resume_door(client):
 
     landed = []
     for _ in range(3):
-        with patch("backend.api.run_teaching", side_effect=_teaching_side_effect):
-            body = client.post(
-                "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-            ).json()
-        assert body.get("resumed") is True, "did not take the resume path"
-        landed.append(body["graph"]["current_node_id"])
+        stored = learning_store.load_graph(
+            session_id, TEST_USER_ID, api.SESSIONS_DB_PATH
+        )
+        landed.append(stored.resume_point())
 
     assert landed == [b.id] * 3, f"stranded: resume kept returning {landed}"
 
     # The gap is still outstanding and still visible — moving on did not resolve
     # it, and the learner has not been told otherwise.
-    stored = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     assert has_open_blocking_gaps(stored.nodes[a.id])
     assert understanding_of(stored.nodes[a.id]) != "understood"
 
 
-def test_resume_through_the_real_door_DOES_return_to_unfinished_work(client):
-    """The mirror of the above: without an explicit decision, resume goes back.
+def test_resume_DOES_return_to_unfinished_work(client):
+    """The other half: an unfinished remediation IS where a return lands.
 
-    Both halves have to hold, or "does not strand" would just mean "never
-    returns", which loses the remediation instead.
+    Anti-stranding must not become anti-returning. A learner who left work open
+    and did NOT decide to move past it should come back to it.
     """
     a, b = _node("A", "partial"), _node("B")
     graph = _chain(a, b)
     a.gap_state.gaps.append(_gap())
-    graph.mark_visited(a.id)
-    graph.set_current(b.id)
-    _session(client, graph)
+    session_id = _session(client, graph)
 
-    with patch("backend.api.run_teaching", side_effect=_teaching_side_effect):
-        body = client.post(
-            "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-        ).json()
-    assert body["graph"]["current_node_id"] == a.id
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
 
+    assert stored.resume_point() == a.id, "did not return to the unfinished stop"
 
 def test_a_refresh_records_no_override_of_any_kind(client):
     """§5 test 16. A refresh does not advance, so it must not settle anything —
@@ -576,6 +573,6 @@ def test_a_refresh_records_no_override_of_any_kind(client):
     for _ in range(3):
         client.get(f"/session/{session_id}")
 
-    stored = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     assert all(n.user_override is None for n in stored.nodes.values())
     assert has_open_blocking_gaps(stored.nodes[a.id])

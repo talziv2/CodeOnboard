@@ -11,6 +11,8 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from tests.conftest import TEST_USER_ID
 from fastapi.testclient import TestClient
 
 import backend.api as api
@@ -222,7 +224,7 @@ def test_every_answer_is_recorded_whatever_the_system_did_about_it(p, t, c, clie
 def test_pruning_ahead_is_reported_when_it_fires(p, t, c, client):
     session_id, node_id = _start(client)
     # Two understood units in one area, with a recommended one still ahead.
-    graph = api.learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    graph = api.learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     order = graph.path_order()
     graph.nodes[order[1]].understanding_state = "understood"
     graph.nodes[order[1]].visited = True
@@ -232,7 +234,7 @@ def test_pruning_ahead_is_reported_when_it_fires(p, t, c, client):
         lesson_brief={"objective": "x", "area_id": "a1", "priority": "recommended"},
     ))
     graph.add_edge(order[1], extra.id, kind="sequence")
-    api.learning_store.save_graph(graph, api.SESSIONS_DB_PATH)
+    api.learning_store.save_graph(graph, api.SESSIONS_DB_PATH, user_id=TEST_USER_ID)
 
     body = _respond(client, session_id, "understood", "none")
 

@@ -33,8 +33,10 @@ from contextlib import asynccontextmanager
 
 import anthropic
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.routing import Match
 from pydantic import BaseModel
 
 from backend.agents.goal import (
@@ -58,6 +60,8 @@ from backend.learning import progress
 from backend.learning import scope
 from backend.learning import store as learning_store
 from backend.learning import understanding
+from backend.auth.deps import CurrentUser, current_user, owned_session
+from backend.auth import tokens
 from backend.auth.routes import router as auth_router
 from backend.auth.startup import run_startup_checks
 from backend.learning.graph import understanding_of
@@ -159,6 +163,80 @@ app.add_middleware(
 
 app.include_router(auth_router)
 
+
+# ── the third layer (multi-user.md §7.2) ─────────────────────────────────────
+#
+# `store.load_graph` makes an unowned read impossible, and `Depends(current_user)`
+# makes the routes ergonomic about it. This catches the case both miss: a route
+# added later that declares NEITHER, whose author did not run the coverage test.
+#
+# It checks what a route DECLARES, not whether a cookie is present. A second
+# cookie check would duplicate the dependency and disagree with it — the
+# dependency resolves the session properly, this one could only guess — so
+# instead it asks a different question: "does this path have an auth dependency
+# at all?" A path that does is left entirely alone. A path that does not, and is
+# not deliberately public, is refused before it runs.
+#
+# An ALLOW-LIST, not a deny-list. A deny-list of protected paths fails open —
+# forget an entry and it is public. This fails closed: a new path is refused
+# until somebody names it here, in a diff a reviewer sees.
+PUBLIC_PATHS: frozenset[str] = frozenset({
+    "/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc", "/health",
+})
+
+_AUTH_DEPENDENCIES = frozenset({"current_user", "optional_user", "owned_session", "owner_id"})
+
+
+def _declares_auth(dependant) -> bool:
+    """Does this route pull in one of the auth dependencies, at any depth?"""
+    if getattr(dependant.call, "__name__", "") in _AUTH_DEPENDENCIES:
+        return True
+    return any(_declares_auth(sub) for sub in dependant.dependencies)
+
+
+def _route_for(scope) -> object | None:
+    """The route this request will actually be dispatched to, or None.
+
+    Uses Starlette's own matcher rather than comparing `request.url.path` to
+    `route.path`. THE BUG THAT MADE THIS NECESSARY: route paths are TEMPLATES —
+    `/session/{session_id}` — so a string comparison against `/session/abc123`
+    never matched, and every templated route was treated as undeclared and
+    refused. The symptom was every session route returning 401 with a correct
+    cookie and a correct dependency.
+    """
+    for route in app.routes:
+        match, _ = route.matches(scope)
+        if match is not Match.NONE:
+            return route
+    return None
+
+
+@app.middleware("http")
+async def _refuse_undeclared_routes(request, call_next):
+    """Refuse any route that neither declares auth nor is deliberately public.
+
+    OPTIONS is exempt: a CORS preflight carries no credential by definition, and
+    401-ing it makes the browser report the real request as an opaque CORS
+    failure — the least informative error in web development.
+
+    An unmatched path falls through to the router, which answers 404. Refusing it
+    here would turn "no such endpoint" into "not authenticated", which is both
+    wrong and confusing.
+    """
+    if request.method == "OPTIONS" or request.url.path.startswith("/auth/"):
+        return await call_next(request)
+
+    route = _route_for(request.scope)
+    if route is None or getattr(route, "path", None) in PUBLIC_PATHS:
+        return await call_next(request)
+
+    dependant = getattr(route, "dependant", None)
+    if dependant is not None and _declares_auth(dependant):
+        return await call_next(request)
+
+    return JSONResponse(status_code=401, content={"detail": "not_authenticated"})
+
+
 # In-memory session store: session_id → GoalSession (goal dialogue only).
 # Learning-graph sessions live in SQLite (learning_store) — different lifecycle:
 # the goal dialogue is ephemeral, the learning graph persists across requests.
@@ -176,13 +254,36 @@ app.include_router(auth_router)
 # free them on.
 sessions: dict[str, GoalSession] = {}
 
+# WHO owns each in-flight interview. A parallel dict rather than a field on
+# `GoalSession`, because that dataclass belongs to the goal agent and must not
+# learn about users (I9). M7 replaces both with a `session_drafts` table; until
+# then this is what stops one learner from driving another's interview simply
+# by holding its id.
+session_owners: dict[str, str] = {}
+
 _MAX_GOAL_SESSIONS = 64
 
 
-def _remember_goal_session(session: GoalSession) -> None:
+def _remember_goal_session(session: GoalSession, owner: str) -> None:
     sessions[session.session_id] = session
+    session_owners[session.session_id] = owner
     while len(sessions) > _MAX_GOAL_SESSIONS:
-        del sessions[next(iter(sessions))]
+        evicted = next(iter(sessions))
+        del sessions[evicted]
+        session_owners.pop(evicted, None)
+
+
+def _owned_goal_session(session_id: str, owner: str) -> GoalSession:
+    """The caller's interview, or 404 — same rule as a learning session.
+
+    404 for "not yours" as well as "not there": a different status would confirm
+    that an id belongs to somebody, which is exactly what the learning-session
+    routes refuse to do.
+    """
+    session = sessions.get(session_id)
+    if session is None or session_owners.get(session_id) != owner:
+        raise HTTPException(status_code=404, detail="session_not_found")
+    return session
 
 
 # Indirection so tests can point persistence at a temp DB.
@@ -245,8 +346,21 @@ class RepoCheckRequest(BaseModel):
     repo_url: str
 
 
+@app.get("/health")
+def health() -> dict:
+    """Liveness. Deliberately public, and deliberately says nothing.
+
+    No version, no database status, no session count — a health endpoint that
+    reports internals is a reconnaissance endpoint. "I am up" is the entire
+    contract, and it is the only thing a load balancer or a restart script needs.
+    """
+    return {"status": "ok"}
+
+
 @app.post("/repo/check")
-def repo_check(body: RepoCheckRequest) -> dict:
+def repo_check(
+    body: RepoCheckRequest, user: CurrentUser = Depends(current_user)
+) -> dict:
     # Catches an unclonable URL before the user answers five questions, rather
     # than surfacing it as a pipeline failure minutes later.
     #
@@ -261,9 +375,11 @@ def repo_check(body: RepoCheckRequest) -> dict:
 
 
 @app.post("/goal/start", response_model=StartResponse)
-def goal_start(body: StartRequest) -> StartResponse:
+def goal_start(
+    body: StartRequest, user: CurrentUser = Depends(current_user)
+) -> StartResponse:
     session = start_session(body.repo_url)
-    _remember_goal_session(session)
+    _remember_goal_session(session, user.user_id)
     first_q = CORE_QUESTIONS[0]
     index, total = question_progress(session)
     return StartResponse(
@@ -275,10 +391,10 @@ def goal_start(body: StartRequest) -> StartResponse:
 
 
 @app.post("/goal/answer", response_model=AnswerResponse)
-def goal_answer(body: AnswerRequest) -> AnswerResponse:
-    session = sessions.get(body.session_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="session_not_found")
+def goal_answer(
+    body: AnswerRequest, user: CurrentUser = Depends(current_user)
+) -> AnswerResponse:
+    session = _owned_goal_session(body.session_id, user.user_id)
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
@@ -305,10 +421,10 @@ def goal_answer(body: AnswerRequest) -> AnswerResponse:
 
 
 @app.post("/goal/back", response_model=BackResponse)
-def goal_back(body: BackRequest) -> BackResponse:
-    session = sessions.get(body.session_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="session_not_found")
+def goal_back(
+    body: BackRequest, user: CurrentUser = Depends(current_user)
+) -> BackResponse:
+    session = _owned_goal_session(body.session_id, user.user_id)
 
     stepped = step_back(session)
     if stepped is None:
@@ -344,7 +460,9 @@ class OnboardResponse(BaseModel):
 
 
 @app.post("/onboard", response_model=OnboardResponse)
-def onboard(body: OnboardRequest) -> OnboardResponse:
+def onboard(
+    body: OnboardRequest, user: CurrentUser = Depends(current_user)
+) -> OnboardResponse:
     client = _new_client()
     state = run_pipeline(body.repo_url, body.goal, client=client)
     return OnboardResponse(
@@ -370,9 +488,12 @@ def onboard(body: OnboardRequest) -> OnboardResponse:
 class SessionStartRequest(BaseModel):
     repo_url: str
     goal: dict
-    # When an identical (repo_url, goal) session already exists, /session/start
-    # resumes it instead of re-running the pipeline. Set force_new to start a
-    # fresh session regardless.
+    # `force_new` is GONE (M3). It existed to override `_try_resume`, which
+    # scanned every session in the database for a matching (repo_url, goal) and
+    # returned someone else's. With that deleted, creation always creates and
+    # there is nothing to force past. Accepted-and-ignored rather than rejected,
+    # so an un-updated client keeps working instead of 422-ing on a field that
+    # no longer means anything.
     force_new: bool = False
     # A client-invented id it can poll GET /session/progress/{id} with while this
     # request is still in flight. Optional: without one the run reports nothing
@@ -464,14 +585,21 @@ def _node_source(graph, node) -> str:
     return _read_node_source(clone_repo(graph.repo_url), node)
 
 
-def _load_session_or_404(session_id: str):
-    graph = learning_store.load_graph(session_id, SESSIONS_DB_PATH)
+def _load_session_or_404(session_id: str, user_id: str):
+    """A session the caller owns, or 404.
+
+    Retained for the handful of places that need a graph part-way through a
+    handler rather than as a dependency. It takes the owner explicitly for the
+    same reason `store.load_graph` does: there is no way to ask for a session
+    without saying whose it is.
+    """
+    graph = learning_store.load_graph(session_id, user_id, SESSIONS_DB_PATH)
     if graph is None:
         raise HTTPException(status_code=404, detail="session_not_found")
     return graph
 
 
-def _render_current_lesson(graph, client) -> dict:
+def _render_current_lesson(graph, client, owner: str) -> dict:
     """Run the Teaching Agent on the graph's current node, persist, return the lesson.
 
     repo_path is re-derived via clone_repo (no-op when already cloned) since the
@@ -486,7 +614,7 @@ def _render_current_lesson(graph, client) -> dict:
     state.doc_context = graph.doc_context
     run_teaching(state, client=client)
     # Persist whatever changed (cached_lesson on the node, etc.).
-    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=owner)
     if state.current_lesson is not None:
         # THE ORIGINAL LESSON, recorded once (session-reset.md §4.3).
         #
@@ -527,33 +655,42 @@ def _render_current_lesson(graph, client) -> dict:
         # Save fallback as cached_lesson so the grader can run against it.
         if node:
             node.cached_lesson = fallback
-            learning_store.save_graph(graph, SESSIONS_DB_PATH)
+            learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=owner)
         return fallback
     return state.current_lesson
 
 
 @app.post("/session/start")
-def session_start(body: SessionStartRequest) -> dict:
-    # Registered before the first stage so a poll that arrives during the clone
-    # finds an empty run rather than a 404, and finished in a `finally` so a
-    # client is never left polling a run that has already returned — including
-    # the resume path, which returns before the pipeline starts.
+def session_start(
+    body: SessionStartRequest, user: CurrentUser = Depends(current_user)
+) -> dict:
+    """Plan a new learning session for the caller.
+
+    ## `_try_resume` is gone (multi-user.md §2 P1)
+
+    This used to scan the whole database for a session whose `repo_url` and
+    `goal_json` matched, and return it instead of planning. With one learner
+    that was a helpful cost saving. With two it was a CROSS-USER HIJACK: two
+    people who picked `psf/requests` and answered the interview the same way got
+    the same session — each other's answers, gaps and lesson history.
+
+    It also contradicted the product requirement it looked like it served.
+    A learner may hold several sessions on one repository, with the same goal or
+    different ones, and they must be independent (I3). Creation now always
+    creates; resuming means opening a session you already have, by id.
+
+    `force_new` went with it — with nothing implicit left to force past, the
+    flag had nothing to mean.
+    """
     pid = body.progress_id or ""
     pipeline_progress.begin(pid)
     try:
-        return _run_session_start(body, pid)
+        return _run_session_start(body, pid, user.user_id)
     finally:
         pipeline_progress.finish(pid)
 
 
-def _run_session_start(body: SessionStartRequest, pid: str) -> dict:
-    # Resume: if an identical (repo_url, goal) session exists, continue it
-    # rather than paying for the pipeline again. Match on exact goal equality.
-    if not body.force_new:
-        resumed = _try_resume(body.repo_url, body.goal)
-        if resumed is not None:
-            return resumed
-
+def _run_session_start(body: SessionStartRequest, pid: str, owner: str) -> dict:
     client = _new_client()
     state = run_pipeline(body.repo_url, body.goal, client=client, progress_id=pid)
     if state.graph is None:
@@ -561,16 +698,10 @@ def _run_session_start(body: SessionStartRequest, pid: str) -> dict:
             status_code=500,
             detail={"error": "no_graph", "errors": state.errors},
         )
-    # `create_session`, not `save_graph`: this is the one moment a plan exists and
-    # has not yet been touched, so it is the only moment the immutable copy can be
-    # taken. Both writes land in ONE transaction, because a session that exists
-    # without a plan is a session where `Start over` cannot work
-    # (session-reset.md §4.2).
-    learning_store.create_session(state.graph, SESSIONS_DB_PATH)
-    # The dossier outlives the request that produced it: Teaching and the
-    # Mutator run later in the session and need the same understanding. Keyed to
-    # this session and this commit, so goal-specific understanding is never
-    # reused across goals or against code that has since drifted.
+    # `create_session` writes the graph AND its plan in one transaction, with the
+    # owner stamped in the same write — a session cannot exist unowned even for
+    # the width of a crash.
+    learning_store.create_session(state.graph, SESSIONS_DB_PATH, user_id=owner)
     if state.investigation:
         try:
             dossier_store.save_investigation(
@@ -580,8 +711,6 @@ def _run_session_start(body: SessionStartRequest, pid: str) -> dict:
                 SESSIONS_DB_PATH,
             )
         except Exception as e:
-            # Persistence is enrichment (D12) — failing here must not lose a
-            # graph the user has already paid for.
             state.errors.append(f"dossier persistence failed (non-fatal): {e}")
     return {
         "session_id": state.graph.session_id,
@@ -591,29 +720,10 @@ def _run_session_start(body: SessionStartRequest, pid: str) -> dict:
     }
 
 
-def _try_resume(repo_url: str, goal: dict) -> dict | None:
-    for summary in learning_store.list_sessions_for_repo(repo_url, SESSIONS_DB_PATH):
-        if summary["goal"] != goal:
-            continue
-        graph = learning_store.load_graph(summary["session_id"], SESSIONS_DB_PATH)
-        if graph is None:
-            continue
-        # Move the pointer to a sensible re-entry point and persist it.
-        resume_node = graph.resume_point()
-        if resume_node is not None:
-            graph.set_current(resume_node)
-            learning_store.save_graph(graph, SESSIONS_DB_PATH)
-        return {
-            "session_id": graph.session_id,
-            "graph": graph.to_dict(),
-            "resumed": True,
-            "errors": [],
-        }
-    return None
-
-
 @app.get("/session/progress/{progress_id}")
-def session_progress(progress_id: str) -> dict:
+def session_progress(
+    progress_id: str, user: CurrentUser = Depends(current_user)
+) -> dict:
     """What the /session/start call using this id is doing right now.
 
     Polled on its own request while that POST blocks — FastAPI serves sync
@@ -629,20 +739,40 @@ def session_progress(progress_id: str) -> dict:
 
 
 @app.get("/sessions")
-def list_sessions(repo_url: str) -> dict:
-    # Past sessions for a repo, so a returning client can find and resume one.
-    summaries = learning_store.list_sessions_for_repo(repo_url, SESSIONS_DB_PATH)
+def list_sessions(
+    user: CurrentUser = Depends(current_user),
+    repo_url: str | None = None,
+    include_archived: bool = False,
+) -> dict:
+    """The CALLER'S sessions, newest activity first.
+
+    This took a required `repo_url` and returned every session on that
+    repository belonging to ANYONE (multi-user.md §2 P2) — with 91 sessions in
+    the live database, one request returned the whole corpus with full goal
+    objects. It is now scoped by owner in SQL, and `repo_url` is an optional
+    filter rather than the key.
+
+    Loads no graphs: the dashboard lists everything at once, and reading 900+
+    node rows to show three numbers per card is what the cached progress columns
+    exist to avoid. Those are NULL until M4 fills them, and a caller must read
+    that as "not computed" rather than as zero.
+    """
+    summaries = learning_store.list_sessions_for_user(
+        user.user_id, SESSIONS_DB_PATH, include_archived=include_archived
+    )
+    if repo_url:
+        summaries = [s for s in summaries if s["repo_url"] == repo_url]
     return {"sessions": summaries}
 
 
 @app.get("/session/{session_id}")
-def session_get(session_id: str) -> dict:
-    graph = _load_session_or_404(session_id)
+def session_get(session_id: str, user: CurrentUser = Depends(current_user)) -> dict:
+    graph = _load_session_or_404(session_id, user.user_id)
     return graph.to_dict()
 
 
 @app.post("/session/{session_id}/reset")
-def session_reset(session_id: str) -> dict:
+def session_reset(session_id: str, user: CurrentUser = Depends(current_user)) -> dict:
     """Start over: the same learning path, restored, with none of the learner's work.
 
     What this endpoint deliberately does NOT do — each one was what `Start over`
@@ -665,13 +795,13 @@ def session_reset(session_id: str) -> dict:
     in without a second fetch, plus what was discarded — which is the honest thing
     to show after an irreversible action.
     """
-    graph = _load_session_or_404(session_id)
-    plan = learning_store.load_plan(session_id, SESSIONS_DB_PATH)
+    graph = _load_session_or_404(session_id, user.user_id)
+    plan = learning_store.load_plan(session_id, user.user_id, SESSIONS_DB_PATH)
     if plan is None:
         raise HTTPException(status_code=409, detail="no_plan_snapshot")
 
     summary = reset_to_plan(graph, plan)
-    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
     logger.info(
         "session reset: session=%s discarded=%s", session_id, summary.to_dict()
     )
@@ -683,7 +813,7 @@ def session_reset(session_id: str) -> dict:
 
 
 @app.get("/session/{session_id}/welcome")
-def session_welcome(session_id: str) -> dict:
+def session_welcome(session_id: str, user: CurrentUser = Depends(current_user)) -> dict:
     """The welcome page's briefing: what this repository is, for this learner.
 
     Written once and cached on the session. The profile half of that page needs
@@ -694,7 +824,7 @@ def session_welcome(session_id: str) -> dict:
     revision simply finds nothing and gets a README-only briefing rather than
     prose about code that is no longer there.
     """
-    graph = _load_session_or_404(session_id)
+    graph = _load_session_or_404(session_id, user.user_id)
     if graph.briefing is not None:
         return {"briefing": graph.briefing}
 
@@ -722,24 +852,24 @@ def session_welcome(session_id: str) -> dict:
         client=_new_client(),
     )
     graph.briefing = briefing
-    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
     return {"briefing": briefing}
 
 
 @app.get("/session/{session_id}/lesson")
-def session_lesson(session_id: str) -> dict:
-    graph = _load_session_or_404(session_id)
+def session_lesson(session_id: str, user: CurrentUser = Depends(current_user)) -> dict:
+    graph = _load_session_or_404(session_id, user.user_id)
     if graph.current_node_id is None:
         raise HTTPException(status_code=409, detail="session_has_no_current_node")
 
-    _render_current_lesson(graph, _new_client())
+    _render_current_lesson(graph, _new_client(), user.user_id)
     node = graph.nodes[graph.current_node_id]
 
     return {"node_id": graph.current_node_id, "lesson": node.cached_lesson}
 
 
 @app.post("/session/{session_id}/advance")
-def session_advance(session_id: str, body: AdvanceRequest) -> dict:
+def session_advance(session_id: str, body: AdvanceRequest, user: CurrentUser = Depends(current_user)) -> dict:
     # "next" moves along the path; "skip" marks the node skipped then advances.
     # Other signals (deeper / simpler) are deferred (phase3.md Part 6).
     if body.signal not in ("next", "skip"):
@@ -748,7 +878,7 @@ def session_advance(session_id: str, body: AdvanceRequest) -> dict:
             detail=f"unsupported signal {body.signal!r}; supported: 'next', 'skip'",
         )
 
-    graph = _load_session_or_404(session_id)
+    graph = _load_session_or_404(session_id, user.user_id)
     current = body.node_id or graph.current_node_id
     if current is None:
         raise HTTPException(status_code=409, detail="session_has_no_current_node")
@@ -766,11 +896,11 @@ def session_advance(session_id: str, body: AdvanceRequest) -> dict:
         state = OnboardState(repo_url=graph.repo_url, goal=graph.goal, client=client)
         state.graph = graph
         mutate_graph(state, "skip")
-        learning_store.save_graph(graph, SESSIONS_DB_PATH)
+        learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
         nxt = graph.current_node_id if graph.current_node_id != current else None
         if nxt is None or nxt == current:
             return {"done": True}
-        lesson = _render_current_lesson(graph, client)
+        lesson = _render_current_lesson(graph, client, user.user_id)
         return {"done": False, "node_id": graph.current_node_id, "lesson": lesson}
 
     # signal == "next"
@@ -809,17 +939,18 @@ def session_advance(session_id: str, body: AdvanceRequest) -> dict:
         nxt = graph.next_in_path(nxt)
 
     if nxt is None:
-        learning_store.save_graph(graph, SESSIONS_DB_PATH)
+        learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
         return {"done": True}
 
     graph.set_current(nxt)
     client = _new_client()
-    lesson = _render_current_lesson(graph, client)  # also persists
+    lesson = _render_current_lesson(graph, client, user.user_id)  # also persists
     return {"done": False, "node_id": nxt, "lesson": lesson}
 
 
 def _respond_to_verification(
-    graph, state: OnboardState, current: str, body: RespondRequest, client
+    graph, state: OnboardState, current: str, body: RespondRequest, client,
+    owner: str,
 ) -> dict:
     """Grade an answer to a verification question (gap-model M6, §18.10).
 
@@ -872,7 +1003,7 @@ def _respond_to_verification(
         **({"gaps_resolved": result["resolved"]} if result.get("resolved") else {}),
         **({"gaps_opened": opened} if opened else {}),
     )
-    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=owner)
 
     return {
         "kind": history.VERIFICATION,
@@ -893,7 +1024,7 @@ def _respond_to_verification(
 
 
 @app.post("/session/{session_id}/verify")
-def session_verify(session_id: str, body: dict | None = None) -> dict:
+def session_verify(session_id: str, body: dict | None = None, user: CurrentUser = Depends(current_user)) -> dict:
     """Generate a FRESH question testing whether a gap has actually closed.
 
     Replaces "Try again", which re-showed the answered question after `reveal`
@@ -918,7 +1049,7 @@ def session_verify(session_id: str, body: dict | None = None) -> dict:
     body = body or {}
     node_id = body.get("node_id")
     gap_id = body.get("gap_id")
-    graph = _load_session_or_404(session_id)
+    graph = _load_session_or_404(session_id, user.user_id)
     current = node_id or graph.current_node_id
     if current is None or current not in graph.nodes:
         raise HTTPException(status_code=404, detail="node_not_found")
@@ -958,7 +1089,7 @@ def session_verify(session_id: str, body: dict | None = None) -> dict:
         raise HTTPException(status_code=503, detail="verification_unavailable")
 
     stored = teaching_verify.store(node, prompt)
-    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
     return {
         "node_id": current,
         # No `reveal` and no expected answer — excluded by design, not omitted for
@@ -972,7 +1103,7 @@ def session_verify(session_id: str, body: dict | None = None) -> dict:
 
 
 @app.post("/session/{session_id}/waive")
-def session_waive(session_id: str, body: WaiveRequest) -> dict:
+def session_waive(session_id: str, body: WaiveRequest, user: CurrentUser = Depends(current_user)) -> dict:
     """Stop remediating — one gap, or every open blocking gap on the node.
 
     **Never evidence** (§18.16.2): waiving does not produce `verified`, so the
@@ -983,7 +1114,7 @@ def session_waive(session_id: str, body: WaiveRequest) -> dict:
     `POST /verify` will offer them again once they are re-opened, which is what
     "an offer to verify it now" on the completion screen rests on.
     """
-    graph = _load_session_or_404(session_id)
+    graph = _load_session_or_404(session_id, user.user_id)
     current = body.node_id or graph.current_node_id
     if current is None or current not in graph.nodes:
         raise HTTPException(status_code=404, detail="node_not_found")
@@ -998,7 +1129,7 @@ def session_waive(session_id: str, body: WaiveRequest) -> dict:
     else:
         waived = graph.waive_remaining(current)
 
-    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
     return {
         "node_id": current,
         # NAMED, never a bare count: "what you chose not to check" is the most
@@ -1012,8 +1143,8 @@ def session_waive(session_id: str, body: WaiveRequest) -> dict:
 
 
 @app.post("/session/{session_id}/respond")
-def session_respond(session_id: str, body: RespondRequest) -> dict:
-    graph = _load_session_or_404(session_id)
+def session_respond(session_id: str, body: RespondRequest, user: CurrentUser = Depends(current_user)) -> dict:
+    graph = _load_session_or_404(session_id, user.user_id)
     current = body.node_id or graph.current_node_id
     if current is None:
         raise HTTPException(status_code=409, detail="session_has_no_current_node")
@@ -1029,7 +1160,7 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
     state.graph = graph
 
     if body.kind == history.VERIFICATION:
-        return _respond_to_verification(graph, state, current, body, client)
+        return _respond_to_verification(graph, state, current, body, client, user.user_id)
 
     # Which gaps this ANSWER opened, as a fact rather than a count. Taken as a
     # before/after delta because the Grader mints ids internally; asking it to
@@ -1222,7 +1353,7 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
             unlocks=current,
         )
 
-    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
 
     return {
         "classification": classification,
@@ -1241,12 +1372,12 @@ def session_respond(session_id: str, body: RespondRequest) -> dict:
 
 
 @app.post("/session/{session_id}/retry")
-def session_retry(session_id: str, body: dict) -> dict:
+def session_retry(session_id: str, body: dict, user: CurrentUser = Depends(current_user)) -> dict:
     """Insert a prerequisite for the current node and load its lesson.
     Called when the user clicks 'Try again' after a wrong answer.
     """
     node_id = body.get("node_id")
-    graph = _load_session_or_404(session_id)
+    graph = _load_session_or_404(session_id, user.user_id)
     current = node_id or graph.current_node_id
     if not current or current not in graph.nodes:
         raise HTTPException(status_code=404, detail="node_not_found")
@@ -1280,11 +1411,11 @@ def session_retry(session_id: str, body: dict) -> dict:
         # the node's, not the policy's, so both paths spend from it. Charged
         # only when one was actually spliced: a decline costs nothing.
         graph.nodes[current].gap_state.remediation_rounds += 1
-    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
     if graph.current_node_id == current:
         # No prerequisite was inserted (guard triggered) — just return current
         return {"current_node_id": current, "inserted": False}
-    lesson = _render_current_lesson(graph, client)
+    lesson = _render_current_lesson(graph, client, user.user_id)
     return {"current_node_id": graph.current_node_id, "inserted": True, "lesson": lesson}
 
 
@@ -1301,7 +1432,7 @@ class JumpRequest(BaseModel):
 
 
 @app.post("/session/{session_id}/jump")
-def session_jump(session_id: str, body: JumpRequest) -> dict:
+def session_jump(session_id: str, body: JumpRequest, user: CurrentUser = Depends(current_user)) -> dict:
     """Move to a stop that is not the next one — and leave a record that it happened.
 
     Jumping stays UNCONDITIONAL. Dependencies are not enforced here and no stop is
@@ -1327,7 +1458,7 @@ def session_jump(session_id: str, body: JumpRequest) -> dict:
                    f"{', '.join(sorted(history.JUMP_INTENTS))}",
         )
 
-    graph = _load_session_or_404(session_id)
+    graph = _load_session_or_404(session_id, user.user_id)
     if body.node_id not in graph.nodes:
         raise HTTPException(status_code=404, detail="node_not_found")
 
@@ -1352,7 +1483,7 @@ def session_jump(session_id: str, body: JumpRequest) -> dict:
             body.node_id, kind=history.JUMPED, from_node_id=left
         )
 
-    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
     return {"current_node_id": body.node_id, "arrival": graph.arrival}
 
 
@@ -1361,7 +1492,7 @@ class ScopeRequest(BaseModel):
 
 
 @app.post("/session/{session_id}/scope")
-def session_scope(session_id: str, body: ScopeRequest) -> dict:
+def session_scope(session_id: str, body: ScopeRequest, user: CurrentUser = Depends(current_user)) -> dict:
     """Adjust the journey's scope after the learner has seen it (§5.3).
 
     Pure Python, no LLM, no planning: it moves existing units between the
@@ -1377,7 +1508,7 @@ def session_scope(session_id: str, body: ScopeRequest) -> dict:
                    f"'shorter', 'deeper'",
         )
 
-    graph = _load_session_or_404(session_id)
+    graph = _load_session_or_404(session_id, user.user_id)
     before = scope.journey_size(graph)
     changed = (
         scope.shorten(graph) if body.direction == "shorter" else scope.deepen(graph)
@@ -1391,7 +1522,7 @@ def session_scope(session_id: str, body: ScopeRequest) -> dict:
             else history.SCOPE_DEEPER,
             nodes=changed,
         )
-    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
 
     return {
         "direction": body.direction,
@@ -1406,19 +1537,19 @@ def session_scope(session_id: str, body: ScopeRequest) -> dict:
 
 
 @app.post("/session/{session_id}/override")
-def session_override(session_id: str, body: OverrideRequest) -> dict:
+def session_override(session_id: str, body: OverrideRequest, user: CurrentUser = Depends(current_user)) -> dict:
     # User-driven edits to their own understanding graph. Pure Python, no LLM.
     if body.action not in ("mark_understood", "mark_weak", "skip"):
         raise HTTPException(
             status_code=400, detail=f"unsupported action {body.action!r}"
         )
-    graph = _load_session_or_404(session_id)
+    graph = _load_session_or_404(session_id, user.user_id)
     node_id = body.node_id or graph.current_node_id
     if node_id is None or node_id not in graph.nodes:
         raise HTTPException(status_code=404, detail="node_not_found")
 
     graph.override(node_id, body.action)
-    learning_store.save_graph(graph, SESSIONS_DB_PATH)
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
     node = graph.nodes[node_id]
     return {
         "node_id": node_id,
@@ -1429,7 +1560,7 @@ def session_override(session_id: str, body: OverrideRequest) -> dict:
 
 
 @app.get("/session/{session_id}/evidence/{node_id}")
-def session_evidence(session_id: str, node_id: str) -> dict:
+def session_evidence(session_id: str, node_id: str, user: CurrentUser = Depends(current_user)) -> dict:
     """The evidence chain behind one node's understanding state (M3a.1).
 
     Its own endpoint rather than a slice of the session payload: the timeline
@@ -1437,15 +1568,15 @@ def session_evidence(session_id: str, node_id: str) -> dict:
     the size of every `/session/{id}` poll for something read on demand when the
     learner opens one node.
     """
-    graph = _load_session_or_404(session_id)
+    graph = _load_session_or_404(session_id, user.user_id)
     if node_id not in graph.nodes:
         raise HTTPException(status_code=404, detail="node_not_found")
     return understanding.evidence(graph, node_id)
 
 
 @app.get("/session/{session_id}/file")
-def session_file(session_id: str, path: str) -> dict:
-    graph = _load_session_or_404(session_id)
+def session_file(session_id: str, path: str, user: CurrentUser = Depends(current_user)) -> dict:
+    graph = _load_session_or_404(session_id, user.user_id)
     repo_path = clone_repo(graph.repo_url)
     # Containment is decided by `resolve_within`, which resolves both sides and
     # compares path ANCESTRY. The check here used to be a string prefix, which
@@ -1461,3 +1592,4 @@ def session_file(session_id: str, path: str) -> dict:
     with open(full_path, encoding="utf-8", errors="replace") as f:
         content = f.read()
     return {"path": path, "content": content}
+

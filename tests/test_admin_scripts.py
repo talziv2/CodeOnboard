@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import TEST_USER_ID
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import adopt_legacy_sessions as adopt_script  # noqa: E402
@@ -53,7 +55,7 @@ def _graph(repo_url="https://github.com/psf/requests") -> LearningGraph:
 def _legacy_corpus(db: Path, count: int = 3) -> list[LearningGraph]:
     graphs = [_graph() for _ in range(count)]
     for graph in graphs:
-        save_graph(graph, db)
+        save_graph(graph, db, user_id=TEST_USER_ID)
     with sqlite3.connect(db) as conn:
         conn.execute("UPDATE sessions SET user_id = NULL")
     migration.migrate(db, apply=True)
@@ -314,7 +316,7 @@ def test_it_never_touches_a_session_owned_by_someone_else(db):
 
 
 def test_it_refuses_before_the_migration_has_run(db):
-    save_graph(_graph(), db)
+    save_graph(_graph(), db, user_id=TEST_USER_ID)
     with sqlite3.connect(db) as conn:
         conn.execute("DELETE FROM users")
         conn.execute("UPDATE sessions SET user_id = NULL")
@@ -348,5 +350,8 @@ def test_adoption_does_not_change_the_sessions_themselves(db):
     assert after == before
     from backend.learning.store import load_graph
 
+    # After adoption they belong to the TARGET account — which is the change —
+    # so that is who must be able to read them.
+    target = identity.find_user_by_email(EMAIL, db_path=db)["user_id"]
     for graph in graphs:
-        assert load_graph(graph.session_id, db) is not None
+        assert load_graph(graph.session_id, target, db) is not None

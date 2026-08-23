@@ -15,6 +15,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from tests.conftest import TEST_USER_ID
+
 from backend.agents.grader import verification
 from backend.agents.teaching import verify as teaching_verify
 from backend.learning import store as learning_store
@@ -467,9 +469,9 @@ def test_pending_verification_and_counters_round_trip(tmp_path):
     teaching_verify.store(node, teaching_verify.VerificationPrompt(
         question="a fresh question", targets=[b.id],
     ))
-    learning_store.save_graph(graph, db)
+    learning_store.save_graph(graph, db, user_id=TEST_USER_ID)
 
-    reloaded = learning_store.load_graph(graph.session_id, db).nodes[node.id]
+    reloaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db).nodes[node.id]
     assert reloaded.gap_state.pending_verification["question"] == "a fresh question"
     assert reloaded.gap_state.pending_verification["targets"] == [b.id]
     assert reloaded.gap_state.remediation_rounds == 2

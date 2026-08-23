@@ -25,6 +25,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import TEST_USER_ID
+
 from backend.learning import adaptation, progress
 from backend.learning import store as learning_store
 from backend.learning.gaps import Gap
@@ -306,7 +308,7 @@ def test_every_stored_gap_free_node_derives_its_stored_state():
     checked = 0
     mismatches = []
     for session_id in session_ids:
-        graph = learning_store.load_graph(session_id, LIVE_DB)
+        graph = learning_store.load_graph(session_id, TEST_USER_ID, LIVE_DB)
         if graph is None:
             continue
         for node in graph.nodes.values():

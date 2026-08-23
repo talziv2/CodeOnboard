@@ -407,7 +407,7 @@ def save_graph(
     graph: LearningGraph,
     db_path: Path = DEFAULT_DB_PATH,
     *,
-    user_id: str | None = None,
+    user_id: str,
 ) -> None:
     """Persist the LIVE graph. Never touches a plan table — see the header.
 
@@ -419,10 +419,10 @@ def save_graph(
     can touch another user's session" structural rather than a habit sixteen
     routes have to keep.
 
-    In M1 it is optional and defaults to the legacy user, because there is still
-    no way to log in: making it required now would break every route in the name
-    of a rule nothing can yet satisfy. M3 removes the default, at which point
-    omitting it is a TypeError rather than a silent fallback.
+    **Required as of M3.** M1 and M2 defaulted it to the legacy user, because
+    nothing could log in yet; the default is gone now, so omitting it is a
+    `TypeError` rather than a silent fallback to an account nobody owns. A
+    security boundary should fail loudly when it is forgotten.
 
     `repo_id` is not a parameter at all — it is derived from `graph.repo_url`,
     which is the only correct source for it.
@@ -437,7 +437,7 @@ def create_session(
     graph: LearningGraph,
     db_path: Path = DEFAULT_DB_PATH,
     *,
-    user_id: str | None = None,
+    user_id: str,
 ) -> None:
     """Persist a NEWLY PLANNED graph, and its plan, in ONE transaction.
 
@@ -483,9 +483,14 @@ def _resolve_ownership(
     that knows which repository this is, and `ensure_repository` maps every
     spelling of it onto one row.
     """
-    from backend.auth.identity import ensure_legacy_user, ensure_repository
+    from backend.auth.identity import ensure_repository
 
-    owner = user_id or ensure_legacy_user(db_path)
+    if not user_id:
+        # Belt to the signature's braces. A caller that reaches here with an
+        # empty string has bypassed the type hint, and defaulting would hand the
+        # session to whichever account happened to be convenient.
+        raise ValueError("save requires an owner: user_id must be a real user id")
+    owner = user_id
     try:
         repo_id = ensure_repository(graph.repo_url, db_path)
     except ValueError:
@@ -678,7 +683,11 @@ def record_plan_lesson(
         return cursor.rowcount > 0
 
 
-def load_plan(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> LearningGraph | None:
+def load_plan(
+    session_id: str,
+    user_id: str,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> LearningGraph | None:
     """The graph AS PLANNED — the restore source for `Start over`.
 
     Every learner-state field is at its dataclass default, because the plan
@@ -706,8 +715,13 @@ def load_plan(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> LearningGraph
         return None
     with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
+        # Owner-scoped like `load_graph`. Without it, `/reset` on someone else's
+        # session would answer 409 "no plan" where its owner gets 200 — a
+        # difference that confirms the session is real, which is exactly the
+        # oracle 404-not-403 exists to close.
         session_row = conn.execute(
-            "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
+            "SELECT * FROM sessions WHERE session_id = ? AND user_id = ?",
+            (session_id, user_id),
         ).fetchone()
         if session_row is None or session_row["schema_version"] != SCHEMA_VERSION:
             return None
@@ -781,13 +795,39 @@ def _row_to_plan_node(row: sqlite3.Row) -> LearningNode:
     )
 
 
-def load_graph(session_id: str, db_path: Path = DEFAULT_DB_PATH) -> LearningGraph | None:
+def load_graph(
+    session_id: str,
+    user_id: str,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> LearningGraph | None:
+    """The graph, or None — for "not there" and "not yours" alike.
+
+    ## `user_id` is REQUIRED, and that is the whole security model
+
+    Ownership is decided HERE, at the persistence boundary, rather than in the
+    sixteen routes that read a session (multi-user.md §4, I2). There is no code
+    path that produces a `LearningGraph` without a caller having named whose it
+    is, so "no user can touch another user's session" is structural rather than
+    a habit every future route has to remember.
+
+    A positional parameter, not a keyword with a default. M2 had a default —
+    the legacy user — because nothing could log in yet; removing it now turns
+    every un-updated call site into a `TypeError` at import or first call, which
+    is exactly the loud failure that a security boundary should have when it is
+    forgotten.
+
+    **None for a foreign session, not an exception.** The caller turns it into a
+    404, identical to a session id that never existed, so the API cannot be used
+    to discover which ids are real (I6).
+    """
+
     if not db_path.exists():
         return None
     with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         session_row = conn.execute(
-            "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
+            "SELECT * FROM sessions WHERE session_id = ? AND user_id = ?",
+            (session_id, user_id),
         ).fetchone()
         if session_row is None:
             return None

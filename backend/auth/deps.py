@@ -85,3 +85,50 @@ def current_user(
     if user is None:
         raise HTTPException(status_code=401, detail="not_authenticated")
     return user
+
+
+def owned_session(session_id: str, user: CurrentUser = Depends(current_user)):
+    """The caller's session, or 404 — the chokepoint every session route uses.
+
+    ## Why this is a dependency and not a helper the routes call
+
+    A helper can be forgotten. A dependency is declared in the signature, which
+    means `tests/test_route_authz_coverage.py` can enumerate `app.routes` and
+    fail the build when a new session route does not have one. Three layers hold
+    invariant I2 up, and each catches what the others miss:
+
+      1. `store.load_graph` REQUIRES a `user_id`, so no code path anywhere can
+         produce a `LearningGraph` without naming an owner;
+      2. this dependency, so the routes get it right ergonomically;
+      3. the coverage test, so a route added later cannot quietly skip both.
+
+    ## 404, never 403
+
+    A 403 says "this exists but is not yours", which is a working oracle for
+    which session ids are real. The store's `WHERE user_id = ?` gives the right
+    answer for free: a foreign session simply returns no row, and is
+    indistinguishable from one that never existed (I6).
+    """
+    from backend.learning import store as learning_store
+
+    graph = learning_store.load_graph(session_id, user.user_id, _db_path_for(user))
+    if graph is None:
+        raise HTTPException(status_code=404, detail="session_not_found")
+    return graph
+
+
+def _db_path_for(_user: CurrentUser) -> Path:
+    """The database this request works against.
+
+    Read from `backend.api.SESSIONS_DB_PATH` at CALL time — the test suite
+    repoints that attribute per test, and a module-level import would bind the
+    production path once and quietly write there instead.
+    """
+    from backend import api
+
+    return api.SESSIONS_DB_PATH
+
+
+def owner_id(user: CurrentUser = Depends(current_user)) -> str:
+    """Just the id, for routes that write rather than read a graph."""
+    return user.user_id

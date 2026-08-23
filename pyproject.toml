@@ -46,3 +46,6 @@ required-environments = [
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+markers = [
+    "real_auth: exercises authentication itself — opts out of the signed-in-by-default fixture",
+]

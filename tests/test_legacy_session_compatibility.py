@@ -36,6 +36,8 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+
+from tests.conftest import TEST_USER_ID
 from fastapi.testclient import TestClient
 
 import backend.api as api
@@ -103,7 +105,7 @@ def _walked(graph: LearningGraph) -> LearningGraph:
 def _make_v2(db: Path) -> LearningGraph:
     """A session as it existed before the plan tables: version 2, no plan rows."""
     graph = _walked(_graph())
-    create_session(graph, db)
+    create_session(graph, db, user_id=TEST_USER_ID)
     with sqlite3.connect(db) as conn:
         conn.execute("UPDATE sessions SET schema_version = 2 WHERE session_id = ?",
                      (graph.session_id,))
@@ -114,7 +116,7 @@ def _make_v2(db: Path) -> LearningGraph:
 
 def _make_v3(db: Path) -> LearningGraph:
     graph = _walked(_graph())
-    create_session(graph, db)
+    create_session(graph, db, user_id=TEST_USER_ID)
     return graph
 
 
@@ -123,7 +125,7 @@ def _make_v3(db: Path) -> LearningGraph:
 def test_a_version_2_session_loads(db):
     graph = _make_v2(db)
 
-    reloaded = load_graph(graph.session_id, db)
+    reloaded = load_graph(graph.session_id, TEST_USER_ID, db)
 
     assert reloaded is not None, (
         "the live database is entirely version 2; refusing to load it makes the "
@@ -134,9 +136,9 @@ def test_a_version_2_session_loads(db):
 
 def test_a_version_2_session_resumes_where_the_learner_left_off(db):
     graph = _make_v2(db)
-    expected = load_graph(graph.session_id, db).resume_point()
+    expected = load_graph(graph.session_id, TEST_USER_ID, db).resume_point()
 
-    reloaded = load_graph(graph.session_id, db)
+    reloaded = load_graph(graph.session_id, TEST_USER_ID, db)
 
     assert reloaded.resume_point() == expected
     assert reloaded.current_node_id == graph.current_node_id
@@ -153,7 +155,7 @@ def test_an_unsupported_version_is_still_treated_as_missing(db, monkeypatch):
     from backend.learning import store
 
     monkeypatch.setattr(store, "SUPPORTED_SCHEMA_VERSIONS", frozenset({3}))
-    assert load_graph(graph.session_id, db) is None
+    assert load_graph(graph.session_id, TEST_USER_ID, db) is None
 
 
 # ── 2. its state is unchanged ─────────────────────────────────────────────────
@@ -162,7 +164,7 @@ def test_lesson_progress_gaps_and_history_survive_exactly(db):
     graph = _make_v2(db)
     first = graph.path_order()[0]
 
-    reloaded = load_graph(graph.session_id, db)
+    reloaded = load_graph(graph.session_id, TEST_USER_ID, db)
     node = reloaded.nodes[first]
 
     assert node.cached_lesson == graph.nodes[first].cached_lesson
@@ -180,11 +182,11 @@ def test_a_version_2_session_can_still_be_answered_and_advanced(db):
     graph = _make_v2(db)
     first = graph.path_order()[0]
 
-    reloaded = load_graph(graph.session_id, db)
+    reloaded = load_graph(graph.session_id, TEST_USER_ID, db)
     reloaded.record_attempt(first, "It owns connection reuse.", "understood", "yes")
-    save_graph(reloaded, db)
+    save_graph(reloaded, db, user_id=TEST_USER_ID)
 
-    again = load_graph(graph.session_id, db)
+    again = load_graph(graph.session_id, TEST_USER_ID, db)
     assert len(again.nodes[first].attempts) == 2
     assert again.nodes[first].attempts[-1]["answer"] == "It owns connection reuse."
 
@@ -199,7 +201,7 @@ def test_saving_a_version_2_session_does_not_relabel_it_as_version_3(db):
     """
     graph = _make_v2(db)
 
-    save_graph(load_graph(graph.session_id, db), db)
+    save_graph(load_graph(graph.session_id, TEST_USER_ID, db), db, user_id=TEST_USER_ID)
 
     with sqlite3.connect(db) as conn:
         version = conn.execute(
@@ -211,7 +213,7 @@ def test_saving_a_version_2_session_does_not_relabel_it_as_version_3(db):
 
 def test_a_new_session_is_written_at_the_current_version(db):
     graph = _graph()
-    save_graph(graph, db)
+    save_graph(graph, db, user_id=TEST_USER_ID)
 
     with sqlite3.connect(db) as conn:
         version = conn.execute(
@@ -226,7 +228,7 @@ def test_a_new_session_is_written_at_the_current_version(db):
 def test_a_version_2_session_has_no_plan_to_restore(db):
     graph = _make_v2(db)
 
-    assert load_plan(graph.session_id, db) is None
+    assert load_plan(graph.session_id, TEST_USER_ID, db) is None
 
 
 def test_a_version_2_session_reports_has_plan_false_on_the_wire(db, client):
@@ -259,7 +261,7 @@ def test_a_version_3_session_reports_has_plan_true(db, client):
 def test_a_version_3_session_still_has_its_plan(db):
     graph = _make_v3(db)
 
-    plan = load_plan(graph.session_id, db)
+    plan = load_plan(graph.session_id, TEST_USER_ID, db)
 
     assert plan is not None
     assert set(plan.nodes) == set(graph.nodes)
@@ -272,7 +274,7 @@ def test_start_over_still_works_on_a_version_3_session(db, client):
     response = client.post(f"/session/{graph.session_id}/reset")
 
     assert response.status_code == 200
-    restored = load_graph(graph.session_id, db)
+    restored = load_graph(graph.session_id, TEST_USER_ID, db)
     assert restored.nodes[first].attempts == []
     assert restored.nodes[first].visited is False
     assert restored.nodes[first].weak_spot is False
@@ -301,7 +303,7 @@ def test_reset_is_gated_twice_over(db, client):
         conn.execute("UPDATE sessions SET schema_version = 2 WHERE session_id = ?",
                      (graph.session_id,))
 
-    assert load_plan(graph.session_id, db) is None, "the version gate alone refuses"
+    assert load_plan(graph.session_id, TEST_USER_ID, db) is None, "the version gate alone refuses"
     assert client.post(f"/session/{graph.session_id}/reset").status_code == 409
 
 
@@ -330,8 +332,8 @@ def test_the_next_bump_must_revisit_load_plan(db):
 def test_loading_a_version_2_session_never_creates_plan_rows(db):
     graph = _make_v2(db)
 
-    load_graph(graph.session_id, db)
-    load_plan(graph.session_id, db)
+    load_graph(graph.session_id, TEST_USER_ID, db)
+    load_plan(graph.session_id, TEST_USER_ID, db)
 
     with sqlite3.connect(db) as conn:
         assert conn.execute(
@@ -346,9 +348,9 @@ def test_saving_a_version_2_session_never_creates_plan_rows(db):
     graph = _make_v2(db)
 
     for _ in range(3):
-        reloaded = load_graph(graph.session_id, db)
+        reloaded = load_graph(graph.session_id, TEST_USER_ID, db)
         reloaded.mark_visited(reloaded.path_order()[0])
-        save_graph(reloaded, db)
+        save_graph(reloaded, db, user_id=TEST_USER_ID)
 
     with sqlite3.connect(db) as conn:
         assert conn.execute(
@@ -383,7 +385,7 @@ def test_the_migration_does_not_give_a_version_2_session_a_plan(db):
         ).fetchone()
     assert version == 2, "the migration must not relabel the row"
     assert user_id is not None, "but it must still give it an owner"
-    assert load_plan(graph.session_id, db) is None
+    assert load_plan(graph.session_id, TEST_USER_ID, db) is None
 
 
 def test_a_failed_reset_does_not_leave_a_partial_plan(db, client):
@@ -419,8 +421,8 @@ def test_a_database_older_than_the_plan_tables_answers_no_plan(db):
         conn.execute("DROP TABLE plan_nodes")
         conn.execute("DROP TABLE plan_edges")
 
-    assert load_plan(graph.session_id, db) is None
-    assert load_graph(graph.session_id, db) is not None
+    assert load_plan(graph.session_id, TEST_USER_ID, db) is None
+    assert load_graph(graph.session_id, TEST_USER_ID, db) is not None
 
 
 def test_start_over_on_a_pre_plan_database_is_a_409_not_a_500(db, client):

@@ -24,6 +24,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from tests.conftest import TEST_USER_ID
 from fastapi.testclient import TestClient
 
 import backend.api as api
@@ -70,7 +72,7 @@ def _planned(db_path: Path) -> LearningGraph:
         graph.add_edge(a, b, kind="sequence")
     graph.add_edge(ids[0], ids[2], kind="prerequisite")  # PLANNED dependency
     graph.set_current(ids[0])
-    learning_store.create_session(graph, db_path)
+    learning_store.create_session(graph, db_path, user_id=TEST_USER_ID)
     for index, node_id in enumerate(ids, start=1):
         learning_store.record_plan_lesson(
             graph.session_id, node_id, _lesson(f"stop{index}"), db_path
@@ -164,29 +166,29 @@ def test_a_reset_graph_equals_a_graph_built_from_the_plan(db_path):
     """
     planned = _planned(db_path)
     node_ids = list(planned.nodes)
-    live = learning_store.load_graph(planned.session_id, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
     _work_the_session(live, node_ids)
-    learning_store.save_graph(live, db_path)
+    learning_store.save_graph(live, db_path, user_id=TEST_USER_ID)
 
-    live = learning_store.load_graph(planned.session_id, db_path)
-    plan = learning_store.load_plan(planned.session_id, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
+    plan = learning_store.load_plan(planned.session_id, TEST_USER_ID, db_path)
     reset_to_plan(live, plan)
-    learning_store.save_graph(live, db_path)
+    learning_store.save_graph(live, db_path, user_id=TEST_USER_ID)
 
     # Compared through a reload, so the assertion covers persistence too.
-    after = learning_store.load_graph(planned.session_id, db_path)
-    expected = learning_store.load_plan(planned.session_id, db_path)
+    after = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
+    expected = learning_store.load_plan(planned.session_id, TEST_USER_ID, db_path)
     expected.current_node_id = expected.path_head()
     assert _wire(after) == _wire(expected)
 
 
 def test_the_reset_marker_is_the_only_history_left(db_path):
     planned = _planned(db_path)
-    live = learning_store.load_graph(planned.session_id, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
     _work_the_session(live, list(planned.nodes))
     assert len(live.journey_events) > 1
 
-    reset_to_plan(live, learning_store.load_plan(planned.session_id, db_path))
+    reset_to_plan(live, learning_store.load_plan(planned.session_id, TEST_USER_ID, db_path))
 
     assert [e["kind"] for e in live.journey_events] == [history.RESET]
 
@@ -194,11 +196,11 @@ def test_the_reset_marker_is_the_only_history_left(db_path):
 def test_resetting_twice_leaves_exactly_one_marker(db_path):
     """Deterministic and idempotent: a second reset is not a second history."""
     planned = _planned(db_path)
-    live = learning_store.load_graph(planned.session_id, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
 
-    reset_to_plan(live, learning_store.load_plan(planned.session_id, db_path))
+    reset_to_plan(live, learning_store.load_plan(planned.session_id, TEST_USER_ID, db_path))
     first = _wire(live)
-    reset_to_plan(live, learning_store.load_plan(planned.session_id, db_path))
+    reset_to_plan(live, learning_store.load_plan(planned.session_id, TEST_USER_ID, db_path))
 
     assert [e["kind"] for e in live.journey_events] == [history.RESET]
     assert _wire(live) == first
@@ -211,14 +213,14 @@ def test_the_reset_does_not_touch_the_stored_plan(db_path):
     one-way door: the second `Start over` would restore the first one's damage."""
     planned = _planned(db_path)
     before = _plan_rows(db_path)
-    live = learning_store.load_graph(planned.session_id, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
     _work_the_session(live, list(planned.nodes))
 
-    reset_to_plan(live, learning_store.load_plan(planned.session_id, db_path))
-    learning_store.save_graph(live, db_path)
+    reset_to_plan(live, learning_store.load_plan(planned.session_id, TEST_USER_ID, db_path))
+    learning_store.save_graph(live, db_path, user_id=TEST_USER_ID)
     # And keep working afterwards, on the restored graph.
     live.record_attempt(live.current_node_id, "again", "partial", "some of it")
-    learning_store.save_graph(live, db_path)
+    learning_store.save_graph(live, db_path, user_id=TEST_USER_ID)
 
     assert _plan_rows(db_path) == before
 
@@ -226,14 +228,14 @@ def test_the_reset_does_not_touch_the_stored_plan(db_path):
 def test_the_restored_graph_can_be_reset_again(db_path):
     """The property the previous test protects, exercised end to end."""
     planned = _planned(db_path)
-    live = learning_store.load_graph(planned.session_id, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
     _work_the_session(live, list(planned.nodes))
-    reset_to_plan(live, learning_store.load_plan(planned.session_id, db_path))
-    learning_store.save_graph(live, db_path)
+    reset_to_plan(live, learning_store.load_plan(planned.session_id, TEST_USER_ID, db_path))
+    learning_store.save_graph(live, db_path, user_id=TEST_USER_ID)
 
-    live = learning_store.load_graph(planned.session_id, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
     _work_the_session(live, [n for n in planned.nodes])
-    reset_to_plan(live, learning_store.load_plan(planned.session_id, db_path))
+    reset_to_plan(live, learning_store.load_plan(planned.session_id, TEST_USER_ID, db_path))
 
     assert len(live.nodes) == 4
     assert all(n.attempts == [] for n in live.nodes.values())
@@ -244,11 +246,11 @@ def test_the_restored_graph_can_be_reset_again(db_path):
 def test_remedial_nodes_are_gone_and_the_rerouted_edge_is_restored(db_path):
     planned = _planned(db_path)
     original_edges = {(e.from_node_id, e.to_node_id, e.kind) for e in planned.edges}
-    live = learning_store.load_graph(planned.session_id, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
     _work_the_session(live, list(planned.nodes))
     assert len(live.nodes) == 5  # four planned plus the warm-up
 
-    reset_to_plan(live, learning_store.load_plan(planned.session_id, db_path))
+    reset_to_plan(live, learning_store.load_plan(planned.session_id, TEST_USER_ID, db_path))
 
     assert set(live.nodes) == set(planned.nodes)
     assert {(e.from_node_id, e.to_node_id, e.kind) for e in live.edges} == original_edges
@@ -258,7 +260,7 @@ def test_a_warm_up_spliced_before_the_head_is_removed(db_path):
     """The case with no incoming sequence edge to repair — it was the head."""
     planned = _planned(db_path)
     head = planned.path_head()
-    live = learning_store.load_graph(planned.session_id, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
     warm_up = LearningNode(
         title="Before the beginning",
         code_anchor=CodeAnchor(file="requests/__init__.py", line_start=1, line_end=5),
@@ -267,7 +269,7 @@ def test_a_warm_up_spliced_before_the_head_is_removed(db_path):
     live.insert_before(head, warm_up, kind="prerequisite")
     assert live.path_head() == warm_up.id
 
-    reset_to_plan(live, learning_store.load_plan(planned.session_id, db_path))
+    reset_to_plan(live, learning_store.load_plan(planned.session_id, TEST_USER_ID, db_path))
 
     assert live.path_head() == head
     assert live.current_node_id == head
@@ -281,14 +283,14 @@ def test_priority_comes_back_for_both_producers(db_path):
     """
     planned = _planned(db_path)
     original = {n: planned.nodes[n].lesson_brief["priority"] for n in planned.nodes}
-    live = learning_store.load_graph(planned.session_id, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
     scope.shorten(live)                      # recommended -> optional, scope_locked
     live.mark_understanding(list(planned.nodes)[0], "understood")
     adaptation.prune_ahead(live)
     assert any(n.lesson_brief.get("priority") == "optional"
                for n in live.nodes.values())
 
-    reset_to_plan(live, learning_store.load_plan(planned.session_id, db_path))
+    reset_to_plan(live, learning_store.load_plan(planned.session_id, TEST_USER_ID, db_path))
 
     assert {n: live.nodes[n].lesson_brief["priority"] for n in live.nodes} == original
     assert all("scope_locked" not in n.lesson_brief for n in live.nodes.values())
@@ -298,10 +300,10 @@ def test_the_original_lesson_replaces_a_retaught_one(db_path):
     """The other thing the rejected design needed recovery logic for."""
     planned = _planned(db_path)
     first = list(planned.nodes)[0]
-    live = learning_store.load_graph(planned.session_id, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
     live.nodes[first].cached_lesson = _lesson("RETAUGHT")
 
-    reset_to_plan(live, learning_store.load_plan(planned.session_id, db_path))
+    reset_to_plan(live, learning_store.load_plan(planned.session_id, TEST_USER_ID, db_path))
 
     assert live.nodes[first].cached_lesson == _lesson("stop1")
 
@@ -314,11 +316,11 @@ def test_a_stop_that_was_never_reached_has_no_lesson(db_path):
         code_anchor=CodeAnchor(file="requests/api.py", line_start=1, line_end=9),
     ))
     graph.set_current(node.id)
-    learning_store.create_session(graph, db_path)
-    live = learning_store.load_graph(graph.session_id, db_path)
+    learning_store.create_session(graph, db_path, user_id=TEST_USER_ID)
+    live = learning_store.load_graph(graph.session_id, TEST_USER_ID, db_path)
     live.nodes[node.id].cached_lesson = _lesson("rendered later")
 
-    reset_to_plan(live, learning_store.load_plan(graph.session_id, db_path))
+    reset_to_plan(live, learning_store.load_plan(graph.session_id, TEST_USER_ID, db_path))
 
     assert live.nodes[node.id].cached_lesson is None
 
@@ -331,10 +333,10 @@ def test_gap_machinery_is_gone_entirely(db_path):
     that no longer exists.
     """
     planned = _planned(db_path)
-    live = learning_store.load_graph(planned.session_id, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
     _work_the_session(live, list(planned.nodes))
 
-    reset_to_plan(live, learning_store.load_plan(planned.session_id, db_path))
+    reset_to_plan(live, learning_store.load_plan(planned.session_id, TEST_USER_ID, db_path))
 
     for node in live.nodes.values():
         assert node.gaps == []
@@ -345,12 +347,12 @@ def test_gap_machinery_is_gone_entirely(db_path):
 def test_sticky_state_is_gone(db_path):
     """`weak_spot` survives later `understood` updates by design, so it needs saying."""
     planned = _planned(db_path)
-    live = learning_store.load_graph(planned.session_id, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
     first = list(planned.nodes)[0]
     live.mark_understanding(first, "failed")   # sets weak_spot
     assert live.nodes[first].weak_spot is True
 
-    reset_to_plan(live, learning_store.load_plan(planned.session_id, db_path))
+    reset_to_plan(live, learning_store.load_plan(planned.session_id, TEST_USER_ID, db_path))
 
     assert live.nodes[first].weak_spot is False
     assert live.nodes[first].user_override is None
@@ -360,11 +362,11 @@ def test_sticky_state_is_gone(db_path):
 def test_position_returns_to_the_first_stop(db_path):
     planned = _planned(db_path)
     head = planned.path_head()
-    live = learning_store.load_graph(planned.session_id, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
     live.set_current(list(planned.nodes)[3])
     live.record_arrival(list(planned.nodes)[3], kind="jumped", from_node_id=head)
 
-    reset_to_plan(live, learning_store.load_plan(planned.session_id, db_path))
+    reset_to_plan(live, learning_store.load_plan(planned.session_id, TEST_USER_ID, db_path))
 
     assert live.current_node_id == head
     assert live.arrival is None
@@ -373,16 +375,16 @@ def test_position_returns_to_the_first_stop(db_path):
 def test_what_is_not_learner_state_survives(db_path):
     """The goal, the repository, the briefing and the chapter list are the plan."""
     planned = _planned(db_path)
-    live = learning_store.load_graph(planned.session_id, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
     live.briefing = {"paragraph": "what this repository is"}
     live.doc_context = {"readme": "an HTTP library"}
-    learning_store.save_graph(live, db_path)
+    learning_store.save_graph(live, db_path, user_id=TEST_USER_ID)
 
-    live = learning_store.load_graph(planned.session_id, db_path)
-    reset_to_plan(live, learning_store.load_plan(planned.session_id, db_path))
-    learning_store.save_graph(live, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
+    reset_to_plan(live, learning_store.load_plan(planned.session_id, TEST_USER_ID, db_path))
+    learning_store.save_graph(live, db_path, user_id=TEST_USER_ID)
 
-    after = learning_store.load_graph(planned.session_id, db_path)
+    after = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
     assert after.repo_url == REPO
     assert after.goal == GOAL
     assert after.areas == planned.areas
@@ -395,10 +397,10 @@ def test_what_is_not_learner_state_survives(db_path):
 
 def test_the_summary_counts_what_was_discarded(db_path):
     planned = _planned(db_path)
-    live = learning_store.load_graph(planned.session_id, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
     _work_the_session(live, list(planned.nodes))
 
-    summary = reset_to_plan(live, learning_store.load_plan(planned.session_id, db_path))
+    summary = reset_to_plan(live, learning_store.load_plan(planned.session_id, TEST_USER_ID, db_path))
 
     assert isinstance(summary, ResetSummary)
     assert summary.attempts == 2
@@ -410,9 +412,9 @@ def test_the_summary_counts_what_was_discarded(db_path):
 
 def test_the_summary_of_a_pristine_session_is_empty(db_path):
     planned = _planned(db_path)
-    live = learning_store.load_graph(planned.session_id, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
 
-    summary = reset_to_plan(live, learning_store.load_plan(planned.session_id, db_path))
+    summary = reset_to_plan(live, learning_store.load_plan(planned.session_id, TEST_USER_ID, db_path))
 
     assert summary.attempts == 0
     assert summary.gaps == 0
@@ -422,7 +424,7 @@ def test_the_summary_of_a_pristine_session_is_empty(db_path):
 
 def test_learner_state_describes_the_boundary(db_path):
     planned = _planned(db_path)
-    live = learning_store.load_graph(planned.session_id, db_path)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db_path)
     _work_the_session(live, list(planned.nodes))
 
     state = learner_state(live)
@@ -447,9 +449,9 @@ def client(tmp_path, monkeypatch):
 def test_the_endpoint_restores_and_returns_the_graph(client):
     db = api.SESSIONS_DB_PATH
     planned = _planned(db)
-    live = learning_store.load_graph(planned.session_id, db)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db)
     _work_the_session(live, list(planned.nodes))
-    learning_store.save_graph(live, db)
+    learning_store.save_graph(live, db, user_id=TEST_USER_ID)
 
     resp = client.post(f"/session/{planned.session_id}/reset")
 
@@ -507,9 +509,9 @@ def test_the_endpoint_409s_when_there_is_no_plan(client):
 def test_the_endpoint_is_idempotent(client):
     db = api.SESSIONS_DB_PATH
     planned = _planned(db)
-    live = learning_store.load_graph(planned.session_id, db)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db)
     _work_the_session(live, list(planned.nodes))
-    learning_store.save_graph(live, db)
+    learning_store.save_graph(live, db, user_id=TEST_USER_ID)
 
     first = client.post(f"/session/{planned.session_id}/reset").json()["graph"]
     second = client.post(f"/session/{planned.session_id}/reset").json()["graph"]
@@ -531,9 +533,9 @@ def test_the_session_is_usable_after_a_reset(client, monkeypatch):
     monkeypatch.setattr(api.anthropic, "Anthropic", lambda **kw: llm)
     db = api.SESSIONS_DB_PATH
     planned = _planned(db)
-    live = learning_store.load_graph(planned.session_id, db)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db)
     _work_the_session(live, list(planned.nodes))
-    learning_store.save_graph(live, db)
+    learning_store.save_graph(live, db, user_id=TEST_USER_ID)
     client.post(f"/session/{planned.session_id}/reset")
 
     # Cloning is `_render_current_lesson`'s own precondition and predates this
@@ -588,9 +590,9 @@ def test_a_refused_reset_changes_nothing(client):
     """
     db = api.SESSIONS_DB_PATH
     planned = _planned(db)
-    live = learning_store.load_graph(planned.session_id, db)
+    live = learning_store.load_graph(planned.session_id, TEST_USER_ID, db)
     _work_the_session(live, list(planned.nodes))
-    learning_store.save_graph(live, db)
+    learning_store.save_graph(live, db, user_id=TEST_USER_ID)
     # Dropping the plan rows is this test's SETUP — it is how a v2 session looks —
     # so the baseline is taken after it. Snapshotting first would compare across
     # the test's own edit and fail on `has_plan`, which is correct to change here.
@@ -598,11 +600,11 @@ def test_a_refused_reset_changes_nothing(client):
     conn.execute("DELETE FROM plan_nodes WHERE session_id = ?", (planned.session_id,))
     conn.commit()
     conn.close()
-    before = _wire(learning_store.load_graph(planned.session_id, db))
+    before = _wire(learning_store.load_graph(planned.session_id, TEST_USER_ID, db))
 
     assert client.post(f"/session/{planned.session_id}/reset").status_code == 409
 
-    after = learning_store.load_graph(planned.session_id, db)
+    after = learning_store.load_graph(planned.session_id, TEST_USER_ID, db)
     assert _wire(after) == before
     # And still no plan: a refusal must never synthesise one from live state.
-    assert learning_store.load_plan(planned.session_id, db) is None
+    assert learning_store.load_plan(planned.session_id, TEST_USER_ID, db) is None

@@ -10,6 +10,8 @@ the network, the LLM, or the real data/ directory.
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from tests.conftest import TEST_USER_ID
 from fastapi.testclient import TestClient
 
 import backend.api as api
@@ -129,9 +131,9 @@ def test_session_start_persists_the_original_plan(mock_pipeline, client):
         "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
     ).json()["session_id"]
 
-    plan = learning_store.load_plan(session_id, api.SESSIONS_DB_PATH)
+    plan = learning_store.load_plan(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     assert plan is not None
-    live = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    live = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     assert set(plan.nodes) == set(live.nodes)
 
 
@@ -144,12 +146,12 @@ def test_the_first_render_fills_the_plan_lesson_slot(mock_p, mock_t, mock_c, cli
     ).json()["session_id"]
     node_id = client.get(f"/session/{session_id}").json()["current_node_id"]
 
-    assert learning_store.load_plan(session_id, api.SESSIONS_DB_PATH) \
+    assert learning_store.load_plan(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH) \
         .nodes[node_id].cached_lesson is None
 
     client.get(f"/session/{session_id}/lesson")
 
-    assert learning_store.load_plan(session_id, api.SESSIONS_DB_PATH) \
+    assert learning_store.load_plan(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH) \
         .nodes[node_id].cached_lesson == FAKE_LESSON
 
 
@@ -177,16 +179,16 @@ def test_a_teaching_failure_does_not_seal_the_fallback_into_the_plan(
 
     client.get(f"/session/{session_id}/lesson")
 
-    plan = learning_store.load_plan(session_id, api.SESSIONS_DB_PATH)
+    plan = learning_store.load_plan(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     assert plan.nodes[node_id].cached_lesson is None
     # The LIVE side still got the fallback, so the session is not blocked.
-    live = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    live = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     assert live.nodes[node_id].cached_lesson is not None
 
     # And a later successful render fills the slot the outage left empty.
     mock_teaching.side_effect = _teaching_side_effect
     client.get(f"/session/{session_id}/lesson")
-    assert learning_store.load_plan(session_id, api.SESSIONS_DB_PATH) \
+    assert learning_store.load_plan(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH) \
         .nodes[node_id].cached_lesson == FAKE_LESSON
 
 
@@ -631,27 +633,43 @@ def test_override_rejects_unknown_action(mock_pipeline, client):
 
 # ── Part 7: resume ────────────────────────────────────────────────────────────
 
-@patch("backend.api.clone_repo", return_value="data/repos/requests")
-@patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
-def test_same_repo_goal_resumes_without_rerunning_pipeline(
-    mock_pipeline, mock_teaching, mock_clone, client
-):
-    start = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
-    session_id = start["session_id"]
-    assert start["resumed"] is False
-    # Advance once so the first node is visited and current moves to the second.
-    client.post(f"/session/{session_id}/advance", json={"signal": "next"})
+def test_the_same_repo_and_goal_now_produce_a_SECOND_session(mock_pipeline, client):
+    """M3 DELETED implicit resume, and this is the behaviour that replaces it.
 
-    # Second start, same repo + goal → resume the SAME session, no new pipeline.
-    again = client.post(
+    `_try_resume` used to scan every session in the database for a matching
+    (repo_url, goal) and return it rather than planning. Two learners who picked
+    the same repository and answered the interview the same way got THE SAME
+    SESSION — each other's answers, gaps and history (multi-user.md §2 P1).
+
+    It also contradicted the requirement it looked like it served: a learner may
+    hold several sessions on one repository, with the same goal or a different
+    one, and they must be independent (I3).
+
+    So creation always creates. Resuming means opening a session you already
+    own, by id, from the dashboard.
+    """
+    first = client.post(
         "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
     ).json()
-    assert again["resumed"] is True
-    assert again["session_id"] == session_id
-    assert mock_pipeline.call_count == 1  # pipeline ran only the first time
+    second = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    ).json()
+
+    assert first["session_id"] != second["session_id"]
+    assert second["resumed"] is False
+    assert mock_pipeline.call_count == 2, "the second must be planned, not reused"
+
+    # And they are genuinely independent: advancing one leaves the other alone.
+    stored_first = learning_store.load_graph(
+        first["session_id"], TEST_USER_ID, api.SESSIONS_DB_PATH
+    )
+    stored_second = learning_store.load_graph(
+        second["session_id"], TEST_USER_ID, api.SESSIONS_DB_PATH
+    )
+    assert set(stored_first.nodes) != set(stored_second.nodes), (
+        "two sessions sharing node ids would share state"
+    )
 
 
 @patch("backend.api.clone_repo", return_value="data/repos/requests")

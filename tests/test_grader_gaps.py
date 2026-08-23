@@ -20,6 +20,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from tests.conftest import TEST_USER_ID
+
 from backend.agents.grader import run
 from backend.agents.grader.agent import (
     _GAPS_ADDENDUM,
@@ -593,9 +595,9 @@ def test_two_same_kind_gaps_survive_save_load_and_a_re_grade(flag_on, tmp_path):
     ]))
     original = [(g.id, g.claim) for g in state.graph.nodes[node_id].gaps]
     assert len(original) == 2
-    learning_store.save_graph(state.graph, db)
+    learning_store.save_graph(state.graph, db, user_id=TEST_USER_ID)
 
-    reloaded = learning_store.load_graph(state.graph.session_id, db)
+    reloaded = learning_store.load_graph(state.graph.session_id, TEST_USER_ID, db)
     resumed = OnboardState(repo_url=REPO, goal=GOAL)
     resumed.graph = reloaded
     client = _client("confused", gaps=[
@@ -622,9 +624,9 @@ def test_detected_gaps_survive_a_save_and_load(flag_on, tmp_path):
         _gap("wrong_model", CLAIM_A, part="what data a Node holds"),
         _gap("wrong_model", CLAIM_B, part="what solution() reconstructs"),
     ]))
-    learning_store.save_graph(state.graph, db)
+    learning_store.save_graph(state.graph, db, user_id=TEST_USER_ID)
 
-    reloaded = learning_store.load_graph(state.graph.session_id, db)
+    reloaded = learning_store.load_graph(state.graph.session_id, TEST_USER_ID, db)
     gaps = reloaded.nodes[node_id].gaps
     assert [(g.id, g.kind, g.claim, g.objective_part) for g in gaps] == [
         (g.id, g.kind, g.claim, g.objective_part) for g in state.graph.nodes[node_id].gaps

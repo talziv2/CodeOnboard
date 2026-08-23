@@ -24,6 +24,8 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from tests.conftest import TEST_USER_ID
 from fastapi.testclient import TestClient
 
 import backend.api as api
@@ -91,7 +93,7 @@ def _start(client, graph) -> str:
 
 
 def _stored(session_id):
-    return learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    return learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
 
 
 # ── /respond: the gaps list ──────────────────────────────────────────────────
@@ -588,7 +590,7 @@ def test_the_verification_envelope_does_not_land_on_the_assessment(client):
     session_id = _start(client, _graph(node))
     graph = _stored(session_id)
     graph.record_attempt(node.id, "first", "confused", "r")
-    learning_store.save_graph(graph, api.SESSIONS_DB_PATH)
+    learning_store.save_graph(graph, api.SESSIONS_DB_PATH, user_id=TEST_USER_ID)
     _verify(client, session_id)
 
     with patch("backend.api.grade_verification",

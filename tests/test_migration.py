@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import TEST_USER_ID
+
 from backend.auth import identity, startup
 from backend.auth.schema import init_auth_schema
 from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
@@ -73,7 +75,7 @@ def _legacy_db(db: Path, spellings=REPO_SPELLINGS) -> list[LearningGraph]:
     """
     graphs = [_graph(url, focus=f"area {i}") for i, url in enumerate(spellings)]
     for graph in graphs:
-        save_graph(graph, db)
+        save_graph(graph, db, user_id=TEST_USER_ID)
     with sqlite3.connect(db) as conn:
         conn.execute(
             "UPDATE sessions SET user_id = NULL, repo_id = NULL, title = NULL, "
@@ -99,8 +101,9 @@ def test_every_session_still_loads_after_the_migration(db):
     graphs = _legacy_db(db)
     migration.migrate(db, apply=True)
 
+    legacy = identity.get_legacy_user_id(db)
     for graph in graphs:
-        reloaded = load_graph(graph.session_id, db)
+        reloaded = load_graph(graph.session_id, legacy, db)
         assert reloaded is not None
         assert reloaded.repo_url == graph.repo_url
         assert reloaded.goal == graph.goal
@@ -198,14 +201,15 @@ def test_a_url_the_cloner_would_refuse_does_not_lose_its_session(db):
     reports the URL rather than failing on it.
     """
     graph = _graph("https://gitlab.example.com/team/project")
-    save_graph(graph, db)
+    save_graph(graph, db, user_id=TEST_USER_ID)
     with sqlite3.connect(db) as conn:
         conn.execute("UPDATE sessions SET user_id = NULL, repo_id = NULL")
 
     report = migration.migrate(db, apply=True)
 
     assert report["unmappable_repo_urls"] == ["https://gitlab.example.com/team/project"]
-    assert load_graph(graph.session_id, db) is not None
+    # The migration assigned it to the legacy user, so that is who can read it.
+    assert load_graph(graph.session_id, identity.get_legacy_user_id(db), db) is not None
     assert startup.count_unowned_sessions(db) == 0
 
 
@@ -349,7 +353,7 @@ def test_startup_is_silent_on_a_database_with_no_account_columns(db):
 
 def test_deleting_a_session_removes_its_dossier(db):
     graph = _graph("https://github.com/psf/requests")
-    save_graph(graph, db)
+    save_graph(graph, db, user_id=TEST_USER_ID)
     dossier_store.save_investigation(
         graph.session_id, "abc123", {"dossier": {"claims": []}}, db
     )
@@ -362,7 +366,7 @@ def test_deleting_a_session_removes_its_dossier(db):
 
 def test_the_sweep_removes_a_dossier_whose_session_is_gone(db):
     graph = _graph("https://github.com/psf/requests")
-    save_graph(graph, db)
+    save_graph(graph, db, user_id=TEST_USER_ID)
     dossier_store.save_investigation(
         graph.session_id, "abc123", {"dossier": {"claims": []}}, db
     )
@@ -377,7 +381,7 @@ def test_the_sweep_removes_a_dossier_whose_session_is_gone(db):
 
 def test_the_sweep_leaves_a_live_session_alone(db):
     graph = _graph("https://github.com/psf/requests")
-    save_graph(graph, db)
+    save_graph(graph, db, user_id=TEST_USER_ID)
     dossier_store.save_investigation(
         graph.session_id, "abc123", {"dossier": {"claims": []}}, db
     )
@@ -427,23 +431,24 @@ def test_listing_reports_progress_as_unknown_until_it_is_cached(db):
 
 # ── new sessions, written after the migration ─────────────────────────────────
 
-def test_a_newly_saved_session_is_owned_without_anyone_passing_an_owner(db):
-    """The M1 shim: no way to log in yet, so a save defaults to the legacy user.
+def test_saving_without_an_owner_is_now_a_hard_error(db):
+    """M3 REMOVED THE DEFAULT, and that is the whole point of the milestone.
 
-    M3 removes the default and makes the omission a TypeError.
+    M1 and M2 let `save_graph` fall back to the legacy user, because nothing
+    could log in yet and requiring an owner would have broken every route in the
+    name of a rule nothing could satisfy. Now a caller that forgets gets a
+    `TypeError` at the call rather than a session quietly filed under an account
+    nobody owns — a security boundary should fail loudly when it is forgotten.
     """
     graph = _graph("https://github.com/psf/requests")
-    save_graph(graph, db)
 
-    assert startup.count_unowned_sessions(db) == 0
-    with sqlite3.connect(db) as conn:
-        owner, repo_id = conn.execute(
-            "SELECT user_id, repo_id FROM sessions WHERE session_id = ?",
-            (graph.session_id,),
-        ).fetchone()
-    assert owner == identity.get_legacy_user_id(db)
-    assert repo_id == identity.ensure_repository(graph.repo_url, db)
+    with pytest.raises(TypeError):
+        save_graph(graph, db)          # no user_id
 
+    save_graph(graph, db, user_id=TEST_USER_ID)
+    assert load_graph(graph.session_id, TEST_USER_ID, db) is not None
+    # And it is genuinely filed under that user, not a default.
+    assert load_graph(graph.session_id, "somebody-else", db) is None
 
 def test_saving_an_existing_session_never_reassigns_its_owner(db):
     """A save is the owner working, never a change of owner.
@@ -456,7 +461,7 @@ def test_saving_an_existing_session_never_reassigns_its_owner(db):
     real_user = identity.create_user("shira@example.com", db_path=db)
     save_graph(graph, db, user_id=real_user)
 
-    save_graph(graph, db)                     # no owner named this time
+    save_graph(graph, db, user_id=TEST_USER_ID)                     # no owner named this time
 
     with sqlite3.connect(db) as conn:
         owner = conn.execute(
@@ -467,14 +472,14 @@ def test_saving_an_existing_session_never_reassigns_its_owner(db):
 
 def test_saving_updates_last_active_but_not_created_at(db):
     graph = _graph("https://github.com/psf/requests")
-    save_graph(graph, db)
+    save_graph(graph, db, user_id=TEST_USER_ID)
     with sqlite3.connect(db) as conn:
         created, active = conn.execute(
             "SELECT created_at, last_active_at FROM sessions"
         ).fetchone()
 
     graph.mark_visited(next(iter(graph.nodes)))
-    save_graph(graph, db)
+    save_graph(graph, db, user_id=TEST_USER_ID)
 
     with sqlite3.connect(db) as conn:
         created_after, active_after = conn.execute(

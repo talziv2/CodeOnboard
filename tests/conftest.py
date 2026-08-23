@@ -57,3 +57,51 @@ def _neutral_flags(monkeypatch):
     """
     for flag in AMBIENT_FLAGS:
         monkeypatch.delenv(flag, raising=False)
+
+
+# ── authentication, for the suites that predate it (multi-user M3) ────────────
+#
+# Sixteen test files drive session routes through `TestClient`, and every one of
+# those routes now requires a signed-in caller. Rather than teach all sixteen to
+# register and carry a cookie — which would bury what each is actually testing —
+# every test runs as ONE fixed user by default.
+#
+# This is a real user id threaded through the real ownership checks, not a bypass:
+# `load_graph` still filters on it, `save_graph` still stamps it, and a session
+# created by one of these tests genuinely belongs to `TEST_USER_ID`. What is
+# stubbed is only the COOKIE→user step, which `tests/test_auth.py` covers for
+# real.
+#
+# A module opts out with `pytestmark = pytest.mark.real_auth` when it needs to
+# exercise authentication itself — `test_auth.py` and `test_ownership.py` both do.
+TEST_USER_ID = "test-user-00000000000000000000000"
+TEST_USER_EMAIL = "test-user@codeonboard.local"
+
+
+@pytest.fixture(autouse=True)
+def _signed_in(request):
+    """Run every test as one fixed user, unless it opts out.
+
+    `dependency_overrides` ONLY — no `monkeypatch.setattr` on the module. The
+    overrides dict is keyed on the ORIGINAL function object that the routes
+    captured at import, so rebinding `deps.current_user` first makes the key a
+    different object and the override silently never matches. That was the first
+    version of this fixture, and it presented as every route returning 401.
+    """
+    if request.node.get_closest_marker("real_auth"):
+        yield
+        return
+
+    import backend.api as api
+    from backend.auth import deps
+
+    user = deps.CurrentUser(
+        user_id=TEST_USER_ID, email=TEST_USER_EMAIL, display_name="Test User"
+    )
+    previous = api.app.dependency_overrides.copy()
+    api.app.dependency_overrides[deps.current_user] = lambda: user
+    api.app.dependency_overrides[deps.optional_user] = lambda: user
+    try:
+        yield
+    finally:
+        api.app.dependency_overrides = previous

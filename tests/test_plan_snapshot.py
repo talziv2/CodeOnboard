@@ -29,6 +29,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import TEST_USER_ID
+
 from backend.learning import adaptation, scope
 from backend.learning.gaps import Gap
 from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
@@ -117,9 +119,9 @@ def _plan_rows(db_path: Path) -> tuple[list[tuple], list[tuple]]:
 def test_create_session_writes_the_plan_alongside_the_live_graph(db_path):
     graph = _planned_graph()
 
-    create_session(graph, db_path)
+    create_session(graph, db_path, user_id=TEST_USER_ID)
 
-    plan = load_plan(graph.session_id, db_path)
+    plan = load_plan(graph.session_id, TEST_USER_ID, db_path)
     assert plan is not None
     assert set(plan.nodes) == set(graph.nodes)
     assert {(e.from_node_id, e.to_node_id, e.kind) for e in plan.edges} == {
@@ -130,9 +132,9 @@ def test_create_session_writes_the_plan_alongside_the_live_graph(db_path):
 def test_the_plan_carries_every_planned_field(db_path):
     """The guard against plan data silently not being persisted (see the docstring)."""
     graph = _planned_graph()
-    create_session(graph, db_path)
+    create_session(graph, db_path, user_id=TEST_USER_ID)
 
-    plan = load_plan(graph.session_id, db_path)
+    plan = load_plan(graph.session_id, TEST_USER_ID, db_path)
 
     for node_id, original in graph.nodes.items():
         restored = plan.nodes[node_id]
@@ -144,9 +146,9 @@ def test_the_plan_carries_every_planned_field(db_path):
 
 def test_a_planned_node_comes_back_with_no_learner_state(db_path):
     graph = _planned_graph()
-    create_session(graph, db_path)
+    create_session(graph, db_path, user_id=TEST_USER_ID)
 
-    node = next(iter(load_plan(graph.session_id, db_path).nodes.values()))
+    node = next(iter(load_plan(graph.session_id, TEST_USER_ID, db_path).nodes.values()))
 
     assert node.understanding_state == "not_started"
     assert node.visited is False
@@ -163,9 +165,9 @@ def test_the_plan_carries_no_position_and_no_history(db_path):
     graph = _planned_graph()
     graph.record_journey_event("jumped", nodes=[next(iter(graph.nodes))])
     graph.record_arrival(next(iter(graph.nodes)), kind="jumped")
-    create_session(graph, db_path)
+    create_session(graph, db_path, user_id=TEST_USER_ID)
 
-    plan = load_plan(graph.session_id, db_path)
+    plan = load_plan(graph.session_id, TEST_USER_ID, db_path)
 
     assert plan.current_node_id is None
     assert plan.arrival is None
@@ -175,13 +177,13 @@ def test_the_plan_carries_no_position_and_no_history(db_path):
 def test_session_level_plan_columns_come_across(db_path):
     graph = _planned_graph()
     graph.doc_context = {"readme": "requests is an HTTP library"}
-    create_session(graph, db_path)
+    create_session(graph, db_path, user_id=TEST_USER_ID)
     # Written after creation, by the welcome page rather than the planner.
-    live = load_graph(graph.session_id, db_path)
+    live = load_graph(graph.session_id, TEST_USER_ID, db_path)
     live.briefing = {"paragraph": "what this repository is"}
-    save_graph(live, db_path)
+    save_graph(live, db_path, user_id=TEST_USER_ID)
 
-    plan = load_plan(graph.session_id, db_path)
+    plan = load_plan(graph.session_id, TEST_USER_ID, db_path)
 
     assert plan.repo_url == graph.repo_url
     assert plan.goal == graph.goal
@@ -206,9 +208,9 @@ def test_creation_is_one_transaction(db_path, monkeypatch):
     graph = _planned_graph()
 
     with pytest.raises(RuntimeError):
-        create_session(graph, db_path)
+        create_session(graph, db_path, user_id=TEST_USER_ID)
 
-    assert load_graph(graph.session_id, db_path) is None
+    assert load_graph(graph.session_id, TEST_USER_ID, db_path) is None
 
 
 def test_save_graph_alone_writes_no_plan(db_path):
@@ -220,40 +222,40 @@ def test_save_graph_alone_writes_no_plan(db_path):
     """
     graph = _planned_graph()
 
-    save_graph(graph, db_path)
+    save_graph(graph, db_path, user_id=TEST_USER_ID)
 
-    assert load_plan(graph.session_id, db_path) is None
+    assert load_plan(graph.session_id, TEST_USER_ID, db_path) is None
 
 
 # --- the write-once lesson slot -----------------------------------------------
 
 def test_the_first_lesson_fills_the_slot(db_path):
     graph = _planned_graph()
-    create_session(graph, db_path)
+    create_session(graph, db_path, user_id=TEST_USER_ID)
     node_id = graph.current_node_id
 
     assert record_plan_lesson(graph.session_id, node_id, _lesson("first"), db_path) is True
 
-    assert load_plan(graph.session_id, db_path).nodes[node_id].cached_lesson == _lesson("first")
+    assert load_plan(graph.session_id, TEST_USER_ID, db_path).nodes[node_id].cached_lesson == _lesson("first")
 
 
 def test_a_second_recording_cannot_overwrite(db_path):
     graph = _planned_graph()
-    create_session(graph, db_path)
+    create_session(graph, db_path, user_id=TEST_USER_ID)
     node_id = graph.current_node_id
     record_plan_lesson(graph.session_id, node_id, _lesson("first"), db_path)
 
     assert record_plan_lesson(graph.session_id, node_id, _lesson("retaught"), db_path) is False
 
-    assert load_plan(graph.session_id, db_path).nodes[node_id].cached_lesson == _lesson("first")
+    assert load_plan(graph.session_id, TEST_USER_ID, db_path).nodes[node_id].cached_lesson == _lesson("first")
 
 
 def test_an_unrendered_stop_has_no_lesson(db_path):
     """None, not a fabricated one — the same state a fresh session is in there."""
     graph = _planned_graph()
-    create_session(graph, db_path)
+    create_session(graph, db_path, user_id=TEST_USER_ID)
 
-    plan = load_plan(graph.session_id, db_path)
+    plan = load_plan(graph.session_id, TEST_USER_ID, db_path)
 
     assert all(n.cached_lesson is None for n in plan.nodes.values())
 
@@ -265,7 +267,7 @@ def test_recording_for_a_node_outside_the_plan_is_a_no_op(db_path):
     would then restore the very warm-ups it exists to remove.
     """
     graph = _planned_graph()
-    create_session(graph, db_path)
+    create_session(graph, db_path, user_id=TEST_USER_ID)
     before_nodes, before_edges = _plan_rows(db_path)
 
     assert record_plan_lesson(graph.session_id, "not-a-planned-node", _lesson("x"), db_path) is False
@@ -287,7 +289,7 @@ def test_the_plan_does_not_move_while_the_learner_works(db_path):
     lesson.
     """
     graph = _planned_graph()
-    create_session(graph, db_path)
+    create_session(graph, db_path, user_id=TEST_USER_ID)
     first, second, third = list(graph.nodes)
 
     # Lessons render as the learner arrives; the plan records each once.
@@ -295,7 +297,7 @@ def test_the_plan_does_not_move_while_the_learner_works(db_path):
         record_plan_lesson(graph.session_id, node_id, _lesson(marker), db_path)
     baseline_nodes, baseline_edges = _plan_rows(db_path)
 
-    live = load_graph(graph.session_id, db_path)
+    live = load_graph(graph.session_id, TEST_USER_ID, db_path)
 
     # ── an answer, graded, with gaps in every status ──────────────────────────
     live.record_attempt(first, "sessions are just a dict", "confused", "not quite",
@@ -340,7 +342,7 @@ def test_the_plan_does_not_move_while_the_learner_works(db_path):
     )
     live.insert_before(first, warm_up, kind="prerequisite")
     live.set_current(warm_up.id)
-    save_graph(live, db_path)
+    save_graph(live, db_path, user_id=TEST_USER_ID)
     # The warm-up renders too — the no-op path, exercised in situ.
     record_plan_lesson(graph.session_id, warm_up.id, _lesson("warm-up"), db_path)
 
@@ -348,7 +350,7 @@ def test_the_plan_does_not_move_while_the_learner_works(db_path):
     assert _plan_rows(db_path) == (baseline_nodes, baseline_edges)
 
     # And it still describes the ORIGINAL journey, not the mutated one.
-    plan = load_plan(graph.session_id, db_path)
+    plan = load_plan(graph.session_id, TEST_USER_ID, db_path)
     assert set(plan.nodes) == {first, second, third}
     assert plan.nodes[first].cached_lesson == _lesson("one")
     assert plan.nodes[third].cached_lesson is None
@@ -362,7 +364,7 @@ def test_the_plan_does_not_move_while_the_learner_works(db_path):
     assert plan.nodes[second].user_override is None
 
     # ...while the LIVE graph kept every one of those mutations.
-    reloaded = load_graph(graph.session_id, db_path)
+    reloaded = load_graph(graph.session_id, TEST_USER_ID, db_path)
     assert len(reloaded.nodes) == 4
     assert reloaded.nodes[first].attempts
     assert len(reloaded.nodes[first].gaps) == 3
@@ -380,7 +382,7 @@ def test_schema_version_is_three():
 def test_a_session_from_an_older_schema_has_no_plan(db_path):
     """No backfill, no reconstruction: `load_plan` says None and the caller decides."""
     graph = _planned_graph()
-    create_session(graph, db_path)
+    create_session(graph, db_path, user_id=TEST_USER_ID)
     conn = sqlite3.connect(db_path)
     conn.execute("UPDATE sessions SET schema_version = 2 WHERE session_id = ?",
                  (graph.session_id,))
@@ -409,8 +411,8 @@ def test_a_session_from_an_older_schema_has_no_plan(db_path):
     conn.commit()
     conn.close()
 
-    assert load_plan(graph.session_id, db_path) is None
-    restored = load_graph(graph.session_id, db_path)
+    assert load_plan(graph.session_id, TEST_USER_ID, db_path) is None
+    restored = load_graph(graph.session_id, TEST_USER_ID, db_path)
     assert restored is not None
     assert restored.has_plan is False
 
@@ -419,7 +421,7 @@ def test_the_plan_cascades_when_a_session_is_deleted(db_path):
     from backend.learning.store import delete_session
 
     graph = _planned_graph()
-    create_session(graph, db_path)
+    create_session(graph, db_path, user_id=TEST_USER_ID)
 
     delete_session(graph.session_id, db_path)
 
@@ -428,9 +430,9 @@ def test_the_plan_cascades_when_a_session_is_deleted(db_path):
 
 def test_load_plan_is_none_for_an_unknown_session(db_path):
     graph = _planned_graph()
-    create_session(graph, db_path)
+    create_session(graph, db_path, user_id=TEST_USER_ID)
 
-    assert load_plan("no-such-session", db_path) is None
+    assert load_plan("no-such-session", TEST_USER_ID, db_path) is None
 
 
 def test_the_plan_tables_hold_no_learner_state_columns(db_path):
@@ -440,7 +442,7 @@ def test_the_plan_tables_hold_no_learner_state_columns(db_path):
     learning again, which is the whole thing this design removes.
     """
     graph = _planned_graph()
-    create_session(graph, db_path)
+    create_session(graph, db_path, user_id=TEST_USER_ID)
     conn = sqlite3.connect(db_path)
     try:
         columns = {r[1] for r in conn.execute("PRAGMA table_info(plan_nodes)")}
@@ -468,9 +470,9 @@ def test_every_learning_node_field_is_planned_or_defaulted(db_path):
     reset, and this is what makes that loud instead of silent.
     """
     graph = _planned_graph()
-    create_session(graph, db_path)
+    create_session(graph, db_path, user_id=TEST_USER_ID)
     record_plan_lesson(graph.session_id, graph.current_node_id, _lesson("one"), db_path)
-    plan_node = load_plan(graph.session_id, db_path).nodes[graph.current_node_id]
+    plan_node = load_plan(graph.session_id, TEST_USER_ID, db_path).nodes[graph.current_node_id]
 
     # Carried by the plan.
     planned = {"id", "title", "code_anchor", "concept_tags", "lesson_brief",
@@ -534,21 +536,21 @@ def test_create_session_is_called_from_exactly_one_place():
 def test_a_created_session_knows_it_has_a_plan(db_path):
     graph = _planned_graph()
 
-    create_session(graph, db_path)
+    create_session(graph, db_path, user_id=TEST_USER_ID)
 
     # On the in-memory object too, because that is the payload /session/start
     # returns — it must not claim a fresh session cannot be started over.
     assert graph.has_plan is True
-    assert load_graph(graph.session_id, db_path).has_plan is True
-    assert load_graph(graph.session_id, db_path).to_dict()["has_plan"] is True
+    assert load_graph(graph.session_id, TEST_USER_ID, db_path).has_plan is True
+    assert load_graph(graph.session_id, TEST_USER_ID, db_path).to_dict()["has_plan"] is True
 
 
 def test_a_session_with_no_plan_rows_says_so(db_path):
     """The shape of every session written before the plan tables existed."""
     graph = _planned_graph()
-    save_graph(graph, db_path)  # deliberately not create_session
+    save_graph(graph, db_path, user_id=TEST_USER_ID)  # deliberately not create_session
 
-    loaded = load_graph(graph.session_id, db_path)
+    loaded = load_graph(graph.session_id, TEST_USER_ID, db_path)
 
     assert loaded.has_plan is False
     assert loaded.to_dict()["has_plan"] is False
@@ -562,7 +564,7 @@ def test_has_plan_is_never_persisted(db_path):
     that 409s, or one that is hidden on a session that could be restored.
     """
     graph = _planned_graph()
-    create_session(graph, db_path)
+    create_session(graph, db_path, user_id=TEST_USER_ID)
     conn = sqlite3.connect(db_path)
     try:
         columns = {r[1] for r in conn.execute("PRAGMA table_info(sessions)")}
@@ -571,14 +573,14 @@ def test_has_plan_is_never_persisted(db_path):
     assert "has_plan" not in columns
 
     # A lie on the in-memory object does not survive a round trip.
-    live = load_graph(graph.session_id, db_path)
+    live = load_graph(graph.session_id, TEST_USER_ID, db_path)
     live.has_plan = False
-    save_graph(live, db_path)
-    assert load_graph(graph.session_id, db_path).has_plan is True
+    save_graph(live, db_path, user_id=TEST_USER_ID)
+    assert load_graph(graph.session_id, TEST_USER_ID, db_path).has_plan is True
 
 
 def test_a_graph_built_from_the_plan_has_a_plan(db_path):
     graph = _planned_graph()
-    create_session(graph, db_path)
+    create_session(graph, db_path, user_id=TEST_USER_ID)
 
-    assert load_plan(graph.session_id, db_path).has_plan is True
+    assert load_plan(graph.session_id, TEST_USER_ID, db_path).has_plan is True

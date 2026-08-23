@@ -12,6 +12,8 @@ import json
 
 import pytest
 
+from tests.conftest import TEST_USER_ID
+
 from backend.learning import history, progress
 from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
 from backend.learning.store import load_graph, save_graph
@@ -239,9 +241,9 @@ class TestRoundTrip:
         graph.record_attempt(node_id, "a", "confused", "r", graded=False)
         graph.record_response(node_id, history.new_response("hint", text="t"))
         graph.record_journey_event(history.PRUNE_AHEAD, nodes=["z"])
-        save_graph(graph, db)
+        save_graph(graph, db, user_id=TEST_USER_ID)
 
-        reloaded = load_graph(graph.session_id, db)
+        reloaded = load_graph(graph.session_id, TEST_USER_ID, db)
         attempt = reloaded.nodes[node_id].attempts[-1]
         assert attempt["kind"] == history.ASSESSMENT
         assert attempt["graded"] is False
@@ -261,26 +263,26 @@ class TestRoundTrip:
         graph.record_attempt(node_id, "v", "understood", "r",
                              kind=history.VERIFICATION)
         graph.record_response(node_id, history.new_response("hint"))
-        save_graph(graph, db)
+        save_graph(graph, db, user_id=TEST_USER_ID)
 
-        attempt = load_graph(graph.session_id, db).nodes[node_id].attempts[-1]
+        attempt = load_graph(graph.session_id, TEST_USER_ID, db).nodes[node_id].attempts[-1]
         assert attempt["kind"] == history.VERIFICATION
         assert history.is_instrumented(attempt) is False
 
     def test_a_graph_with_no_events_stores_null_not_an_empty_blob(self, tmp_path):
         db = tmp_path / "s.db"
         graph = _graph()
-        save_graph(graph, db)
-        assert load_graph(graph.session_id, db).journey_events == []
+        save_graph(graph, db, user_id=TEST_USER_ID)
+        assert load_graph(graph.session_id, TEST_USER_ID, db).journey_events == []
 
     def test_a_pre_m2_session_loads_with_empty_history(self, tmp_path):
         # Simulates a row written before the column existed.
         db = tmp_path / "s.db"
         graph = _graph()
         graph.nodes[graph.path_order()[0]].attempts.append(_pre_m2_attempt())
-        save_graph(graph, db)
+        save_graph(graph, db, user_id=TEST_USER_ID)
 
-        reloaded = load_graph(graph.session_id, db)
+        reloaded = load_graph(graph.session_id, TEST_USER_ID, db)
         assert reloaded.journey_events == []
         assert history.is_instrumented(
             reloaded.nodes[graph.path_order()[0]].attempts[0]) is False

@@ -28,6 +28,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import TEST_USER_ID
+
 from backend.learning.store import (
     BUSY_TIMEOUT_MS,
     _connect,
@@ -59,7 +61,7 @@ def _graph(title: str = "Understand Session") -> LearningGraph:
 # --- the pragmas --------------------------------------------------------------
 
 def test_wal_is_enabled_on_the_learning_store(db_path):
-    save_graph(_graph(), db_path)
+    save_graph(_graph(), db_path, user_id=TEST_USER_ID)
 
     with _connect(db_path) as conn:
         mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
@@ -68,7 +70,7 @@ def test_wal_is_enabled_on_the_learning_store(db_path):
 
 
 def test_busy_timeout_is_set(db_path):
-    save_graph(_graph(), db_path)
+    save_graph(_graph(), db_path, user_id=TEST_USER_ID)
 
     with _connect(db_path) as conn:
         timeout = conn.execute("PRAGMA busy_timeout").fetchone()[0]
@@ -79,7 +81,7 @@ def test_busy_timeout_is_set(db_path):
 def test_foreign_keys_stay_on(db_path):
     # Pre-existing behaviour the new pragmas must not have displaced: the nodes
     # and edges cascade depends on it.
-    save_graph(_graph(), db_path)
+    save_graph(_graph(), db_path, user_id=TEST_USER_ID)
 
     with _connect(db_path) as conn:
         assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
@@ -99,7 +101,7 @@ def test_the_other_writers_of_this_file_use_the_same_settings(db_path, connect):
     way this milestone exists to stop — and they fail intermittently, from a
     module that looks unrelated to the change.
     """
-    save_graph(_graph(), db_path)
+    save_graph(_graph(), db_path, user_id=TEST_USER_ID)
 
     conn = connect(db_path)
     try:
@@ -114,7 +116,7 @@ def test_the_other_writers_of_this_file_use_the_same_settings(db_path, connect):
 def test_a_reader_is_not_blocked_by_an_open_write(db_path):
     """WAL's whole point: a lesson loading while an answer is being graded."""
     graph = _graph()
-    save_graph(graph, db_path)
+    save_graph(graph, db_path, user_id=TEST_USER_ID)
 
     holder = sqlite3.connect(db_path, timeout=BUSY_TIMEOUT_MS / 1000)
     holder.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
@@ -127,7 +129,7 @@ def test_a_reader_is_not_blocked_by_an_open_write(db_path):
         )
 
         # Under the old rollback journal this raised `database is locked`.
-        reloaded = load_graph(graph.session_id, db_path)
+        reloaded = load_graph(graph.session_id, TEST_USER_ID, db_path)
 
         assert reloaded is not None
         assert reloaded.session_id == graph.session_id
@@ -150,7 +152,7 @@ def test_concurrent_writers_all_succeed(db_path):
         try:
             barrier.wait(timeout=10)     # maximise the overlap
             for _ in range(3):
-                save_graph(graph, db_path)
+                save_graph(graph, db_path, user_id=TEST_USER_ID)
         except Exception as exc:         # noqa: BLE001 - recorded, then asserted
             errors.append(exc)
 
@@ -162,7 +164,7 @@ def test_concurrent_writers_all_succeed(db_path):
 
     assert errors == [], f"concurrent writes failed: {errors!r}"
     for graph in graphs:
-        assert load_graph(graph.session_id, db_path) is not None
+        assert load_graph(graph.session_id, TEST_USER_ID, db_path) is not None
 
 
 def test_a_write_waits_for_a_lock_rather_than_failing(db_path):
@@ -179,7 +181,7 @@ def test_a_write_waits_for_a_lock_rather_than_failing(db_path):
     run, before the release moved onto the holder's own thread.
     """
     graph = _graph()
-    save_graph(graph, db_path)
+    save_graph(graph, db_path, user_id=TEST_USER_ID)
 
     holding = threading.Event()
     outcome: list[object] = []
@@ -204,7 +206,7 @@ def test_a_write_waits_for_a_lock_rather_than_failing(db_path):
     def writer() -> None:
         holding.wait(timeout=5)
         try:
-            save_graph(graph, db_path)
+            save_graph(graph, db_path, user_id=TEST_USER_ID)
             outcome.append("ok")
         except Exception as exc:          # noqa: BLE001
             outcome.append(exc)
@@ -240,7 +242,7 @@ def test_concurrent_first_writes_to_a_new_database_all_succeed(db_path):
     def write(graph: LearningGraph) -> None:
         try:
             barrier.wait(timeout=10)
-            save_graph(graph, db_path)
+            save_graph(graph, db_path, user_id=TEST_USER_ID)
         except Exception as exc:          # noqa: BLE001
             errors.append(exc)
 
@@ -252,7 +254,7 @@ def test_concurrent_first_writes_to_a_new_database_all_succeed(db_path):
 
     assert errors == [], f"concurrent schema initialisation failed: {errors!r}"
     for graph in graphs:
-        assert load_graph(graph.session_id, db_path) is not None
+        assert load_graph(graph.session_id, TEST_USER_ID, db_path) is not None
 
 
 def test_a_real_alter_failure_is_not_swallowed(db_path, monkeypatch):

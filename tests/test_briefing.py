@@ -12,6 +12,8 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from tests.conftest import TEST_USER_ID
 from fastapi.testclient import TestClient
 
 import backend.api as api
@@ -311,7 +313,7 @@ def _saved_graph() -> LearningGraph:
         )
     )
     graph.doc_context = DOC_CONTEXT
-    learning_store.save_graph(graph, api.SESSIONS_DB_PATH)
+    learning_store.save_graph(graph, api.SESSIONS_DB_PATH, user_id=TEST_USER_ID)
     return graph
 
 
@@ -334,7 +336,7 @@ def test_welcome_writes_the_briefing_once_and_reads_it_back(http, tmp_path):
     assert second.json() == first.json()
     # Cached on the session: the second GET is free.
     assert client.messages.create.call_count == 1
-    reloaded = learning_store.load_graph(graph.session_id, api.SESSIONS_DB_PATH)
+    reloaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     assert reloaded.briefing == first.json()["briefing"]
 
 
@@ -358,5 +360,5 @@ def test_welcome_on_an_unknown_session_is_404(http):
 
 def test_a_graph_written_before_briefings_existed_loads_with_none():
     graph = _saved_graph()
-    reloaded = learning_store.load_graph(graph.session_id, api.SESSIONS_DB_PATH)
+    reloaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     assert reloaded.briefing is None
