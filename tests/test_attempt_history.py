@@ -10,6 +10,8 @@ Covers three linked behaviours:
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from tests.conftest import TEST_USER_ID, start_session
 from fastapi.testclient import TestClient
 
 import backend.api as api
@@ -94,8 +96,7 @@ def _inserts_prerequisite(state, signal, client=None, diagnosis=None, origin=Non
 
 
 def _start(client):
-    resp = client.post("/session/start",
-                       json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}).json()
+    resp = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     client.get(f"/session/{resp['session_id']}/lesson")  # so /respond has a prompt
     return resp["session_id"], resp["graph"]["current_node_id"]
 
@@ -144,9 +145,9 @@ def test_attempts_round_trip_through_sqlite(tmp_path):
     db = tmp_path / "s.db"
     graph = _two_node_graph()
     graph.record_attempt(graph.current_node_id, "my answer", "partial", "close")
-    learning_store.save_graph(graph, db)
+    learning_store.save_graph(graph, db, user_id=TEST_USER_ID)
 
-    loaded = learning_store.load_graph(graph.session_id, db)
+    loaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
 
     assert loaded is not None
     assert loaded.nodes[graph.current_node_id].attempts[0]["answer"] == "my answer"
@@ -156,9 +157,9 @@ def test_nodes_without_history_load_as_empty(tmp_path):
     # Sessions written before the column existed must still load.
     db = tmp_path / "s.db"
     graph = _two_node_graph()
-    learning_store.save_graph(graph, db)
+    learning_store.save_graph(graph, db, user_id=TEST_USER_ID)
 
-    loaded = learning_store.load_graph(graph.session_id, db)
+    loaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
 
     assert loaded.nodes[graph.current_node_id].attempts == []
 
@@ -311,9 +312,9 @@ def test_attempts_recorded_before_gap_kind_existed_still_load(tmp_path):
         {"answer": "a", "classification": "partial", "rationale": "close",
          "at": "2026-08-01T00:00:00+00:00"}
     )
-    learning_store.save_graph(graph, db)
+    learning_store.save_graph(graph, db, user_id=TEST_USER_ID)
 
-    loaded = learning_store.load_graph(graph.session_id, db)
+    loaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
 
     attempt = loaded.nodes[graph.current_node_id].attempts[0]
     assert attempt["classification"] == "partial"

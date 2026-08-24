@@ -1,4 +1,13 @@
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+/**
+ * Every call goes through the Next.js rewrite (see `next.config.ts`), so the
+ * browser only ever talks to its own origin and the auth cookie is first-party.
+ *
+ * There is no `NEXT_PUBLIC_API_URL` any more: that value was baked into the
+ * browser bundle at build time, which both published the API's address and made
+ * it impossible to change without a rebuild. The server-side `API_ORIGIN` in
+ * `next.config.ts` replaces it.
+ */
+const BASE = "/api";
 
 /** FastAPI puts the useful part in `detail`, which may be a string or an
  *  object carrying the pipeline's error list. Raw JSON in a UI is useless, so
@@ -23,9 +32,28 @@ async function fail(res: Response): Promise<never> {
  *  origin its CORS list doesn't allow. The browser collapses both into an
  *  opaque `TypeError: Failed to fetch`, so translate it into a slug the UI can
  *  render as something a person can act on. */
+/** Thrown on any 401. The auth layer catches it once, centrally. */
+export class NotAuthenticatedError extends Error {
+  constructor() {
+    super("not_authenticated");
+    this.name = "NotAuthenticatedError";
+  }
+}
+
+/** Notified whenever a request comes back 401, so the app reacts in ONE place. */
+let onUnauthenticated: (() => void) | null = null;
+export function setUnauthenticatedHandler(handler: (() => void) | null) {
+  onUnauthenticated = handler;
+}
+
 async function send(path: string, init?: RequestInit): Promise<Response> {
+  let res: Response;
   try {
-    return await fetch(`${BASE}${path}`, init);
+    // `credentials: "include"` on every request, in the ONE place every request
+    // passes through. Per-call would work until the call somebody adds next
+    // month forgets it — and that call would fail as "not signed in" rather
+    // than as a missing option, which is a long way from its cause.
+    res = await fetch(`${BASE}${path}`, { ...init, credentials: "include" });
   } catch (e: unknown) {
     // An abort is the CALLER'S decision, not a failure to reach the server, and
     // collapsing the two would make "I changed my mind" render as "the backend
@@ -33,6 +61,13 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
     if (e instanceof DOMException && e.name === "AbortError") throw e;
     throw new Error("server_unreachable");
   }
+  if (res.status === 401) {
+    // The session is gone — expired, revoked, or never there. Reported once,
+    // here, so no caller has to remember that 401 is the special one.
+    onUnauthenticated?.();
+    throw new NotAuthenticatedError();
+  }
+  return res;
 }
 
 async function post<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
@@ -41,6 +76,16 @@ async function post<T>(path: string, body?: unknown, signal?: AbortSignal): Prom
     headers: { "Content-Type": "application/json" },
     body: body !== undefined ? JSON.stringify(body) : undefined,
     signal,
+  });
+  if (!res.ok) await fail(res);
+  return res.json();
+}
+
+async function patch<T>(path: string, body?: unknown): Promise<T> {
+  const res = await send(path, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) await fail(res);
   return res.json();
@@ -103,6 +148,9 @@ export const goalBack = (session_id: string) =>
 
 export interface SessionStartResponse {
   session_id: string;
+  /** "generating" — planning runs in the background (multi-user M7). */
+  status?: string;
+  progress_id?: string;
 }
 
 export const sessionStart = (
@@ -144,6 +192,35 @@ export interface PipelineProgress {
 
 export const sessionProgress = (progress_id: string) =>
   get<PipelineProgress>(`/session/progress/${encodeURIComponent(progress_id)}`);
+
+/** What a reset threw away. Counts, not content — nothing is archived. */
+export interface DiscardedWork {
+  stops: number;
+  attempts: number;
+  gaps: number;
+  remedial_nodes: number;
+  lessons_restored: number;
+}
+
+export interface ResetResponse {
+  session_id: string;
+  graph: SessionGraph;
+  discarded: DiscardedWork;
+}
+
+/**
+ * Start over: the same learning path, restored, with none of the learner's work.
+ *
+ * Nothing like `sessionStart(force_new)`, which is the *rebuild* — this runs no
+ * pipeline, spends no model call, keeps the session id and returns in
+ * milliseconds. It carries no progress id and needs no abort signal for the same
+ * reason: there is no wait to report on, and nothing to withdraw from.
+ *
+ * The response carries the whole graph, in the shape `getSession` returns, so the
+ * caller swaps it in rather than re-fetching.
+ */
+export const resetSession = (session_id: string) =>
+  post<ResetResponse>(`/session/${encodeURIComponent(session_id)}/reset`);
 
 // --- Learning graph ---
 
@@ -577,6 +654,15 @@ export interface SessionGraph {
   repo_url: string;
   goal: Record<string, string>;
   current_node_id: string | null;
+  /**
+   * Whether this session has its original plan on disk, and therefore whether
+   * `Start over` can work at all.
+   *
+   * False for sessions planned before routes were snapshotted. Nothing is ever
+   * fabricated for them — the honest answer is that this action is unavailable,
+   * and rebuilding is the way to a route that can be restarted.
+   */
+  has_plan?: boolean;
   nodes: GraphNode[];
   edges: GraphEdge[];
   areas?: Area[];
@@ -891,3 +977,132 @@ export interface FileContent {
 
 export const getFile = (session_id: string, path: string) =>
   get<FileContent>(`/session/${session_id}/file?path=${encodeURIComponent(path)}`);
+
+
+// --- Authentication (multi-user M2) ---
+
+export interface AuthUser {
+  user_id: string;
+  email: string | null;
+  display_name: string | null;
+}
+
+export const register = (email: string, password: string, display_name?: string) =>
+  post<AuthUser>("/auth/register", { email, password, display_name });
+
+export const login = (email: string, password: string) =>
+  post<AuthUser>("/auth/login", { email, password });
+
+/**
+ * Who is calling, or null when nobody is. The whole client-side auth model.
+ *
+ * Returns null rather than throwing on 401: "not signed in" is the expected
+ * ANSWER to this question, not a failure to answer it. Every other endpoint
+ * treats a 401 as exceptional, which is why this one unwraps it here.
+ */
+export const me = async (): Promise<AuthUser | null> => {
+  try {
+    return await get<AuthUser>("/auth/me");
+  } catch (err) {
+    if (err instanceof NotAuthenticatedError) return null;
+    throw err;
+  }
+};
+
+/** Ends this session. Never fails from the caller's point of view. */
+export const logout = async (): Promise<void> => {
+  try {
+    await send("/auth/logout", { method: "POST" });
+  } catch {
+    /* already signed out, or the server is unreachable — either way, done */
+  }
+};
+
+export const logoutEverywhere = () => post<void>("/auth/logout/all");
+
+
+// --- The session list (multi-user M4/M5) ---
+
+/**
+ * One dashboard card's worth of a session.
+ *
+ * `progress` values are NULLABLE and null means NOT COMPUTED — a session
+ * migrated from before the cache existed and not saved since. Rendering that as
+ * 0% would be a claim about the learner rather than about the cache, so the UI
+ * shows nothing at all for it.
+ */
+export interface SessionSummary {
+  session_id: string;
+  repo_url: string;
+  repo_id: string | null;
+  goal: Record<string, string>;
+  title: string | null;
+  status: string | null;
+  current_node_id: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  last_active_at: string | null;
+  archived_at: string | null;
+  progress: {
+    goal_readiness: number | null;
+    stops_settled: number | null;
+    stops_total: number | null;
+  };
+}
+
+export const listSessions = (includeArchived = false) =>
+  get<{ sessions: SessionSummary[] }>(
+    `/sessions${includeArchived ? "?include_archived=true" : ""}`,
+  );
+
+export const getSessionSummary = (session_id: string) =>
+  get<SessionSummary>(`/sessions/${encodeURIComponent(session_id)}`);
+
+export const renameSession = (session_id: string, title: string) =>
+  patch<SessionSummary>(`/sessions/${encodeURIComponent(session_id)}`, { title });
+
+export const archiveSession = (session_id: string, archived: boolean) =>
+  patch<SessionSummary>(`/sessions/${encodeURIComponent(session_id)}`, { archived });
+
+/** Irreversible. The dashboard confirms before calling this. */
+export const deleteSession = async (session_id: string): Promise<void> => {
+  const res = await send(`/sessions/${encodeURIComponent(session_id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) await fail(res);
+};
+
+
+// --- Google (multi-user M6) ---
+
+export interface Identities {
+  identities: { provider: string; created_at: string }[];
+  google_configured: boolean;
+}
+
+export const listIdentities = () => get<Identities>("/auth/identities");
+
+/** Which ways of signing in this server offers. Readable before sign-in.
+ *
+ *  The sign-in page needs this BEFORE anybody is authenticated, which is why it
+ *  is its own public endpoint rather than a field on `/auth/identities`. */
+export const listProviders = () =>
+  get<{ password: boolean; google: boolean }>("/auth/providers");
+
+/**
+ * Finish a Google sign-in that collided with an existing password account.
+ *
+ * Google proved the EMAIL; this proves the ACCOUNT. Both are required because
+ * the app verifies no email of its own, so an address in `users.email` is an
+ * unverified claim and linking on it alone would be an account takeover.
+ */
+export const linkGoogle = (password: string) =>
+  post<AuthUser>("/auth/google/link", { password });
+
+export const unlinkGoogle = async (): Promise<void> => {
+  const res = await send("/auth/identities/google", { method: "DELETE" });
+  if (!res.ok) await fail(res);
+};
+
+/** A full navigation, not a fetch — the browser has to follow Google's redirect. */
+export const GOOGLE_START = "/api/auth/google/start";

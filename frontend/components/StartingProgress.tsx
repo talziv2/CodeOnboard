@@ -45,7 +45,7 @@ interface Props {
    * Overrides the kicker above the repository name.
    *
    * The stages, the tool calls and the elapsed clock are the same work whoever
-   * asked for it, so a restart reuses this screen whole — but it is not the
+   * asked for it, so a rebuild reuses this screen whole — but it is not the
    * first read of the repository, and a screen that said so would be wrong
    * about the one thing the learner already knows.
    */

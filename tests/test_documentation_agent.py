@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import TEST_USER_ID
+
 from backend.agents.documentation.agent import (
     _extract_file_docs,
     _read_docs_dir,
@@ -322,9 +324,9 @@ def test_store_persists_and_loads_doc_context(tmp_path):
         "symbol_docs": {"fakelib/auth.py": {"BasicAuth": "HTTP Basic Authentication handler."}},
         "extra_docs": {"docs/auth.rst": "Authentication details."},
     }
-    save_graph(graph, db_path=db)
+    save_graph(graph, db_path=db, user_id=TEST_USER_ID)
 
-    loaded = load_graph(graph.session_id, db_path=db)
+    loaded = load_graph(graph.session_id, TEST_USER_ID, db_path=db)
     assert loaded is not None
     assert loaded.doc_context == graph.doc_context
 
@@ -335,8 +337,8 @@ def test_store_loads_none_doc_context_when_not_set(tmp_path):
 
     db = tmp_path / "sessions.db"
     graph = LearningGraph(repo_url="https://github.com/fake/fakelib", goal={"primary_goal": "test"})
-    save_graph(graph, db_path=db)
+    save_graph(graph, db_path=db, user_id=TEST_USER_ID)
 
-    loaded = load_graph(graph.session_id, db_path=db)
+    loaded = load_graph(graph.session_id, TEST_USER_ID, db_path=db)
     assert loaded is not None
     assert loaded.doc_context is None

@@ -27,7 +27,9 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/api", () => api);
 
-import Home from "@/app/page";
+// The landing flow moved to `/new` in M5 — `/` is now a redirect to the
+// dashboard (or to login). This suite follows the flow, not the path.
+import Home from "@/app/new/page";
 
 const RECENT_KEY = "codeonboard:recent-repos";
 

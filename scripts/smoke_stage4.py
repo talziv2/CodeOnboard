@@ -114,7 +114,7 @@ def main() -> int:
     if inv:
         print(f"  investigation: {'accepted' if inv.get('accepted') else 'salvaged'}, "
               f"{inv.get('turns')} turns, ${inv.get('cost_usd', 0):.4f}")
-    learning_store.save_graph(graph, DB_PATH)
+    learning_store.save_graph(graph, DB_PATH, user_id=TEST_USER_ID)
 
     # ── 2. dossier persistence ───────────────────────────────────────────────
     rule("2. DOSSIER PERSISTENCE")
@@ -172,7 +172,7 @@ def main() -> int:
     if lesson_state.errors:
         print(f"  errors       : {lesson_state.errors}")
     report["lesson"] = lesson
-    learning_store.save_graph(graph, DB_PATH)
+    learning_store.save_graph(graph, DB_PATH, user_id=TEST_USER_ID)
 
     # ── 4. the user gets it wrong ────────────────────────────────────────────
     rule("4. USER ANSWER -> GRADER")
@@ -230,7 +230,7 @@ def main() -> int:
         }
     if mutation_state.errors:
         print(f"    errors: {mutation_state.errors}")
-    learning_store.save_graph(graph, DB_PATH)
+    learning_store.save_graph(graph, DB_PATH, user_id=TEST_USER_ID)
 
     # ── 6. return to the original path ───────────────────────────────────────
     rule("6. RETURN TO THE ORIGINAL PATH")
@@ -244,7 +244,7 @@ def main() -> int:
         print(f"  prerequisite lesson rendered: "
               f"{_short((prereq_state.current_lesson or {}).get('walkthrough'), 200)}")
         graph.set_current(confused_id)
-        learning_store.save_graph(graph, DB_PATH)
+        learning_store.save_graph(graph, DB_PATH, user_id=TEST_USER_ID)
     print(f"  back at: {graph.nodes[graph.current_node_id].title}")
     print(f"  graph now has {len(graph.nodes)} nodes "
           f"({sum(1 for e in graph.edges if e.kind == 'prerequisite')} prerequisite edge)")

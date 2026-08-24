@@ -31,7 +31,7 @@ import { t } from "@/lib/strings";
  * replaced, and leaving it interactive would invite answering a question on a
  * stop that is being thrown away.
  */
-export default function RestartingOverlay({
+export default function RebuildingOverlay({
   repoUrl,
   goal,
   progressId,
@@ -52,20 +52,20 @@ export default function RestartingOverlay({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={error ? t.session.restartFailed : t.session.restartLabel}
+      aria-label={error ? t.session.rebuildWaitFailed : t.session.rebuildWaitLabel}
       className="fixed inset-0 z-[90] flex flex-col items-center justify-center gap-6 overflow-y-auto bg-ink/95 px-6 py-16 backdrop-blur-sm"
     >
       {error ? (
         <div className="flex w-full max-w-md flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <span className="font-mono text-micro uppercase tracking-[0.14em] text-rust">
-              {t.session.restartFailed}
+              {t.session.rebuildWaitFailed}
             </span>
             <h2 className="font-display text-head font-medium tracking-tight text-chalk">
               {repoUrl.replace(/^https?:\/\/github\.com\//, "")}
             </h2>
             <p className="measure text-aside text-graphite">
-              {t.session.restartReassurance}
+              {t.session.rebuildWaitReassurance}
             </p>
           </div>
 
@@ -75,10 +75,10 @@ export default function RestartingOverlay({
 
           <div className="flex flex-wrap gap-3">
             <Button variant="primary" size="md" onClick={onRetry}>
-              {t.session.restartRetry}
+              {t.session.rebuildWaitRetry}
             </Button>
             <Button variant="secondary" size="md" onClick={onDismiss}>
-              {t.session.restartCancel}
+              {t.session.rebuildWaitCancel}
             </Button>
           </div>
         </div>
@@ -88,14 +88,14 @@ export default function RestartingOverlay({
             repoUrl={repoUrl}
             progressId={progressId}
             goal={goal}
-            label={t.session.restartLabel}
+            label={t.session.rebuildWaitLabel}
           />
 
           <div className="flex w-full max-w-md flex-col gap-3 border-t border-rule pt-4">
-            <p className="measure text-meta text-graphite">{t.session.restartNote}</p>
+            <p className="measure text-meta text-graphite">{t.session.rebuildWaitNote}</p>
             <div>
               <Button variant="chrome" size="sm" onClick={onDismiss}>
-                {t.session.restartCancel}
+                {t.session.rebuildWaitCancel}
               </Button>
             </div>
           </div>

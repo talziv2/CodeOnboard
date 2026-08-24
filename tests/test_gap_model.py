@@ -18,6 +18,8 @@ import sqlite3
 
 import pytest
 
+from tests.conftest import TEST_USER_ID
+
 from backend.learning import store as learning_store
 from backend.learning.flags import gaps_enabled
 from backend.learning.gaps import (
@@ -138,8 +140,8 @@ def test_gaps_survive_a_save_and_load_with_every_field_intact(tmp_path):
     node.gap_state.remediation_rounds = 2
     before = node.gap_state.to_dict()
 
-    learning_store.save_graph(graph, db)
-    reloaded = learning_store.load_graph(graph.session_id, db)
+    learning_store.save_graph(graph, db, user_id=TEST_USER_ID)
+    reloaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
 
     assert reloaded.nodes[node.id].gap_state.to_dict() == before
 
@@ -149,8 +151,8 @@ def test_a_graph_with_no_gaps_round_trips_as_empty(tmp_path):
     graph = LearningGraph(repo_url=REPO, goal=GOAL)
     node = graph.add_node(LearningNode(
         title="A", code_anchor=CodeAnchor(file="a.py", line_start=1, line_end=2)))
-    learning_store.save_graph(graph, db)
-    reloaded = learning_store.load_graph(graph.session_id, db)
+    learning_store.save_graph(graph, db, user_id=TEST_USER_ID)
+    reloaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
     assert reloaded.nodes[node.id].gaps == []
     assert reloaded.nodes[node.id].gap_state.remediation_rounds == 0
 
@@ -161,12 +163,12 @@ def test_a_pre_gap_row_with_a_null_column_loads_unchanged(tmp_path):
     graph = LearningGraph(repo_url=REPO, goal=GOAL)
     node = graph.add_node(LearningNode(
         title="A", code_anchor=CodeAnchor(file="a.py", line_start=1, line_end=2)))
-    learning_store.save_graph(graph, db)
+    learning_store.save_graph(graph, db, user_id=TEST_USER_ID)
     with sqlite3.connect(db) as conn:          # simulate a pre-migration row
         conn.execute("UPDATE nodes SET gaps_json = NULL")
         conn.commit()
 
-    reloaded = learning_store.load_graph(graph.session_id, db)
+    reloaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
     assert reloaded is not None
     assert reloaded.nodes[node.id].gaps == []
 
@@ -177,9 +179,24 @@ def test_a_bare_list_payload_degrades_rather_than_losing_the_gaps():
     assert state.remediation_rounds == 0
 
 
-def test_schema_version_did_not_move():
-    """A bump would make every existing session invisible to this code."""
-    assert learning_store.SCHEMA_VERSION == 2
+def test_schema_version_moves_only_deliberately():
+    """A bump makes every session written before it invisible to this code.
+
+    Pinned at 2 for the whole Gap Model phase, whose persistence was additive by
+    design: `gaps_json` arrived as a nullable column precisely so that stored
+    sessions kept loading.
+
+    **It moved to 3 for the plan snapshot** (session-reset.md D8) — and that is
+    the decision this guard exists to force someone to make out loud. A session
+    written before `plan_nodes` has no plan, so `Start over` cannot work for it,
+    and a row that loads but cannot be reset is worse than one that does not
+    load. The 90 v2 development sessions were copied to
+    `data/sessions-fixtures.db` first, and the measurement scripts that pin
+    session ids now read that file.
+
+    Kept rather than deleted: it still fails on the NEXT bump, which is the point.
+    """
+    assert learning_store.SCHEMA_VERSION == 3
 
 
 # ── the flag contract (gap-model.md §3.8) ────────────────────────────────────
@@ -225,12 +242,12 @@ def test_gaps_written_flag_on_load_intact_with_the_flag_off(tmp_path, monkeypatc
     db = tmp_path / "s.db"
     monkeypatch.setenv("CODEONBOARD_GAPS", "1")
     graph, node = _graph_with_two_gaps()
-    learning_store.save_graph(graph, db)
+    learning_store.save_graph(graph, db, user_id=TEST_USER_ID)
     expected = node.gap_state.to_dict()
 
     monkeypatch.setenv("CODEONBOARD_GAPS", "0")
     assert not gaps_enabled()
-    reloaded = learning_store.load_graph(graph.session_id, db)
+    reloaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
     assert reloaded.nodes[node.id].gap_state.to_dict() == expected
 
 
@@ -244,17 +261,17 @@ def test_a_flag_off_resave_does_not_destroy_gaps(tmp_path, monkeypatch):
     db = tmp_path / "s.db"
     monkeypatch.setenv("CODEONBOARD_GAPS", "1")
     graph, node = _graph_with_two_gaps()
-    learning_store.save_graph(graph, db)
+    learning_store.save_graph(graph, db, user_id=TEST_USER_ID)
     expected = node.gap_state.to_dict()
 
     monkeypatch.setenv("CODEONBOARD_GAPS", "0")
-    reloaded = learning_store.load_graph(graph.session_id, db)
+    reloaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
     reloaded.nodes[node.id].title = "changed while the flag was off"
     reloaded.mark_visited(node.id)
-    learning_store.save_graph(reloaded, db)
+    learning_store.save_graph(reloaded, db, user_id=TEST_USER_ID)
 
     monkeypatch.setenv("CODEONBOARD_GAPS", "1")
-    again = learning_store.load_graph(graph.session_id, db)
+    again = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
     assert again.nodes[node.id].gap_state.to_dict() == expected
     assert again.nodes[node.id].title == "changed while the flag was off"
 
@@ -266,12 +283,12 @@ def test_re_enabling_the_flag_restores_exactly_the_persisted_state(tmp_path, mon
     node.gap_state.gaps[0].status = "verified"
     node.gap_state.gaps[0].resolved_by = 3
     node.gap_state.remediation_rounds = 1
-    learning_store.save_graph(graph, db)
+    learning_store.save_graph(graph, db, user_id=TEST_USER_ID)
     expected = json.dumps(node.gap_state.to_dict(), sort_keys=True)
 
     for setting in ("0", "1", "0", "1"):
         monkeypatch.setenv("CODEONBOARD_GAPS", setting)
-        reloaded = learning_store.load_graph(graph.session_id, db)
+        reloaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
         got = json.dumps(reloaded.nodes[node.id].gap_state.to_dict(), sort_keys=True)
         assert got == expected, f"gap state changed with the flag at {setting}"
 

@@ -534,7 +534,7 @@ def run_attempt(index: int, name: str, spec: dict, spies: dict,
 
     # ── persistence + session start, exactly as /session/start does it ──────
     try:
-        learning_store.save_graph(state.graph, DB_PATH)
+        learning_store.save_graph(state.graph, DB_PATH, user_id=TEST_USER_ID)
         commit_sha = get_commit_sha(state.repo_path)
         dossier_store.save_investigation(
             state.graph.session_id, commit_sha, state.investigation, DB_PATH

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import RestartingOverlay from "@/components/RestartingOverlay";
+import RebuildingOverlay from "@/components/RebuildingOverlay";
 import { t } from "@/lib/strings";
 
 /**
@@ -53,30 +53,30 @@ beforeEach(() => {
 
 describe("while the restart is running", () => {
   test("says the pipeline is running, and what it is running on", async () => {
-    render(<RestartingOverlay {...p} />);
+    render(<RebuildingOverlay {...p} />);
 
-    expect(await screen.findByText(t.session.restartLabel)).toBeTruthy();
+    expect(await screen.findByText(t.session.rebuildWaitLabel)).toBeTruthy();
     expect(screen.getByText("psf/requests")).toBeTruthy();
     // The stage checklist is on screen, so the wait is never a blank box.
     expect(screen.getByText(t.starting.stages.clone)).toBeTruthy();
   });
 
   test("keeps the goal on screen, so the wait says what it is for", async () => {
-    render(<RestartingOverlay {...p} />);
+    render(<RebuildingOverlay {...p} />);
     expect(await screen.findByText("understand the request lifecycle")).toBeTruthy();
   });
 
   test("says what happens to the session being replaced", async () => {
-    render(<RestartingOverlay {...p} />);
-    expect(await screen.findByText(t.session.restartNote)).toBeTruthy();
+    render(<RebuildingOverlay {...p} />);
+    expect(await screen.findByText(t.session.rebuildWaitNote)).toBeTruthy();
   });
 
   test("offers a way out that does not claim to cancel the run", async () => {
-    render(<RestartingOverlay {...p} />);
-    await screen.findByText(t.session.restartNote);
+    render(<RebuildingOverlay {...p} />);
+    await screen.findByText(t.session.rebuildWaitNote);
 
     await userEvent.click(
-      screen.getByRole("button", { name: t.session.restartCancel })
+      screen.getByRole("button", { name: t.session.rebuildWaitCancel })
     );
 
     expect(p.onDismiss).toHaveBeenCalledTimes(1);
@@ -88,30 +88,30 @@ describe("when the restart fails", () => {
   const failed = { error: "no_graph\ncould not plan a route" };
 
   test("names the failure and shows what the server said", () => {
-    render(<RestartingOverlay {...p} {...failed} />);
+    render(<RebuildingOverlay {...p} {...failed} />);
 
-    expect(screen.getByText(t.session.restartFailed)).toBeTruthy();
+    expect(screen.getByText(t.session.rebuildWaitFailed)).toBeTruthy();
     expect(screen.getByText(/could not plan a route/)).toBeTruthy();
   });
 
   test("says the session they were in is still there", () => {
-    render(<RestartingOverlay {...p} {...failed} />);
-    expect(screen.getByText(t.session.restartReassurance)).toBeTruthy();
+    render(<RebuildingOverlay {...p} {...failed} />);
+    expect(screen.getByText(t.session.rebuildWaitReassurance)).toBeTruthy();
   });
 
   test("the wait is gone — a failed run must not look like a running one", () => {
-    render(<RestartingOverlay {...p} {...failed} />);
+    render(<RebuildingOverlay {...p} {...failed} />);
     expect(screen.queryByText(t.starting.stages.clone)).toBeNull();
   });
 
   test("both ways out are offered, and they are different actions", async () => {
-    render(<RestartingOverlay {...p} {...failed} />);
+    render(<RebuildingOverlay {...p} {...failed} />);
 
-    await userEvent.click(screen.getByRole("button", { name: t.session.restartRetry }));
+    await userEvent.click(screen.getByRole("button", { name: t.session.rebuildWaitRetry }));
     expect(p.onRetry).toHaveBeenCalledTimes(1);
     expect(p.onDismiss).not.toHaveBeenCalled();
 
-    await userEvent.click(screen.getByRole("button", { name: t.session.restartCancel }));
+    await userEvent.click(screen.getByRole("button", { name: t.session.rebuildWaitCancel }));
     expect(p.onDismiss).toHaveBeenCalledTimes(1);
   });
 });

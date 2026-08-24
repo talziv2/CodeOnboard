@@ -7,27 +7,41 @@ import { t } from "@/lib/strings";
 /**
  * Everything you can do TO the session, in one place.
  *
- * These four actions used to sit in the header as loose buttons, and between them
- * they took 919px of a 1280px row — which is why the goal, the one piece of
- * context that says what this session is FOR, was rendering at 110px and at
- * nothing below about 1150px. None of them is used often. A stop-level action
- * belongs on the stop; these are all statements about the whole journey, so they
- * belong behind one control that costs 28px.
+ * These actions used to sit in the header as loose buttons, and between them they
+ * took 919px of a 1280px row — which is why the goal, the one piece of context
+ * that says what this session is FOR, was rendering at 110px and at nothing below
+ * about 1150px. None of them is used often. A stop-level action belongs on the
+ * stop; these are all statements about the whole journey, so they belong behind
+ * one control that costs 28px.
  *
  * Ordered by consequence, quietest first: adjusting scope moves units between
- * priority buckets and plans nothing new, the briefing is a page to re-read,
- * starting over builds a fresh session on the same goal, and finishing ends this
- * one. Only the last is confirmed, and the confirmation is inline rather than a
- * `window.confirm` — a native dialog cannot say what will happen to the work
- * already done, which is the only question worth asking here.
+ * priority buckets and plans nothing new, the briefing is a page to re-read, the
+ * tour is a walkthrough to watch again — then the three that change or end the
+ * session, each confirmed inline.
+ *
+ * ── WHY START OVER AND REBUILD ARE TWO ITEMS ─────────────────────────────────
+ *
+ * They were one. `Start over` re-ran the entire repository-analysis pipeline: two
+ * to four minutes, a Sonnet planning call, and a route that was NOT the one on
+ * screen. Someone asking to start over is asking to walk the same path again, so
+ * that is what `Start over` now does — a restore from the persisted plan, no model
+ * call, milliseconds. Rebuilding is a real thing to want and it is still here,
+ * under its own name, with the wait stated in its confirmation.
+ *
+ * All three confirmations are inline rather than `window.confirm`, because a
+ * native dialog cannot say what happens to the work already done — which is the
+ * only question any of them raises. They share one `confirming` value rather than
+ * a boolean each: two open confirmations for two different destructive actions is
+ * a way to press the wrong one.
  *
  * Opening the source is NOT in here, deliberately. It was, briefly, and it was
- * the wrong category: everything in this menu is session management — adjust the
- * scope, re-read the briefing, start over, finish — while opening the code beside
- * a lesson is part of reading the lesson. Lessons cite code throughout and the
- * pane now starts closed, so its control has to be findable without already
- * knowing the menu holds it. It sits in the lesson bar instead.
+ * the wrong category: everything in this menu is session management, while opening
+ * the code beside a lesson is part of reading the lesson. Lessons cite code
+ * throughout and the pane starts closed, so its control has to be findable
+ * without already knowing the menu holds it. It sits in the lesson bar instead.
  */
+type Confirming = "startOver" | "rebuild" | "finish" | null;
+
 export default function SessionMenu({
   stopCount,
   scoping,
@@ -36,7 +50,10 @@ export default function SessionMenu({
   onBriefing,
   onReplayTour,
   onStartOver,
-  restarting,
+  startingOver,
+  canStartOver,
+  onRebuild,
+  rebuilding,
   onFinish,
   className = "",
 }: {
@@ -47,15 +64,27 @@ export default function SessionMenu({
   onBriefing: () => void;
   /** Run the first-run walkthrough again. Absent where there is no tour to run. */
   onReplayTour?: () => void;
+  /** Restore the SAME route and clear the learner's work. Fast, no model call. */
   onStartOver: () => void;
-  restarting: boolean;
+  startingOver: boolean;
+  /**
+   * False for a session with no stored plan to restore — one created before
+   * routes were snapshotted. The action is shown and disabled, with the reason,
+   * rather than hidden: a control that vanishes leaves someone hunting for a
+   * feature they have used before, and the reason names the way out.
+   */
+  canStartOver: boolean;
+  /** Plan a NEW route for the same goal. The two-to-four-minute one. */
+  onRebuild: () => void;
+  rebuilding: boolean;
   onFinish: () => void;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [confirmingFinish, setConfirmingFinish] = useState(false);
+  const [confirming, setConfirming] = useState<Confirming>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const busy = startingOver || rebuilding;
 
   // Dismissal: escape, or a click outside. Capture on the key, so the session
   // page's own Escape handler does not also fire and close the map behind this.
@@ -65,14 +94,14 @@ export default function SessionMenu({
       if (e.key === "Escape") {
         e.stopPropagation();
         setOpen(false);
-        setConfirmingFinish(false);
+        setConfirming(null);
         buttonRef.current?.focus();
       }
     };
     const onPointer = (e: PointerEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) {
         setOpen(false);
-        setConfirmingFinish(false);
+        setConfirming(null);
       }
     };
     window.addEventListener("keydown", onKey, true);
@@ -83,6 +112,13 @@ export default function SessionMenu({
     };
   }, [open]);
 
+  /** Fire an action, then get out of the way — each has its own surface now. */
+  const commit = (action: () => void) => {
+    action();
+    setOpen(false);
+    setConfirming(null);
+  };
+
   return (
     <div ref={rootRef} className={`relative ${className}`}>
       <button
@@ -90,7 +126,7 @@ export default function SessionMenu({
         type="button"
         onClick={() => {
           setOpen((v) => !v);
-          setConfirmingFinish(false);
+          setConfirming(null);
         }}
         aria-label={t.session.menu}
         aria-haspopup="dialog"
@@ -140,70 +176,75 @@ export default function SessionMenu({
           </section>
 
           <div className="flex flex-col gap-1 border-t border-rule pt-3">
-            <MenuItem
-              onClick={() => {
-                onBriefing();
-                setOpen(false);
-              }}
-            >
+            <MenuItem onClick={() => commit(onBriefing)}>
               {t.welcome.headerLink}
             </MenuItem>
-            {/* Sits with the briefing rather than with the destructive pair
-                below it: both are "show me the orientation again", and neither
+            {/* Sits with the briefing rather than with the destructive group
+                below: both are "show me the orientation again", and neither
                 changes anything about the session. */}
             {onReplayTour && (
-              <MenuItem
-                onClick={() => {
-                  onReplayTour();
-                  setOpen(false);
-                }}
-              >
+              <MenuItem onClick={() => commit(onReplayTour)}>
                 {t.tour.replay}
               </MenuItem>
             )}
-            {/* Closes the menu, because the wait is no longer reported here. A
-                restart re-runs the whole pipeline; that now happens on its own
-                full-screen surface with the real stages on it, and leaving this
-                popup open behind it would put a stale, disabled copy of the
-                label under the screen that replaced it. */}
-            <MenuItem
-              onClick={() => {
-                onStartOver();
-                setOpen(false);
-              }}
-              disabled={restarting}
-            >
-              {restarting ? t.session.startingOver : t.session.startOver}
-            </MenuItem>
+          </div>
+
+          {/* The three that change or end the session, each confirmed. Start over
+              leads because it is the one people actually want: same route, fresh
+              start, instant. */}
+          <div className="flex flex-col gap-2 border-t border-rule pt-3">
+            {confirming === "startOver" ? (
+              <Confirm
+                question={t.session.startOverConfirm}
+                yes={t.session.startOverYes}
+                no={t.session.startOverNo}
+                onYes={() => commit(onStartOver)}
+                onNo={() => setConfirming(null)}
+              />
+            ) : (
+              <>
+                <MenuItem
+                  onClick={() => setConfirming("startOver")}
+                  disabled={busy || !canStartOver}
+                >
+                  {startingOver ? t.session.startingOver : t.session.startOver}
+                </MenuItem>
+                {/* Why it is unavailable, where the unavailable control is. A
+                    disabled item with no explanation reads as a bug. */}
+                {!canStartOver && (
+                  <span className="text-micro text-graphite">
+                    {t.errors.no_plan_snapshot}
+                  </span>
+                )}
+              </>
+            )}
+
+            {confirming === "rebuild" ? (
+              <Confirm
+                question={t.session.rebuildConfirm}
+                yes={t.session.rebuildYes}
+                no={t.session.rebuildNo}
+                onYes={() => commit(onRebuild)}
+                onNo={() => setConfirming(null)}
+              />
+            ) : (
+              <MenuItem onClick={() => setConfirming("rebuild")} disabled={busy}>
+                {rebuilding ? t.session.rebuilding : t.session.rebuild}
+              </MenuItem>
+            )}
           </div>
 
           <div className="flex flex-col gap-2 border-t border-rule pt-3">
-            {confirmingFinish ? (
-              <>
-                <p className="text-meta text-paper">{t.session.finishConfirm}</p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => {
-                      onFinish();
-                      setOpen(false);
-                      setConfirmingFinish(false);
-                    }}
-                  >
-                    {t.session.finishYes}
-                  </Button>
-                  <Button
-                    variant="chrome"
-                    size="sm"
-                    onClick={() => setConfirmingFinish(false)}
-                  >
-                    {t.session.finishNo}
-                  </Button>
-                </div>
-              </>
+            {confirming === "finish" ? (
+              <Confirm
+                question={t.session.finishConfirm}
+                yes={t.session.finishYes}
+                no={t.session.finishNo}
+                onYes={() => commit(onFinish)}
+                onNo={() => setConfirming(null)}
+              />
             ) : (
-              <MenuItem onClick={() => setConfirmingFinish(true)}>
+              <MenuItem onClick={() => setConfirming("finish")}>
                 {t.session.finish}
               </MenuItem>
             )}
@@ -211,6 +252,41 @@ export default function SessionMenu({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * One inline confirmation: what will happen, then the two ways out.
+ *
+ * The question is a statement of consequence rather than "are you sure" — the
+ * real question for all three of these is what happens to the work already done,
+ * and only prose can answer it.
+ */
+function Confirm({
+  question,
+  yes,
+  no,
+  onYes,
+  onNo,
+}: {
+  question: string;
+  yes: string;
+  no: string;
+  onYes: () => void;
+  onNo: () => void;
+}) {
+  return (
+    <>
+      <p className="text-meta text-paper">{question}</p>
+      <div className="flex gap-2">
+        <Button variant="primary" size="sm" onClick={onYes}>
+          {yes}
+        </Button>
+        <Button variant="chrome" size="sm" onClick={onNo}>
+          {no}
+        </Button>
+      </div>
+    </>
   );
 }
 

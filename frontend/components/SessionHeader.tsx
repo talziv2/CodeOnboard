@@ -42,7 +42,10 @@ export default function SessionHeader({
   onBriefing,
   onReplayTour,
   onStartOver,
-  restarting,
+  startingOver,
+  canStartOver,
+  onRebuild,
+  rebuilding,
   onFinish,
 }: {
   graph: SessionGraph;
@@ -55,7 +58,10 @@ export default function SessionHeader({
   onBriefing: () => void;
   onReplayTour: () => void;
   onStartOver: () => void;
-  restarting: boolean;
+  startingOver: boolean;
+  canStartOver: boolean;
+  onRebuild: () => void;
+  rebuilding: boolean;
   onFinish: () => void;
 }) {
   return (
@@ -140,7 +146,10 @@ export default function SessionHeader({
           onBriefing={onBriefing}
           onReplayTour={onReplayTour}
           onStartOver={onStartOver}
-          restarting={restarting}
+          startingOver={startingOver}
+          canStartOver={canStartOver}
+          onRebuild={onRebuild}
+          rebuilding={rebuilding}
           onFinish={onFinish}
         />
         <SettingsMenu />

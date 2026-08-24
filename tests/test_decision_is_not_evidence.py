@@ -32,6 +32,8 @@ Run with: uv run pytest tests/test_decision_is_not_evidence.py -v
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from tests.conftest import TEST_USER_ID, start_session
 from fastapi.testclient import TestClient
 
 import backend.api as api
@@ -419,9 +421,7 @@ def _start(client, graph) -> str:
 
     with patch("backend.api.run_pipeline", side_effect=_pipeline), \
          patch("backend.api.run_teaching", side_effect=_teaching_side_effect):
-        return client.post(
-            "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-        ).json()["session_id"]
+        return start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
 
 
 def test_off_topic_then_move_on_end_to_end(client):
@@ -457,7 +457,7 @@ def test_off_topic_then_move_on_end_to_end(client):
     assert a.id in wire["understanding"]["set_aside"]
     assert a.id not in wire["understanding"]["needs_work"]
 
-    stored = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     assert stored.nodes[a.id].user_override == "continue"
     assert is_settled(stored.nodes[a.id]) is True
 
@@ -476,7 +476,7 @@ def test_the_decision_survives_a_reload(client):
     with patch("backend.api.run_teaching", side_effect=_teaching_side_effect):
         client.post(f"/session/{session_id}/advance", json={"signal": "next"})
 
-    reloaded = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    reloaded = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     assert reloaded.nodes[a.id].user_override == "continue"
     assert understanding.is_set_aside(reloaded.nodes[a.id]) is True
     assert reloaded.resume_point() != a.id

@@ -32,6 +32,19 @@ Do not implement later-phase features until the current phase works end-to-end o
 
 ```
 backend/
+  auth/           # the account layer (multi-user). Wraps the engine; the engine
+                  #   knows nothing about it.
+    schema.py     # users, auth_identities, auth_sessions, repositories, drafts
+    identity.py   # users + identities; the legacy owner; repository rows
+    passwords.py  # argon2id, rehash-on-login, the dummy verify on the miss path
+    tokens.py     # opaque cookie sessions — only the sha256 is stored
+    throttle.py   # per-IP AND per-account, exponential
+    deps.py       # current_user · owned_session  ← THE OWNERSHIP CHOKEPOINT
+    routes.py     # /auth/register|login|logout|me
+    google*.py    # OIDC via Authlib; linking needs a password too (D-7)
+    startup.py    # invariants checked before the process serves anything
+    config.py     # refuses to start on an insecure production environment
+  migrations/     # 001_multi_user.py — ownership backfill, idempotent
   agents/
     goal/         # dialogue → goal JSON
     documentation/# README + docstrings → doc_context (no LLM)
@@ -78,6 +91,16 @@ data/
 ## Key API endpoints
 
 ```
+POST /auth/register         → { user }  + HttpOnly cookie
+POST /auth/login            → { user }  + HttpOnly cookie
+POST /auth/logout           → 204
+GET  /auth/me               → { user } | 401
+GET  /auth/google/start     → 302 to Google
+GET  /sessions              → the CALLER'S sessions, newest first
+POST /session/start         → 202 { session_id, status: "generating" }
+GET  /sessions/{id}         → one dashboard row
+PATCH/DELETE /sessions/{id} → rename · archive · delete
+
 POST /goal/start            → { session_id, first_question }
 POST /goal/answer           → { next_question } | { goal: {...} }
 POST /goal/back             → { question, answer }   un-answers the last question
@@ -303,6 +326,38 @@ Two rules follow from that, and both are load-bearing:
   ledger — still gets a question. Asking is a different act from being nagged.
 
 ---
+
+## Multi-user rules
+
+Full design: `docs/planning/phases/multi-user.md`.
+
+- **Ownership is decided at the persistence boundary, not in the routes.**
+  `store.load_graph(session_id, user_id)` takes the owner as a REQUIRED
+  parameter, so there is no code path that produces a `LearningGraph` without a
+  caller having named whose it is. `Depends(owned_session)` is the ergonomic
+  wrapper; `tests/test_route_authz_coverage.py` fails the build on a route that
+  declares neither; a middleware refuses anything that declares no auth and is
+  not on a stated allow-list. Four layers, because forgetting is the failure
+  mode.
+- **404, never 403.** A foreign session and a nonexistent one answer
+  identically, byte for byte. A 403 confirms which ids are real.
+- **The learning engine knows nothing about users.** `learning/`, `agents/` and
+  `repo/` contain no reference to a user, and `store.py` is the one place in
+  `learning/` that does — because it is the boundary.
+- **Creation always creates.** `_try_resume` matched on `(repo_url, goal)` across
+  the whole database and handed back somebody else's session. A learner may hold
+  many sessions on one repository; resuming means opening one you own, by id.
+- **Nothing about a learner is inferred from an email.** No verification ships
+  (D-5), so `users.email` is an unverified claim: the auth key is
+  `auth_identities.(provider, subject)`, and Google linking needs the account's
+  password as well as Google's word (D-7).
+- **Version 2 sessions still load.** The plan tables moved `SCHEMA_VERSION` to 3;
+  `SUPPORTED_SCHEMA_VERSIONS` keeps the 91-session corpus readable and resumable,
+  with `Start over` unavailable because they genuinely have no plan. Nothing is
+  ever synthesised (D-9).
+- **Planning runs in the background.** `POST /session/start` reserves the row and
+  returns 202 with the id, so closing the tab during a four-minute plan no longer
+  leaves a session the learner cannot find.
 
 ## Design decisions
 

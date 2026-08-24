@@ -27,6 +27,8 @@ Run with: uv run pytest tests/test_retry_dispatch.py -v
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from tests.conftest import TEST_USER_ID, start_session
 from fastapi.testclient import TestClient
 
 import backend.api as api
@@ -97,9 +99,7 @@ def _start(client, graph) -> str:
 
     with patch("backend.api.run_pipeline", side_effect=_pipeline), \
          patch("backend.api.run_teaching", side_effect=_teaching_side_effect):
-        return client.post(
-            "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-        ).json()["session_id"]
+        return start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
 
 
 # ── the unit's own prompt is answerable exactly once ─────────────────────────
@@ -305,7 +305,7 @@ def test_reassess_issues_a_question_and_charges_it(client):
         body = client.post(f"/session/{session_id}/reassess", json={}).json()
 
     assert body["question"] == "A FRESH OBJECTIVE QUESTION"
-    stored = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     state = stored.nodes[node_id].gap_state
     assert state.pending_reassessment["question"] == "A FRESH OBJECTIVE QUESTION"
     assert state.reassessments == 1
@@ -325,7 +325,7 @@ def test_a_question_we_could_not_generate_is_not_charged(client):
         resp = client.post(f"/session/{session_id}/reassess", json={})
 
     assert resp.status_code == 503
-    stored = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     assert stored.nodes[node_id].gap_state.reassessments == 0
 
 
@@ -389,7 +389,7 @@ def test_a_reassessment_answer_is_an_ordinary_assessment(client):
         ).json()
 
     assert body["classification"] == "understood"
-    stored = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     node = stored.nodes[node_id]
     attempt = node.attempts[-1]
     # An ASSESSMENT, so it counts as evidence about the objective.
@@ -423,7 +423,7 @@ def test_answering_a_reassessment_makes_recovery_reachable(client):
             json={"response": "a good answer", "kind": history.SOURCE_REASSESSMENT},
         )
 
-    stored = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     node = stored.nodes[node_id]
     assert understanding.classify(node) == understanding.RECOVERED
     assert progress.is_demonstrated(node) is True
@@ -519,9 +519,9 @@ def test_the_round_trip_keeps_the_budget(tmp_path):
     node_id = graph.path_order()[0]
     graph.nodes[node_id].gap_state.reassessments = 1
     graph.nodes[node_id].gap_state.pending_reassessment = {"question": "q", "at": "now"}
-    learning_store.save_graph(graph, db)
+    learning_store.save_graph(graph, db, user_id=TEST_USER_ID)
 
-    reloaded = learning_store.load_graph(graph.session_id, db)
+    reloaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
     state = reloaded.nodes[node_id].gap_state
     assert state.reassessments == 1
     assert state.pending_reassessment["question"] == "q"
@@ -564,7 +564,7 @@ def test_the_complete_learner_loop(client):
     # 2 ── "Move on anyway". A DECISION, recorded, and not evidence.
     with patch("backend.api.run_teaching", side_effect=_teaching_side_effect):
         client.post(f"/session/{session_id}/advance", json={"signal": "next"})
-    stored = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     assert stored.nodes[a].user_override == "continue"
     assert understanding.classify(stored.nodes[a]) == understanding.INSUFFICIENT
     assert understanding.is_set_aside(stored.nodes[a]) is True
@@ -611,7 +611,7 @@ def test_the_complete_learner_loop(client):
                   "kind": history.SOURCE_REASSESSMENT},
         )
 
-    stored = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     node = stored.nodes[a]
     assert node.user_override is None                    # withdrawn by the attempt
     assert understanding_of(node) == "understood"

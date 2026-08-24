@@ -3,6 +3,13 @@
 .venv/
 data/repos/
 data/*.db
+# SQLite's WAL sidecars. The learning store runs in WAL mode, so these two sit
+# beside every database file the app or the test suite touches — and `data/*.db`
+# does not match them, because the suffix comes AFTER the extension.
+data/*.db-wal
+data/*.db-shm
+# The rollback journal, for the fallback path where WAL is unavailable.
+data/*.db-journal
 __pycache__/
 *.pyc
 .pytest_cache/
@@ -11,3 +18,4 @@ _tmp_compare/
 frontend/.next/
 frontend/node_modules/
 node_modules/
+data/quarantine/

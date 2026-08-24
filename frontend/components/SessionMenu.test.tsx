@@ -7,12 +7,18 @@ import { t } from "@/lib/strings";
 /**
  * The session menu.
  *
- * Two things are load-bearing. Every session-level action has to actually be in
+ * Three things are load-bearing. Every session-level action has to actually be in
  * here — they were removed from the header to give the goal its width back, so a
- * missing one is not a tidier header, it is a lost capability. And `Finish
- * session` has to be confirmed: it is the one action that ends the thing the
- * learner came for, and it now sits one click from the top of the page rather
- * than at the bottom of a lesson.
+ * missing one is not a tidier header, it is a lost capability.
+ *
+ * `Start over` and `Rebuild learning path` must stay TWO items doing two different
+ * things. They were one, and it was the wrong one: `Start over` re-ran the whole
+ * pipeline and came back with a different route. A test that let them collapse
+ * back together would let the original defect back in.
+ *
+ * And all three destructive actions must be confirmed, with only one confirmation
+ * open at a time — they sit within a click of each other, and the difference
+ * between them is minutes, money, and whether the route survives.
  */
 
 const props = () => ({
@@ -22,7 +28,10 @@ const props = () => ({
   onScope: vi.fn(),
   onBriefing: vi.fn(),
   onStartOver: vi.fn(),
-  restarting: false,
+  startingOver: false,
+  canStartOver: true,
+  onRebuild: vi.fn(),
+  rebuilding: false,
   onFinish: vi.fn(),
 });
 
@@ -44,14 +53,24 @@ describe("what the menu holds", () => {
     expect(screen.queryByText(t.welcome.headerLink)).toBeNull();
   });
 
-  test("all four session actions are present, and nothing else", async () => {
+  test("every session action is present", async () => {
     await open();
 
     expect(screen.getByRole("button", { name: t.scope.shorter })).toBeTruthy();
     expect(screen.getByRole("button", { name: t.scope.deeper })).toBeTruthy();
     expect(screen.getByRole("button", { name: t.welcome.headerLink })).toBeTruthy();
     expect(screen.getByRole("button", { name: t.session.startOver })).toBeTruthy();
+    expect(screen.getByRole("button", { name: t.session.rebuild })).toBeTruthy();
     expect(screen.getByRole("button", { name: t.session.finish })).toBeTruthy();
+  });
+
+  test("starting over and rebuilding are separate items", async () => {
+    // These being one action was the defect this phase exists to fix.
+    await open();
+
+    expect(screen.getByRole("button", { name: t.session.startOver })).not.toBe(
+      screen.getByRole("button", { name: t.session.rebuild })
+    );
   });
 
   test("scope reports the live stop count and passes the direction through", async () => {
@@ -82,26 +101,150 @@ describe("what the menu holds", () => {
 });
 
 describe("starting over", () => {
-  test("fires the restart and gets out of the way", async () => {
-    // The wait is reported on its own full-screen surface now. A popup left
-    // standing behind it would show a stale, disabled `Starting over…` under the
-    // screen that replaced it — which is the state this whole fix is about.
+  test("asks first, and says what survives", async () => {
     await open();
 
     await userEvent.click(screen.getByRole("button", { name: t.session.startOver }));
 
-    expect(p.onStartOver).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText(t.session.startOver)).toBeNull();
+    expect(p.onStartOver).not.toHaveBeenCalled();
+    expect(screen.getByText(t.session.startOverConfirm)).toBeTruthy();
+    expect(screen.getByRole("button", { name: t.session.startOverNo })).toBeTruthy();
   });
 
-  test("a restart already in flight cannot be fired twice", async () => {
-    await open({ restarting: true });
+  test("confirming fires it, and the menu gets out of the way", async () => {
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: t.session.startOver }));
+
+    await userEvent.click(screen.getByRole("button", { name: t.session.startOverYes }));
+
+    expect(p.onStartOver).toHaveBeenCalledTimes(1);
+    expect(p.onRebuild).not.toHaveBeenCalled();
+    expect(screen.queryByText(t.session.startOverConfirm)).toBeNull();
+  });
+
+  test("backing out leaves the session alone", async () => {
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: t.session.startOver }));
+
+    await userEvent.click(screen.getByRole("button", { name: t.session.startOverNo }));
+
+    expect(p.onStartOver).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: t.session.startOver })).toBeTruthy();
+  });
+
+  test("a reset already running cannot be fired again", async () => {
+    await open({ startingOver: true });
 
     const item = screen.getByRole("button", { name: t.session.startingOver });
     expect(item.hasAttribute("disabled")).toBe(true);
-
     await userEvent.click(item);
     expect(p.onStartOver).not.toHaveBeenCalled();
+  });
+});
+
+describe("a session with no stored plan", () => {
+  test("Start over is shown, disabled, and says why", async () => {
+    // Shown rather than hidden: a control that vanishes leaves someone hunting
+    // for a feature they have used before. And the reason names the way out,
+    // which is the rebuild sitting right below it.
+    await open({ canStartOver: false });
+
+    const item = screen.getByRole("button", { name: t.session.startOver });
+    expect(item.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText(t.errors.no_plan_snapshot)).toBeTruthy();
+  });
+
+  test("it cannot be confirmed into happening", async () => {
+    await open({ canStartOver: false });
+
+    await userEvent.click(screen.getByRole("button", { name: t.session.startOver }));
+
+    expect(screen.queryByText(t.session.startOverConfirm)).toBeNull();
+    expect(p.onStartOver).not.toHaveBeenCalled();
+  });
+
+  test("rebuilding is still offered — it is the way to a restartable route", async () => {
+    await open({ canStartOver: false });
+
+    expect(
+      screen.getByRole("button", { name: t.session.rebuild }).hasAttribute("disabled")
+    ).toBe(false);
+  });
+
+  test("a session WITH a plan shows no such note", async () => {
+    await open({ canStartOver: true });
+    expect(screen.queryByText(t.errors.no_plan_snapshot)).toBeNull();
+  });
+});
+
+describe("rebuilding the learning path", () => {
+  test("asks first, and the confirmation states the wait", async () => {
+    await open();
+
+    await userEvent.click(screen.getByRole("button", { name: t.session.rebuild }));
+
+    expect(p.onRebuild).not.toHaveBeenCalled();
+    expect(screen.getByText(t.session.rebuildConfirm)).toBeTruthy();
+    // Someone about to spend two to four minutes should be told before they do.
+    expect(t.session.rebuildConfirm).toMatch(/two to four minutes/);
+  });
+
+  test("confirming fires the rebuild and nothing else", async () => {
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: t.session.rebuild }));
+
+    await userEvent.click(screen.getByRole("button", { name: t.session.rebuildYes }));
+
+    expect(p.onRebuild).toHaveBeenCalledTimes(1);
+    expect(p.onStartOver).not.toHaveBeenCalled();
+  });
+
+  test("a rebuild in flight disables both route actions", async () => {
+    // They act on the same session; a reset landing mid-rebuild would race two
+    // writers against one graph.
+    await open({ rebuilding: true });
+
+    expect(
+      screen.getByRole("button", { name: t.session.rebuilding }).hasAttribute("disabled")
+    ).toBe(true);
+    expect(
+      screen.getByRole("button", { name: t.session.startOver }).hasAttribute("disabled")
+    ).toBe(true);
+  });
+});
+
+describe("one confirmation at a time", () => {
+  test("opening a second confirmation replaces the first", async () => {
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: t.session.startOver }));
+    expect(screen.getByText(t.session.startOverConfirm)).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("button", { name: t.session.rebuild }));
+
+    expect(screen.getByText(t.session.rebuildConfirm)).toBeTruthy();
+    expect(screen.queryByText(t.session.startOverConfirm)).toBeNull();
+  });
+
+  test("reopening the menu does not leave a confirmation standing", async () => {
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: t.session.startOver }));
+
+    await userEvent.click(screen.getByRole("button", { name: t.session.menu }));
+    await userEvent.click(screen.getByRole("button", { name: t.session.menu }));
+
+    expect(screen.queryByText(t.session.startOverConfirm)).toBeNull();
+    expect(screen.getByRole("button", { name: t.session.startOver })).toBeTruthy();
+  });
+
+  test("Escape closes the menu without firing anything", async () => {
+    await open();
+    await userEvent.click(screen.getByRole("button", { name: t.session.startOver }));
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(p.onStartOver).not.toHaveBeenCalled();
+    expect(screen.queryByText(t.session.startOverConfirm)).toBeNull();
+    expect(screen.queryByText(t.session.startOver)).toBeNull();
   });
 });
 
@@ -132,32 +275,7 @@ describe("finishing the session", () => {
     await userEvent.click(screen.getByRole("button", { name: t.session.finishNo }));
 
     expect(p.onFinish).not.toHaveBeenCalled();
-    // Back to the plain item, ready to be asked again.
     expect(screen.getByRole("button", { name: t.session.finish })).toBeTruthy();
     expect(screen.queryByText(t.session.finishConfirm)).toBeNull();
-  });
-
-  test("reopening the menu does not leave the confirmation standing", async () => {
-    await open();
-    await userEvent.click(screen.getByRole("button", { name: t.session.finish }));
-    expect(screen.getByText(t.session.finishConfirm)).toBeTruthy();
-
-    // Close and reopen.
-    await userEvent.click(screen.getByRole("button", { name: t.session.menu }));
-    await userEvent.click(screen.getByRole("button", { name: t.session.menu }));
-
-    expect(screen.queryByText(t.session.finishConfirm)).toBeNull();
-    expect(screen.getByRole("button", { name: t.session.finish })).toBeTruthy();
-  });
-
-  test("Escape closes the menu without finishing anything", async () => {
-    await open();
-    await userEvent.click(screen.getByRole("button", { name: t.session.finish }));
-
-    await userEvent.keyboard("{Escape}");
-
-    expect(p.onFinish).not.toHaveBeenCalled();
-    expect(screen.queryByText(t.session.finishConfirm)).toBeNull();
-    expect(screen.queryByText(t.session.finish)).toBeNull();
   });
 });

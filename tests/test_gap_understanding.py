@@ -25,6 +25,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import TEST_USER_ID
+
 from backend.learning import adaptation, progress
 from backend.learning import store as learning_store
 from backend.learning.gaps import Gap
@@ -39,6 +41,27 @@ from backend.learning.graph import (
 REPO = "https://github.com/psf/requests"
 GOAL = {"primary_goal": "x", "goal_type": "understand_component"}
 LIVE_DB = Path("data/sessions.db")
+
+
+def _live_sessions_available() -> bool:
+    """Is there a real local database with sessions in it?
+
+    Not merely "does the file exist". `dossier_store` shares this filename and
+    creates it with only its own `investigation` table, so a run that touches a
+    dossier and nothing else leaves a file behind that satisfies `exists()` and
+    has no `sessions` table at all — which turned the gate below from a skip into
+    an `OperationalError` on a fresh checkout, and only on the SECOND run.
+    """
+    if not LIVE_DB.exists():
+        return False
+    try:
+        with sqlite3.connect(LIVE_DB) as conn:
+            return bool(conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sessions'"
+            ).fetchone())
+    except sqlite3.Error:
+        return False
+
 
 # Every module that may touch `node.understanding_state` directly, and why.
 _RAW_ACCESS_ALLOWED = {
@@ -277,7 +300,7 @@ def test_resume_point_will_not_pass_an_unverified_prerequisite():
 # ── the compatibility gate, over real stored sessions ────────────────────────
 
 
-@pytest.mark.skipif(not LIVE_DB.exists(), reason="no local sessions.db")
+@pytest.mark.skipif(not _live_sessions_available(), reason="no local sessions.db")
 def test_every_stored_gap_free_node_derives_its_stored_state():
     """gap-model.md M7's compatibility gate, exactly as specified.
 
@@ -292,7 +315,7 @@ def test_every_stored_gap_free_node_derives_its_stored_state():
     checked = 0
     mismatches = []
     for session_id in session_ids:
-        graph = learning_store.load_graph(session_id, LIVE_DB)
+        graph = learning_store.load_graph(session_id, TEST_USER_ID, LIVE_DB)
         if graph is None:
             continue
         for node in graph.nodes.values():

@@ -11,6 +11,86 @@ export const t = {
     "Build a real understanding of an unfamiliar codebase, one anchored concept at a time.",
 
   // --- home: repo step ---
+  // ── authentication (multi-user M2) ──────────────────────────────────────
+  //
+  // The two failure messages are deliberately incurious. "Email or password is
+  // incorrect" and "that email cannot be used" say nothing about whether an
+  // account exists, because "is this person a user here" is not a question an
+  // anonymous visitor gets to ask. The backend returns exactly these; they are
+  // repeated here as the fallback when it cannot be reached.
+  // ── the dashboard (multi-user M5) ───────────────────────────────────────
+  //
+  // The empty state INVITES rather than apologises: a learner with no sessions
+  // has not lost anything, they simply have not started one yet.
+  dashboard: {
+    title: "My learning sessions",
+    loading: "Loading your sessions…",
+    loadFailed: "Couldn't load your sessions. Try again.",
+    empty: "No sessions yet. Point CodeOnboard at a repository and it will build you a route through it.",
+    noneArchived: "Nothing archived.",
+    startFirst: "Start your first session",
+    startNew: "Start a new session",
+    backToDashboard: "Back to my sessions",
+    continue: "Continue",
+    // Planning runs in the background, so the card exists from the first second
+    // and says what it is doing. Closing the tab no longer loses the session.
+    generating: "Building your route…",
+    // A plan that never arrived. Named rather than left spinning: a learner who
+    // cannot tell whether to wait or retry is worse off than one who is told.
+    failed: "Couldn't build this route",
+    rename: "Rename",
+    renameLabel: "Session name",
+    save: "Save",
+    cancel: "Cancel",
+    archive: "Archive",
+    unarchive: "Unarchive",
+    archived: "archived",
+    showArchived: "Show archived",
+    hideArchived: "Hide archived",
+    delete: "Delete",
+    // Named as irreversible, because it is. Archiving keeps everything and is
+    // offered first; this is for someone who means it.
+    deleteConfirm: "Delete permanently?",
+    deleteYes: "Delete",
+    ready: (percent: number) => `${percent}% ready`,
+    stops: (settled: number, total: number) => `${settled} of ${total} stops`,
+  },
+
+  auth: {
+    emailLabel: "Email",
+    passwordLabel: "Password",
+    nameLabel: "Name (optional)",
+    passwordHint: "At least 10 characters. Length beats punctuation.",
+    login: {
+      title: "Sign in",
+      subtitle: "Sign in to pick up where you left off.",
+      submit: "Sign in",
+      busy: "Signing in…",
+      failed: "Could not sign in. Try again.",
+      switchPrompt: "No account yet?",
+      switchAction: "Create one",
+    },
+    signup: {
+      title: "Create an account",
+      subtitle: "Create an account to keep your learning sessions.",
+      submit: "Create account",
+      busy: "Creating…",
+      failed: "Could not create the account. Try again.",
+      switchPrompt: "Already have an account?",
+      switchAction: "Sign in",
+    },
+    signOut: "Sign out",
+    google: "Continue with Google",
+    // The link step exists because the app verifies no email of its own, so
+    // Google proving the address is not the same as proving the account.
+    linkTitle: "Connect Google to your account",
+    linkBody:
+      "An account already uses this email. Enter its password to connect Google to it — you'll be signed out of any other devices.",
+    linkSubmit: "Connect and sign in",
+    linkBusy: "Connecting…",
+    checking: "Checking your session…",
+  },
+
   home: {
     repoLabel: "Repository to read",
     repoPlaceholder: "https://github.com/psf/requests",
@@ -223,27 +303,52 @@ export const t = {
     readiness: "Readiness",
     hideSource: "Hide source",
     showSource: "Show source",
-    startingOver: "Starting over…",
-    startOver: "Start over",
-    // ── the restart's own wait ──────────────────────────────────────────────
+    // ── two different actions, and they used to be one ──────────────────────
     //
-    // Start over re-runs the entire pipeline, which is the same two-to-four
+    // `Start over` re-ran the whole pipeline: two to four minutes, and a
+    // DIFFERENT route than the one on screen. That is a rebuild, not a restart,
+    // so they are now separate controls with separate confirmations.
+    //
+    // The copy carries the whole distinction, because the two sit one click apart
+    // and the difference between them is minutes and money. This one names what
+    // is KEPT, since "will I lose the route?" is the actual question.
+    startOver: "Start over",
+    startingOver: "Starting over…",
+    startOverConfirm:
+      "Walk this same route again from the first stop? The stops, their order and their lessons stay exactly as they are. Your progress, answers, feedback, gaps and any warm-ups added along the way are cleared.",
+    startOverYes: "Start over",
+    startOverNo: "Keep my progress",
+    // Shown when the reset itself failed. It leads with what did NOT happen,
+    // because the learner's first question is whether their work is gone — and it
+    // is not: a failed reset changes nothing on the server.
+    startOverFailed: "Couldn't start over, and nothing has changed — your progress is exactly where it was.",
+    dismiss: "Dismiss",
+    // The old `Start over`, named for what it does. The wording has to earn the
+    // wait rather than spring it on someone.
+    rebuild: "Rebuild learning path",
+    rebuilding: "Rebuilding…",
+    rebuildConfirm:
+      "Plan a brand-new route for the same repository and the same answers? This reads the repository again, takes two to four minutes, and the new route will not be the same as this one. Your current session is kept until the new one is ready.",
+    rebuildYes: "Rebuild it",
+    rebuildNo: "Never mind",
+    // ── the rebuild's own wait ──────────────────────────────────────────────
+    //
+    // A rebuild re-runs the entire pipeline, which is the same two-to-four
     // minutes the landing page warns about. It used to say so nowhere: the menu
     // item greyed out and the session sat there, which is indistinguishable from
-    // a click that did nothing. These are the words on the screen that replaced
-    // that silence.
-    restartLabel: "Starting over",
+    // a click that did nothing.
+    rebuildWaitLabel: "Rebuilding your route",
     // Says what survives, because that is the question someone watching a
     // three-minute wait actually has.
-    restartNote:
+    rebuildWaitNote:
       "Same repository, same answers — the route is planned again from scratch. Your current session stays exactly as it is until the new one is ready.",
-    restartFailed: "Couldn't build the new session.",
-    restartReassurance:
+    rebuildWaitFailed: "Couldn't build the new route.",
+    rebuildWaitReassurance:
       "Nothing happened to the session you were in — it is still here, and still where you left it.",
-    restartRetry: "Try again",
+    rebuildWaitRetry: "Try again",
     // Withdraws the WAIT, not the run: the backend finishes either way, and
     // saying "cancel" would promise a stop we cannot deliver.
-    restartCancel: "Keep the session I have",
+    rebuildWaitCancel: "Keep the session I have",
     // The session-level actions, behind one control. Named for what they act on
     // rather than what they look like: "⋯" is not a word.
     menu: "Session actions",
@@ -1199,6 +1304,31 @@ export const t = {
   // FastAPI raises these as `detail`; they reach the UI verbatim otherwise.
   errors: {
     session_not_found: "That session no longer exists.",
+    // ── auth (multi-user M2) ──────────────────────────────────────────────
+    //
+    // Both of these are deliberately incurious. The backend returns one refusal
+    // for a wrong password and for an email that has no account, because "is
+    // this person a user here" is not a question an anonymous visitor gets to
+    // ask; the copy must not undo that by being more specific than the API.
+    not_authenticated: "Your session has ended. Sign in again.",
+    oauth_state: "That sign-in link expired. Try again.",
+    oauth_failed: "Google sign-in didn't complete. Try again.",
+    oauth_unverified:
+      "Google hasn't verified that email address, so it can't be used to sign in here.",
+    google_not_configured:
+      "Google sign-in isn't set up on this server. Use your email and password.",
+    no_pending_link: "That sign-in link expired. Start again from the sign-in page.",
+    last_identity:
+      "That's the only way into this account, so it can't be removed. Set a password first.",
+    too_many_attempts: "Too many attempts. Wait a moment, then try again.",
+    "Email or password is incorrect.": "Email or password is incorrect.",
+    "That email cannot be used to register.":
+      "That email can't be used. Try signing in instead.",
+    // A session planned before the route was snapshotted, so there is nothing to
+    // restore it to. Says what to do instead, because the learner cannot fix this
+    // one and rebuilding genuinely is the way out.
+    no_plan_snapshot:
+      "This session was created before routes could be restored, so it can't be started over. Rebuilding the learning path will give you a fresh one.",
     node_not_found: "That stop isn't part of this session.",
     session_has_no_current_node: "This session has no current stop.",
     no_lesson_rendered_yet: "The lesson hasn't loaded yet — give it a moment.",

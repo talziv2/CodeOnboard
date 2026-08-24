@@ -266,9 +266,18 @@ REMEDIATION_INSERTED = "remediation_inserted"
 # anyway. `nodes` is the stop landed on; `from_node_id` the one left behind, or
 # absent when there was no current stop to leave.
 JUMPED = "jumped"
+# The learner started over: the plan restored from its snapshot, every trace of
+# their previous walk discarded (session-reset.md).
+#
+# The one kind ever written to an EMPTY list. A reset clears `journey_events`
+# along with everything else the learner produced and then records this, so
+# exactly one can ever accumulate — and it is the only reason a learner has to
+# understand why their answers are gone. Discarding it too would leave a session
+# that silently forgot a deliberate act.
+RESET = "reset"
 
 JOURNEY_EVENT_KINDS = frozenset({
-    PRUNE_AHEAD, SCOPE_SHORTER, SCOPE_DEEPER, REMEDIATION_INSERTED, JUMPED,
+    PRUNE_AHEAD, SCOPE_SHORTER, SCOPE_DEEPER, REMEDIATION_INSERTED, JUMPED, RESET,
 })
 
 # Why the learner moved. `study` is an ordinary jump — they chose a stop and went

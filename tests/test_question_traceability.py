@@ -26,6 +26,8 @@ Run with: uv run pytest tests/test_question_traceability.py -v
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from tests.conftest import TEST_USER_ID, start_session
 from fastapi.testclient import TestClient
 
 import backend.api as api
@@ -83,9 +85,7 @@ def _start(client, graph) -> str:
 
     with patch("backend.api.run_pipeline", side_effect=_pipeline), \
          patch("backend.api.run_teaching", side_effect=_teaching_side_effect):
-        return client.post(
-            "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-        ).json()["session_id"]
+        return start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
 
 
 # ── the record ───────────────────────────────────────────────────────────────
@@ -183,7 +183,7 @@ def test_respond_records_the_prompt_that_was_on_screen(client):
          patch("backend.api.run_teaching", side_effect=_teaching_side_effect):
         client.post(f"/session/{session_id}/respond", json={"response": "cookies"})
 
-    stored = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     attempt = stored.nodes[node_id].attempts[-1]
     assert history.question_of(attempt) == (
         "What does Session own that a bare request does not?"
@@ -224,7 +224,7 @@ def test_a_reteach_does_not_relabel_the_answer_that_caused_it(client):
          patch("backend.api.run_teaching", side_effect=_teaching_side_effect):
         client.post(f"/session/{session_id}/respond", json={"response": "wrong"})
 
-    stored = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     node = stored.nodes[node_id]
     assert history.question_of(node.attempts[-1]) == "ORIGINAL QUESTION"
     # And the lesson really was replaced, so the trap was live.
@@ -251,7 +251,7 @@ def test_the_next_answer_is_labelled_as_answering_the_rewritten_question(client)
          patch("backend.api.run_teaching", side_effect=_teaching_side_effect):
         client.post(f"/session/{session_id}/respond", json={"response": "better"})
 
-    stored = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     attempts = stored.nodes[node_id].attempts
     assert history.question_of(attempts[-1]) == "REWRITTEN QUESTION"
     assert history.question_source_of(attempts[-1]) == history.SOURCE_RETEACH
@@ -294,7 +294,7 @@ def test_a_verification_question_survives_being_answered(client):
         )
     assert resp.status_code == 200
 
-    stored = learning_store.load_graph(session_id, api.SESSIONS_DB_PATH)
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     node = stored.nodes[node_id]
     attempt = node.attempts[-1]
     assert attempt["kind"] == history.VERIFICATION
@@ -344,9 +344,9 @@ def test_the_question_survives_a_round_trip(tmp_path):
         node_id, "an answer", "partial", "r",
         question="What does Session own?", question_source=history.SOURCE_RETEACH,
     )
-    learning_store.save_graph(graph, db)
+    learning_store.save_graph(graph, db, user_id=TEST_USER_ID)
 
-    reloaded = learning_store.load_graph(graph.session_id, db)
+    reloaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
     attempt = reloaded.nodes[node_id].attempts[-1]
     assert history.question_of(attempt) == "What does Session own?"
     assert history.question_source_of(attempt) == history.SOURCE_RETEACH

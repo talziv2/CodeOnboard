@@ -22,6 +22,8 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from tests.conftest import TEST_USER_ID, start_session
 from fastapi.testclient import TestClient
 
 import backend.api as api
@@ -377,9 +379,9 @@ def test_remediates_round_trips_through_the_store(tmp_path):
                       "remediates": [gap.id]},
     ))
     graph.set_current(warm_up.id)
-    learning_store.save_graph(graph, db)
+    learning_store.save_graph(graph, db, user_id=TEST_USER_ID)
 
-    reloaded = learning_store.load_graph(graph.session_id, db)
+    reloaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
     assert reloaded.nodes[warm_up.id].lesson_brief["remediates"] == [gap.id]
 
 
@@ -453,9 +455,7 @@ def _run_respond(client, graph, classification, gap_kind):
     with patch("backend.api.run_pipeline", side_effect=_pipeline), \
          patch("backend.api.run_teaching", side_effect=_teaching_side_effect), \
          patch("backend.api.clone_repo", return_value="data/repos/requests"):
-        body = client.post(
-            "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-        ).json()
+        body = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
         session_id = body["session_id"]
         client.get(f"/session/{session_id}/lesson")
         with patch("backend.api.run_grader", side_effect=_grader), \

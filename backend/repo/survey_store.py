@@ -44,9 +44,16 @@ CREATE TABLE IF NOT EXISTS repo_survey (
 
 
 def _connect(db_path: Path | None) -> sqlite3.Connection:
+    # Same file as the learning store, so the same concurrency settings apply —
+    # imported rather than restated, because two modules writing one database
+    # under different pragmas is the kind of disagreement nobody notices until
+    # it produces `database is locked` from only one of them.
+    from backend.learning.store import BUSY_TIMEOUT_MS, _configure
+
     db_path = Path(db_path) if db_path is not None else DB_PATH
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(db_path)
+    connection = sqlite3.connect(db_path, timeout=BUSY_TIMEOUT_MS / 1000)
+    _configure(connection)
     connection.row_factory = sqlite3.Row
     connection.execute(_TABLE)
     return connection
