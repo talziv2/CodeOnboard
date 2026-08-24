@@ -62,6 +62,8 @@ from backend.learning import store as learning_store
 from backend.learning import understanding
 from backend.auth.deps import CurrentUser, current_user, owned_session
 from backend.auth import tokens
+from backend.auth.google_routes import identities_router
+from backend.auth.google_routes import router as google_router
 from backend.auth.routes import router as auth_router
 from backend.auth.startup import run_startup_checks
 from backend.learning.graph import understanding_of
@@ -162,6 +164,8 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(google_router)
+app.include_router(identities_router)
 
 
 # ── the third layer (multi-user.md §7.2) ─────────────────────────────────────

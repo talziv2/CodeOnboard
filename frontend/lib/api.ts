@@ -946,3 +946,31 @@ export const deleteSession = async (session_id: string): Promise<void> => {
   });
   if (!res.ok) await fail(res);
 };
+
+
+// --- Google (multi-user M6) ---
+
+export interface Identities {
+  identities: { provider: string; created_at: string }[];
+  google_configured: boolean;
+}
+
+export const listIdentities = () => get<Identities>("/auth/identities");
+
+/**
+ * Finish a Google sign-in that collided with an existing password account.
+ *
+ * Google proved the EMAIL; this proves the ACCOUNT. Both are required because
+ * the app verifies no email of its own, so an address in `users.email` is an
+ * unverified claim and linking on it alone would be an account takeover.
+ */
+export const linkGoogle = (password: string) =>
+  post<AuthUser>("/auth/google/link", { password });
+
+export const unlinkGoogle = async (): Promise<void> => {
+  const res = await send("/auth/identities/google", { method: "DELETE" });
+  if (!res.ok) await fail(res);
+};
+
+/** A full navigation, not a fetch — the browser has to follow Google's redirect. */
+export const GOOGLE_START = "/api/auth/google/start";

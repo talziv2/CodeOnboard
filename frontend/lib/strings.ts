@@ -74,6 +74,14 @@ export const t = {
       switchAction: "Sign in",
     },
     signOut: "Sign out",
+    google: "Continue with Google",
+    // The link step exists because the app verifies no email of its own, so
+    // Google proving the address is not the same as proving the account.
+    linkTitle: "Connect Google to your account",
+    linkBody:
+      "An account already uses this email. Enter its password to connect Google to it — you'll be signed out of any other devices.",
+    linkSubmit: "Connect and sign in",
+    linkBusy: "Connecting…",
     checking: "Checking your session…",
   },
 
@@ -1225,6 +1233,14 @@ export const t = {
     // this person a user here" is not a question an anonymous visitor gets to
     // ask; the copy must not undo that by being more specific than the API.
     not_authenticated: "Your session has ended. Sign in again.",
+    oauth_state: "That sign-in link expired. Try again.",
+    oauth_failed: "Google sign-in didn't complete. Try again.",
+    oauth_unverified:
+      "Google hasn't verified that email address, so it can't be used to sign in here.",
+    google_not_configured: "Google sign-in isn't set up on this server.",
+    no_pending_link: "That sign-in link expired. Start again from the sign-in page.",
+    last_identity:
+      "That's the only way into this account, so it can't be removed. Set a password first.",
     too_many_attempts: "Too many attempts. Wait a moment, then try again.",
     "Email or password is incorrect.": "Email or password is incorrect.",
     "That email cannot be used to register.":

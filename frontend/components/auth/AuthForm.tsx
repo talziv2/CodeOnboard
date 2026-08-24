@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Button from "@/components/ui/Button";
+import { GOOGLE_START, linkGoogle } from "@/lib/api";
 import { destinationFor } from "@/lib/auth-redirect";
 import { NEXT_PARAM, useAuth } from "@/lib/auth";
 import { errorText, t } from "@/lib/strings";
@@ -13,7 +14,7 @@ import { errorText, t } from "@/lib/strings";
  * "where do I go afterwards" logic to drift.
  */
 export default function AuthForm({ mode }: { mode: "login" | "signup" }) {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, refresh } = useAuth();
   const router = useRouter();
   const params = useSearchParams();
   const [email, setEmail] = useState("");
@@ -23,6 +24,16 @@ export default function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const [error, setError] = useState<string | null>(null);
 
   const copy = mode === "login" ? t.auth.login : t.auth.signup;
+
+  /**
+   * The callback sends the browser back here with a hint about what happened.
+   *
+   * `?link=google` means Google verified an address that already belongs to a
+   * password account, and NOTHING was linked — the account's password has to be
+   * confirmed first. `?error=` is anything that went wrong, already worded.
+   */
+  const linking = params.get("link") === "google";
+  const oauthError = params.get("error");
 
   // Where to land afterwards. `destinationFor` is the open-redirect guard, kept
   // as a pure function in `lib/auth-redirect` so it can be tested directly —
@@ -35,6 +46,15 @@ export default function AuthForm({ mode }: { mode: "login" | "signup" }) {
     setBusy(true);
     setError(null);
     try {
+      if (linking) {
+        // Confirming the password for a pending Google link, not signing in.
+        // The server links, revokes every other session for that account, and
+        // issues this browser a fresh one.
+        await linkGoogle(password);
+        await refresh();
+        router.replace("/sessions");
+        return;
+      }
       if (mode === "login") await signIn(email.trim(), password);
       else await signUp(email.trim(), password, displayName.trim() || undefined);
       router.replace(destination());
@@ -46,6 +66,17 @@ export default function AuthForm({ mode }: { mode: "login" | "signup" }) {
 
   return (
     <form onSubmit={submit} className="flex w-full max-w-sm flex-col gap-3">
+      {linking && (
+        <div className="flex flex-col gap-1.5 rounded-field border border-rule bg-trench p-3.5">
+          <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
+            {t.auth.linkTitle}
+          </span>
+          <p className="text-meta text-graphite">{t.auth.linkBody}</p>
+        </div>
+      )}
+      {oauthError && (
+        <p role="alert" className="text-aside text-rust">{errorText(oauthError)}</p>
+      )}
       <label
         htmlFor="email"
         className="font-mono text-micro uppercase tracking-[0.14em] text-graphite"
@@ -105,8 +136,25 @@ export default function AuthForm({ mode }: { mode: "login" | "signup" }) {
       {error && <p role="alert" className="text-aside text-rust">{error}</p>}
 
       <Button variant="primary" size="block" className="mt-2" type="submit" disabled={busy}>
-        {busy ? copy.busy : copy.submit}
+        {busy ? (linking ? t.auth.linkBusy : copy.busy)
+              : (linking ? t.auth.linkSubmit : copy.submit)}
       </Button>
+
+      {!linking && (
+        <>
+          <span className="mt-1 text-center font-mono text-micro uppercase tracking-[0.14em] text-graphite">
+            or
+          </span>
+          {/* A full navigation, not a fetch: the browser has to follow Google's
+              redirect, and an XHR cannot. */}
+          <a
+            href={GOOGLE_START}
+            className="rounded-field border border-rule bg-trench px-3.5 py-3 text-center text-aside text-chalk hover:border-signal-dim"
+          >
+            {t.auth.google}
+          </a>
+        </>
+      )}
 
       <p className="mt-2 text-center text-meta text-graphite">
         {copy.switchPrompt}{" "}
