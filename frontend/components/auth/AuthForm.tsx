@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Button from "@/components/ui/Button";
-import { GOOGLE_START, linkGoogle } from "@/lib/api";
+import { GOOGLE_START, linkGoogle, listProviders } from "@/lib/api";
 import { destinationFor } from "@/lib/auth-redirect";
 import { NEXT_PARAM, useAuth } from "@/lib/auth";
 import { errorText, t } from "@/lib/strings";
@@ -34,6 +34,25 @@ export default function AuthForm({ mode }: { mode: "login" | "signup" }) {
    */
   const linking = params.get("link") === "google";
   const oauthError = params.get("error");
+
+  /**
+   * Whether to offer Google at all.
+   *
+   * `null` while unknown, so the button does not flash in and out on load. An
+   * unconfigured server used to render the button anyway and answer the click
+   * with `{"detail":"google_not_configured"}` on a blank tab — offered and
+   * broken, which is worse than absent.
+   */
+  const [googleAvailable, setGoogleAvailable] = useState<boolean | null>(null);
+  useEffect(() => {
+    let live = true;
+    listProviders()
+      .then((p) => { if (live) setGoogleAvailable(p.google); })
+      // Unreachable means unknown, and unknown means do not offer it: a button
+      // that cannot work is worse than one that is not there.
+      .catch(() => { if (live) setGoogleAvailable(false); });
+    return () => { live = false; };
+  }, []);
 
   // Where to land afterwards. `destinationFor` is the open-redirect guard, kept
   // as a pure function in `lib/auth-redirect` so it can be tested directly —
@@ -140,7 +159,7 @@ export default function AuthForm({ mode }: { mode: "login" | "signup" }) {
               : (linking ? t.auth.linkSubmit : copy.submit)}
       </Button>
 
-      {!linking && (
+      {!linking && googleAvailable && (
         <>
           <span className="mt-1 text-center font-mono text-micro uppercase tracking-[0.14em] text-graphite">
             or

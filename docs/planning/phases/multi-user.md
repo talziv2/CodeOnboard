@@ -1895,3 +1895,43 @@ email verification, no password reset, one SQLite file, one process. Every one o
 those limits is a recorded decision with its consequence written down, rather
 than an omission. If this is ever deployed somewhere real, §6.3 and §14 name
 exactly what has to change first.
+
+### M6 follow-up — the unconfigured Google button
+
+Found in manual testing, and a real defect rather than a cosmetic one. M6 claimed
+"unconfigured, the button is hidden and `/start` answers 503: absent rather than
+half-working". The second half was true and **the first half was never built** —
+`AuthForm` rendered the Google link unconditionally, so clicking it on a server
+with no credentials navigated the browser onto:
+
+```
+{"detail":"google_not_configured"}
+```
+
+A raw JSON object on a blank tab, with no way back into the app.
+
+Two fixes, because there were two mistakes:
+
+1. **`/auth/google/start` redirects instead of returning JSON.** This route is
+   only ever reached by a full browser navigation — the browser has to follow
+   Google's redirect and a `fetch` cannot — so its errors have to be readable on
+   a page. It now answers `303 → /login?error=google_not_configured`, which the
+   sign-in page already knows how to render via `errorText`. The status code was
+   right; the *medium* was wrong.
+2. **`GET /auth/providers`** (public) tells the sign-in page which methods the
+   server offers, so the button is hidden rather than offered-and-broken. It has
+   to be public because the page reads it before anybody is signed in; it
+   describes the deployment, never a person, and reveals only what clicking the
+   button would reveal anyway. Declared in `test_route_authz_coverage.PUBLIC`
+   with that reason — the coverage test failed until it was, which is the test
+   working.
+
+The button stays hidden while the answer is unknown (`null`) and if the request
+fails: a button that cannot work is worse than one that is not there, and one
+that appears then vanishes is on screen long enough to click.
+
+Tests: 3 backend (`test_google_oauth.py`), 6 frontend
+(`components/auth/AuthForm.test.tsx`) covering configured, unconfigured, pending,
+unreachable, the email form surviving, and the error text for a click that got
+through anyway. Suites after: **backend 1706 passed / 5 skipped, frontend 621
+passed**, tsc clean.

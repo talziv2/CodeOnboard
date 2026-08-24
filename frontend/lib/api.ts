@@ -960,6 +960,13 @@ export interface Identities {
 
 export const listIdentities = () => get<Identities>("/auth/identities");
 
+/** Which ways of signing in this server offers. Readable before sign-in.
+ *
+ *  The sign-in page needs this BEFORE anybody is authenticated, which is why it
+ *  is its own public endpoint rather than a field on `/auth/identities`. */
+export const listProviders = () =>
+  get<{ password: boolean; google: boolean }>("/auth/providers");
+
 /**
  * Finish a Google sign-in that collided with an existing password account.
  *

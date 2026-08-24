@@ -337,10 +337,41 @@ def test_an_unverified_email_lands_on_a_readable_error(client, monkeypatch):
     assert "oauth_unverified" in response.headers["location"]
 
 
-def test_start_refuses_when_google_is_not_configured(client, monkeypatch):
+def test_start_sends_you_back_when_google_is_not_configured(client, monkeypatch):
+    """A browser navigation must not end on a JSON body.
+
+    This route is only ever reached by a full page navigation, so `503
+    {"detail": "google_not_configured"}` put a raw JSON object on a blank tab
+    with no way back — which is what a learner actually saw. It goes back to the
+    sign-in page with a reason the page can render.
+    """
     monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
 
-    assert client.get("/auth/google/start").status_code == 503
+    response = client.get("/auth/google/start", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login?error=google_not_configured"
+
+
+def test_the_providers_endpoint_is_readable_before_signing_in(client, monkeypatch):
+    """The sign-in page has to know BEFORE anybody is authenticated.
+
+    Otherwise it can only offer the button and hope — and an unconfigured server
+    turns that hope into an error page.
+    """
+    monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+
+    response = client.get("/auth/providers")
+
+    assert response.status_code == 200
+    assert response.json() == {"password": True, "google": False}
+
+
+def test_the_providers_endpoint_reports_google_once_configured(client, monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "id")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "secret")
+
+    assert client.get("/auth/providers").json()["google"] is True
 
 
 # ── unlinking ─────────────────────────────────────────────────────────────────

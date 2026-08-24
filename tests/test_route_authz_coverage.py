@@ -34,6 +34,7 @@ PUBLIC = {
     "/docs":                 "the Swagger page itself; its calls are enforced",
     "/docs/oauth2-redirect": "part of the Swagger page",
     "/redoc":                "rendered documentation only; every path it lists is still enforced",
+    "/auth/providers":       "which sign-in methods this deployment offers — the sign-in page must read it before anybody is signed in, and it describes the server, never a person",
     "/health":               "liveness only — returns a constant, reveals nothing about state",
 }
 

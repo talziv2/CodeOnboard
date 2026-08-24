@@ -1243,7 +1243,8 @@ export const t = {
     oauth_failed: "Google sign-in didn't complete. Try again.",
     oauth_unverified:
       "Google hasn't verified that email address, so it can't be used to sign in here.",
-    google_not_configured: "Google sign-in isn't set up on this server.",
+    google_not_configured:
+      "Google sign-in isn't set up on this server. Use your email and password.",
     no_pending_link: "That sign-in link expired. Start again from the sign-in page.",
     last_identity:
       "That's the only way into this account, so it can't be removed. Set a password first.",

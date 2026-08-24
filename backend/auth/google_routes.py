@@ -106,8 +106,19 @@ def _back_to(path: str) -> RedirectResponse:
 
 @router.get("/start")
 async def google_start(request: Request) -> Response:
+    """Begin the flow. Redirects to Google — or back to the sign-in page.
+
+    THIS ROUTE IS ONLY EVER A FULL BROWSER NAVIGATION, never an XHR: the browser
+    has to follow Google's redirect, and a fetch cannot. So an error here must be
+    something a person can read on a page, not a JSON body.
+
+    Returning `503 {"detail": "google_not_configured"}` put exactly that in front
+    of a learner — a raw JSON object on a blank tab, with no way back. The status
+    was right and the medium was wrong. It redirects to the sign-in page with a
+    readable reason instead, which is also where they were trying to get to.
+    """
     if not google.is_configured():
-        raise HTTPException(status_code=503, detail="google_not_configured")
+        return _back_to("/login?error=google_not_configured")
 
     flow = google.new_flow_state()
     client = google.build_client()
@@ -228,6 +239,21 @@ def google_link(
 
 
 identities_router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@identities_router.get("/providers")
+def list_providers() -> dict:
+    """Which ways of signing in this server actually offers.
+
+    Public, and deliberately: the sign-in page has to read it BEFORE anybody is
+    signed in, which is the whole point. It reveals only whether Google is
+    configured on this deployment — not a fact about any person, and one anybody
+    could discover by clicking the button.
+
+    Without it the page could only offer the button and hope, which is how a
+    learner ends up looking at `{"detail":"google_not_configured"}`.
+    """
+    return {"password": True, "google": google.is_configured()}
 
 
 @identities_router.get("/identities")
