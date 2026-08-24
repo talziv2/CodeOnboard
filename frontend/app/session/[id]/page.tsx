@@ -145,6 +145,9 @@ export default function SessionPage() {
   // below — because the point of the dot is "you have not seen this", and looking
   // at it is what makes that false.
   const [unseen, setUnseen] = useState<SessionTab[]>([]);
+  // Rewritten material the learner has not read. Durable, panel-owned — see
+  // `onMaterialUnread` below and `lib/materialSeen.ts`.
+  const [materialUnread, setMaterialUnread] = useState(false);
   // Which unit's evidence chain is open, if any. Null = closed.
   const [evidenceNodeId, setEvidenceNodeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -631,9 +634,15 @@ export default function SessionPage() {
             // from S4 (something landed where you were not looking), and the Map
             // tab additionally carries A1's route mark when the SHAPE of the
             // journey changed. Different claims, so they are not merged.
-            changed={
-              routeChanges.length > 0 && tab !== "map" ? [...unseen, "map" as SessionTab] : unseen
-            }
+            changed={[
+              ...unseen,
+              // Durable, and additive to `unseen` rather than replacing it: the
+              // two answer different questions and a dot is one bit either way.
+              ...(materialUnread && !unseen.includes("lesson")
+                ? ["lesson" as SessionTab]
+                : []),
+              ...(routeChanges.length > 0 && tab !== "map" ? ["map" as SessionTab] : []),
+            ]}
             onPick={(picked) => dispatchTab({ kind: "picked", tab: picked })}
             onSwitchMode={(picked) => dispatchTab({ kind: "switchedMode", mode: picked })}
             /* The right side of the lesson bar, as one group rather than three
@@ -746,6 +755,15 @@ export default function SessionPage() {
                       current.includes(changed) ? current : [...current, changed]
                     );
                   }}
+                  /* THE DURABLE HALF (M3). `unseen` is transient by design — a
+                     verdict landing while you are on another tab is news that
+                     stops being news once seen, and React state is right for it.
+                     Rewritten material is different: it stays unread until the
+                     learner actually looks, across reloads, so the panel owns
+                     that fact (localStorage, keyed by node) and reports it here
+                     rather than the page inferring it from a grading reply it
+                     will forget. */
+                  onMaterialUnread={setMaterialUnread}
                   // The consequence line's `Read it`. A learner click, so R5 is
                   // satisfied by the same reducer everything else goes through.
                   onGoToSurface={(target) => dispatchTab({ kind: "picked", tab: target })}

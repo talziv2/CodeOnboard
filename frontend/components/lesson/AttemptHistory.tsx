@@ -2,6 +2,7 @@
 
 import type { Attempt } from "@/lib/api";
 import SectionLabel from "@/components/ui/SectionLabel";
+import Prose from "@/components/ui/Prose";
 import { NEUTRAL, VERDICT_COLOR } from "@/lib/verdict";
 import { t } from "@/lib/strings";
 
@@ -57,8 +58,26 @@ function whenLabel(iso: string): string {
 
 /** One graded answer, collapsed to its verdict until opened. */
 function AttemptCard({ attempt, index }: { attempt: Attempt; index: number }) {
-  const label = t.lesson.verdict[attempt.classification] ?? attempt.classification;
-  const color = VERDICT_COLOR[attempt.classification] ?? NEUTRAL;
+  /**
+   * A CHECK has no verdict, and that is not an omission.
+   *
+   * It is graded per gap, and whether the stop is demonstrated is decided by
+   * `understanding_of` from the latest ASSESSMENT plus the gap list — never by
+   * this answer. So the row is labelled for what it is instead of borrowing a
+   * verdict word it was never given.
+   *
+   * Checks were dropped from this list entirely until now, on the mechanical
+   * grounds that a blank verdict rendered a blank row. The consequence, from a
+   * real run: a learner cleared two gaps with a careful answer, returned to the
+   * stop, and found the gaps marked resolved with no trace of what they wrote.
+   * Labelling the row costs one string and keeps their words.
+   */
+  const isCheck = (attempt.kind ?? "assessment") === "verification";
+  const closed = attempt.response?.gaps_resolved?.length ?? null;
+  const label = isCheck
+    ? t.lesson.checkRow
+    : t.lesson.verdict[attempt.classification] ?? attempt.classification;
+  const color = isCheck ? NEUTRAL : VERDICT_COLOR[attempt.classification] ?? NEUTRAL;
 
   return (
     <details className="group rounded-card border border-rule bg-slab open:bg-trench">
@@ -72,12 +91,41 @@ function AttemptCard({ attempt, index }: { attempt: Attempt; index: number }) {
         >
           {label}
         </span>
+        {/* What the check achieved, where it is recorded. A row saying only
+            "Check" leaves the learner to open it to find out whether it worked. */}
+        {isCheck && closed !== null && (
+          <span className="font-mono text-micro text-graphite">
+            {closed > 0 ? t.lesson.checkRowCleared(closed) : t.lesson.checkRowClearedNone}
+          </span>
+        )}
         <span className="ms-auto font-mono text-micro text-graphite">
           {whenLabel(attempt.at)}
         </span>
         <Chevron />
       </summary>
       <div className="flex flex-col gap-2.5 border-t border-rule px-3 py-3">
+        {/* WHAT WAS ASKED, above the answer to it (M1).
+            Rendered only when the attempt actually carries it. Falling back to
+            the node's current prompt would be worse than silence: after a
+            re-teach that is a different question, so an old answer would be
+            captioned with one the learner never saw. */}
+        {attempt.question && (
+          <div className="flex flex-col gap-1">
+            <span className="flex flex-wrap items-baseline gap-x-2 font-mono text-micro uppercase tracking-[0.14em] text-graphite">
+              {t.lesson.youWereAsked}
+              {/* Only for the questions that are NOT the unit's original prompt.
+                  That one is the unmarked case, and badging every row with
+                  "lesson question" would be noise carrying no decision. */}
+              {attempt.question_source &&
+                t.lesson.askedBy[attempt.question_source] && (
+                  <span className="rounded-chip bg-signal-wash px-1.5 py-px text-signal">
+                    {t.lesson.askedBy[attempt.question_source]}
+                  </span>
+                )}
+            </span>
+            <Prose text={attempt.question} size="aside" tone="graphite" />
+          </div>
+        )}
         <div className="flex flex-col gap-1">
           <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
             {t.lesson.youWrote}

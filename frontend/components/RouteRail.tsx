@@ -5,6 +5,7 @@ import { openOnly, type GraphNode } from "@/lib/api";
 import type { RouteStop } from "@/lib/graph-layout";
 import { isComplete, isSettled, type RouteSection } from "@/lib/route-sections";
 import { understandingLabel } from "@/lib/tags";
+import { standingLabel, standingOfNode } from "@/lib/standing";
 import StatePin from "@/components/ui/StatePin";
 import { t } from "@/lib/strings";
 
@@ -110,6 +111,37 @@ function Stop({
   // "not started", "needs another pass" — while the map spoke the learner's.
   // Same unit, two names (M3a.3 AC3).
   const state = understandingLabel(node.understanding ?? "insufficient");
+  const standing = standingOfNode(node);
+  const open = openOnly(node.gaps).length;
+
+  // WHAT IS STILL TRUE OF THIS STOP, in the fewest words that are not
+  // misleading. Nothing for a stop that is demonstrated or untouched — the pin
+  // has already said it and a caption would be noise on every unwalked row.
+  //
+  // Named gaps outrank everything: a count of open misconceptions is the most
+  // actionable thing the rail can say, whatever the standing around it.
+  const caption =
+    open > 0
+      ? t.rail.unresolvedCount(open)
+      : standing === "open"
+        ? state
+        : standingLabel(standing);
+  const captionHint =
+    open > 0
+      ? t.rail.unresolvedHint
+      : standing === "attempted"
+        ? t.rail.attemptedHint
+        : standing === "set_aside"
+          ? // WHICH decision, because they are not the same to a learner.
+            // `waived` is "stop asking me", `asserted` is "I already know
+            // this", and `continued` is "not now". Only the first was ever
+            // named.
+            node.disposition === "waived"
+              ? t.rail.setAsideHint
+              : node.disposition === "asserted"
+                ? t.rail.assertedHint
+                : t.rail.movedOnHint
+          : state;
   return (
     <button
       onClick={() => onJump(node)}
@@ -151,6 +183,8 @@ function Stop({
 
       <StatePin
         understanding={node.understanding}
+        disposition={node.disposition}
+        attempted={node.attempted}
         isCurrent={isCurrent}
         role="rail"
         className="z-10 mt-0.5 block"
@@ -187,27 +221,21 @@ function Stop({
             latest answer reached the objective, held back only by a check they
             have not taken yet. Captioning that as a weakness reports a failure
             that did not happen. */}
-        {node.understanding === "unresolved" && (
+        {/* KEYED ON THE STANDING, not on `understanding` alone (M0). The old
+            condition was `understanding === "unresolved"`, which silently
+            excluded the two cases a caption is most needed for. An `off-topic`
+            answer opens no gaps and is excluded from evidence, so the stop
+            classifies `insufficient` — and a learner who answered it, and then
+            one who chose to move on from it, both got NO caption and a pin
+            identical to a stop nobody had opened. */}
+        {caption && (
           <span
-            className="font-mono text-micro tracking-[0.05em] text-rust"
-            title={
-              openOnly(node.gaps).length > 0
-                ? t.rail.unresolvedHint
-                : node.disposition === "waived"
-                  ? t.rail.setAsideHint
-                  : state
-            }
+            className={`font-mono text-micro tracking-[0.05em] ${
+              standing === "open" ? "text-rust" : "text-graphite"
+            }`}
+            title={captionHint}
           >
-            {/* Three reasons a stop can be unresolved, and they are not the
-                same thing to a learner: work still open, work they chose to
-                set aside, and a genuine rough patch. Only the last is a
-                weakness, and saying so for all three is what M3a.1 set out to
-                stop. */}
-            {openOnly(node.gaps).length > 0
-              ? t.rail.unresolvedCount(openOnly(node.gaps).length)
-              : node.disposition === "waived"
-                ? t.rail.setAside
-                : state}
+            {caption}
           </span>
         )}
       </span>
@@ -403,6 +431,8 @@ export default function RouteRail({
               >
                 <StatePin
                   understanding={stop.node.understanding}
+                  disposition={stop.node.disposition}
+                  attempted={stop.node.attempted}
                   isCurrent={stop.node.id === currentNodeId}
                   role="rail"
                 />

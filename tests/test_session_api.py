@@ -595,11 +595,14 @@ def test_override_mark_understood(mock_pipeline, client):
         json={"action": "mark_understood", "node_id": node_id},
     )
     assert resp.status_code == 200
-    assert resp.json()["understanding_state"] == "understood"
+    # M0: the claim is recorded, the evidence channel is not touched.
+    assert resp.json()["understanding_state"] != "understood"
 
     graph = client.get(f"/session/{session_id}").json()
     node = next(n for n in graph["nodes"] if n["id"] == node_id)
-    assert node["understanding_state"] == "understood"
+    assert node["understanding_state"] != "understood"
+    assert node["user_override"] == "mark_understood"
+    assert node["disposition"] == "asserted"
 
 
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)

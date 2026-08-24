@@ -264,15 +264,39 @@ def test_mark_understood_on_a_gap_bearing_node_behaves_as_waive_remaining():
     assert understanding_of(node) != "understood"
 
 
-def test_mark_understood_is_unchanged_on_a_node_with_no_gap_records():
-    """The compatibility rule: vacuously nothing is bypassed, so every session
-    written before this phase is unaffected."""
+def test_mark_understood_on_a_gap_free_node_asserts_without_demonstrating():
+    """M0. The half of §18.16.2 that stayed open, closed.
+
+    On a gap-bearing node this already routed to `waive_remaining`. On a gap-free
+    one it wrote `understanding_state = "understood"` straight into the EVIDENCE
+    channel — so a click produced a claim indistinguishable from a graded answer.
+    Now the intent is recorded in the disposition channel and nowhere else.
+    """
     graph = _chain(_node("A"))
     node = graph.nodes[graph.path_order()[0]]
     graph.override(node.id, "mark_understood")
+
     assert node.user_override == "mark_understood"
-    assert node.understanding_state == "understood"
-    assert understanding_of(node) == "understood"
+    assert node.understanding_state == "not_started"   # never written
+    assert understanding_of(node) != "understood"
+
+
+def test_mark_understood_still_settles_the_stop():
+    """The consequence that had to be carried, or removing the write would have
+    silently made every asserted stop block completion forever.
+
+    Settlement now comes from the INTENT (`SETTLING_OVERRIDES`) rather than from
+    a state write that was pretending to be evidence.
+    """
+    graph = _chain(_node("A"))
+    node = graph.nodes[graph.path_order()[0]]
+    graph.override(node.id, "mark_understood")
+
+    assert "mark_understood" in SETTLING_OVERRIDES
+    assert is_settled(node) is True
+    assert graph.is_complete() is True
+    # And it buys no credit: an assertion is not a demonstration.
+    assert graph.readiness() < 1.0
 
 
 def test_mark_understood_migrates_even_when_every_gap_is_non_blocking():

@@ -48,6 +48,43 @@ vi.mock("@/lib/api", async (importOriginal) => ({
   ...api,
 }));
 
+/**
+ * The server's retry offer, which M2 made the single source of "what now".
+ *
+ * `answer` while the unit's own prompt is still live — before any graded answer,
+ * which is the only time it may be answered — and `verify`/`reassess` afterwards.
+ * Supplied on the fixtures because the panel no longer derives any of this: the
+ * budgets and the answered-question history it depends on are server-side.
+ */
+const LIVE_PROMPT = {
+  available: true,
+  mechanism: "answer" as const,
+  reason: "",
+  gap_id: null,
+  reassessments_left: 2,
+};
+const CAN_VERIFY = {
+  available: true,
+  mechanism: "verify" as const,
+  reason: "",
+  gap_id: "g1",
+  reassessments_left: 2,
+};
+const CAN_REASSESS = {
+  available: true,
+  mechanism: "reassess" as const,
+  reason: "",
+  gap_id: null,
+  reassessments_left: 2,
+};
+const NOTHING_LEFT = {
+  available: false,
+  mechanism: null,
+  reason: "objective_met",
+  gap_id: null,
+  reassessments_left: 2,
+};
+
 const LESSON: Lesson = {
   node_id: "n1",
   lesson: {
@@ -58,6 +95,7 @@ const LESSON: Lesson = {
     reveal: "The explanation.",
     takeaway: "The takeaway.",
   },
+  retry: LIVE_PROMPT,
 };
 
 const GAP = { id: "g1", kind: "wrong_model", claim: "A connected graph cannot fail.", blocking: true };
@@ -71,12 +109,14 @@ const RETAUGHT: RespondResult = {
   adaptation: { kind: "reteach", retaught: true },
   current_node_id: "n1",
   gaps: [GAP],
+  retry: CAN_VERIFY,
 };
 
 /** A wrong answer that changed nothing in Lesson. */
 const HINTED: RespondResult = {
   ...RETAUGHT,
   adaptation: { kind: "hint", text: "Look at what h() returns." },
+  retry: CAN_REASSESS,
 };
 
 const NODE = node("n1", {
@@ -311,5 +351,94 @@ describe("the second signal: the consequence line offers the click", () => {
     await screen.findByText(HINTED.rationale!);
 
     await waitFor(() => expect(dotOn("lesson")).toBe(true));
+  });
+});
+
+// ── M3: what changed, not only that something did ────────────────────────────
+
+describe("the rewritten material names what it answers", () => {
+  const RETAUGHT_AT = "2026-03-01T10:00:00.000Z";
+  const CLAIM = "urllib3 applies the Authorization header.";
+  const REWRITTEN_NODE = {
+    ...NODE,
+    gaps: [{ id: "g1", kind: "wrong_model", claim: CLAIM, blocking: true, status: "open" }],
+    attempts: [
+      {
+        answer: "urllib3 adds the header.",
+        classification: "confused" as const,
+        rationale: "Not what the code does.",
+        at: RETAUGHT_AT,
+        response: {
+          action: "reteach", retaught: true, at: RETAUGHT_AT,
+          gaps_addressed: ["g1"],
+        },
+      },
+    ],
+  };
+
+  beforeEach(() => window.localStorage.clear());
+
+  test("the notice says WHICH misconception the rewrite corrects", async () => {
+    // A badge solves navigation and not comprehension: a learner returning to a
+    // rewritten lesson still has to work out which part is new. A re-teach
+    // regenerates every field, so there is no diff to highlight — what changed is
+    // honestly answered by what it was written to correct, which the backend
+    // already recorded (`gaps_addressed`) and nothing had joined up.
+    render(<Harness Panel={await panel()} which={REWRITTEN_NODE} />);
+    await screen.findByText(t.lesson.newMaterialLabel);
+
+    expect(screen.getByText(t.lesson.rewriteAnswers)).toBeTruthy();
+    expect(screen.getByText(CLAIM)).toBeTruthy();
+  });
+
+  test("reading it marks the material seen, so the notice can stop", async () => {
+    // The old callout never cleared: it was derived from the last attempt's
+    // `retaught` flag and sat there until the next answer, long after reading.
+    render(<Harness Panel={await panel()} which={REWRITTEN_NODE} />);
+    await screen.findByText(t.lesson.newMaterialLabel);
+
+    await waitFor(() => {
+      const seen = window.localStorage.getItem("codeonboard:lesson-seen:s1:n1");
+      expect(seen && seen > RETAUGHT_AT).toBe(true);
+    });
+  });
+
+  test("shows even when a LATER answer came after the rewrite", async () => {
+    // Found by running the real UI. The notice used to key on `materialIsNew` —
+    // "did the LAST answer rewrite this" — so a learner who was re-taught, never
+    // looked, and then answered again from the other tab was never told at all.
+    // That is exactly the miss this milestone exists to prevent.
+    const answeredSince = {
+      ...REWRITTEN_NODE,
+      attempts: [
+        ...REWRITTEN_NODE.attempts,
+        {
+          answer: "A later answer.",
+          classification: "partial" as const,
+          rationale: "Closer.",
+          at: "2026-03-02T10:00:00.000Z",
+          response: { action: "none", at: "2026-03-02T10:00:00.000Z" },
+        },
+      ],
+    };
+    render(<Harness Panel={await panel()} which={answeredSince} />);
+
+    expect(await screen.findByText(t.lesson.newMaterialLabel)).toBeTruthy();
+    expect(screen.getByText(CLAIM)).toBeTruthy();
+  });
+
+  test("does NOT show again once it has been read", async () => {
+    // The other half, and the bug the old callout had: it never cleared, sitting
+    // there until the next answer long after being read.
+    window.localStorage.setItem(
+      "codeonboard:lesson-seen:s1:n1",
+      "2026-03-05T00:00:00.000Z"
+    );
+    render(<Harness Panel={await panel()} which={REWRITTEN_NODE} />);
+    // `setup` is a section label and appears more than once; wait on the lesson
+    // body itself, which is unique and only present once the panel has settled.
+    await screen.findByText(LESSON.lesson.setup!);
+
+    expect(screen.queryByText(t.lesson.newMaterialLabel)).toBeNull();
   });
 });

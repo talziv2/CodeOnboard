@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type RefObject } from "react";
-import type { NodeGap, RespondResult } from "@/lib/api";
+import type { NodeGap, RespondResult, RetryOffer } from "@/lib/api";
 import Button from "@/components/ui/Button";
 import Callout from "@/components/ui/Callout";
 import Prose, { InlineProse } from "@/components/ui/Prose";
@@ -35,13 +35,17 @@ import { t } from "@/lib/strings";
  * `LessonCanvas`. That is what stops the primary being stranded below a long read,
  * and it is why the explanation can be as long as it needs to be.
  *
- * Two scars carried across deliberately. A CHECK IS NOT A RE-GRADE: its
+ * One scar carried across deliberately. A CHECK IS NOT A RE-GRADE: its
  * `classification` is null by design, so the action plan takes `isCheck` and never
  * infers from the classification — which is how "Build me a warm-up" once became the
- * only button after a correct check. And "TRY AGAIN" IS NOT OFFERED WHILE A GAP IS
- * OPEN: `feedbackActions` returns `check` there instead, because re-asking the
- * question whose answer the reveal just gave away proves only that the page was
- * read (§18.7).
+ * only button after a correct check.
+ *
+ * THE RETRY IS ONE BUTTON AND THE BACKEND CHOOSES ITS MECHANISM (M2). What used to
+ * be `check` and `answerAgain` is now `askAgain`, and the panel no longer works out
+ * whether either is possible — `retry` arrives decided. When there is none, the
+ * REASON is said rather than the control silently vanishing: "you've shown this
+ * one" and "you've used both fresh questions" are different facts and a learner
+ * looking for a way forward deserves to know which they are in.
  */
 export default function FeedbackCardNext({
   result,
@@ -50,19 +54,19 @@ export default function FeedbackCardNext({
   closed,
   checkedAnswer,
   openGaps,
+  retry,
+  materialUnread,
   warmUpInserted,
   warmUpAvailable,
   warmUpDeclined,
-  canAnswerAgain,
-  checkAvailable,
   loading,
   verifying,
   error,
   verdictRef,
   onAdvanceStop,
-  onCheckUnderstanding,
+  onAskAgain,
+  onReadMaterial,
   onBuildWarmUp,
-  onAnswerAgain,
   onStartWarmUp,
   onReadInLesson,
 }: {
@@ -72,20 +76,23 @@ export default function FeedbackCardNext({
   closed: NodeGap[];
   checkedAnswer: string | undefined;
   openGaps: NodeGap[];
+  /** What "Ask me again" would do here. Server-computed; rendered, not decided. */
+  retry?: RetryOffer;
+  /** A re-teach rewrote the material and the learner has not looked since. */
+  materialUnread?: boolean;
   warmUpInserted: boolean;
   warmUpAvailable: boolean;
   /** The Mutator refused one for this node — on EITHER call. Panel-owned. */
   warmUpDeclined: boolean;
-  canAnswerAgain: boolean;
-  checkAvailable: boolean;
   loading: boolean;
   verifying: boolean;
   error: string | null;
   verdictRef: RefObject<HTMLDivElement | null>;
   onAdvanceStop: () => void;
-  onCheckUnderstanding: () => void;
+  onAskAgain: () => void;
+  /** Take the learner to the rewritten material. Absent on the single column. */
+  onReadMaterial?: () => void;
   onBuildWarmUp: () => void;
-  onAnswerAgain: () => void;
   onStartWarmUp: () => void;
   /**
    * Take the learner to the rewritten material. Present only under `surfaces`,
@@ -115,7 +122,9 @@ export default function FeedbackCardNext({
   const plan = feedbackActions({
     classification: result.classification,
     isCheck,
-    openGapCount: openGaps.length,
+    retry,
+    // Only where there is somewhere to go AND something unread there.
+    materialUnread: Boolean(materialUnread && onReadMaterial),
     warmUpInserted,
     // Declined, by EITHER route. The automatic one is still read from the grading
     // response: the backend chose `prerequisite` and produced no mutation. The
@@ -127,8 +136,6 @@ export default function FeedbackCardNext({
       (result.adaptation?.kind === "prerequisite" &&
         result.mutation?.kind !== "prerequisite"),
     warmUpAvailable,
-    canAnswerAgain,
-    checkAvailable,
   });
 
   // WHICH action is waiting, not merely that something is.
@@ -146,31 +153,30 @@ export default function FeedbackCardNext({
   }, [loading, verifying]);
   const waiting = (id: ActionId) => pressed === id && (loading || verifying);
 
+  // ONE label, whichever mechanism the server picked. The learner is not told
+  // whether this will be a check on a misconception or a fresh question about the
+  // objective, because that is a fact about our bookkeeping and not about them.
   const label: Record<ActionId, string> = {
     next: waiting("next") ? t.lesson.loadingShort : t.lesson.nextStop,
-    check: waiting("check")
-      ? t.lesson.verifyCtaBusy
-      : isCheck
-        ? t.lesson.checkAnother
-        : t.lesson.verifyCta,
+    askAgain: waiting("askAgain") ? t.lesson.askAgainBusy : t.lesson.askAgain,
+    readMaterial: t.lesson.readWhatChanged,
     warmUp: waiting("warmUp") ? t.lesson.loadingShort : t.lesson.buildWarmUp,
-    answerAgain: t.lesson.tryAgain,
     startWarmUp: waiting("startWarmUp") ? t.lesson.loadingShort : t.lesson.startWarmUp,
     skipWarmUp: waiting("skipWarmUp") ? t.lesson.loadingShort : t.lesson.skipItMoveOn,
     moveOn: waiting("moveOn") ? t.lesson.loadingShort : t.lesson.moveOnAnyway,
   };
   const handlers: Record<ActionId, () => void> = {
     next: onAdvanceStop,
-    check: onCheckUnderstanding,
+    askAgain: onAskAgain,
+    readMaterial: onReadMaterial ?? onAdvanceStop,
     warmUp: onBuildWarmUp,
-    answerAgain: onAnswerAgain,
     startWarmUp: onStartWarmUp,
     skipWarmUp: onAdvanceStop,
     moveOn: onAdvanceStop,
   };
   // Every action is still DISABLED while anything is in flight — one request at a
   // time was never the bug. Only the label moved.
-  const busy = (id: ActionId) => (id === "check" ? loading || verifying : loading);
+  const busy = (id: ActionId) => (id === "askAgain" ? loading || verifying : loading);
   const actions = plannedActions(plan);
 
   return (
@@ -257,6 +263,28 @@ export default function FeedbackCardNext({
 
       {isCheck && closed.length === 0 && (
         <p className="measure text-meta text-graphite">{t.lesson.checkNothingClosed}</p>
+      )}
+
+      {/* WHY there is no retry, when there is none. Each reason is something to
+          act on or accept — never a malfunction — and a control that simply is
+          not there leaves the learner unable to tell "nothing left to do" from
+          "something is broken". Suppressed once the objective is met, where the
+          verdict and the primary action already say it between them. */}
+      {retry &&
+        !retry.available &&
+        retry.reason &&
+        retry.reason !== "objective_met" &&
+        t.lesson.retryReason[retry.reason] && (
+          <p className="measure border-s-2 border-rule ps-3 text-meta text-graphite">
+            {t.lesson.retryReason[retry.reason]}
+          </p>
+        )}
+
+      {/* Only on the LAST one. A running counter on every verdict would read as
+          pressure rather than information, and the number only becomes
+          actionable when running out is imminent. */}
+      {retry?.available && retry.mechanism === "reassess" && retry.reassessments_left === 1 && (
+        <p className="measure text-meta text-graphite">{t.lesson.lastAskLeft}</p>
       )}
 
       {/* A verification answer is kept out of "Your answers" — it carries no

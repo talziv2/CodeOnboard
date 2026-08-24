@@ -7,8 +7,10 @@ import {
   respond,
   advance,
   retry,
+  requestReassessment,
   requestVerification,
   openOnly,
+  respondToReassessment,
   respondToVerification,
   waive,
 } from "@/lib/api";
@@ -28,6 +30,7 @@ import LessonWorkspace from "@/components/lesson/LessonWorkspace";
 import RevealBlock from "@/components/lesson/RevealBlock";
 import SetupProse from "@/components/lesson/SetupProse";
 import TracePath from "@/components/lesson/TracePath";
+import SpentPrompt from "@/components/lesson/SpentPrompt";
 import VerificationBlock from "@/components/lesson/VerificationBlock";
 import PracticeSurface from "@/components/ui/PracticeSurface";
 import Prose, { InlineProse } from "@/components/ui/Prose";
@@ -39,7 +42,15 @@ import type { ArrivalNotice as Arrival } from "@/lib/arrival";
 import type { Surface } from "@/lib/lessonSurfaces";
 import EarlierExplanations from "@/components/lesson/EarlierExplanations";
 import ArrivalNotice from "@/components/lesson/ArrivalNotice";
-import { materialIsNew, supersededExplanations } from "@/lib/lessonHistory";
+import { remedialUnlockFor } from "@/lib/graph-layout";
+import { supersededExplanations } from "@/lib/lessonHistory";
+import {
+  lastSeenAt,
+  markSeen,
+  materialUnread as isMaterialUnread,
+  retaughtAt,
+  rewriteAnswers,
+} from "@/lib/materialSeen";
 import { FAILED } from "@/lib/verdict";
 import { errorText, t } from "@/lib/strings";
 
@@ -95,6 +106,16 @@ interface Props {
    * component cannot see which surface is on screen.
    */
   onSurfaceChanged?: (surface: Surface) => void;
+  /**
+   * There is rewritten material on Lesson that the learner has not looked at.
+   *
+   * Reported rather than folded into `onSurfaceChanged` because the two have
+   * different lifetimes, which was the defect: a verdict landing while you are
+   * elsewhere is transient news and a React-state dot is right for it, but
+   * "your material was rewritten and you have not seen it" must survive a reload
+   * — a change forgotten on refresh is a change the learner never saw.
+   */
+  onMaterialUnread?: (unread: boolean) => void;
   /** Take the learner to a surface. Always from an explicit control of theirs. */
   onGoToSurface?: (surface: Surface) => void;
 }
@@ -103,7 +124,7 @@ export default function LessonPanel({
   sessionId, nodeId, node, position, total, isPrerequisite,
   arrival = null, onReturnToRoute, onDismissArrival, returningToRoute = false,
   graph, onFileClick, onAdvance, onRespond, finished, onFinish, onLeave, surface,
-  onSurfaceChanged, onGoToSurface,
+  onSurfaceChanged, onGoToSurface, onMaterialUnread,
 }: Props) {
   const router = useRouter();
   const [lesson, setLesson] = useState<Lesson | null>(null);
@@ -111,10 +132,23 @@ export default function LessonPanel({
   const [result, setResult] = useState<RespondResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // The outstanding verification question, once requested. Held in component
-  // state rather than on the lesson: a verification is a different question with
-  // a different lifetime, and `cached_lesson` is the teacher's artifact.
-  const [verification, setVerification] = useState<VerificationPrompt | null>(null);
+  /**
+   * The outstanding FRESH question, of either kind, once requested.
+   *
+   * Held in component state rather than on the lesson: a fresh question has a
+   * different lifetime from the unit's prompt, and `cached_lesson` is the
+   * teacher's artifact — a re-teach replaces it wholesale and would take an
+   * outstanding question with it.
+   *
+   * One shape for verification and re-assessment, matching the server's `pending`.
+   * `gaps` is present only on a check, which is the one thing that genuinely
+   * differs: what a check was aimed at is otherwise unrecoverable once the reply
+   * lands, because `result.gaps` is the still-OPEN list and a gap that just
+   * closed is by definition absent from it.
+   */
+  const [verification, setVerification] = useState<
+    { kind: "verification" | "reassessment"; question: string; gaps?: NodeGap[] } | null
+  >(null);
   const [verifying, setVerifying] = useState(false);
 
   const verdictRef = useRef<HTMLDivElement>(null);
@@ -135,12 +169,92 @@ export default function LessonPanel({
   // stop's surroundings rather than about the attempt that asked.
   const [warmUpDeclined, setWarmUpDeclined] = useState(false);
 
+  // ── the rewritten material, and whether it has been looked at (M3) ──────────
+  //
+  // ABOVE THE EARLY RETURNS, with the rest of the state. Everything these read is
+  // available from props, and putting them beside the derived values further down
+  // — after `if (finished)` and `if (!lesson)` — changed the hook count between
+  // renders the moment a lesson finished loading.
+  //
+  // `materialIsNew` asks the narrow question "did the LAST answer rewrite this",
+  // which is what the consequence line needs at the moment it happens. This pair
+  // is the durable one: the material was installed at T, the learner last looked
+  // at S. It survives a reload — where the old tab dot did not — and it CLEARS on
+  // being read, where the old callout never did.
+  //
+  // Read from `node.attempts` rather than the panel's assembled list, which can
+  // carry a synthesised `pending` entry that never has a `response` at all.
+  const installedAt = retaughtAt(node.attempts ?? []);
+  const [seenAt, setSeenAt] = useState<string | null>(null);
+  // WHICH rewrite the notice is about, captured on ARRIVAL rather than read live.
+  //
+  // Found by running the real UI: keying the notice on the LIVE unread flag makes
+  // it flash and vanish, because arriving at Lesson is what marks the material
+  // seen — and arriving is exactly when the learner needs to be told. So the
+  // effect below snapshots "was this unread when I got here" before it clears it,
+  // and the notice stays up for the visit that earned it.
+  //
+  // KEYED BY `${nodeId}:${installedAt}`, and the effect that sets it is guarded by
+  // a ref, because React runs effects TWICE on mount in development. The first
+  // draft snapshotted into plain state and reset it on node change, and the
+  // second invocation reliably undid the snapshot: reset cleared it, then the
+  // marking effect found the material already seen — by its own first
+  // invocation — and declined to set it again. The notice never appeared in dev
+  // and would have appeared in production, which is the worst version of a bug.
+  //
+  // A ref survives the remount, so the whole arrival is handled exactly once; and
+  // keying by node means no reset is needed at all, since a different stop can
+  // never match a key left by another one.
+  const arrivalHandled = useRef<string | null>(null);
+  const [noticeKey, setNoticeKey] = useState<string | null>(null);
+  useEffect(() => {
+    setSeenAt(lastSeenAt(sessionId, nodeId));
+  }, [sessionId, nodeId]);
+
+  // Looking at it is what makes "you have not seen this" false. Under the single
+  // column there is nowhere else to be, so rendering the panel IS looking; under
+  // the split it has to be the Lesson surface specifically.
+  const splitSurfaces = isSplitSurfaces(lessonUi());
+  const lookingAtMaterial = !splitSurfaces || (surface ?? "lesson") === "lesson";
+  useEffect(() => {
+    if (!lookingAtMaterial || !installedAt) return;
+    const key = `${nodeId}:${installedAt}`;
+    if (arrivalHandled.current === key) return;
+    arrivalHandled.current = key;
+    // Read storage directly rather than the `seenAt` state: this effect is what
+    // writes it, so racing its own render would decide the question with a value
+    // it is about to overwrite.
+    if (isMaterialUnread(installedAt, lastSeenAt(sessionId, nodeId))) {
+      setNoticeKey(key);
+    }
+    const now = new Date().toISOString();
+    markSeen(sessionId, nodeId, now);
+    setSeenAt(now);
+  }, [lookingAtMaterial, installedAt, sessionId, nodeId]);
+
+  // Only meaningful where there is somewhere else to go. Under `next` the material
+  // is in the same column as the verdict, so "go and read it" would be an
+  // instruction to look slightly further up the page.
+  const materialUnread = splitSurfaces && isMaterialUnread(installedAt, seenAt);
+  useEffect(() => {
+    onMaterialUnread?.(materialUnread);
+  }, [materialUnread, onMaterialUnread]);
+
   useEffect(() => {
     setLesson(null);
     setError(null);
     setLoading(true);
     getLesson(sessionId)
-      .then(setLesson)
+      .then((got) => {
+        setLesson(got);
+        // A QUESTION ALREADY ASKED COMES BACK (M2). It is charged on issue, so a
+        // refresh that dropped it would cost the learner an attempt they never
+        // got to take — and would leave the composer offering a prompt that is
+        // spent. Restored from the server, which is the only thing that knows.
+        if (got.pending) {
+          setVerification({ kind: got.pending.kind, question: got.pending.question });
+        }
+      })
       .catch((e) => setError(errorText(e.message)))
       .finally(() => setLoading(false));
   }, [sessionId, nodeId]);
@@ -307,7 +421,8 @@ export default function LessonPanel({
     setSolvingGapId(gapId ?? null);
     setError(null);
     try {
-      setVerification(await requestVerification(sessionId, nodeId, gapId));
+      const prompt = await requestVerification(sessionId, nodeId, gapId);
+      setVerification({ kind: "verification", question: prompt.question, gaps: prompt.gaps });
       onSurfaceChanged?.("understanding");
       setAnswer("");
       setResult(null);
@@ -319,15 +434,65 @@ export default function LessonPanel({
     }
   };
 
-  const onSubmitVerification = async () => {
-    if (!answer.trim()) return;
+  /**
+   * THE ONE RETRY. Which mechanism it runs is the server's decision (M2).
+   *
+   * The panel does not choose and does not check whether a retry is possible —
+   * `retry.mechanism` arrives decided from `backend/learning/retry.py`, computed
+   * from facts this side does not have: gap budgets, remediation rounds, the
+   * re-assessment budget, and which questions have already been answered.
+   * Reconstructing that from grading-reply flags is what produced every seam bug
+   * this pass found.
+   */
+  const onAskAgain = async () => {
+    const mechanism = retryOffer?.mechanism;
+    if (mechanism === "verify") return onCheckUnderstanding(retryOffer?.gap_id ?? undefined);
+    if (mechanism === "answer") {
+      // Not a retry at all — the unit's own prompt, never yet answered. Clearing
+      // the verdict is the whole action.
+      setResult(null);
+      setAnswer("");
+      return;
+    }
+    if (mechanism !== "reassess") return;
+
+    setVerifying(true);
+    setError(null);
+    try {
+      const prompt = await requestReassessment(sessionId, nodeId);
+      setVerification({ kind: "reassessment", question: prompt.question });
+      onSurfaceChanged?.("understanding");
+      setAnswer("");
+      setResult(null);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? errorText(e.message) : t.lesson.warmUpFailed);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  /**
+   * Answer whichever fresh question is on screen.
+   *
+   * One handler for both, because the client's job is identical — post the answer
+   * with the kind the question came with. What differs is downstream and belongs
+   * there: a verification reply carries `resolved`/`unresolved` and no
+   * classification, while a re-assessment reply is an ordinary graded verdict.
+   */
+  const onSubmitPending = async () => {
+    if (!answer.trim() || !verification) return;
+    const isVerification = verification.kind === "verification";
     setLoading(true);
     setError(null);
     try {
-      const got = await respondToVerification(sessionId, answer, nodeId);
+      const got = isVerification
+        ? await respondToVerification(sessionId, answer, nodeId)
+        : await respondToReassessment(sessionId, answer, nodeId);
       onSurfaceChanged?.("understanding");
       // Captured BEFORE the composer and the prompt are cleared — see `checked`.
-      setChecked({ answer, targeted: verification?.gaps ?? [] });
+      // Only for a check: a re-assessment answer IS an assessment, so it lands in
+      // "Your answers" like any other and does not need rescuing from the wire.
+      if (isVerification) setChecked({ answer, targeted: verification.gaps ?? [] });
       setResult(got);
       setVerification(null);
       setAnswer("");
@@ -370,28 +535,26 @@ export default function LessonPanel({
 
   if (!lesson) return null;
 
-  // A warm-up was spliced in before this node, so its lesson is the thing that
-  // was meant to unblock this one.
-  const warmUpEdge = graph.edges.find(
-    (e) => e.kind === "prerequisite" && e.to_id === nodeId
-  );
-  const warmUpTitle = warmUpEdge
-    ? graph.nodes.find((n) => n.id === warmUpEdge.from_id)?.title ?? null
-    : null;
+  // A REMEDIAL warm-up was spliced in before this node, so its lesson is the
+  // thing that was meant to unblock this one.
+  //
+  // `remedialUnlockFor`, not "any prerequisite edge": the planner emits one of
+  // those for every `depends_on`, so the old test matched the ordinary stop
+  // before this one and claimed a warm-up that never existed. See the helper.
+  const warmUpTitle =
+    remedialUnlockFor(graph.nodes, graph.edges, nodeId)?.title ?? null;
 
   // When a warm-up is auto-created we skip the graph refresh so the verdict
   // stays readable, which leaves node.attempts one behind. Show the answer that
   // was just graded anyway — it can't double up, because in that branch the
   // refresh that would have carried it never ran.
-  // ASSESSMENTS only. "Your answers" is the record of attempts at the lesson's
-  // own question; a verification answer replies to a different, gap-specific
-  // question (gap-model M6) and carries no `classification`, so leaving it in
-  // would render a blank row, inflate the count, and — worse — make `latest`
-  // below refer to an answer about something else entirely.
+  // ASSESSMENTS only, for everything that REASONS about the learner: `latest`,
+  // recovery, the material notices. A verification answer replies to a
+  // different, gap-specific question (gap-model M6) and carries no
+  // `classification`, so letting it in would make `latest` refer to an answer
+  // about something else entirely.
   //
-  // Filtered rather than labelled: showing verification answers in their own
-  // right needs copy, and `strings.ts` is mid-change in another branch. That is
-  // the frontend half of M9, not this.
+  // It is NOT filtered out of what the learner is SHOWN — see `answerLog`.
   const recorded = (node.attempts ?? []).filter(
     (a) => (a.kind ?? "assessment") !== "verification"
   );
@@ -406,6 +569,27 @@ export default function LessonPanel({
       : null;
   const attempts = pending ? [...recorded, pending] : recorded;
   const latest = attempts[attempts.length - 1];
+
+  /**
+   * EVERYTHING THE LEARNER WROTE HERE, checks included, oldest first.
+   *
+   * Verification answers used to be dropped from "Your answers" outright. The
+   * stated reason was mechanical — no `classification`, so the row rendered
+   * blank and the count inflated — and the fix was deferred because it "needs
+   * copy". The consequence, reported from a real run: a learner cleared two gaps
+   * with a careful answer, came back to the stop, and found the gaps marked
+   * resolved with **no trace of what they wrote**. The system kept the verdict
+   * and threw away the words that earned it.
+   *
+   * The answer was never lost — it is on the node, and the evidence drawer shows
+   * it — but "Your answers" is where a learner looks for their own words, and it
+   * was the one place they were not.
+   *
+   * So a check is LABELLED rather than hidden. M1 is what makes that possible:
+   * the row can now show the question it answered, so it reads as an answer to
+   * something rather than an unexplained blank.
+   */
+  const answerLog = pending ? [...(node.attempts ?? []), pending] : node.attempts ?? [];
 
   // A lesson written before the setup/reveal split has one body and nothing to
   // withhold. `setup` is what distinguishes the two — `walkthrough` is present
@@ -451,6 +635,29 @@ export default function LessonPanel({
       : node.file
         ? [{ file: node.file, line_start: node.line_start, line_end: node.line_end } as Anchor]
         : [];
+  /**
+   * WHAT "ASK ME AGAIN" WOULD DO, from the freshest source that has an opinion.
+   *
+   * A grading reply recomputes it, so that wins while a verdict is up; otherwise
+   * the lesson payload carries it, which is what makes the offer survive a reload
+   * and a revisit. Before M2 it existed only inside a grading reply, so refreshing
+   * lost it — and a refresh is not a decision about the learner's understanding,
+   * so it must not change what is on offer.
+   */
+  const retryOffer = result?.retry ?? lesson?.retry;
+
+  /**
+   * Is the unit's own prompt still answerable?
+   *
+   * Exactly once, before its reveal has ever been shown — see `retry.py`. Read
+   * from the server's offer where there is one; the local fallback is for a
+   * pre-M2 backend, and it errs toward the old behaviour rather than locking a
+   * learner out of a composer they used to have.
+   */
+  const promptIsLive = retryOffer
+    ? retryOffer.mechanism === "answer"
+    : attempts.length === 0;
+
   const adaptation = result?.adaptation;
   // A hint, a follow-up or a corrected lesson is an invitation to answer again
   // — the node is still ahead of them, not behind them.
@@ -528,16 +735,32 @@ export default function LessonPanel({
   // Only offered on the split: the group is Lesson's, and `next` has no Lesson to
   // be a document of.
   const superseded = drawing ? supersededExplanations(attempts) : [];
-  // Did the last answer rewrite what is on this surface? The consequence line says
-  // so on the Understanding side at the moment it happens; this is what makes the
-  // claim good for a learner who arrives at Lesson later, or after a reload.
-  const rewritten = drawing === "lesson" && materialIsNew(attempts);
+
+  // WHICH misconception the rewrite answers. A badge solves navigation and not
+  // comprehension — a re-teach replaces the whole lesson, so there is no diff to
+  // point at, and the honest answer to "what changed" is what it was written to
+  // correct.
+  const rewriteFor = rewriteAnswers(attempts, allGaps);
+  /**
+   * Show the "Rewritten" notice.
+   *
+   * Keyed on WAS-UNREAD-ON-ARRIVAL, not on `materialIsNew`. That helper asks
+   * whether the LAST answer rewrote this, which is the right question for the
+   * consequence line at the moment it happens and the wrong one here: a learner
+   * who was re-taught, never looked, and then answered again from the other tab
+   * would never have been told at all — the exact miss this milestone exists to
+   * prevent. Found by running the real UI against a stored session.
+   */
+  const rewritten =
+    drawing === "lesson" &&
+    installedAt !== null &&
+    noticeKey === `${nodeId}:${installedAt}`;
   const blocks = lessonBlocks({
     phase,
     locationCount: locations.length,
     openGapCount: openGaps.length,
     gapCount: allGaps.length,
-    attemptCount: attempts.length,
+    attemptCount: answerLog.length,
     revealed,
     hasReveal: isSplit && Boolean(lesson.lesson.reveal),
     // Zero on the single canvas, which is how `next` stays exactly as it was: the
@@ -632,7 +855,7 @@ export default function LessonPanel({
             isPrerequisite={isPrerequisite}
             onFileClick={onFileClick}
             openGapCount={openGaps.length}
-            attemptCount={attempts.length}
+            attemptCount={answerLog.length}
             onShowGaps={() => revealBlock("lesson-gaps")}
             onShowAttempts={() => revealBlock("lesson-attempts")}
             collapsed={collapsed}
@@ -674,7 +897,33 @@ export default function LessonPanel({
 
           {rewritten && (
             <Callout tone="signal" label={t.lesson.newMaterialLabel}>
-              <p className="text-meta text-chalk">{t.lesson.newMaterialBody}</p>
+              <div className="flex flex-col gap-1.5">
+                <p className="text-meta text-chalk">{t.lesson.newMaterialBody}</p>
+                {/* WHAT changed, not only that something did. There is no diff to
+                    highlight — a re-teach regenerates every field — so the honest
+                    answer is what it was written to correct, which the backend
+                    already recorded and nothing had joined up. */}
+                {rewriteFor.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                    <span className="font-mono text-micro uppercase tracking-[0.13em] text-graphite">
+                      {t.lesson.rewriteAnswers}
+                    </span>
+                    <ul className="flex flex-col gap-1">
+                      {rewriteFor.map((claim) => (
+                        <li key={claim} className="measure text-meta text-paper">
+                          <InlineProse text={claim} tone="paper" />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {/* The version it replaced is already reachable, always collapsed,
+                    in `EarlierExplanations` — R3's third mitigation. Naming it here
+                    is what turns "something changed" into something comparable. */}
+                {superseded.length > 0 && (
+                  <p className="text-meta text-graphite">{t.lesson.compareEarlier}</p>
+                )}
+              </div>
             </Callout>
           )}
 
@@ -708,7 +957,10 @@ export default function LessonPanel({
               // empty block nobody should bother opening. The tally inside says
               // "3 of 3 resolved", which is the thing actually worth knowing.
               gapsCount: openGaps.length || undefined,
-              attempts: t.lesson.yourAnswers(attempts.length),
+              // `answerLog`, matching what the disclosure actually contains.
+              // Counting assessments here while listing checks inside would put
+              // two different numbers on one block.
+              attempts: t.lesson.yourAnswers(answerLog.length),
               earlier: t.lesson.earlierExplanations(superseded.length),
               question: t.lesson.questionAsked,
             }}
@@ -746,7 +998,11 @@ export default function LessonPanel({
             }
             attempts={
               <div id="lesson-attempts">
-                <AttemptHistory attempts={attempts} />
+                {/* `answerLog`, not `attempts`: checks are the learner's words
+                    too, and hiding them left a cleared gap with nothing behind
+                    it. Everything that REASONS about understanding still reads
+                    the assessments-only list. */}
+                <AttemptHistory attempts={answerLog} />
               </div>
             }
             question={
@@ -756,12 +1012,12 @@ export default function LessonPanel({
                     question={verification.question}
                     answer={answer}
                     onAnswerChange={setAnswer}
-                    onSubmit={onSubmitVerification}
+                    onSubmit={onSubmitPending}
                     onDismiss={() => setVerification(null)}
                     loading={loading}
                     error={error}
                   />
-                ) : (
+                ) : promptIsLive ? (
                   <AnswerComposer
                     prompt={lesson.lesson.prompt}
                     answer={answer}
@@ -770,6 +1026,22 @@ export default function LessonPanel({
                     onSkip={handleAdvance}
                     loading={loading}
                     error={error}
+                  />
+                ) : (
+                  /* THE BACK DOOR, CLOSED (M2).
+                     `revealed` is `Boolean(result) || attempts.length > 0`, so
+                     leaving a graded stop and returning used to re-open this
+                     composer with the explanation on screen — the very thing
+                     §18.7 removed a button to prevent, handed back to anyone who
+                     happened to navigate away and back. The rule now binds
+                     everyone: once anything has been graded here the reveal has
+                     been shown, this prompt is spent, and the only route to new
+                     evidence is a question that ships no answer. */
+                  <SpentPrompt
+                    prompt={lesson.lesson.prompt}
+                    retry={retryOffer}
+                    busy={loading || verifying}
+                    onAskAgain={onAskAgain}
                   />
                 )}
               </PracticeSurface>
@@ -784,6 +1056,8 @@ export default function LessonPanel({
                     closed={closed}
                     checkedAnswer={checked?.answer}
                     openGaps={openGaps}
+                    retry={retryOffer}
+                    materialUnread={materialUnread}
                     warmUpInserted={warmUpInserted}
                     // ONE gate for the whole table. The assessment path uses the
                     // panel's own flag; on a check that flag is false by
@@ -795,20 +1069,16 @@ export default function LessonPanel({
                       (canRequestWarmUp || (isCheck && !warmUpInserted)) && !warmUpDeclined
                     }
                     warmUpDeclined={warmUpDeclined}
-                    canAnswerAgain={canAnswerAgain}
-                    // Verification is available whenever something is open to
-                    // verify. Exhaustion and the node's remediation cap are not on
-                    // the node wire, so a refusal is reported (`nothing_to_verify`)
-                    // rather than pre-empted.
-                    checkAvailable={openGaps.length > 0}
                     loading={loading}
                     verifying={verifying}
                     error={error}
                     verdictRef={verdictRef}
                     onAdvanceStop={handleAdvance}
-                    onCheckUnderstanding={onCheckUnderstanding}
+                    onAskAgain={onAskAgain}
+                    onReadMaterial={
+                      onGoToSurface ? () => onGoToSurface("lesson") : undefined
+                    }
                     onBuildWarmUp={handleRetry}
-                    onAnswerAgain={answerAgain}
                     onStartWarmUp={startWarmUp}
                     // The consequence line's control, under `surfaces` only: the
                     // line says the stop was rewritten, and on the split the

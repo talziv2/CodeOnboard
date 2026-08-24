@@ -1,47 +1,61 @@
+import type { RetryOffer } from "@/lib/api";
+
 /**
  * Which actions a verdict offers, and which one is primary.
  *
- * The feedback row could show four equally weighted buttons, so it said nothing
- * about what to do next. `ui-direction.md` §2.4 fixes that with one rule:
+ * The rule is unchanged and is still the whole content of this module
+ * (`ui-direction.md` §2.4):
  *
  *   **the primary is whatever most directly closes the gap between where the
  *   learner is and the objective. Moving on is never primary unless the objective
  *   is met.**
  *
- * **"The objective is met" is not `classification === "understood"`.** That is the
- * latest assessment of one answer; the objective is the node's state, and
- * `understanding_of()` withholds `understood` while any blocking gap is unverified.
- * The two diverge routinely, because gaps close only by verification. Reading the
- * assessment as if it were the state is what let this module return "Next stop →"
- * as the only action on a `required` stop the server reported `partial` — and the
- * exhaustive sweep asserted the invariant against the same wrong quantity, so it
- * passed. The sweep now checks it against `understood && no gaps outstanding`.
+ * ── What changed in M2, and why ───────────────────────────────────────────────
  *
- * That rule is the whole content of this module, and it is a pure function because
- * the table it generates has six rows plus the check path, and a six-row table
- * expressed as nested JSX conditionals is how the sixteen-conditional feedback
- * branch got that way in the first place.
+ * This module used to DECIDE whether a retry was possible, from four flags the
+ * panel derived from four different slices of the grading reply: `canAnswerAgain`,
+ * `checkAvailable`, `canRequestWarmUp`, `warmUpDeclined`. Every defect the
+ * learning-loop pass found was a seam between them:
  *
- * Two gates from §3 are inputs rather than decisions made here, because the panel
- * owns them: `warmUpAvailable` encodes the Mutator's one-per-node cap and the
- * §18.11 rule that a `confused` learner must not get FEWER options than a `partial`
- * one, and `canAnswerAgain` encodes whether a retry is live at all. Offering what
- * would be declined is the bug those flags exist to prevent, so this never
- * re-derives them.
+ *   - `canAnswerAgain` was computed, was TRUE after a hint, and the row that read
+ *     it was unreachable because `FAILED` short-circuited first. The system wrote
+ *     a hint whose prompt forbids it from containing the answer, then removed the
+ *     only button that could use it.
+ *   - `checkAvailable` could not see a gap's verification budget, so an exhausted
+ *     gap was offered and the refusal arrived as an error.
+ *   - `warmUpDeclined` was derived two different ways and was wrong on one of
+ *     them.
  *
- * Both bugs the exhaustive sweep in the test file caught were of exactly that kind:
- * `next` became primary with a gap still open by falling through the tail, and the
- * check path offered a warm-up without consulting the gate at all.
+ * None of those flags could be made correct here, because the facts they were
+ * approximating are not on this side: gaps and their budgets, the node's
+ * remediation rounds, the re-assessment budget, and which questions have already
+ * been answered. So the decision moved to `backend/learning/retry.py`, and this
+ * module renders `RetryOffer`.
+ *
+ * **There is now ONE retry action.** `check` and `answerAgain` are gone as
+ * separate ids: which mechanism serves *Ask me again* is the backend's business,
+ * and a learner asked to choose between "verify a gap" and "re-assess the
+ * objective" is being asked to diagnose themselves before they are allowed
+ * another go.
+ *
+ * The warm-up gates stay inputs rather than decisions, exactly as before —
+ * offering what would be declined is the bug they exist to prevent.
  */
 export type ActionId =
   /** Advance to the next stop on the walk. */
   | "next"
-  /** Ask a NEW question about the same misconception — not a re-ask. */
-  | "check"
+  /**
+   * The one retry. A fresh question — about a named misconception, or about the
+   * objective — chosen server-side and never shipped with its answer.
+   */
+  | "askAgain"
+  /**
+   * Go and read the material this answer rewrote. Only ever offered where there
+   * IS rewritten material the learner has not seen.
+   */
+  | "readMaterial"
   /** Have the Mutator build a prerequisite warm-up. */
   | "warmUp"
-  /** Clear the verdict and answer the same question again. */
-  | "answerAgain"
   /** Begin the warm-up that was just inserted. */
   | "startWarmUp"
   /** Leave the inserted warm-up unvisited and continue here. */
@@ -60,165 +74,142 @@ export interface ActionInput {
   classification: string | null;
   /** This reply is a verification result rather than an assessment. */
   isCheck: boolean;
-  openGapCount: number;
+  /**
+   * The server's answer to "what would Ask me again do here". Optional so a
+   * client talking to a pre-M2 backend degrades to no retry rather than to a
+   * button that 404s.
+   */
+  retry?: RetryOffer;
   /** A warm-up was spliced in by this reply. */
   warmUpInserted: boolean;
   /** A warm-up was attempted and the backend declined it. */
   warmUpDeclined: boolean;
-  /**
-   * A warm-up can be offered at all.
-   *
-   * ONE gate, computed by the panel, because the two paths reach it differently:
-   * `canRequestWarmUp` covers the assessment path (and already encodes the
-   * Mutator's one-per-node cap and §18.11), while on a CHECK that flag is false by
-   * construction and a warm-up is still deliberately reachable while something is
-   * unresolved. Passing the union means this module never has to know which path it
-   * is on to obey "never offer what would be declined" — which it broke when it had
-   * to remember.
-   */
+  /** A warm-up can be offered at all. Panel-owned; never re-derived here. */
   warmUpAvailable: boolean;
-  /** The panel's gate: answering again is live. */
-  canAnswerAgain: boolean;
   /**
-   * A check can be offered at all.
+   * A re-teach rewrote this stop's material and the learner has not looked since.
    *
-   * SEPARATE FROM `canAnswerAgain`, which is what it used to be gated on. That
-   * flag means "the system invited another attempt at the same question" — true
-   * only for `hint`, `followup` and `reteach`. Verification is a different act
-   * with a different producer: `/verify` needs nothing but the node, and the one
-   * verdict where it is *most* clearly right — `understood` with a gap still
-   * open — is precisely the one where `canAnswerAgain` is false, because
-   * `decide_all` returns `none` there. So the action the design calls correct
-   * was unreachable exactly when it was correct.
+   * THE ONE INPUT THAT IS LEGITIMATELY THE CLIENT'S. Every other decision moved
+   * to the server in M2, on the rule that the frontend must not reconstruct what
+   * the backend knows — but "have I looked at that tab" is not a fact about
+   * understanding and the server cannot observe it. See `lib/materialSeen.ts`.
    *
-   * Panel-owned, like the warm-up gates, and deliberately not re-derived here.
-   * Today the panel can only know whether an open gap exists; whether that gap
-   * still has verification budget is not on the node wire, so a refusal is
-   * reported rather than pre-empted (`nothing_to_verify`). When the wire carries
-   * exhaustion, this is the one place that narrows.
+   * False under the single-column build, where there is nowhere else to go.
    */
-  checkAvailable: boolean;
+  materialUnread?: boolean;
 }
 
 const FAILED = ["confused", "off-topic"];
 
-export function feedbackActions({
-  classification,
-  isCheck,
-  openGapCount,
-  warmUpInserted,
-  warmUpDeclined,
-  warmUpAvailable,
-  canAnswerAgain,
-  checkAvailable,
-}: ActionInput): ActionPlan {
-  // A check first, because `classification` is null on this path and every test
-  // below it would fall through. What most directly closes the gap after a check is
-  // another check while anything is still open; otherwise the objective is met and
-  // moving on becomes legitimate.
-  if (isCheck) {
-    if (openGapCount > 0) {
-      return {
-        primary: checkAvailable ? "check" : "next",
-        secondary: checkAvailable ? "next" : undefined,
-        // `warmUpDeclined` is consulted here too. It used to be read only by the
-        // assessment rows, so a warm-up refused on the retry call was offered
-        // again from the check path — the one contract these gates exist for.
-        tertiary:
-          warmUpAvailable && !warmUpInserted && !warmUpDeclined ? "warmUp" : undefined,
-      };
-    }
-    return { primary: "next" };
-  }
+/**
+ * Is the objective met?
+ *
+ * **Not `classification === "understood"`.** That is the latest assessment of one
+ * answer; the objective is the node's state, and `understanding_of()` withholds
+ * `understood` while any blocking gap is unverified. Reading the assessment as if
+ * it were the state is what once returned "Next stop →" as the only action on a
+ * `required` stop the server reported `partial`.
+ *
+ * The server already answers this — `retry.reason === "objective_met"` is exactly
+ * it, computed from `understanding_of` — so where the offer is present that is
+ * what decides, and the classification is only the pre-M2 fallback.
+ */
+function objectiveMet(input: ActionInput): boolean {
+  if (input.retry) return input.retry.reason === "objective_met";
+  return input.classification === "understood";
+}
 
-  // THE OBJECTIVE IS MET ONLY IF NOTHING IS STILL OUTSTANDING. `classification`
-  // is the latest assessment; it is not the node's state. A gap opened by an
-  // earlier attempt closes only by verification (M6), so `understood` arrives
-  // with gaps open routinely, and `understanding_of()` reports the node `partial`
-  // until they are verified — which means readiness does not credit it either.
-  //
-  // This row used to return `next` alone. Live, on a `required` stop reported
-  // `partial` with a blocking gap open, the whole action row was "Next stop →":
-  // the learner was told "Understood", shown "1 unresolved", and given one button
-  // that walked away from it. Verification is the only caller of
-  // `Gap.mark_verified`, so the sole mechanism that could close it was the one
-  // thing not on offer.
-  //
-  // A warm-up is deliberately NOT offered here. It remediates confusion, and
-  // this answer reached the objective; stepping back would be the system
-  // disagreeing with its own grade.
-  if (classification === "understood") {
-    if (openGapCount > 0 && checkAvailable) {
-      return { primary: "check", secondary: "next" };
-    }
-    return { primary: "next" };
-  }
+export function feedbackActions(input: ActionInput): ActionPlan {
+  const { retry, isCheck, classification, warmUpInserted, warmUpDeclined, warmUpAvailable } =
+    input;
 
-  // A warm-up is already in the journey — starting it is the most direct route.
+  // A warm-up is already in the journey — starting it is the most direct route,
+  // and it is more direct than another question about a foundation that is about
+  // to be taught.
   if (warmUpInserted) {
     return { primary: "startWarmUp", secondary: "skipWarmUp", tertiary: "moveOn" };
   }
 
-  // Asked for and refused. Do not offer it again; a check is what is left.
-  if (warmUpDeclined) {
-    const canCheck = checkAvailable && openGapCount > 0;
-    return {
-      primary: canCheck ? "check" : "moveOn",
-      secondary: canCheck ? "moveOn" : undefined,
-    };
-  }
+  // Nothing left to do here. `next` leads, and it is the ONLY row where moving on
+  // is primary — which is the rule this module exists to hold.
+  if (objectiveMet(input)) return { primary: "next" };
 
-  const failed = classification !== null && FAILED.includes(classification);
+  const canRetry = retry?.available ?? false;
 
-  // Something is named and still open: closing it is more direct than anything
-  // else on offer, and a check asks a NEW question about it rather than re-asking
-  // the one whose answer the reveal has already given away.
-  if (openGapCount > 0 && checkAvailable) {
-    return {
-      primary: "check",
-      secondary: failed ? "moveOn" : "next",
-      tertiary: warmUpAvailable ? "warmUp" : undefined,
-    };
-  }
+  /**
+   * Did the most recent graded act show a SHORTFALL?
+   *
+   * A warm-up remediates confusion, so it is offered only where there is
+   * confusion to remediate. Two rows get this wrong if the question is not asked,
+   * and both were live:
+   *
+   *   a check that CLEARED everything — the learner has just positively
+   *     demonstrated the corrected model, and offering to step back is the
+   *     system disagreeing with the evidence it recorded one line above.
+   *     Reported from a real run: "Cleared … what this closed: …" with
+   *     "Build me a warm-up" still on the row.
+   *   an answer that REACHED the objective while a gap stays open — same
+   *     argument: stepping back would be the system disagreeing with its own
+   *     grade.
+   *
+   * On a check the server answers it: `verify` means a blocking gap is still
+   * open, so something is still unremediated. `reassess` on that path means
+   * everything closed. On an assessment the classification answers it directly —
+   * and note that `confused` with no gaps still qualifies, which is §18.11's rule
+   * that a confused learner must not be offered FEWER options than a partial one.
+   */
+  const showedShortfall = isCheck
+    ? retry?.mechanism === "verify"
+    : classification !== null && classification !== "understood";
 
-  // Partly there with nothing named. Another attempt at the same question is
-  // meaningful here precisely because there is no gap for a check to target.
+  // Never beside a correct answer, never after the backend refused one for this
+  // stop, and never where nothing fell short.
+  const canWarmUp = warmUpAvailable && !warmUpDeclined && showedShortfall;
+  // Whether leaving is the honest second option or an ordinary one. `isCheck` has
+  // no classification of its own, and a check that left something open is a
+  // shortfall like any other.
+  const failed = isCheck || (classification !== null && FAILED.includes(classification));
+  const leave: ActionId = failed ? "moveOn" : "next";
+
+  // ── read, then answer ───────────────────────────────────────────────────────
   //
-  // `openGapCount === 0` is what the comment always claimed and the condition
-  // never said. It did not matter while a check was gated on `canAnswerAgain`
-  // — the row above caught every named gap — but once a check can be
-  // unavailable for its own reasons, a `partial` answer with two gaps open fell
-  // through to here and made `next` primary again. The sweep caught it.
-  if (!failed && canAnswerAgain && openGapCount === 0) {
+  // A re-teach rewrote the material BECAUSE of this answer, and it names the
+  // misconception the answer revealed. Sending the learner straight at another
+  // question would let them retry without ever seeing the thing written for them
+  // — and worse, the fresh question is built to be fatal to exactly the
+  // misconception the unread correction explains, so it sets them up to fail
+  // something they were just given the means to get right.
+  //
+  // GUIDANCE, NOT A GATE. The retry stays on the row, one place down. Nothing is
+  // disabled and nothing is hidden: the learner who wants to go straight at it
+  // still can, and the ordering only says which we think is more direct. Blocking
+  // would be the system deciding they may not know something.
+  if (input.materialUnread) {
     return {
-      primary: "next",
-      secondary: "answerAgain",
-      tertiary: warmUpAvailable ? "warmUp" : undefined,
+      primary: "readMaterial",
+      secondary: canRetry ? "askAgain" : leave,
+      tertiary: canRetry ? leave : undefined,
     };
   }
 
-  // Failed, nothing named, no retry: a warm-up is the only route back toward the
-  // objective, so it leads even though it is slower.
-  if (failed) {
+  // The objective is unmet and there IS a route to it. Taking it is by definition
+  // the most direct thing on offer, whichever mechanism the server picked.
+  if (canRetry) {
     return {
-      primary: warmUpAvailable ? "warmUp" : "moveOn",
-      secondary: warmUpAvailable ? "moveOn" : undefined,
+      primary: "askAgain",
+      secondary: leave,
+      tertiary: canWarmUp ? "warmUp" : undefined,
     };
   }
 
-  // A gap is named and nothing on offer can close it — no retry, and the warm-up
-  // is either used up or unavailable. Then there is genuinely nothing more direct
-  // than leaving, and saying so beats pretending otherwise. Reached explicitly
-  // rather than by falling through, which is how `next` briefly became primary
-  // with a gap still open.
-  if (openGapCount > 0) {
-    return {
-      primary: warmUpAvailable ? "warmUp" : "moveOn",
-      secondary: warmUpAvailable ? "moveOn" : undefined,
-    };
-  }
-
-  return { primary: "next", tertiary: warmUpAvailable ? "warmUp" : undefined };
+  // Unmet, and nothing can close it right now. A warm-up leads if one is still
+  // available — it is slower, but it is the only thing pointing at the objective.
+  // Otherwise say plainly that leaving is what is left, rather than dressing it
+  // up as an ordinary advance.
+  return {
+    primary: canWarmUp ? "warmUp" : leave,
+    secondary: canWarmUp ? leave : undefined,
+  };
 }
 
 /** The actions in a plan, in weight order, skipping the ones it does not offer. */

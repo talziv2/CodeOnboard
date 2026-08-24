@@ -410,3 +410,94 @@ describe("the rail counts what is still unresolved", () => {
     expect(row?.getAttribute("title")).not.toContain("claim b");
   });
 });
+
+/**
+ * M0 — a stop the learner answered must not read like one they never opened.
+ *
+ * The caption used to be keyed on `understanding === "unresolved"`, which
+ * excluded the two cases it is most needed for. An `off-topic` answer opens no
+ * gaps and is excluded from evidence, so the stop classifies `insufficient`: the
+ * learner answered it, decided to move on, and the rail said nothing at all.
+ */
+describe("a stop says whether it was attempted and whether it was set aside", () => {
+  const railOf = (over: Partial<GraphNode>) => {
+    const target = {
+      ...stop("n1", "Explain the Session–adapter handoff", "a1", "requests/sessions.py"),
+      ...over,
+    } as GraphNode;
+    const nodes = [target, ...NODES.slice(1)];
+    const edges: GraphEdge[] = nodes.slice(0, -1).map((n, i) => ({
+      from_id: n.id, to_id: nodes[i + 1].id, kind: "sequence",
+    }));
+    const journey = splitJourney(buildRoute(nodes, edges), AREAS, "n2");
+    return render(
+      <RouteRail
+        sections={journey.sections}
+        optional={journey.optional}
+        currentNodeId="n2"
+        openSectionId={null}
+        onJump={vi.fn()}
+        onOpenSection={vi.fn()}
+        onExpand={vi.fn()}
+      />
+    );
+  };
+
+  const rowOf = (title = "Explain the Session–adapter handoff") =>
+    screen.getByText(title).closest("[title]");
+
+  test("an untouched stop is captioned with nothing", () => {
+    railOf({ understanding: "insufficient", disposition: "active", attempted: false });
+    expect(screen.queryByText(t.rail.attempted)).toBeNull();
+    expect(screen.queryByText(t.rail.setAside)).toBeNull();
+  });
+
+  test("an off-topic answer is captioned as attempted, not as a failure", () => {
+    // Not "needs work": an off-topic answer is evidence of neither understanding
+    // nor misunderstanding, so the caption reports what happened and claims
+    // nothing about what they know.
+    railOf({ understanding: "insufficient", disposition: "active", attempted: true });
+    expect(screen.getByText(t.rail.attempted)).toBeTruthy();
+    expect(rowOf()?.getAttribute("title")).toBeTruthy();
+  });
+
+  test("moving on from it is captioned as set aside", () => {
+    railOf({ understanding: "insufficient", disposition: "continued", attempted: true });
+    expect(screen.getByText(t.rail.setAside)).toBeTruthy();
+  });
+
+  test("a set-aside stop with no gaps still says which decision it was", () => {
+    // Three ways to settle a stop and they are not the same thing to a learner:
+    // "not now", "stop asking me", and "I already know this". Only the second
+    // was ever named.
+    const { unmount } = railOf({
+      understanding: "unresolved", disposition: "continued", attempted: true,
+    });
+    expect(screen.getByTitle(t.rail.movedOnHint)).toBeTruthy();
+    unmount();
+
+    railOf({ understanding: "unresolved", disposition: "asserted", attempted: true });
+    expect(screen.getByTitle(t.rail.assertedHint)).toBeTruthy();
+  });
+
+  test("named gaps still outrank the standing caption", () => {
+    // A count of open misconceptions is the most actionable thing the rail can
+    // say, whatever decision was taken around it.
+    railOf({
+      understanding: "unresolved",
+      disposition: "continued",
+      attempted: true,
+      gaps: [{ id: "a", kind: "wrong_model", claim: "claim a", blocking: true, status: "open" }],
+    });
+    expect(screen.getByText(t.rail.unresolvedCount(1))).toBeTruthy();
+    expect(screen.queryByText(t.rail.setAside)).toBeNull();
+  });
+
+  test("a demonstrated stop is never captioned as set aside", () => {
+    // The invariant at the rail: a waiver survives a later answer by design, so
+    // a recovered stop routinely carries one. Evidence wins.
+    railOf({ understanding: "recovered", disposition: "waived", attempted: true });
+    expect(screen.queryByText(t.rail.setAside)).toBeNull();
+    expect(screen.queryByText(t.rail.attempted)).toBeNull();
+  });
+});

@@ -78,6 +78,80 @@ VERIFICATION = "verification"
 DEFAULT_KIND = ASSESSMENT
 
 
+# --- which mechanism asked the question (M1) ----------------------------------
+#
+# `kind` says what an answer is EVIDENCE ABOUT — the objective, or one gap. This
+# says WHICH QUESTION was put, and the two are not the same axis: three of the
+# four sources below produce an `ASSESSMENT`, and they are not interchangeable.
+#
+#   lesson        the unit's own cached prompt, as first written
+#   reteach       the prompt a re-teach REPLACED it with — deliberately built so
+#                 that it cannot be answered while still holding the diagnosed
+#                 misconception, which makes it a genuinely new question rather
+#                 than a re-ask
+#   verification  a fresh question aimed at ONE gap (M6). Always paired with
+#                 `kind = VERIFICATION`.
+#   reassessment  a fresh question aimed at the OBJECTIVE (M5)
+#
+# Absent means UNKNOWN — every attempt written before M1 — and never "no
+# question". Same rule as `RESPONSE`, and for the same reason: a default here
+# would silently attribute a verdict to a question we cannot actually identify.
+QUESTION = "question"
+QUESTION_SOURCE = "question_source"
+
+SOURCE_LESSON = "lesson"
+SOURCE_RETEACH = "reteach"
+SOURCE_VERIFICATION = "verification"
+SOURCE_REASSESSMENT = "reassessment"
+
+QUESTION_SOURCES = frozenset({
+    SOURCE_LESSON, SOURCE_RETEACH, SOURCE_VERIFICATION, SOURCE_REASSESSMENT,
+})
+
+# Sources that put a question the learner had NOT already seen the reasoning for.
+# The distinction §18.7 turns on: re-showing a prompt after its reveal tests
+# recall, so an answer to one of these is the only kind that can demonstrate
+# something the learner did not simply read.
+FRESH_SOURCES = frozenset({
+    SOURCE_RETEACH, SOURCE_VERIFICATION, SOURCE_REASSESSMENT,
+})
+
+
+def question_of(attempt: dict) -> str | None:
+    """The question this answer answered, or None when unrecorded (pre-M1)."""
+    text = attempt.get(QUESTION)
+    return text if isinstance(text, str) and text.strip() else None
+
+
+def lesson_was_retaught(attempts: list[dict]) -> bool:
+    """Is the node's CURRENT cached lesson one a re-teach installed?
+
+    ANY successful re-teach, not just the most recent answer's. A re-teach
+    assigns `cached_lesson` outright and nothing ever puts the original back, so
+    once one has landed every later question off that lesson is a re-taught one.
+
+    Distinct from the frontend's `materialIsNew`, which asks the narrower
+    question "did the LAST answer rewrite this" — that one is about whether the
+    material is news, and it must go stale on the next answer. This one is about
+    provenance, and provenance does not expire.
+    """
+    return any(
+        is_instrumented(a) and a[RESPONSE].get("retaught") is True
+        for a in assessments(attempts)
+    )
+
+
+def question_source_of(attempt: dict) -> str | None:
+    """Which mechanism asked, or None when unrecorded.
+
+    `None` is deliberately not `"lesson"`. Guessing the commonest source for a
+    pre-M1 attempt would put a confident wrong answer in exactly the record whose
+    job is to say what actually happened.
+    """
+    source = attempt.get(QUESTION_SOURCE)
+    return source if source in QUESTION_SOURCES else None
+
+
 # --- the response envelope ----------------------------------------------------
 
 # The key whose PRESENCE means "this attempt was instrumented". `action` is

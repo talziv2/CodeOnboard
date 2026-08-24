@@ -1,5 +1,5 @@
-import type { UnderstandingClass } from "@/lib/api";
-import { understandingStyle } from "@/lib/tags";
+import type { Disposition, UnderstandingClass } from "@/lib/api";
+import { standingOf, standingStyle } from "@/lib/standing";
 
 /**
  * The route pin: what the evidence shows about one unit, plus whether the learner
@@ -29,6 +29,19 @@ import { understandingStyle } from "@/lib/tags";
  * MapView's `Pip` and EvidenceDrawer's inline dot are deliberately not folded in:
  * one is a button with its own hover behaviour, the other sits inside a text row,
  * both are half a dozen lines, and both already read the shared encoding.
+ *
+ * ── The settled bar ───────────────────────────────────────────────────────────
+ *
+ * A pin may carry a bar across it, meaning **the learner closed this question
+ * without demonstrating it** — moved on, waived it, skipped it, or asserted they
+ * already knew it. The colour still says what the evidence shows; the bar says a
+ * decision was taken over the top of it. Two claims, two channels, so neither
+ * overwrites the other — which is the whole reason understanding and disposition
+ * are separate dimensions server-side.
+ *
+ * Shape rather than hue, like the dash, and for the same accessibility reason:
+ * without it a stop the learner deliberately set aside and one they are still
+ * stuck on are the same circle.
  */
 type PinRole = "rail" | "map" | "list";
 
@@ -60,22 +73,32 @@ const ROLE: Record<
 
 export default function StatePin({
   understanding,
+  disposition,
+  attempted,
   isCurrent,
   role,
   className = "",
 }: {
   understanding: UnderstandingClass | undefined;
+  /** What the learner DECIDED here. Omit where the caller has no node. */
+  disposition?: Disposition;
+  /** Have they answered this stop's own question? Omit where unknown. */
+  attempted?: boolean;
   isCurrent: boolean;
   role: PinRole;
   /** Positioning that belongs to the row, not the pin — margins, z-index. */
   className?: string;
 }) {
-  const style = understandingStyle(understanding ?? "insufficient");
+  const standing = standingOf({ understanding, disposition, attempted });
+  const style = standingStyle(standing, understanding);
   const r = ROLE[role];
   return (
     <span
       aria-hidden
-      className={`shrink-0 rounded-full bg-ink ${r.box} ${r.border} ${className}`}
+      // `relative` unconditionally once a bar can be drawn: the list role had no
+      // inner dot to position against and therefore no positioning context, and
+      // a bar without one escapes to the nearest ancestor that has.
+      className={`relative shrink-0 rounded-full bg-ink ${r.box} ${r.border} ${className}`}
       style={{
         borderColor: isCurrent ? "var(--color-signal)" : style.stroke,
         borderStyle: style.borderStyle,
@@ -85,6 +108,16 @@ export default function StatePin({
     >
       {isCurrent && r.dot && (
         <span className={`absolute ${r.dot} rounded-full bg-signal`} />
+      )}
+      {/* Drawn even on the current stop. Standing on a stop does not undo the
+          decision taken there, and the signal ring already says "you are here"
+          in a channel this does not touch. Inset so it reads as a bar across the
+          pin rather than a line through the row. */}
+      {style.settled && (
+        <span
+          className="absolute inset-x-[15%] top-1/2 h-px -translate-y-1/2"
+          style={{ background: isCurrent ? "var(--color-signal)" : style.stroke }}
+        />
       )}
     </span>
   );

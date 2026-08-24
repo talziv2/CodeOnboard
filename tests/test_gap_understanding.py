@@ -199,12 +199,19 @@ def test_mark_understood_override_cannot_confer_mastery_over_a_gap():
     assert node.user_override == "waive_remaining"    # M8 migration
 
 
-def test_mark_understood_override_still_works_on_a_gap_free_node():
-    """The migration rule: vacuously nothing is bypassed, so it is untouched."""
+def test_mark_understood_cannot_confer_mastery_on_a_gap_free_node_either():
+    """M0. The same guarantee as the test above, on the node shape that escaped it.
+
+    §18.16.2 blocked the gap-bearing door and left this one open. The gap model
+    was not what made the write wrong — a learner decision is not evidence of
+    understanding, whether or not a misconception happens to be recorded.
+    """
     graph = LearningGraph(repo_url=REPO, goal=GOAL)
     node = graph.add_node(_node())
     graph.override(node.id, "mark_understood")
-    assert understanding_of(node) == "understood"
+    assert node.understanding_state == "not_started"   # never overwritten
+    assert understanding_of(node) != "understood"
+    assert node.user_override == "mark_understood"     # the intent IS recorded
 
 
 # ── the consumers ────────────────────────────────────────────────────────────

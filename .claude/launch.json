@@ -205,6 +205,41 @@
         "CODEONBOARD_GAPS": "1"
       },
       "port": 8105
+    },
+    {
+      "name": "frontend-3105-isolated",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3105"
+      ],
+      "env": {
+        "NEXT_PUBLIC_API_URL": "http://localhost:8000",
+        "NEXT_DIST_DIR": ".next-3105"
+      },
+      "cwd": "frontend",
+      "port": 3105
+    },
+    {
+      "name": "backend-e2e-open",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "python",
+        "-m",
+        "uvicorn",
+        "backend.api:app",
+        "--port",
+        "8000"
+      ],
+      "env": {
+        "CODEONBOARD_ALLOWED_ORIGINS": "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3100,http://127.0.0.1:3100,http://localhost:3105,http://127.0.0.1:3105",
+        "CODEONBOARD_GAPS": "1"
+      },
+      "port": 8000
     }
   ]
 }

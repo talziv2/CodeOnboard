@@ -31,6 +31,43 @@ vi.mock("@/lib/flags", async (importOriginal) => ({
   lessonUi: () => "next",
 }));
 
+/**
+ * The server's retry offer, which M2 made the single source of "what now".
+ *
+ * `answer` while the unit's own prompt is still live — before any graded answer,
+ * which is the only time it may be answered — and `verify`/`reassess` afterwards.
+ * Supplied on the fixtures because the panel no longer derives any of this: the
+ * budgets and the answered-question history it depends on are server-side.
+ */
+const LIVE_PROMPT = {
+  available: true,
+  mechanism: "answer" as const,
+  reason: "",
+  gap_id: null,
+  reassessments_left: 2,
+};
+const CAN_VERIFY = {
+  available: true,
+  mechanism: "verify" as const,
+  reason: "",
+  gap_id: "g1",
+  reassessments_left: 2,
+};
+const CAN_REASSESS = {
+  available: true,
+  mechanism: "reassess" as const,
+  reason: "",
+  gap_id: null,
+  reassessments_left: 2,
+};
+const NOTHING_LEFT = {
+  available: false,
+  mechanism: null,
+  reason: "objective_met",
+  gap_id: null,
+  reassessments_left: 2,
+};
+
 const LESSON: Lesson = {
   node_id: "n1",
   lesson: {
@@ -40,6 +77,7 @@ const LESSON: Lesson = {
     setup: "The setup half, without the answer.",
     reveal: "The explanation, withheld until an answer exists.",
   },
+  retry: LIVE_PROMPT,
 };
 
 const GAP = { id: "g1", kind: "wrong_model", claim: "A connected graph cannot return None.", blocking: true };
@@ -53,6 +91,7 @@ const CONFUSED: RespondResult = {
   adaptation: { kind: "hint", text: "Look at what h() returns." },
   current_node_id: "n1",
   gaps: [GAP],
+  retry: CAN_VERIFY,
 };
 
 const PROMPT: VerificationPrompt = {
@@ -144,9 +183,9 @@ describe("requesting a verification", () => {
 
     await user.type(textareas()[0], "A wrong answer.");
     await user.click(submits()[0]);
-    await screen.findByRole("button", { name: "Check my understanding" });
+    await screen.findByRole("button", { name: t.lesson.askAgain });
 
-    await user.click(screen.getByRole("button", { name: "Check my understanding" }));
+    await user.click(screen.getByRole("button", { name: t.lesson.askAgain }));
     await screen.findByText(PROMPT.question);
     return user;
   }
@@ -209,6 +248,8 @@ describe("requesting a verification", () => {
       resolved: ["g1"],
       unresolved: [],
       gaps: [],
+      // Cleared: the server reports nothing left to ask here.
+      retry: NOTHING_LEFT,
       ...over,
     });
 
@@ -243,13 +284,18 @@ describe("requesting a verification", () => {
       expect(screen.queryByRole("button", { name: "Build me a warm-up" })).toBeNull();
     });
 
-    test("offers another check while a gap is still open", async () => {
+    test("offers another go while a gap is still open", async () => {
       await answerCheck(
-        checkReply({ resolved: [], unresolved: ["g1"], gaps: [GAP], understanding_state: "failed" })
+        checkReply({
+          resolved: [], unresolved: ["g1"], gaps: [GAP],
+          understanding_state: "failed", retry: CAN_VERIFY,
+        })
       );
 
       expect(screen.getByText("Still open")).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Check another" })).toBeTruthy();
+      // ONE retry, whatever the mechanism. "Check another" was a second name for
+      // the same act, and which act it is now belongs to the server.
+      expect(screen.getByRole("button", { name: t.lesson.askAgain })).toBeTruthy();
     });
 
     test("distinguishes a partial close from a complete one", async () => {
@@ -408,7 +454,7 @@ describe("the derived phase agrees with what is on screen", () => {
 
     await user.type(textareas()[0], "A wrong answer.");
     await user.click(submits()[0]);
-    await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
+    await user.click(await screen.findByRole("button", { name: t.lesson.askAgain }));
     await screen.findByText(PROMPT.question);
 
     expect(phaseOnScreen()).toBe("VERIFY");
@@ -432,7 +478,7 @@ describe("the derived phase agrees with what is on screen", () => {
 
     await user.type(textareas()[0], "A wrong answer.");
     await user.click(submits()[0]);
-    await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
+    await user.click(await screen.findByRole("button", { name: t.lesson.askAgain }));
     await screen.findByText(PROMPT.question);
     await user.type(textareas()[0], "The right answer.");
     await user.click(submits()[0]);
@@ -544,7 +590,7 @@ describe("the brief survives every phase", () => {
 
     await user.type(textareas()[0], "A wrong answer.");
     await user.click(submits()[0]);
-    await user.click(await screen.findByRole("button", { name: "Check my understanding" }));
+    await user.click(await screen.findByRole("button", { name: t.lesson.askAgain }));
     await screen.findByText(PROMPT.question);
 
     expect(briefHas().objective).toBe(true);

@@ -72,6 +72,22 @@ NON_GAP_KINDS: frozenset[str] = frozenset({"none", "no_attempt"})
 VERIFICATION_ATTEMPT_CAP = 2
 REMEDIATION_ROUND_CAP = 4
 
+# How many fresh OBJECTIVE-scoped questions one node may be re-assessed with.
+#
+# Its own counter rather than a share of either cap above, because it measures a
+# different thing and blurring them would make all three unreadable:
+# `VERIFICATION_ATTEMPT_CAP` bounds questions about ONE GAP, `REMEDIATION_ROUND_CAP`
+# bounds how much HELP a node may receive, and this bounds how many times the
+# OBJECTIVE may be re-examined. A learner can exhaust one without touching the
+# others.
+#
+# Two, and the number is doing real work: without a cap the measure degrades from
+# mastery to persistence, since enough draws will eventually find a question the
+# learner can answer. Spent when a question is ISSUED, not when it is answered —
+# an unanswered question has still been asked, exactly as `pending_verification`
+# is spent on issue.
+REASSESSMENT_CAP = 2
+
 # The arbitration order (§18.5). Foundational first, because remediating a
 # higher-altitude gap while a foundation is missing lands on nothing. Within a
 # rank, detection order breaks ties — which is why every sort below is stable.
@@ -302,10 +318,29 @@ class GapState:
     # answer beside the question is what made re-asking meaningless in the first
     # place (§18.7).
     pending_verification: dict | None = None
+    # The outstanding RE-ASSESSMENT question: {question, probes, at}. None when
+    # nothing is awaiting an answer.
+    #
+    # Beside `pending_verification` rather than sharing it, because the two are
+    # graded by different agents against different standards — a verification
+    # answer is evidence about one gap and cannot re-grade the objective, while a
+    # re-assessment answer is an ordinary assessment OF the objective. One field
+    # would force every reader to branch on a second field to know which it had.
+    #
+    # Carries no `reveal` and no model answer, for the same reason
+    # `pending_verification` does not.
+    pending_reassessment: dict | None = None
+    # Fresh objective-scoped questions ISSUED for this node. Bounded by
+    # `REASSESSMENT_CAP`; spent on issue, never on answer.
+    reassessments: int = 0
 
     def __bool__(self) -> bool:
         return bool(
-            self.gaps or self.remediation_rounds > 0 or self.pending_verification
+            self.gaps
+            or self.remediation_rounds > 0
+            or self.pending_verification
+            or self.pending_reassessment
+            or self.reassessments > 0
         )
 
     def to_dict(self) -> dict:
@@ -313,6 +348,8 @@ class GapState:
             "gaps": [g.to_dict() for g in self.gaps],
             "remediation_rounds": self.remediation_rounds,
             "pending_verification": self.pending_verification,
+            "pending_reassessment": self.pending_reassessment,
+            "reassessments": self.reassessments,
         }
 
     @classmethod
@@ -331,4 +368,9 @@ class GapState:
             gaps=[Gap.from_dict(g) for g in payload.get("gaps", [])],
             remediation_rounds=int(payload.get("remediation_rounds", 0) or 0),
             pending_verification=payload.get("pending_verification") or None,
+            # Absent on every graph written before M2, which loads as "none
+            # issued" — a fact about history rather than a guess, since the
+            # mechanism did not exist.
+            pending_reassessment=payload.get("pending_reassessment") or None,
+            reassessments=int(payload.get("reassessments", 0) or 0),
         )

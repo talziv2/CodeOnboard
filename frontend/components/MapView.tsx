@@ -119,6 +119,8 @@ export default function MapView({
                   <span className="flex justify-center pt-2.5">
                     <StatePin
                       understanding={node.understanding}
+                      disposition={node.disposition}
+                      attempted={node.attempted}
                       isCurrent={isCurrent}
                       role="map"
                       className="z-10"

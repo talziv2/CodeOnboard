@@ -1,5 +1,16 @@
 # Re-assessing an objective
 
+**Status: folded into `learning-loop.md` as M5, and blocked behind that document's
+objective-model decision gate.** Option B below is still the recommendation; what
+changed is that it must not ship until the assessment target is settled, because
+a second question with nothing enumerated to anchor it is the risk the gate
+exists to price. Two corrections to §1 from the M0 investigation: `RECOVERED` is
+*mechanically* reachable today — `partial → understood` and `confused →
+understood` both classify `recovered`, verified by execution — so what blocks it
+is `feedbackActions`, not the evidence model; and the "off-topic seven" are no
+longer routeless in the way §1 describes, since M0 makes those stops settle and
+render. The rest stands.
+
 **Status: proposal. Nothing here is implemented.** It exists because S0 found a dead
 end, S6 confirmed it, and the honest message now shipping in the verdict card
 (`checkClearedNotCredited`) describes the dead end rather than removing it. The
