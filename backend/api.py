@@ -62,6 +62,7 @@ from backend.learning import progress
 from backend.learning import scope
 from backend.learning import store as learning_store
 from backend.learning import understanding
+from backend.auth import config as auth_config
 from backend.auth import drafts
 from backend.auth.deps import CurrentUser, current_user, owned_session
 from backend.auth import tokens
@@ -121,6 +122,9 @@ async def _lifespan(_app: FastAPI):
     A lifespan handler rather than `@app.on_event("startup")`, which FastAPI
     deprecates.
     """
+    # Configuration BEFORE the database: a deployment with an insecure setting
+    # should not get as far as touching data.
+    auth_config.enforce()
     result = run_startup_checks(SESSIONS_DB_PATH)
     reported = {k: v for k, v in result.items() if v}
     if reported:
@@ -214,6 +218,27 @@ def _route_for(scope) -> object | None:
         if match is not Match.NONE:
             return route
     return None
+
+
+@app.middleware("http")
+async def _security_headers(request, call_next):
+    """Headers that cost nothing and remove whole categories of mistake.
+
+    `nosniff` stops a browser second-guessing a content type — the trick that
+    turns a JSON endpoint into a script include. `DENY` on framing removes
+    clickjacking outright; nothing here is meant to be embedded. `no-referrer`
+    keeps session ids out of the Referer header on any outbound link, which is
+    the quiet way URLs leak to third parties.
+
+    A Content-Security-Policy is deliberately NOT set here: this app serves an
+    API, and its pages come from Next, which owns their policy. A CSP declared
+    in two places is one that disagrees with itself.
+    """
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    return response
 
 
 @app.middleware("http")

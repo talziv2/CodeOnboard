@@ -859,6 +859,24 @@ def load_graph(
 
     if not db_path.exists():
         return None
+    try:
+        return _load_graph_rows(session_id, user_id, db_path)
+    except sqlite3.OperationalError as exc:
+        # THE DATABASE FILE EXISTS BUT HAS NO `sessions` TABLE.
+        #
+        # Reachable, and not obscure: registering creates the file (the account
+        # tables live in it), so a learner who signs up and then opens a session
+        # URL before any session has ever been saved lands exactly here. It
+        # answered 500 with a SQL fragment in the body — a malfunction, and a
+        # small map of the schema, where the honest answer is "no such session".
+        if "no such table" in str(exc).lower():
+            return None
+        raise
+
+
+def _load_graph_rows(
+    session_id: str, user_id: str, db_path: Path
+) -> LearningGraph | None:
     with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         session_row = conn.execute(
