@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests.conftest import TEST_USER_ID
+from tests.conftest import TEST_USER_ID, start_session
 from fastapi.testclient import TestClient
 
 import backend.api as api
@@ -96,8 +96,7 @@ def _inserts_prerequisite(state, signal, client=None, diagnosis=None, origin=Non
 
 
 def _start(client):
-    resp = client.post("/session/start",
-                       json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}).json()
+    resp = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     client.get(f"/session/{resp['session_id']}/lesson")  # so /respond has a prompt
     return resp["session_id"], resp["graph"]["current_node_id"]
 

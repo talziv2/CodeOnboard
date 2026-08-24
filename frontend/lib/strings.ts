@@ -32,6 +32,12 @@ export const t = {
     startNew: "Start a new session",
     backToDashboard: "Back to my sessions",
     continue: "Continue",
+    // Planning runs in the background, so the card exists from the first second
+    // and says what it is doing. Closing the tab no longer loses the session.
+    generating: "Building your route…",
+    // A plan that never arrived. Named rather than left spinning: a learner who
+    // cannot tell whether to wait or retry is worse off than one who is told.
+    failed: "Couldn't build this route",
     rename: "Rename",
     renameLabel: "Session name",
     save: "Save",

@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests.conftest import TEST_USER_ID
+from tests.conftest import TEST_USER_ID, start_session
 from fastapi.testclient import TestClient
 
 import backend.api as api
@@ -83,9 +83,7 @@ def _grader(classification: str, gap_kind: str):
 
 
 def _start(client) -> tuple[str, str]:
-    body = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
+    body = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     session_id = body["session_id"]
     client.get(f"/session/{session_id}/lesson")
     return session_id, body["graph"]["current_node_id"]

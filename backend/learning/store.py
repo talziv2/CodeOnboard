@@ -1008,6 +1008,108 @@ def list_sessions_for_user(
         ]
 
 
+def create_pending_session(
+    session_id: str,
+    user_id: str,
+    repo_url: str,
+    goal: dict,
+    title: str,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> None:
+    """Reserve a session row BEFORE the pipeline runs (multi-user M7).
+
+    ## The failure this closes
+
+    Planning takes two to four minutes, and `POST /session/start` used to return
+    the new id only at the END. Close the tab in the meantime and the pipeline
+    still finished, the graph was still written — and the learner had no way to
+    find it. The session existed and was unreachable, which is the worst of both.
+
+    So the row is created first, with `status = 'generating'` and no nodes. It
+    appears on the dashboard immediately, it belongs to somebody from its first
+    instant, and the id is returned before any work starts.
+
+    `schema_version` is the current one: a pending session is a session of
+    today's shape that has not been filled in, not one of an older shape.
+    """
+    init_db(db_path)
+    from backend.auth.identity import ensure_repository
+
+    try:
+        repo_id = ensure_repository(repo_url, db_path)
+    except ValueError:
+        repo_id = None
+    with _connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO sessions
+                (session_id, repo_url, goal_json, current_node_id, schema_version,
+                 user_id, repo_id, title, status, last_active_at)
+            VALUES (?, ?, ?, NULL, ?, ?, ?, ?, 'generating',
+                    strftime('%Y-%m-%dT%H:%M:%S', 'now'))
+            """,
+            (session_id, repo_url, json.dumps(goal), SCHEMA_VERSION,
+             user_id, repo_id, title),
+        )
+
+
+def set_session_status(
+    session_id: str,
+    status: str,
+    db_path: Path = DEFAULT_DB_PATH,
+    *,
+    detail: str | None = None,
+) -> None:
+    """Move a session between lifecycle states. No owner needed.
+
+    Called by the background task that is already planning THIS session, which
+    knows the id because it created it — there is no caller to scope against,
+    and requiring one would mean threading a user through a worker that has no
+    request.
+    """
+    with _connect(db_path) as conn:
+        conn.execute(
+            "UPDATE sessions SET status = ?, last_active_at = "
+            "strftime('%Y-%m-%dT%H:%M:%S', 'now') WHERE session_id = ?",
+            (status, session_id),
+        )
+        if detail is not None:
+            conn.execute(
+                "UPDATE sessions SET title = COALESCE(NULLIF(title, ''), ?) "
+                "WHERE session_id = ?",
+                (detail, session_id),
+            )
+
+
+def fail_stale_generating_sessions(
+    db_path: Path = DEFAULT_DB_PATH, *, older_than_minutes: int = 15
+) -> int:
+    """Mark abandoned `generating` sessions as failed. Returns how many.
+
+    A pipeline runs in a background task, so a process killed mid-plan leaves a
+    row that will never move on its own. Left alone it is a card that spins
+    forever — the learner cannot tell whether to wait or retry, which is worse
+    than being told it failed.
+
+    Run at startup, where "the process is new, so nothing that claimed to be
+    running still is" is true by construction.
+    """
+    cutoff = time.strftime(
+        "%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - older_than_minutes * 60)
+    )
+    try:
+        with _connect(db_path) as conn:
+            return conn.execute(
+                "UPDATE sessions SET status = 'failed' "
+                "WHERE status = 'generating' AND COALESCE(last_active_at, '') < ?",
+                (cutoff,),
+            ).rowcount
+    except sqlite3.OperationalError as exc:
+        if "no such column" in str(exc).lower() or "no such table" in str(exc).lower():
+            return 0
+        raise
+
+
 def update_session(
     session_id: str,
     user_id: str,

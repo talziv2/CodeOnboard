@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests.conftest import TEST_USER_ID
+from tests.conftest import TEST_USER_ID, start_session
 from fastapi.testclient import TestClient
 
 import backend.api as api
@@ -90,18 +90,18 @@ def _teaching_side_effect(state, client=None):
 
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_session_start_returns_session_and_graph(mock_pipeline, client):
-    resp = client.post("/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL})
-    assert resp.status_code == 200
-    body = resp.json()
-    assert "session_id" in body
-    assert len(body["graph"]["nodes"]) == 2
-    assert body["graph"]["current_node_id"] is not None
+    # M7: creation is asynchronous. The id comes back at once with `202`; the
+    # graph is read afterwards, which is what the frontend does too.
+    started = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
+    assert started["session_id"]
+    assert started["status"] == "generating"
+    assert len(started["graph"]["nodes"]) == 2
+    assert started["graph"]["current_node_id"] is not None
 
 
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_session_start_persists_graph(mock_pipeline, client):
-    resp = client.post("/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL})
-    session_id = resp.json()["session_id"]
+    session_id = start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
     # A fresh GET must find the persisted graph.
     got = client.get(f"/session/{session_id}")
     assert got.status_code == 200
@@ -109,14 +109,31 @@ def test_session_start_persists_graph(mock_pipeline, client):
 
 
 @patch("backend.api.run_pipeline")
-def test_session_start_500_when_no_graph(mock_pipeline, client):
+def test_a_pipeline_that_produces_no_graph_marks_the_session_failed(
+    mock_pipeline, client
+):
     state = MagicMock()
     state.graph = None
     state.errors = ["pipeline failed: boom"]
     mock_pipeline.return_value = state
-    resp = client.post("/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL})
-    assert resp.status_code == 500
-    assert "boom" in str(resp.json()["detail"])
+    # Asserts on the RESPONSE, so it calls the endpoint rather than the helper.
+    # M7 made creation asynchronous: the row is reserved and 202 returned before
+    # the pipeline runs, so a planning failure can no longer be a 500 — it is a
+    # session whose status becomes `failed`, which is the whole point.
+    resp = client.post(
+        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
+    )
+    assert resp.status_code == 202
+    session_id = resp.json()["session_id"]
+    summary = client.get(f"/sessions/{session_id}")
+    assert summary.status_code == 200, summary.text
+    assert summary.json()["status"] == "failed"
+    # And it is reachable rather than stranded: the learner can see what happened.
+    assert client.get(f"/session/{session_id}").status_code in (200, 404)
+    # The pipeline's own error is logged rather than returned: the request that
+    # started it had already succeeded and gone by the time the failure
+    # happened. The learner learns of it from the session's status, which is the
+    # only place that survives them closing the tab.
 
 
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
@@ -127,9 +144,7 @@ def test_session_start_persists_the_original_plan(mock_pipeline, client):
     is the call site that can silently regress: swapping back to `save_graph` here
     would leave every store-level test passing and every new session unresettable.
     """
-    session_id = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()["session_id"]
+    session_id = start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
 
     plan = learning_store.load_plan(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     assert plan is not None
@@ -141,9 +156,7 @@ def test_session_start_persists_the_original_plan(mock_pipeline, client):
 @patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_the_first_render_fills_the_plan_lesson_slot(mock_p, mock_t, mock_c, client):
-    session_id = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()["session_id"]
+    session_id = start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
     node_id = client.get(f"/session/{session_id}").json()["current_node_id"]
 
     assert learning_store.load_plan(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH) \
@@ -172,9 +185,7 @@ def test_a_teaching_failure_does_not_seal_the_fallback_into_the_plan(
         return state
 
     mock_teaching.side_effect = fails
-    session_id = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()["session_id"]
+    session_id = start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
     node_id = client.get(f"/session/{session_id}").json()["current_node_id"]
 
     client.get(f"/session/{session_id}/lesson")
@@ -214,7 +225,7 @@ def test_the_run_reports_the_stages_it_passed_through():
             "repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL, "progress_id": "run-abc",
         })
 
-    assert resp.status_code == 200
+    assert resp.status_code == 202
     snap = pipeline_progress.snapshot("run-abc")
     assert snap["done"] == ["clone", "structure"]
 
@@ -226,20 +237,21 @@ def test_a_run_is_marked_finished_even_when_the_pipeline_fails(client):
     state.graph = None
     state.errors = ["pipeline failed: boom"]
     with patch("backend.api.run_pipeline", return_value=state):
-        resp = client.post("/session/start", json={
-            "repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL, "progress_id": "run-dead",
-        })
+        started = start_session(client, FAKE_REPO_URL, FAKE_GOAL, progress_id="run-dead")
 
-    assert resp.status_code == 500
+    # The request itself succeeds — it only reserves the row. The FAILURE lands
+    # on the session, which is the point of doing this in the background: a
+    # learner who closed the tab still has something to come back to and be told.
+    assert client.get(f"/sessions/{started['session_id']}").json()["status"] == "failed"
     assert pipeline_progress.snapshot("run-dead")["finished"] is True
 
 
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_a_run_without_a_progress_id_reports_nothing(mock_pipeline, client):
     # The id is optional: an older client must still get a session.
-    resp = client.post("/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL})
+    started = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
 
-    assert resp.status_code == 200
+    assert started["session_id"]
     assert pipeline_progress.snapshot("") is None
 
 
@@ -255,9 +267,7 @@ def test_session_get_unknown_returns_404(client):
 @patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_lesson_renders_current_node(mock_pipeline, mock_teaching, mock_clone, client):
-    session_id = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()["session_id"]
+    session_id = start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
 
     resp = client.get(f"/session/{session_id}/lesson")
     assert resp.status_code == 200
@@ -270,9 +280,7 @@ def test_lesson_renders_current_node(mock_pipeline, mock_teaching, mock_clone, c
 @patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_lesson_caches_on_node(mock_pipeline, mock_teaching, mock_clone, client):
-    session_id = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()["session_id"]
+    session_id = start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
     client.get(f"/session/{session_id}/lesson")
     # The persisted graph should now report has_lesson on the current node.
     graph = client.get(f"/session/{session_id}").json()
@@ -291,9 +299,7 @@ def test_lesson_unknown_session_404(client):
 @patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_advance_moves_to_next_node(mock_pipeline, mock_teaching, mock_clone, client):
-    start = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
+    start = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     session_id = start["session_id"]
     first_node = start["graph"]["current_node_id"]
 
@@ -309,9 +315,7 @@ def test_advance_moves_to_next_node(mock_pipeline, mock_teaching, mock_clone, cl
 @patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_advance_marks_visited(mock_pipeline, mock_teaching, mock_clone, client):
-    start = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
+    start = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     session_id = start["session_id"]
     first_node = start["graph"]["current_node_id"]
 
@@ -325,9 +329,7 @@ def test_advance_marks_visited(mock_pipeline, mock_teaching, mock_clone, client)
 @patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_advance_past_end_returns_done(mock_pipeline, mock_teaching, mock_clone, client):
-    session_id = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()["session_id"]
+    session_id = start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
     # Two nodes → one advance reaches the second, a second advance hits the end.
     client.post(f"/session/{session_id}/advance", json={"signal": "next"})
     resp = client.post(f"/session/{session_id}/advance", json={"signal": "next"})
@@ -338,9 +340,7 @@ def test_advance_past_end_returns_done(mock_pipeline, mock_teaching, mock_clone,
 def test_advance_rejects_unsupported_signal(client):
     # Need a real session first so we reach the signal check.
     with patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect):
-        session_id = client.post(
-            "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-        ).json()["session_id"]
+        session_id = start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
     resp = client.post(f"/session/{session_id}/advance", json={"signal": "deeper"})
     assert resp.status_code == 400
 
@@ -370,9 +370,7 @@ def _grader_side_effect(classification: str):
 @patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_respond_classifies_and_persists(mock_pipeline, mock_teaching, mock_clone, client):
-    session_id = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()["session_id"]
+    session_id = start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
     client.get(f"/session/{session_id}/lesson")  # render so there's a lesson to grade
 
     with patch("backend.api.run_grader", side_effect=_grader_side_effect("understood")):
@@ -403,9 +401,7 @@ def test_off_topic_does_not_trigger_an_automatic_prerequisite(
     `off-topic` to insert a warm-up. Typing something unrelated would still have
     reshaped the learning path.
     """
-    session_id = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()["session_id"]
+    session_id = start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
     client.get(f"/session/{session_id}/lesson")
 
     with patch("backend.api.run_grader", side_effect=_grader_side_effect("off-topic")):
@@ -428,9 +424,7 @@ def test_off_topic_does_not_trigger_an_automatic_prerequisite(
 def test_confused_still_triggers_an_automatic_prerequisite(
     mock_pipeline, mock_teaching, mock_clone, mock_mutate, client
 ):
-    session_id = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()["session_id"]
+    session_id = start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
     client.get(f"/session/{session_id}/lesson")
 
     with patch("backend.api.run_grader", side_effect=_grader_side_effect("confused")):
@@ -443,9 +437,7 @@ def test_confused_still_triggers_an_automatic_prerequisite(
 @patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_respond_confused_sets_weak_spot(mock_pipeline, mock_teaching, mock_clone, client):
-    session_id = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()["session_id"]
+    session_id = start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
     client.get(f"/session/{session_id}/lesson")
 
     with patch("backend.api.run_grader", side_effect=_grader_side_effect("confused")):
@@ -461,9 +453,7 @@ def test_respond_confused_sets_weak_spot(mock_pipeline, mock_teaching, mock_clon
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_respond_409_before_lesson_rendered(mock_pipeline, client):
     # No /lesson call → current node has no cached_lesson → 409.
-    session_id = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()["session_id"]
+    session_id = start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
     resp = client.post(f"/session/{session_id}/respond", json={"response": "x"})
     assert resp.status_code == 409
 
@@ -497,9 +487,7 @@ def _mutator_inserts_prerequisite(state, signal, client=None, diagnosis=None, or
 def test_confused_inserts_prerequisite_and_walk_returns_to_node(
     mock_pipeline, mock_teaching, mock_clone, client
 ):
-    start = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
+    start = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     session_id = start["session_id"]
     confused_node = start["graph"]["current_node_id"]
     client.get(f"/session/{session_id}/lesson")  # render so /respond has a prompt
@@ -536,9 +524,7 @@ def test_advancing_from_a_prerequisite_returns_to_the_failed_node(
     # The point of a remediation prerequisite is a second attempt at the
     # objective the learner failed. Advancing off the warm-up must land back on
     # that node — not jump past it, which would leave it permanently unlearned.
-    start = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
+    start = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     session_id = start["session_id"]
     confused_node = start["graph"]["current_node_id"]
     client.get(f"/session/{session_id}/lesson")
@@ -569,9 +555,7 @@ def test_advancing_from_a_prerequisite_returns_to_the_failed_node(
 @patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_understood_does_not_mutate(mock_pipeline, mock_teaching, mock_clone, client):
-    session_id = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()["session_id"]
+    session_id = start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
     client.get(f"/session/{session_id}/lesson")
 
     with patch("backend.api.run_grader", side_effect=_grader_side_effect("understood")):
@@ -586,9 +570,7 @@ def test_understood_does_not_mutate(mock_pipeline, mock_teaching, mock_clone, cl
 @patch("backend.api.run_teaching", side_effect=_teaching_side_effect)
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_advance_skip_marks_skipped_and_moves_on(mock_pipeline, mock_teaching, mock_clone, client):
-    start = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
+    start = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     session_id = start["session_id"]
     first = start["graph"]["current_node_id"]
 
@@ -604,9 +586,7 @@ def test_advance_skip_marks_skipped_and_moves_on(mock_pipeline, mock_teaching, m
 
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_override_mark_understood(mock_pipeline, client):
-    start = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
+    start = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     session_id = start["session_id"]
     node_id = start["graph"]["current_node_id"]
 
@@ -624,9 +604,7 @@ def test_override_mark_understood(mock_pipeline, client):
 
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_override_rejects_unknown_action(mock_pipeline, client):
-    session_id = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()["session_id"]
+    session_id = start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
     resp = client.post(f"/session/{session_id}/override", json={"action": "explode"})
     assert resp.status_code == 400
 
@@ -649,12 +627,8 @@ def test_the_same_repo_and_goal_now_produce_a_SECOND_session(mock_pipeline, clie
     So creation always creates. Resuming means opening a session you already
     own, by id, from the dashboard.
     """
-    first = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
-    second = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
+    first = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
+    second = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
 
     assert first["session_id"] != second["session_id"]
     assert second["resumed"] is False
@@ -678,40 +652,29 @@ def test_the_same_repo_and_goal_now_produce_a_SECOND_session(mock_pipeline, clie
 def test_resume_moves_current_to_first_unvisited(
     mock_pipeline, mock_teaching, mock_clone, client
 ):
-    start = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
+    start = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     session_id = start["session_id"]
     first_node = start["graph"]["current_node_id"]
     client.post(f"/session/{session_id}/advance", json={"signal": "next"})
 
-    again = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
+    again = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     # First node was visited → resume lands on the second (first unvisited).
     assert again["graph"]["current_node_id"] != first_node
 
 
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_different_goal_creates_new_session(mock_pipeline, client):
-    client.post("/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL})
+    start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     other_goal = {**FAKE_GOAL, "primary_goal": "something else entirely"}
-    resp = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": other_goal}
-    ).json()
+    resp = start_session(client, FAKE_REPO_URL, other_goal)
     assert resp["resumed"] is False
     assert mock_pipeline.call_count == 2  # ran for each distinct goal
 
 
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_force_new_starts_fresh_despite_match(mock_pipeline, client):
-    first = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
-    forced = client.post(
-        "/session/start",
-        json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL, "force_new": True},
-    ).json()
+    first = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
+    forced = start_session(client, FAKE_REPO_URL, FAKE_GOAL, force_new=True)
     assert forced["resumed"] is False
     assert forced["session_id"] != first["session_id"]
     assert mock_pipeline.call_count == 2
@@ -719,7 +682,7 @@ def test_force_new_starts_fresh_despite_match(mock_pipeline, client):
 
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_list_sessions_for_repo(mock_pipeline, client):
-    client.post("/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL})
+    start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     resp = client.get("/sessions", params={"repo_url": FAKE_REPO_URL})
     assert resp.status_code == 200
     sessions = resp.json()["sessions"]
@@ -747,9 +710,7 @@ def test_list_sessions_empty_for_unknown_repo(client):
 
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_jump_records_a_journey_event_naming_both_stops(mock_pipeline, client):
-    start = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
+    start = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     session_id = start["session_id"]
     first_node = start["graph"]["current_node_id"]
     other = next(
@@ -770,9 +731,7 @@ def test_jump_records_a_journey_event_naming_both_stops(mock_pipeline, client):
 
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_jump_records_the_arrival_for_the_notice(mock_pipeline, client):
-    start = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
+    start = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     session_id = start["session_id"]
     first_node = start["graph"]["current_node_id"]
     other = next(
@@ -795,9 +754,7 @@ def test_jump_records_the_arrival_for_the_notice(mock_pipeline, client):
 def test_a_fresh_session_has_no_arrival(mock_pipeline, client):
     # Null means "nothing to say", and the first stop of a journey is reached by
     # starting rather than by jumping.
-    start = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
+    start = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     assert start["graph"]["arrival"] is None
 
 
@@ -811,9 +768,7 @@ def test_advancing_clears_the_arrival(mock_pipeline, mock_teaching, mock_clone, 
     telling the learner they are off-route from a stop they have already left,
     and the only way to silence it would be to jump again.
     """
-    start = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
+    start = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     session_id = start["session_id"]
     first_node = start["graph"]["current_node_id"]
     other = next(
@@ -837,9 +792,7 @@ def test_resuming_clears_the_arrival_but_is_still_recorded(mock_pipeline, client
     It clears the notice (they are back on the route) yet still writes an event:
     a log that recorded only departures would imply the learner never came back.
     """
-    start = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
+    start = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     session_id = start["session_id"]
     first_node = start["graph"]["current_node_id"]
     other = next(
@@ -863,9 +816,7 @@ def test_resuming_clears_the_arrival_but_is_still_recorded(mock_pipeline, client
 
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_jump_rejects_an_unknown_intent(mock_pipeline, client):
-    start = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
+    start = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     session_id = start["session_id"]
     node = start["graph"]["current_node_id"]
 
@@ -878,9 +829,7 @@ def test_jump_rejects_an_unknown_intent(mock_pipeline, client):
 
 @patch("backend.api.run_pipeline", side_effect=_pipeline_side_effect)
 def test_jump_to_an_unknown_node_is_a_404(mock_pipeline, client):
-    start = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()
+    start = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
     resp = client.post(
         f"/session/{start['session_id']}/jump", json={"node_id": "nope"}
     )
@@ -899,9 +848,7 @@ def test_the_file_endpoint_serves_a_file_inside_the_checkout(
     (checkout / "requests").mkdir(parents=True)
     (checkout / "requests" / "sessions.py").write_text("class Session: pass\n")
 
-    session_id = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()["session_id"]
+    session_id = start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
 
     with patch("backend.api.clone_repo", return_value=str(checkout)):
         response = client.get(
@@ -938,9 +885,7 @@ def test_the_file_endpoint_refuses_to_escape_the_checkout(
     (sibling / "secrets.py").write_text("SECRET = 'do not read me'\n")
     (tmp_path / "escape.txt").write_text("outside\n")
 
-    session_id = client.post(
-        "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-    ).json()["session_id"]
+    session_id = start_session(client, FAKE_REPO_URL, FAKE_GOAL)["session_id"]
 
     with patch("backend.api.clone_repo", return_value=str(checkout)):
         response = client.get(f"/session/{session_id}/file", params={"path": path})

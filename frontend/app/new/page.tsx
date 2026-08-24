@@ -91,6 +91,12 @@ export default function Home() {
     try {
       const { session_id } = await sessionStart(repoUrl, forGoal, false, runId);
       rememberRepo(repoUrl);
+      // M7: planning now runs in the background and this returns at once. The
+      // learner goes to the dashboard, where the card says what it is doing —
+      // rather than sitting on a progress screen for four minutes, which is
+      // exactly the wait that used to lose the session if they closed the tab.
+      router.push("/sessions");
+      return;
       // Land on the welcome page, not the first lesson: after a wait this long,
       // the first thing owed is what the repository is and what the system took
       // the goal to be — both checkable before any teaching starts.

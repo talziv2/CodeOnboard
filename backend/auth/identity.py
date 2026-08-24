@@ -340,3 +340,24 @@ def touch_login(user_id: str, db_path: Path = DEFAULT_DB_PATH) -> None:
         conn.execute(
             "UPDATE users SET last_login_at = ? WHERE user_id = ?", (_now(), user_id)
         )
+
+
+def ensure_user_row(
+    user_id: str, email: str | None = None, db_path: Path = DEFAULT_DB_PATH
+) -> None:
+    """Make sure a `users` row exists for this id. Idempotent.
+
+    For callers that hold a user id from somewhere other than registration — a
+    migration, a fixture, an imported account. Production never needs it:
+    `/auth/register` creates the row before anything can reference it.
+
+    `ON CONFLICT DO NOTHING` rather than check-then-insert, for the same reason
+    `ensure_legacy_user` uses it: the check-then-act version races itself.
+    """
+    init_auth_schema(db_path)
+    with _connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO users (user_id, email, display_name, created_at, is_active) "
+            "VALUES (?, ?, NULL, ?, 1) ON CONFLICT DO NOTHING",
+            (user_id, email, _now()),
+        )

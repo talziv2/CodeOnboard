@@ -34,6 +34,12 @@ export default function SessionCard({
   // cache, so it says nothing instead.
   const percent = goal_readiness === null ? null : Math.round(goal_readiness * 100);
   const archived = session.archived_at !== null;
+  // The two states that are not "a session you can open". `generating` is
+  // waiting on a background task; `failed` is a plan that never arrived — and
+  // saying so is the whole reason the row is created before the work starts,
+  // rather than after it.
+  const generating = session.status === "generating";
+  const failed = session.status === "failed";
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -106,9 +112,17 @@ export default function SessionCard({
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="primary" size="sm" onClick={onContinue} disabled={busy}>
-          {t.dashboard.continue}
-        </Button>
+        {generating ? (
+          <span className="animate-pulse font-mono text-meta text-graphite">
+            {t.dashboard.generating}
+          </span>
+        ) : failed ? (
+          <span className="font-mono text-meta text-rust">{t.dashboard.failed}</span>
+        ) : (
+          <Button variant="primary" size="sm" onClick={onContinue} disabled={busy}>
+            {t.dashboard.continue}
+          </Button>
+        )}
         {!renaming && (
           <Button variant="chrome" size="xs" onClick={() => setRenaming(true)} disabled={busy}>
             {t.dashboard.rename}

@@ -45,6 +45,21 @@ export default function SessionsPage() {
     if (status === "authenticated") load();
   }, [status, load]);
 
+  /**
+   * Poll only while something is actually being planned.
+   *
+   * A session in `generating` is being built by a background task, so nothing
+   * pushes its completion here — but polling a dashboard where nothing is
+   * happening is pure waste, so the interval exists only while at least one
+   * card is waiting and clears itself the moment none is.
+   */
+  const generating = (sessions ?? []).some((s) => s.status === "generating");
+  useEffect(() => {
+    if (!generating) return;
+    const timer = setInterval(load, 4000);
+    return () => clearInterval(timer);
+  }, [generating, load]);
+
   useEffect(() => {
     if (status === "anonymous") router.replace("/login");
   }, [status, router]);

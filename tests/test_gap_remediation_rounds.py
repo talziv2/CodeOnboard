@@ -27,7 +27,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests.conftest import TEST_USER_ID
+from tests.conftest import TEST_USER_ID, start_session
 from fastapi.testclient import TestClient
 
 import backend.api as api
@@ -89,9 +89,7 @@ def _start(client, graph) -> str:
     with patch("backend.api.run_pipeline", side_effect=_pipeline), \
          patch("backend.api.run_teaching", side_effect=_teaching_side_effect), \
          patch("backend.api.clone_repo", return_value="data/repos/requests"):
-        body = client.post(
-            "/session/start", json={"repo_url": FAKE_REPO_URL, "goal": FAKE_GOAL}
-        ).json()
+        body = start_session(client, FAKE_REPO_URL, FAKE_GOAL)
         session_id = body["session_id"]
         client.get(f"/session/{session_id}/lesson")
     return session_id

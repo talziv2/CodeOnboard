@@ -102,13 +102,66 @@ def sweep_orphaned_investigations(db_path: Path = DEFAULT_DB_PATH) -> int:
     return max(removed, 0)
 
 
-def run_startup_checks(db_path: Path = DEFAULT_DB_PATH) -> dict:
-    """Both checks, in the order their severity implies.
+def fail_stale_generating(db_path: Path = DEFAULT_DB_PATH) -> int:
+    """Mark sessions still claiming to be generating as failed (M7).
 
-    The sweep runs FIRST so that a tidy-up never appears to be the thing that
-    failed, and the assertion last so its exception is the one that reaches the
-    caller.
+    A pipeline runs in a background task, so a process killed mid-plan leaves a
+    row nothing will ever move. THE PROCESS IS NEW, so nothing that claimed to
+    be running still is — which makes startup the one moment this is safe to
+    assume.
+
+    A card that spins forever is worse than one that says it failed: the learner
+    cannot tell whether to wait or to retry.
+    """
+    from backend.learning.store import fail_stale_generating_sessions
+
+    failed = fail_stale_generating_sessions(db_path, older_than_minutes=0)
+    if failed:
+        logger.info("marked %d interrupted generation(s) as failed", failed)
+    return failed
+
+
+def purge_old_drafts(db_path: Path = DEFAULT_DB_PATH) -> int:
+    """Forget interviews nobody has touched in a month.
+
+    Housekeeping. Unlike the dict this replaced, the table has no cap to evict
+    against, so without this it grows forever.
+    """
+    from backend.auth import drafts
+
+    return drafts.purge_old_drafts(db_path) if hasattr(drafts, "purge_old_drafts")         else drafts.purge_older_than(db_path=db_path)
+
+
+def run_startup_checks(db_path: Path = DEFAULT_DB_PATH) -> dict:
+    """Everything the process checks before it serves anything.
+
+    Ordered by severity, deliberately: the repairs run FIRST so a tidy-up never
+    appears to be the thing that failed, and the assertion runs LAST so its
+    exception is the one that reaches the caller.
     """
     swept = sweep_orphaned_investigations(db_path)
+    stale = fail_stale_generating(db_path)
+    drafts_purged = purge_old_drafts(db_path)
+    expired = _purge_expired_auth_sessions(db_path)
     assert_every_session_is_owned(db_path)
-    return {"orphaned_investigations_removed": swept}
+    return {
+        "orphaned_investigations_removed": swept,
+        "interrupted_generations_failed": stale,
+        "abandoned_drafts_purged": drafts_purged,
+        "expired_auth_sessions_purged": expired,
+    }
+
+
+def _purge_expired_auth_sessions(db_path: Path) -> int:
+    """Delete auth sessions that can no longer authenticate anyone.
+
+    Housekeeping, not security — `tokens.resolve` already refuses them. It keeps
+    the table from growing without bound in a process that may run for months.
+    """
+    from backend.auth import tokens
+
+    try:
+        return tokens.purge_expired(db_path)
+    except Exception as exc:                      # noqa: BLE001
+        logger.debug("auth-session purge skipped: %s", exc)
+        return 0

@@ -148,6 +148,9 @@ export const goalBack = (session_id: string) =>
 
 export interface SessionStartResponse {
   session_id: string;
+  /** "generating" — planning runs in the background (multi-user M7). */
+  status?: string;
+  progress_id?: string;
 }
 
 export const sessionStart = (

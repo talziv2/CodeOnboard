@@ -29,11 +29,13 @@
 
 import logging
 import os
+import threading
+import uuid
 from contextlib import asynccontextmanager
 
 import anthropic
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.routing import Match
@@ -60,6 +62,7 @@ from backend.learning import progress
 from backend.learning import scope
 from backend.learning import store as learning_store
 from backend.learning import understanding
+from backend.auth import drafts
 from backend.auth.deps import CurrentUser, current_user, owned_session
 from backend.auth import tokens
 from backend.auth.google_routes import identities_router
@@ -119,11 +122,9 @@ async def _lifespan(_app: FastAPI):
     deprecates.
     """
     result = run_startup_checks(SESSIONS_DB_PATH)
-    if result["orphaned_investigations_removed"]:
-        logger.info(
-            "startup: removed %d orphaned investigation row(s)",
-            result["orphaned_investigations_removed"],
-        )
+    reported = {k: v for k, v in result.items() if v}
+    if reported:
+        logger.info("startup housekeeping: %s", reported)
     yield
 
 
@@ -241,55 +242,13 @@ async def _refuse_undeclared_routes(request, call_next):
     return JSONResponse(status_code=401, content={"detail": "not_authenticated"})
 
 
-# In-memory session store: session_id → GoalSession (goal dialogue only).
-# Learning-graph sessions live in SQLite (learning_store) — different lifecycle:
-# the goal dialogue is ephemeral, the learning graph persists across requests.
+# THE GOAL INTERVIEW LIVES IN A TABLE NOW (M7, `backend/auth/drafts.py`).
 #
-# A completed dialogue is NOT dropped when the goal is synthesised. The client shows
-# the answers back and waits for the learner to confirm before anything starts, and
-# from that review they can reopen any answer — which is /goal/back, which needs the
-# session. Deleting on completion made every Back on the review step return 404
-# session_not_found.
+# It used to be a module-level dict capped at 64 and shared by everybody, and
+# all three of those were wrong: it died with the process, the cap was global so
+# concurrent learners evicted each other, and it was unowned so anybody holding
+# an id could drive somebody else's interview.
 #
-# Retention is bounded rather than immediate. Insertion order is dict order, so the
-# oldest dialogues are evicted past _MAX_GOAL_SESSIONS. A GoalSession is a repo URL,
-# a handful of answers and a goal type, so the cap is about not leaking indefinitely
-# rather than about memory pressure — there is no "learner closed the tab" signal to
-# free them on.
-sessions: dict[str, GoalSession] = {}
-
-# WHO owns each in-flight interview. A parallel dict rather than a field on
-# `GoalSession`, because that dataclass belongs to the goal agent and must not
-# learn about users (I9). M7 replaces both with a `session_drafts` table; until
-# then this is what stops one learner from driving another's interview simply
-# by holding its id.
-session_owners: dict[str, str] = {}
-
-_MAX_GOAL_SESSIONS = 64
-
-
-def _remember_goal_session(session: GoalSession, owner: str) -> None:
-    sessions[session.session_id] = session
-    session_owners[session.session_id] = owner
-    while len(sessions) > _MAX_GOAL_SESSIONS:
-        evicted = next(iter(sessions))
-        del sessions[evicted]
-        session_owners.pop(evicted, None)
-
-
-def _owned_goal_session(session_id: str, owner: str) -> GoalSession:
-    """The caller's interview, or 404 — same rule as a learning session.
-
-    404 for "not yours" as well as "not there": a different status would confirm
-    that an id belongs to somebody, which is exactly what the learning-session
-    routes refuse to do.
-    """
-    session = sessions.get(session_id)
-    if session is None or session_owners.get(session_id) != owner:
-        raise HTTPException(status_code=404, detail="session_not_found")
-    return session
-
-
 # Indirection so tests can point persistence at a temp DB.
 SESSIONS_DB_PATH = learning_store.DEFAULT_DB_PATH
 
@@ -382,8 +341,7 @@ def repo_check(
 def goal_start(
     body: StartRequest, user: CurrentUser = Depends(current_user)
 ) -> StartResponse:
-    session = start_session(body.repo_url)
-    _remember_goal_session(session, user.user_id)
+    session = drafts.create(user.user_id, body.repo_url, SESSIONS_DB_PATH)
     first_q = CORE_QUESTIONS[0]
     index, total = question_progress(session)
     return StartResponse(
@@ -398,7 +356,11 @@ def goal_start(
 def goal_answer(
     body: AnswerRequest, user: CurrentUser = Depends(current_user)
 ) -> AnswerResponse:
-    session = _owned_goal_session(body.session_id, user.user_id)
+    session = drafts.load(body.session_id, user.user_id, SESSIONS_DB_PATH)
+    if session is None:
+        # 404 for "not yours" as well as "not there" — a draft id must not be
+        # usable to discover that somebody else is mid-interview.
+        raise HTTPException(status_code=404, detail="session_not_found")
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
@@ -406,6 +368,8 @@ def goal_answer(
         next_q, goal_output = process_answer(session, body.answer, client=client)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    drafts.save(session, user.user_id, SESSIONS_DB_PATH)
 
     if goal_output is not None:
         # The session stays: the client shows these answers back for confirmation,
@@ -428,7 +392,9 @@ def goal_answer(
 def goal_back(
     body: BackRequest, user: CurrentUser = Depends(current_user)
 ) -> BackResponse:
-    session = _owned_goal_session(body.session_id, user.user_id)
+    session = drafts.load(body.session_id, user.user_id, SESSIONS_DB_PATH)
+    if session is None:
+        raise HTTPException(status_code=404, detail="session_not_found")
 
     stepped = step_back(session)
     if stepped is None:
@@ -436,6 +402,7 @@ def goal_back(
         # race, not the normal path.
         raise HTTPException(status_code=400, detail="at_first_question")
 
+    drafts.save(session, user.user_id, SESSIONS_DB_PATH)
     question, previous = stepped
     index, total = question_progress(session)
     return BackResponse(
@@ -664,64 +631,145 @@ def _render_current_lesson(graph, client, owner: str) -> dict:
     return state.current_lesson
 
 
-@app.post("/session/start")
+# ── one generation at a time, per learner ────────────────────────────────────
+#
+# Planning holds a threadpool worker for two to four minutes and spends real
+# money. Without a cap, a learner who double-clicks Start pays twice and gets two
+# sessions; with several learners, a handful of clicks exhausts the pool and the
+# app stops answering anything at all.
+#
+# Per-user rather than global, because one person's impatience must not block
+# somebody else's first session. The global semaphore below is the second bound.
+_generating: set[str] = set()
+_generating_lock = threading.Lock()
+
+# How many pipelines may run at once across everybody. Chosen against what the
+# resource actually is — Starlette's threadpool, and the Anthropic bill — rather
+# than against CPU.
+_GLOBAL_GENERATION_LIMIT = threading.Semaphore(3)
+
+
+@app.post("/session/start", status_code=202)
 def session_start(
-    body: SessionStartRequest, user: CurrentUser = Depends(current_user)
+    body: SessionStartRequest,
+    background: BackgroundTasks,
+    user: CurrentUser = Depends(current_user),
 ) -> dict:
-    """Plan a new learning session for the caller.
+    """Start planning a session. Returns 202 with the id, immediately.
 
-    ## `_try_resume` is gone (multi-user.md §2 P1)
+    ## Why this returns before the work is done (multi-user.md §10.3)
 
-    This used to scan the whole database for a session whose `repo_url` and
-    `goal_json` matched, and return it instead of planning. With one learner
-    that was a helpful cost saving. With two it was a CROSS-USER HIJACK: two
-    people who picked `psf/requests` and answered the interview the same way got
-    the same session — each other's answers, gaps and lesson history.
+    Planning takes two to four minutes. This used to block for all of it and
+    return the id at the END — so closing the tab meant the pipeline still
+    finished, the graph was still written, and the learner had no way to find
+    it. The session existed and was unreachable.
 
-    It also contradicted the product requirement it looked like it served.
-    A learner may hold several sessions on one repository, with the same goal or
-    different ones, and they must be independent (I3). Creation now always
-    creates; resuming means opening a session you already have, by id.
+    Now the row is reserved first, `status = 'generating'`, and the id comes
+    back at once. The dashboard shows it working; closing the tab loses nothing;
+    a restart mid-plan leaves a row that the startup sweep marks `failed` rather
+    than one that spins forever.
 
-    `force_new` went with it — with nothing implicit left to force past, the
-    flag had nothing to mean.
+    It also stops being the shape that breaks behind the Next rewrite (D-2),
+    where a four-minute proxied POST is exactly what a dev server times out.
+
+    `_try_resume` is not coming back: creation always creates (M3).
     """
-    pid = body.progress_id or ""
-    pipeline_progress.begin(pid)
+    with _generating_lock:
+        if user.user_id in _generating:
+            # Not an error worth dressing up: they clicked twice, or left a tab
+            # open. The one in flight is the answer.
+            raise HTTPException(status_code=409, detail="generation_already_running")
+        _generating.add(user.user_id)
+
+    session_id = uuid.uuid4().hex
+    title = _title_from_goal(body.goal, body.repo_url)
     try:
-        return _run_session_start(body, pid, user.user_id)
-    finally:
-        pipeline_progress.finish(pid)
-
-
-def _run_session_start(body: SessionStartRequest, pid: str, owner: str) -> dict:
-    client = _new_client()
-    state = run_pipeline(body.repo_url, body.goal, client=client, progress_id=pid)
-    if state.graph is None:
-        raise HTTPException(
-            status_code=500,
-            detail={"error": "no_graph", "errors": state.errors},
+        learning_store.create_pending_session(
+            session_id, user.user_id, body.repo_url, body.goal, title,
+            SESSIONS_DB_PATH,
         )
-    # `create_session` writes the graph AND its plan in one transaction, with the
-    # owner stamped in the same write — a session cannot exist unowned even for
-    # the width of a crash.
-    learning_store.create_session(state.graph, SESSIONS_DB_PATH, user_id=owner)
-    if state.investigation:
-        try:
-            dossier_store.save_investigation(
-                state.graph.session_id,
-                get_commit_sha(state.repo_path),
-                state.investigation,
-                SESSIONS_DB_PATH,
-            )
-        except Exception as e:
-            state.errors.append(f"dossier persistence failed (non-fatal): {e}")
+    except Exception:
+        with _generating_lock:
+            _generating.discard(user.user_id)
+        raise
+
+    pid = body.progress_id or session_id
+    pipeline_progress.begin(pid)
+    background.add_task(
+        _generate_session, session_id, user.user_id, body, pid
+    )
     return {
-        "session_id": state.graph.session_id,
-        "graph": state.graph.to_dict(),
+        "session_id": session_id,
+        "status": "generating",
+        "progress_id": pid,
         "resumed": False,
-        "errors": state.errors,
+        "errors": [],
     }
+
+
+def _title_from_goal(goal: dict, repo_url: str) -> str:
+    """A name for the card before there is anything else to name it after."""
+    for key in ("focus_area", "primary_goal"):
+        value = (goal.get(key) or "").strip()
+        if value:
+            title = value[0].upper() + value[1:]
+            return title if len(title) <= 60 else title[:57].rstrip() + "…"
+    try:
+        return "/".join(parse_repo_url(repo_url))
+    except ValueError:
+        return "Learning session"
+
+
+def _generate_session(
+    session_id: str, owner: str, body: SessionStartRequest, pid: str
+) -> None:
+    """Plan the session, in the background. Never raises into the caller.
+
+    The one thing this must always do is LEAVE THE ROW IN A TERMINAL STATE.
+    A pipeline that fails and leaves `generating` behind is a card that spins
+    forever, and the learner cannot tell whether to wait or retry.
+    """
+    acquired = _GLOBAL_GENERATION_LIMIT.acquire(timeout=900)
+    try:
+        if not acquired:
+            learning_store.set_session_status(session_id, "failed", SESSIONS_DB_PATH)
+            logger.warning("generation queue full: session=%s", session_id)
+            return
+        client = _new_client()
+        state = run_pipeline(body.repo_url, body.goal, client=client, progress_id=pid)
+        if state.graph is None:
+            learning_store.set_session_status(session_id, "failed", SESSIONS_DB_PATH)
+            logger.warning("planning produced no graph: session=%s errors=%s",
+                           session_id, state.errors)
+            return
+
+        # The planner minted its own id; the row already exists under the one the
+        # client was handed. Reconciling here rather than teaching the planner
+        # about reserved ids keeps the engine ignorant of the account layer (I9).
+        state.graph.session_id = session_id
+        learning_store.create_session(state.graph, SESSIONS_DB_PATH, user_id=owner)
+        learning_store.set_session_status(session_id, "active", SESSIONS_DB_PATH)
+
+        if state.investigation:
+            try:
+                dossier_store.save_investigation(
+                    session_id, get_commit_sha(state.repo_path),
+                    state.investigation, SESSIONS_DB_PATH,
+                )
+            except Exception as e:
+                logger.warning("dossier persistence failed (non-fatal): %s", e)
+    except Exception as exc:                       # noqa: BLE001
+        logger.exception("generation failed: session=%s", session_id)
+        try:
+            learning_store.set_session_status(session_id, "failed", SESSIONS_DB_PATH)
+        except Exception:
+            logger.error("could not mark session %s failed: %s", session_id, exc)
+    finally:
+        if acquired:
+            _GLOBAL_GENERATION_LIMIT.release()
+        pipeline_progress.finish(pid)
+        with _generating_lock:
+            _generating.discard(owner)
 
 
 @app.get("/session/progress/{progress_id}")
