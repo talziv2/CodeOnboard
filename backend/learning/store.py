@@ -967,6 +967,41 @@ def list_sessions_for_repo(
         ]
 
 
+# How much of the welcome briefing a dashboard card carries. The paragraph is
+# three to five sentences pitched at this learner; the card shows its opening and
+# CSS clamps whatever still overflows. Capped here as well, because a listing of
+# ninety sessions would otherwise ship ninety paragraphs to draw three lines.
+_BLURB_CHARS = 280
+
+
+def _repo_blurb(briefing_json: str | None) -> str | None:
+    """The welcome briefing's opening, for the dashboard card.
+
+    NOT SYNTHESISED, and that is the whole rule. A session whose welcome page was
+    never opened has no briefing, and the card then says nothing about the
+    repository rather than describing one it has not read — the same refusal the
+    briefing itself makes when it has no material (`available: False`).
+
+    Truncation is safe against the markdown the paragraph may contain because an
+    unclosed delimiter stays literal by design (`frontend/lib/markdown.ts`), so a
+    cut through a `**` degrades to two asterisks rather than to a mis-parse.
+    """
+    if not briefing_json:
+        return None
+    try:
+        briefing = json.loads(briefing_json)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(briefing, dict) or not briefing.get("available"):
+        return None
+    paragraph = (briefing.get("paragraph") or "").strip()
+    if not paragraph:
+        return None
+    if len(paragraph) <= _BLURB_CHARS:
+        return paragraph
+    return paragraph[:_BLURB_CHARS].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
 def list_sessions_for_user(
     user_id: str,
     db_path: Path = DEFAULT_DB_PATH,
@@ -994,8 +1029,8 @@ def list_sessions_for_user(
             f"""
             SELECT session_id, repo_url, repo_id, goal_json, title, status,
                    current_node_id, created_at, updated_at, last_active_at,
-                   archived_at, readiness_cached, stops_settled_cached,
-                   stops_total_cached
+                   archived_at, briefing_json, readiness_cached,
+                   stops_settled_cached, stops_total_cached
             FROM sessions
             WHERE user_id = ? AND schema_version IN (SELECT value FROM json_each(?))
               {"" if include_archived else "AND archived_at IS NULL"}
@@ -1016,6 +1051,7 @@ def list_sessions_for_user(
                 "updated_at": r["updated_at"],
                 "last_active_at": r["last_active_at"],
                 "archived_at": r["archived_at"],
+                "repo_blurb": _repo_blurb(r["briefing_json"]),
                 "progress": {
                     "goal_readiness": r["readiness_cached"],
                     "stops_settled": r["stops_settled_cached"],

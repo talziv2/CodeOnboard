@@ -23,12 +23,29 @@ export const t = {
   // The empty state INVITES rather than apologises: a learner with no sessions
   // has not lost anything, they simply have not started one yet.
   dashboard: {
-    title: "My learning sessions",
+    title: "My Learning Sessions",
+    // The name, not the address. `display_name` when the learner gave one,
+    // otherwise the local part of the email — nobody wants to be greeted by
+    // their own inbox.
+    welcome: (name: string) => `Welcome back, ${name}`,
+    // The greeting with nothing to greet. An account created without a display
+    // name and with an unreadable address still gets a sentence, not a blank.
+    welcomeAnonymous: "Welcome back",
+    // The card's mono label for the learner's own words. The title above it is
+    // the focus area; this is the sentence they wrote about why.
+    goalLabel: "Goal",
+    // Pressing the card SELECTS it — it grows and shows the rest of what it
+    // knows. Opening the session is `Continue`, and only `Continue`, because a
+    // card that navigates on any click cannot be read without leaving.
+    expand: (title: string) => `More about ${title}`,
+    collapse: (title: string) => `Less about ${title}`,
+    // `Continue` reads fine beside its own card and says nothing on its own in
+    // a list of four, so the accessible name carries which session it opens.
+    openSession: (title: string) => `Continue: ${title}`,
     loading: "Loading your sessions…",
     loadFailed: "Couldn't load your sessions. Try again.",
     empty: "No sessions yet. Point CodeOnboard at a repository and it will build you a route through it.",
     noneArchived: "Nothing archived.",
-    startFirst: "Start your first session",
     startNew: "Start a new session",
     backToDashboard: "Back to my sessions",
     continue: "Continue",

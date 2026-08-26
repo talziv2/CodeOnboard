@@ -62,3 +62,40 @@ export function relativeTime(iso: string | null, now: Date = new Date()): string
   if (days <= 7) return `${days} day${days === 1 ? "" : "s"} ago`;
   return then.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
+
+/**
+ * The learner's own sentence about why they came, when the title is not already
+ * it.
+ *
+ * The title is derived from `focus_area` and falls back to `primary_goal`, so on
+ * a session with no `focus_area` the two are the SAME STRING and printing both
+ * would be the card saying one thing twice. Truncation is why the comparison is
+ * a prefix test rather than equality: a derived title is cut at 60 characters
+ * with an ellipsis, so it is a prefix of the goal it came from, never equal to
+ * it.
+ */
+export function sessionGoal(session: SessionSummary): string | null {
+  const goal = (session.goal?.primary_goal ?? "").trim();
+  if (!goal) return null;
+  const title = sessionTitle(session).replace(/…$/, "").trim().toLowerCase();
+  if (title && goal.toLowerCase().startsWith(title)) return null;
+  return goal;
+}
+
+/**
+ * What to call the learner in the greeting.
+ *
+ * The display name when they gave one, otherwise the local part of the email —
+ * an address is how the system finds them, not what they are called, and
+ * "Welcome back, shira.zakov@eyeviation.com" is a form letter. Returns null
+ * when there is nothing usable, so the caller greets without a name rather than
+ * greeting an empty string.
+ */
+export function learnerName(
+  user: { display_name?: string | null; email?: string | null } | null,
+): string | null {
+  const named = (user?.display_name ?? "").trim();
+  if (named) return named;
+  const local = (user?.email ?? "").split("@")[0].trim();
+  return local || null;
+}
