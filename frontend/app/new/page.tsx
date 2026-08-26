@@ -5,13 +5,23 @@ import { useRouter } from "next/navigation";
 import GoalDialogue from "@/components/GoalDialogue";
 import SettingsMenu from "@/components/SettingsMenu";
 import StartingProgress from "@/components/StartingProgress";
-import { checkRepo, sessionStart } from "@/lib/api";
+import { checkRepo, getSessionSummary, sessionStart } from "@/lib/api";
 import Button from "@/components/ui/Button";
 import { errorText, t } from "@/lib/strings";
 
 type Step = "repo" | "goal" | "starting" | "failed";
 
 const RECENT_KEY = "codeonboard:recent-repos";
+
+/**
+ * How often to ask whether the plan has landed.
+ *
+ * Slower than `StartingProgress`'s own poll (900ms), because the two are asking
+ * different things: that one draws a live activity line and wants to look alive,
+ * this one waits for a single transition in a two-to-four-minute job. Matched to
+ * the dashboard's interval, which watches the same rows for the same reason.
+ */
+const SESSION_POLL_MS = 4000;
 
 function readRecent(): string[] {
   if (typeof window === "undefined") return [];
@@ -52,6 +62,9 @@ export default function Home() {
   // poll what that call is doing while it blocks.
   const [startedGoal, setStartedGoal] = useState<Record<string, string> | null>(null);
   const [progressId, setProgressId] = useState("");
+  // The session being planned, once the id exists. Set for the whole wait, which
+  // is what keeps the learner on the progress screen instead of the dashboard.
+  const [waitingFor, setWaitingFor] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Kept so a failed pipeline can be retried without redoing the interview.
@@ -91,21 +104,71 @@ export default function Home() {
     try {
       const { session_id } = await sessionStart(repoUrl, forGoal, false, runId);
       rememberRepo(repoUrl);
-      // M7: planning now runs in the background and this returns at once. The
-      // learner goes to the dashboard, where the card says what it is doing —
-      // rather than sitting on a progress screen for four minutes, which is
-      // exactly the wait that used to lose the session if they closed the tab.
-      router.push("/sessions");
-      return;
-      // Land on the welcome page, not the first lesson: after a wait this long,
-      // the first thing owed is what the repository is and what the system took
-      // the goal to be — both checkable before any teaching starts.
-      router.push(`/session/${session_id}/welcome`);
+      // M7 made this call RETURN AT ONCE — the plan is built by a background
+      // task — and the first cut of that took the learner to the dashboard the
+      // moment the id existed. That threw away the wrong half of the change.
+      //
+      // What M7 fixed is that the SESSION no longer depends on the tab staying
+      // open: the row is reserved before any work starts, so closing the tab
+      // loses nothing. What it did not change is that this learner is still
+      // waiting for THIS route, and the progress screen is the only place that
+      // says what is being read, in their repository, on their goal. Redirecting
+      // replaced a screen full of real streamed facts with a card that says
+      // "Building your route…".
+      //
+      // So: stay, and watch. `waitingFor` starts the poll below; the dashboard
+      // still shows the same session building, for a learner who leaves.
+      setWaitingFor(session_id);
     } catch (err: unknown) {
       setError(err instanceof Error ? errorText(err.message) : t.home.pipelineFailed);
       setStep("failed");
     }
   };
+
+  /**
+   * Watch the reserved session until its plan lands.
+   *
+   * TWO SOURCES, and they answer different questions. `StartingProgress` polls
+   * the RUN — what is being read, which stage, how long — and a run that has
+   * ended stops reporting. This polls the SESSION ROW, which is the only thing
+   * that says whether the plan was written: `active` means there is a route to
+   * walk, `failed` means the background task gave up. Neither is derivable from
+   * the other, which is why the redirect could not simply be deleted.
+   *
+   * A poll that errors is treated as no news. The row is written by a background
+   * task and a blip must not be reported as a failed pipeline — the terminal
+   * status is the authority, and it is guaranteed to arrive (`_generate_session`
+   * leaves the row in a terminal state on every path).
+   */
+  useEffect(() => {
+    if (!waitingFor) return;
+    let live = true;
+    const check = async () => {
+      try {
+        const summary = await getSessionSummary(waitingFor);
+        if (!live) return;
+        if (summary.status === "active") {
+          // Land on the welcome page, not the first lesson: after a wait this
+          // long, the first thing owed is what the repository is and what the
+          // system took the goal to be — both checkable before any teaching
+          // starts.
+          router.push(`/session/${waitingFor}/welcome`);
+        } else if (summary.status === "failed") {
+          setWaitingFor(null);
+          setError(t.home.pipelineFailed);
+          setStep("failed");
+        }
+      } catch {
+        /* No news. See above. */
+      }
+    };
+    check();
+    const timer = setInterval(check, SESSION_POLL_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [waitingFor, router]);
 
   const handleGoalDone = (_sessionId: string, newGoal: Record<string, string>) => {
     setGoal(newGoal);

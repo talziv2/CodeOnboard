@@ -1059,6 +1059,17 @@ export const t = {
 
   // --- completion ---
   completion: {
+    /**
+     * The cancel, on a session the learner chose to end.
+     *
+     * Named as what it DOES — carry on where they were — rather than as
+     * "Cancel", which would describe a dialog. Nothing is being cancelled: the
+     * session was never ended, and this screen is what asks whether it should
+     * be.
+     */
+    keepGoing: "Keep going →",
+    notFinishedYet:
+      "Nothing has been ended yet — your session is exactly where you left it.",
     // Two measures, and neither gates the other (§18.16.3). "Journey complete"
     // beside "92% verified" is the intended final state, not a contradiction.
     journeyComplete: "Journey complete",

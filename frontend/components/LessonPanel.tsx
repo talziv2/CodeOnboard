@@ -72,10 +72,27 @@ interface Props {
    * header menu — and a flag owned here could only be set from inside a lesson.
    */
   finished: boolean;
-  /** End the journey: the walk ran out, or the learner chose to stop. */
-  onFinish: () => void;
+  /**
+   * End the journey, saying WHICH of the two ways it ended.
+   *
+   * `"walk"` is the route running out — nothing is left, so the completion screen
+   * offers no way back. `"choice"` is the learner pressing the link below, which
+   * commits nothing and must therefore be cancellable (#9).
+   *
+   * The distinction is the caller's to keep, not this component's: the header
+   * menu's `Finish session` is a third way in that never passes through here.
+   */
+  onFinish: (reason: "walk" | "choice") => void;
   /** Leave the session entirely, from the completion screen. */
   onLeave: () => void;
+  /**
+   * Back out of finishing — offered only where the learner CHOSE to finish.
+   *
+   * Owned by the page for the same reason `finished` is: both `Finish session`
+   * in the header menu and `Finish session early` down here set it, so the panel
+   * cannot be the thing that knows which of the two ways in was taken.
+   */
+  onResume?: () => void;
   /**
    * How the learner got here, when that is worth saying — null when they walked.
    *
@@ -123,7 +140,7 @@ interface Props {
 export default function LessonPanel({
   sessionId, nodeId, node, position, total, isPrerequisite,
   arrival = null, onReturnToRoute, onDismissArrival, returningToRoute = false,
-  graph, onFileClick, onAdvance, onRespond, finished, onFinish, onLeave, surface,
+  graph, onFileClick, onAdvance, onRespond, finished, onFinish, onLeave, onResume, surface,
   onSurfaceChanged, onGoToSurface, onMaterialUnread,
 }: Props) {
   const router = useRouter();
@@ -365,7 +382,9 @@ export default function LessonPanel({
     try {
       const res = (await advance(sessionId, "next", nodeId)) as { done?: boolean };
       await onAdvance();
-      if (res?.done) onFinish();
+      // The walk ran out. Not a decision, and the completion screen must not
+      // offer to resume a route with nothing left on it.
+      if (res?.done) onFinish("walk");
     } catch (e: unknown) {
       setError(e instanceof Error ? errorText(e.message) : t.lesson.advanceFailed);
     } finally {
@@ -520,7 +539,14 @@ export default function LessonPanel({
   };
 
   if (finished) {
-    return <CompletionScreen graph={graph} onNewSession={() => router.push("/")} onFinish={onLeave} />;
+    return (
+      <CompletionScreen
+        graph={graph}
+        onNewSession={() => router.push("/")}
+        onFinish={onLeave}
+        onResume={onResume}
+      />
+    );
   }
 
   if (loading && !lesson) {
@@ -1104,7 +1130,7 @@ export default function LessonPanel({
 
           <div className="border-t border-rule pt-4">
             <button
-              onClick={onFinish}
+              onClick={() => onFinish("choice")}
               className="font-mono text-micro text-graphite transition hover:text-chalk"
             >
               {t.lesson.finishEarly}

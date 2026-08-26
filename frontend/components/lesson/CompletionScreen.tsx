@@ -17,10 +17,41 @@ import { t } from "@/lib/strings";
  * The one rule worth not losing: "another pass" lists what is STILL unresolved,
  * not everything the learner ever stumbled on. `weak_spot` is sticky, so keying
  * off it kept offering a second pass over units already mastered.
+ *
+ * ── THE WAY BACK ─────────────────────────────────────────────────────────────
+ *
+ * `Finish session early` is one unconfirmed click on a quiet link at the foot of
+ * every lesson, and it landed here with no way out: the learner's only routes on
+ * were a NEW session or the front door, both of which leave the one they were
+ * mid-way through. Nothing had actually happened — the flag is client state and
+ * no request is made — so the screen was showing an ending that had not occurred
+ * and offering no way to un-see it.
+ *
+ * So THIS SCREEN IS THE CONFIRMATION, and `onResume` is what makes that true. It
+ * is passed only when the learner CHOSE to stop: when the walk itself ran out
+ * there is no stop to go back to, and a "keep going" button pointing at a
+ * finished route would be an offer the session cannot honour.
+ *
+ * Nothing to undo, which is the point of putting the cancel here rather than in
+ * a dialog before it: the learner gets to see what finishing would mean — the
+ * recap, and what is still unresolved — and then decide, with the session
+ * untouched behind them.
  */
 export default function CompletionScreen({
-  graph, onNewSession, onFinish,
-}: { graph: SessionGraph; onNewSession: () => void; onFinish: () => void }) {
+  graph, onNewSession, onFinish, onResume,
+}: {
+  graph: SessionGraph;
+  onNewSession: () => void;
+  onFinish: () => void;
+  /**
+   * Go back to the stop the learner was on, exactly as it was.
+   *
+   * Absent when the journey genuinely ended. Present when they pressed
+   * `Finish session early` or `Finish session`, which are the two clicks this
+   * screen has to be cancellable from.
+   */
+  onResume?: () => void;
+}) {
   const [tab, setTab] = useState<"summary" | "map">("summary");
   // "Another pass" must list what is STILL unresolved — not everything the
   // learner ever stumbled on. `weak_spot` is sticky, so it kept offering a
@@ -80,18 +111,33 @@ export default function CompletionScreen({
             </div>
           )}
 
-          <div className="flex gap-3">
-            <Button variant="primary" size="md"
+          {/* ORDER IS THE CONFIRMATION. Where the learner chose to stop, going
+              back leads: nothing has been committed yet, and the two buttons
+              beside it both leave the session. Where the walk ran out, the row is
+              exactly what it always was. */}
+          <div className="flex flex-wrap gap-3">
+            {onResume && (
+              <Button variant="primary" size="md" onClick={onResume}>
+                {t.completion.keepGoing}
+              </Button>
+            )}
+            <Button variant={onResume ? "secondary" : "primary"} size="md"
               onClick={onNewSession}
             >
               {t.completion.newSession}
             </Button>
-            <Button variant="secondary" size="md"
+            <Button variant={onResume ? "ghost" : "secondary"} size="md"
               onClick={onFinish}
             >
               {t.completion.goHome}
             </Button>
           </div>
+
+          {onResume && (
+            <p className="measure text-meta text-graphite">
+              {t.completion.notFinishedYet}
+            </p>
+          )}
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-hidden rounded-card border border-rule">
