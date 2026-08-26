@@ -124,3 +124,47 @@ describe("the analysis is not here", () => {
     expect(screen.queryByText(t.log.label)).toBeNull();
   });
 });
+
+/**
+ * An `optional` unit is depth the learner did not ask for. It sits ON the
+ * sequence chain — the planner emitted it, the sizer demoted it — so the map
+ * drew it flush on the spine, unindented and uncaptioned, while the rail filed
+ * it under its collapsed "optional stops" group. Same graph, two answers, and
+ * the surface a learner reads as "the journey" was the one claiming a planned
+ * unit was an ordinary stop on it.
+ */
+describe("an optional stop is not on the promised walk", () => {
+  const OPTIONAL = [
+    node("n1", { title: "The adapter contract" }),
+    node("n2", { title: "Pool keys", priority: "optional" }),
+    node("n3", { title: "Retry budgets" }),
+  ];
+
+  const renderOptional = () =>
+    render(
+      <MapView
+        nodes={OPTIONAL}
+        edges={[seq("n1", "n2"), seq("n2", "n3")]}
+        currentNodeId="n1"
+        onGoToLesson={vi.fn()}
+      />
+    );
+
+  test("it is captioned as off the walk, in the route itself", () => {
+    renderOptional();
+    expect(screen.getByText(t.map.stop.optional)).toBeTruthy();
+  });
+
+  test("and indented, so it does not read as a station", () => {
+    renderOptional();
+    expect(row("Pool keys").closest("li")!.className).toContain("ms-10");
+    expect(row("Retry budgets").closest("li")!.className).not.toContain("ms-10");
+  });
+
+  // The caption is the *reason*, and it must not borrow the warm-up's. Nothing
+  // happened here; this stop was simply never promised.
+  test("it is not captioned as inserted after a wrong answer", () => {
+    renderOptional();
+    expect(screen.queryByText(t.rail.addedAfterConfusion)).toBeNull();
+  });
+});

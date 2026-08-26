@@ -4,6 +4,7 @@ import type { GraphNode } from "@/lib/api";
 import Button from "@/components/ui/Button";
 import ConceptTag from "@/components/ui/ConceptTag";
 import { InlineProse } from "@/components/ui/Prose";
+import { isOnPromisedWalk } from "@/lib/graph-layout";
 import { t } from "@/lib/strings";
 
 /**
@@ -64,6 +65,10 @@ export default function LessonBrief({
   /** Pinned and scrolled: keep orientation, give the reading-once rows back. */
   collapsed?: boolean;
 }) {
+  // An `optional` unit borrows the number of the stop it precedes, so printing
+  // it here would name a position another stop already holds. It is reachable,
+  // it just does not stand on the promised walk.
+  const isStation = isOnPromisedWalk(node);
   const anchors = node.anchors ?? [];
   // One anchor is the display anchor, which the title line already accounts for;
   // listing it twice would be noise. Two or more is a real set.
@@ -73,7 +78,11 @@ export default function LessonBrief({
     <div data-tour="brief" className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
-          {isPrerequisite ? t.lesson.warmUpHeading : t.lesson.stopOf(position, total)}
+          {isPrerequisite
+            ? t.lesson.warmUpHeading
+            : isStation
+              ? t.lesson.stopOf(position, total)
+              : t.map.stop.offRoute}
         </span>
 
         {/* Counters sit on the position line, not under the title: they are

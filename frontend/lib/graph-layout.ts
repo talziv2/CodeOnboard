@@ -149,7 +149,21 @@ export function buildRoute(nodes: GraphNode[], edges: GraphEdge[]): RouteStop[] 
  * visible stops.
  */
 function countsAsStation(stop: Omit<RouteStop, "position">): boolean {
-  return !stop.isPrerequisite && stop.node.priority !== "optional";
+  return !stop.isPrerequisite && isOnPromisedWalk(stop.node);
+}
+
+/**
+ * The node-level half of `countsAsStation`, for callers holding a node rather
+ * than a stop — the lesson header, which is handed one directly.
+ *
+ * It exists so "optional units are not stations" is stated once. `LessonBrief`
+ * guarded only on `isPrerequisite` and so printed "Stop 3 of 13" over an
+ * optional unit, colliding with the required stop that genuinely holds 3 —
+ * `position` deliberately reports the number of the stop a non-station
+ * PRECEDES, which is only safe if every caller checks before printing it.
+ */
+export function isOnPromisedWalk(node: { priority?: string }): boolean {
+  return node.priority !== "optional";
 }
 
 /** `countsAsStation` for callers holding finished stops — section tallies count

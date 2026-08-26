@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { GraphNode, GraphEdge } from "@/lib/api";
 import { understandingLabel, understandingStyle } from "@/lib/tags";
-import { buildRoute, spineLength } from "@/lib/graph-layout";
+import { buildRoute, isOnPromisedWalk, spineLength } from "@/lib/graph-layout";
 import SectionLabel from "@/components/ui/SectionLabel";
 import ConceptTag from "@/components/ui/ConceptTag";
 import StatePin from "@/components/ui/StatePin";
@@ -93,12 +93,19 @@ export default function MapView({
               // A prerequisite connects to the node it unlocks, so the segment
               // below it is the adaptive one.
               const nextIsUnlock = stop.isPrerequisite;
+              // Depth the learner did not ask for. It sits ON the sequence chain
+              // — the planner emitted it, the sizer demoted it — so without this
+              // the map drew it flush on the spine and undistinguished from a
+              // required stop, while the rail filed it under its collapsed
+              // "optional stops" group. The two surfaces disagreed about the same
+              // graph, and a stop planned at creation read as one inserted mid-run.
+              const isOffWalk = !stop.isPrerequisite && !isOnPromisedWalk(node);
 
               return (
                 <li
                   key={node.id}
                   className={`relative grid grid-cols-[calc(34rem/16)_1fr] gap-4 pb-5 ${
-                    stop.isPrerequisite ? "ms-10" : ""
+                    stop.isPrerequisite || isOffWalk ? "ms-10" : ""
                   }`}
                 >
                   {!isLast && (
@@ -111,7 +118,16 @@ export default function MapView({
                               backgroundImage:
                                 "repeating-linear-gradient(to bottom, var(--color-signal) 0 5px, transparent 5px 10px)",
                             }
-                          : { background: "var(--color-rule)" }
+                          : isOffWalk
+                            ? {
+                                // Dashed like a warm-up, because it is equally a
+                                // departure from the spine — but in `rule`, not
+                                // `signal`: nothing happened here, this stop was
+                                // simply never promised.
+                                backgroundImage:
+                                  "repeating-linear-gradient(to bottom, var(--color-rule) 0 5px, transparent 5px 10px)",
+                              }
+                            : { background: "var(--color-rule)" }
                       }
                     />
                   )}
@@ -121,6 +137,7 @@ export default function MapView({
                       understanding={node.understanding}
                       disposition={node.disposition}
                       attempted={node.attempted}
+                      visited={node.visited}
                       isCurrent={isCurrent}
                       role="map"
                       className="z-10"
@@ -144,6 +161,13 @@ export default function MapView({
                         {stop.unlocksTitle && (
                           <span className="text-graphite">{t.map.unlocks(stop.unlocksTitle)}</span>
                         )}
+                      </span>
+                    )}
+
+                    {isOffWalk && (
+                      <span className="flex flex-wrap items-center gap-2 font-mono text-micro tracking-[0.06em] text-graphite">
+                        <span aria-hidden className="h-px w-4 bg-rule" />
+                        {t.map.stop.optional}
                       </span>
                     )}
 
