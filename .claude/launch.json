@@ -240,6 +240,63 @@
         "CODEONBOARD_GAPS": "1"
       },
       "port": 8000
+    },
+    {
+      "name": "frontend-3105-8105",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3105"
+      ],
+      "env": {
+        "API_ORIGIN": "http://localhost:8105",
+        "NEXT_DIST_DIR": ".next-3105"
+      },
+      "cwd": "frontend",
+      "port": 3105,
+      "autoPort": false
+    },
+    {
+      "name": "backend-3107",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "python",
+        "-m",
+        "uvicorn",
+        "scripts.ux_fixture_app:app",
+        "--port",
+        "8107"
+      ],
+      "env": {
+        "CODEONBOARD_ALLOWED_ORIGINS": "http://localhost:3107,http://127.0.0.1:3107",
+        "CODEONBOARD_GAPS": "1",
+        "CODEONBOARD_CURRICULUM": "1",
+        "CODEONBOARD_UX_DB": "data/ux-fixture.db"
+      },
+      "port": 8107,
+      "autoPort": false
+    },
+    {
+      "name": "frontend-3107",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3107"
+      ],
+      "env": {
+        "API_ORIGIN": "http://localhost:8107",
+        "NEXT_DIST_DIR": ".next-3107"
+      },
+      "cwd": "frontend",
+      "port": 3107,
+      "autoPort": false
     }
   ]
 }
