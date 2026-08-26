@@ -1043,6 +1043,13 @@ export interface SessionSummary {
   updated_at: string | null;
   last_active_at: string | null;
   archived_at: string | null;
+  /**
+   * The welcome briefing's opening — what this repository is, pitched at this
+   * learner. NULL for a session whose welcome page was never opened, and the
+   * card then says nothing about the repository rather than describing one
+   * nothing has read.
+   */
+  repo_blurb: string | null;
   progress: {
     goal_readiness: number | null;
     stops_settled: number | null;

@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { relativeTime, repoLabel, sessionTitle } from "@/lib/sessionSummary";
+import {
+  learnerName, relativeTime, repoLabel, sessionGoal, sessionTitle,
+} from "@/lib/sessionSummary";
 import type { SessionSummary } from "@/lib/api";
 
 const base: SessionSummary = {
   session_id: "s1", repo_url: "https://github.com/psf/requests", repo_id: "r1",
   goal: {}, title: null, status: "active", current_node_id: null,
   created_at: null, updated_at: null, last_active_at: null, archived_at: null,
+  repo_blurb: null,
   progress: { goal_readiness: null, stops_settled: null, stops_total: null },
 };
 
@@ -76,5 +79,54 @@ describe("relativeTime", () => {
       expect(relativeTime(stamp, now)).not.toBeNull();
       expect(relativeTime(stamp, now)).toBe("just now");
     }
+  });
+});
+
+describe("sessionGoal", () => {
+  it("gives the learner's own sentence about why they came", () => {
+    expect(sessionGoal({
+      ...base,
+      goal: { focus_area: "request signing", primary_goal: "add a new auth scheme" },
+    })).toBe("add a new auth scheme");
+  });
+
+  it("says nothing when the title is already the goal", () => {
+    // No `focus_area`, so `sessionTitle` derives the title FROM `primary_goal`
+    // and printing both would be the card saying one thing twice.
+    expect(sessionGoal({ ...base, goal: { primary_goal: "understand the retry path" } }))
+      .toBeNull();
+  });
+
+  it("catches the truncated title, which is a prefix and never an equal", () => {
+    const long = "understand how the connection pool decides to reuse a socket "
+      + "instead of opening a new one";
+    expect(sessionGoal({
+      ...base,
+      title: "Understand how the connection pool decides to reuse a soc…",
+      goal: { primary_goal: long },
+    })).toBeNull();
+  });
+
+  it("says nothing when there is no goal to say", () => {
+    expect(sessionGoal(base)).toBeNull();
+  });
+});
+
+describe("learnerName", () => {
+  it("uses the name the learner gave", () => {
+    expect(learnerName({ display_name: "Shira", email: "shira@example.com" }))
+      .toBe("Shira");
+  });
+
+  it("falls back to the local part — an address is not a name", () => {
+    expect(learnerName({ display_name: null, email: "shira.zakov@example.com" }))
+      .toBe("shira.zakov");
+    expect(learnerName({ display_name: "  ", email: "shira@example.com" }))
+      .toBe("shira");
+  });
+
+  it("returns null rather than an empty greeting", () => {
+    expect(learnerName(null)).toBeNull();
+    expect(learnerName({ display_name: null, email: null })).toBeNull();
   });
 });
