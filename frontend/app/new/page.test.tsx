@@ -16,11 +16,14 @@ import { t } from "@/lib/strings";
  * rather than trusted.
  */
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const push = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
 const api = vi.hoisted(() => ({
   checkRepo: vi.fn(),
   sessionStart: vi.fn(),
+  getSessionSummary: vi.fn(),
+  sessionProgress: vi.fn(),
   goalStart: vi.fn(),
   goalAnswer: vi.fn(),
   goalBack: vi.fn(),
@@ -136,5 +139,85 @@ describe("the expectation line", () => {
     // is six or seven, and "five questions" was the concept's own wrong number.
     expect(t.home.expectation).not.toMatch(/\bfive\s+(short\s+)?questions\b/i);
     expect(t.home.expectation).toMatch(/six or seven/i);
+  });
+});
+
+
+/**
+ * #1 — the build screen, and why the learner stays on it.
+ *
+ * Multi-user M7 made `/session/start` return at once, and the first cut of that
+ * pushed the learner to the dashboard the moment the id existed. The session was
+ * safe, and the experience was not: the answer summary and the live read of their
+ * repository were replaced by a card reading "Building your route…".
+ *
+ * These assert the two halves separately, because they fail independently: that
+ * the learner is NOT navigated away while the plan is being built, and that they
+ * ARE taken to the session once it is.
+ */
+describe("after the interview, the learner waits with the build", () => {
+  const REPO = "https://github.com/psf/requests";
+  const GOAL = { primary_goal: "understand the request lifecycle" };
+
+  /** Walk the repo step, then hand the interview its answer in one go. */
+  const reachTheWait = async () => {
+    api.checkRepo.mockResolvedValue({ ok: true, reason: null });
+    api.goalStart.mockResolvedValue({
+      session_id: "g1",
+      question: { text: "What are you trying to do?", options: null, index: 1, total: 6 },
+    });
+    api.goalAnswer.mockResolvedValue({ done: true, goal: GOAL });
+    api.sessionStart.mockResolvedValue({ session_id: "s1", status: "generating" });
+
+    render(<Home />);
+    await userEvent.type(screen.getByLabelText(t.home.repoLabel), REPO);
+    await userEvent.click(screen.getByRole("button", { name: t.home.start }));
+
+    const box = await screen.findByRole("textbox");
+    await userEvent.type(box, "the request lifecycle");
+    await userEvent.click(screen.getByRole("button", { name: t.goal.continue }));
+
+    // The review gate: the interview shows the answers back and waits. Starting
+    // is a separate, explicit act — see `GoalDialogue.test.tsx`.
+    await screen.findByText(t.goal.reviewTitle);
+    await userEvent.click(screen.getByRole("button", { name: t.goal.startSession }));
+  };
+
+  test("stays on the progress screen while the plan is being built", async () => {
+    api.getSessionSummary.mockResolvedValue({ session_id: "s1", status: "generating" });
+    await reachTheWait();
+
+    // The screen that says what is being read, in their repository.
+    await waitFor(() => expect(screen.getByText(t.starting.label)).toBeTruthy());
+    // And the goal they confirmed, still on screen (P3's continuity).
+    expect(screen.getByText(GOAL.primary_goal)).toBeTruthy();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  test("goes to the welcome page once the plan lands", async () => {
+    api.getSessionSummary.mockResolvedValue({ session_id: "s1", status: "active" });
+    await reachTheWait();
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/session/s1/welcome"));
+  });
+
+  test("a failed background plan is reported here, not on the dashboard", async () => {
+    // The row is left in a terminal state on every path, so `failed` is a fact
+    // and not a timeout — and the learner still has their answers, so the
+    // failure screen's "Try again" can re-run without redoing the interview.
+    api.getSessionSummary.mockResolvedValue({ session_id: "s1", status: "failed" });
+    await reachTheWait();
+
+    await waitFor(() => expect(screen.getByText(t.failed.label)).toBeTruthy());
+    expect(screen.getByRole("button", { name: t.failed.tryAgain })).toBeTruthy();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  test("a blip while polling is NOT reported as a failed pipeline", async () => {
+    api.getSessionSummary.mockRejectedValue(new Error("server_unreachable"));
+    await reachTheWait();
+
+    await waitFor(() => expect(screen.getByText(t.starting.label)).toBeTruthy());
+    expect(screen.queryByText(t.failed.label)).toBeNull();
   });
 });

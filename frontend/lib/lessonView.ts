@@ -28,10 +28,14 @@ import type { LessonPhase } from "@/lib/lessonPhase";
  *    channel later; what fixed the crowding is saying it once.
  *
  * 3. *Should gaps stay visible during feedback, or collapse to the brief's counter?*
- *    Collapse. The key point already leads with the blocking gap's claim, so the
- *    list underneath was the same information at length, and the brief's counter
- *    keeps it one click away. Gaps stay OPEN in `STUDY`, because there they are not
- *    superseded — they are what the learner is answering about.
+ *    Collapse — **unless this answer changed them.** The key point already leads
+ *    with the blocking gap's claim, so a standing list underneath is the same
+ *    information at length and the brief's counter keeps it one click away. But a
+ *    gap that has just been OPENED is not superseded information, it is the
+ *    consequence of the thing the learner just did, and collapsing it hid the
+ *    system's conclusion about them behind a number. So: `gapsJustChanged` opens
+ *    the block for exactly one verdict. Gaps also stay OPEN in `STUDY`, because
+ *    there they are what the learner is answering about.
  *
  * 4. *Do `takeaway` and `ownership` belong beside the explanation?*
  *    Yes; they are about the explanation, and they travel with it. What is dropped
@@ -50,7 +54,8 @@ import type { LessonPhase } from "@/lib/lessonPhase";
  * The count is the gate, and writing it as a test is what caught the first draft
  * leaving five blocks open in `STUDY` on a revisit. The worst case now is four —
  * setup, gaps, question and reveal, for someone returning to a stop they already
- * answered — and every other phase is two.
+ * answered — and every other phase is two, or three on the one verdict that
+ * changed the ledger.
  */
 export type BlockState = "open" | "collapsed" | "absent";
 
@@ -102,6 +107,24 @@ export interface ViewInput {
    */
   gapCount?: number;
   attemptCount: number;
+  /**
+   * The answer that just landed CHANGED this stop's ledger — it opened a gap, or
+   * it closed one.
+   *
+   * The one thing that can open the gap block outside `STUDY`, and the reason is
+   * that a collapsed disclosure is the wrong place for a consequence the learner
+   * has not seen yet. Reported from a real session: an answer opened two gaps,
+   * "What you got wrong here" stayed collapsed behind a count, and the learner
+   * moved on without ever reading what the system had concluded about them.
+   *
+   * Deliberately narrower than "there are gaps here". A stop with three
+   * long-standing open gaps and a verdict about something else should not
+   * re-expand the ledger on every answer — that is the accumulation §3a exists
+   * to prevent, and it would train the learner to ignore the block that matters
+   * most on the one occasion it does. This opens for CHANGE, and change is a
+   * fact about the last answer, not about the stop.
+   */
+  gapsJustChanged?: boolean;
   /** The reveal is unlocked — a graded answer exists, or this is a revisit. */
   revealed: boolean;
   /** This lesson actually has a withheld explanation to show. */
@@ -116,6 +139,7 @@ export function lessonBlocks({
   openGapCount,
   gapCount,
   attemptCount,
+  gapsJustChanged = false,
   revealed,
   hasReveal,
   supersededCount = 0,
@@ -160,7 +184,7 @@ export function lessonBlocks({
     gaps:
       (gapCount ?? openGapCount) === 0
         ? "absent"
-        : phase === "STUDY" && openGapCount > 0
+        : (phase === "STUDY" && openGapCount > 0) || gapsJustChanged
           ? "open"
           : "collapsed",
 

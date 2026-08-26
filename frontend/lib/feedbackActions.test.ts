@@ -350,3 +350,68 @@ describe("the warm-up is offered only where something fell short", () => {
     expect(plannedActions(plan)).toContain("warmUp");
   });
 });
+
+describe("the explanation an answer unlocks", () => {
+  /**
+   * #2. The withheld explanation opens on the first graded answer, and under the
+   * surface split it opens on the OTHER TAB. All that said so was a dot; the
+   * relationship — *answered → material appeared → read it* — was left for the
+   * learner to infer from one bit of chrome, and "it is easy to continue without
+   * realising there is new material to read" is exactly what happened.
+   */
+  test("a correct answer leads with the explanation, and keeps Next beside it", () => {
+    const plan = feedbackActions({
+      ...base,
+      classification: "understood",
+      retry: MET,
+      explanationUnread: true,
+    });
+
+    expect(plan.primary).toBe("readExplanation");
+    // GUIDANCE, NOT A GATE. Moving on is one click away, exactly as before.
+    expect(plan.secondary).toBe("next");
+  });
+
+  test("and offers Next alone once there is nothing new to read", () => {
+    const plan = feedbackActions({
+      ...base,
+      classification: "understood",
+      retry: MET,
+      explanationUnread: false,
+    });
+
+    expect(plannedActions(plan)).toEqual(["next"]);
+  });
+
+  test("reading it is offered on a shortfall too, ahead of another go", () => {
+    // The explanation is what the next attempt would be built on, so sending the
+    // learner straight back at the question would waste it.
+    const plan = feedbackActions({ ...base, explanationUnread: true });
+
+    expect(plannedActions(plan)).toEqual(["readExplanation", "askAgain", "next"]);
+  });
+
+  test("a REWRITE outranks it — they are never both on the row", () => {
+    // A re-teach installs a new reveal with the new lesson, so the rewrite is the
+    // newer claim and the one that names the misconception.
+    const plan = feedbackActions({
+      ...base,
+      materialUnread: true,
+      explanationUnread: true,
+    });
+
+    expect(plan.primary).toBe("readMaterial");
+    expect(plannedActions(plan)).not.toContain("readExplanation");
+  });
+
+  test("a warm-up just spliced in outranks both", () => {
+    const plan = feedbackActions({
+      ...base,
+      warmUpInserted: true,
+      explanationUnread: true,
+    });
+
+    expect(plan.primary).toBe("startWarmUp");
+    expect(plannedActions(plan)).not.toContain("readExplanation");
+  });
+});

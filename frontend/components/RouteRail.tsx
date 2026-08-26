@@ -131,6 +131,8 @@ function Stop({
       ? t.rail.unresolvedHint
       : standing === "attempted"
         ? t.rail.attemptedHint
+        : standing === "passed_by"
+          ? t.rail.passedByHint
         : standing === "set_aside"
           ? // WHICH decision, because they are not the same to a learner.
             // `waived` is "stop asking me", `asserted` is "I already know
@@ -185,6 +187,7 @@ function Stop({
         understanding={node.understanding}
         disposition={node.disposition}
         attempted={node.attempted}
+        visited={node.visited}
         isCurrent={isCurrent}
         role="rail"
         className="z-10 mt-0.5 block"
@@ -433,6 +436,7 @@ export default function RouteRail({
                   understanding={stop.node.understanding}
                   disposition={stop.node.disposition}
                   attempted={stop.node.attempted}
+                  visited={stop.node.visited}
                   isCurrent={stop.node.id === currentNodeId}
                   role="rail"
                 />

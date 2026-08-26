@@ -21,10 +21,26 @@ import { t } from "@/lib/strings";
  * settled. Progress here is `resolved of total`, which can only be read off a
  * list that keeps both halves.
  *
- * Two verbs per open gap, and the asymmetry is the point. `Clear this` asks for
- * a fresh question about that specific claim — the only act that can produce
- * `verified`. `Set aside` stops the system asking and is never evidence, so a
- * waived gap reads as settled-by-choice, never as resolved.
+ * Two verbs per open gap, and the asymmetry is the point — but the LABELS used to
+ * hide it. `Clear this` and `Set aside` read as two ways of dismissing the same
+ * row, when only one of them is about the gap going away at all:
+ *
+ *   `Check me on this`  asks for a fresh question about that specific claim. The
+ *                       ONLY act that can produce `verified`, and — once the
+ *                       two-question cap has stopped `Ask me again` proposing
+ *                       this gap — the only remaining route to it at all. So it
+ *                       stays an explicit, discoverable button rather than
+ *                       becoming a link on the claim text.
+ *   `Ignore for now`    records that the learner is deliberately not doing that.
+ *                       Never evidence: a waived gap does not permit
+ *                       `understood`, the stop stays short of demonstrated, and
+ *                       `readiness()` stays honest. What it buys is that the
+ *                       system stops asking, and it is reversible.
+ *
+ * **Ignored is not resolved**, and three things say so rather than one: the
+ * status chip (`Ignored for now` against `Resolved`), the colour (muted against
+ * jade), and the note under it. The tally counts only `verified` in its
+ * numerator, so ignoring a gap moves nothing.
  *
  * The list is chosen by the panel, which prefers the just-graded reply over the
  * graph because the graph lags by one refresh on the warm-up path. That
@@ -87,9 +103,10 @@ function GapRow({
           <InlineProse text={gap.claim} tone="paper" />
         </span>
         <StatusChip gap={gap} />
-        {/* Why it settled. A resolved gap earned it; a waived one was a choice
-            the learner can still reverse, and saying so is what keeps `Set
-            aside` from reading as a dead end. */}
+        {/* Why it settled. A resolved gap earned it; an ignored one was a choice
+            the learner can still reverse, and saying so is what keeps `Ignore
+            for now` from reading as a dead end — and, just as importantly, from
+            reading as a second way of resolving it. */}
         {!open && (
           <span className="text-micro text-muted">
             {verified ? t.lesson.gapResolvedNote : t.lesson.gapWaivedNote}
@@ -102,15 +119,17 @@ function GapRow({
           <span className="text-micro text-muted">{t.lesson.gapAskedTwice}</span>
         )}
       </div>
-      {/* A settled gap keeps its row and loses its verbs — except a waived one,
-          which the learner may still decide to clear. */}
+      {/* A settled gap keeps its row and loses its verbs — except an ignored one,
+          which the learner may still decide to be checked on. That asymmetry is
+          the state model showing through: `verified` is terminal because it was
+          earned, `waived` is a decision and decisions can be revisited. */}
       {!verified && (
         <div className="flex shrink-0 items-center gap-3">
           {/* Bordered against a bare text verb, rather than two buttons of equal
-              weight. Clearing a gap and giving up on it are not two flavours of
-              the same choice, and the primary solid is reserved for the panel's
-              one CTA — a solid on every row would make three gaps look like
-              three CTAs. */}
+              weight. Asking to be checked and choosing not to are not two
+              flavours of the same choice, and the primary solid is reserved for
+              the panel's one CTA — a solid on every row would make three gaps
+              look like three CTAs. */}
           <Button
             variant="secondary"
             size="xs"
@@ -130,12 +149,33 @@ function GapRow({
   );
 }
 
+/**
+ * How loudly the ledger is drawn.
+ *
+ * `null` is the resting state: a block among blocks. The other two mark it as
+ * something that changed BECAUSE OF THE ANSWER JUST GIVEN, and they borrow the
+ * arrival notice's palette rather than inventing one — `brass` is already the
+ * app's "unsettled, wants attention, is not an error", and `jade` is already
+ * "closed or recovered" (see `ui/Callout.tsx`).
+ *
+ * Border-weighted and faintly washed, exactly as `Callout` does it: the box is
+ * marked, not turned into a banner.
+ */
+type Accent = "opened" | "resolved" | null;
+
+const ACCENT: Record<"opened" | "resolved", { box: string; label: string }> = {
+  opened: { box: "border-brass/60 bg-brass/[0.07]", label: "text-brass" },
+  resolved: { box: "border-jade/40 bg-jade/10", label: "text-jade" },
+};
+
 export default function GapList({
   gaps,
   onSolve,
   onWaive,
   disabled = false,
   solvingGapId = null,
+  accent = null,
+  note = null,
 }: {
   gaps: NodeGap[];
   onSolve: (gapId: string) => void;
@@ -143,6 +183,16 @@ export default function GapList({
   disabled?: boolean;
   /** The gap a verification question is currently being written for. */
   solvingGapId?: string | null;
+  /**
+   * Mark the ledger as changed by the last answer.
+   *
+   * A DECISION MADE BY THE PANEL, not here: what "just changed" means is a fact
+   * about the grading reply, and this component only ever renders what it is
+   * given (see the note at the top of the file).
+   */
+  accent?: Accent;
+  /** One line saying what changed. Rendered only alongside an accent. */
+  note?: string | null;
 }) {
   const open = gaps.filter(isOpen);
   const settled = gaps.filter((gap) => !isOpen(gap));
@@ -159,10 +209,21 @@ export default function GapList({
     />
   );
 
+  const marked = accent ? ACCENT[accent] : null;
+
   return (
-    <div className="flex flex-col gap-3">
+    <div
+      className={`flex flex-col gap-3 ${
+        marked ? `rounded-card border px-4 py-3 ${marked.box}` : ""
+      }`}
+    >
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <SectionLabel>{t.lesson.gapsHeading}</SectionLabel>
+        {/* The heading takes the accent's colour so the mark is not carried by
+            the border alone — the same pairing `Callout` uses, where the tinted
+            eyebrow is what names the box. */}
+        <SectionLabel tone={marked ? "raised" : "quiet"}>
+          <span className={marked?.label}>{t.lesson.gapsHeading}</span>
+        </SectionLabel>
         {/* Resolved over total, not a count of what is wrong. The denominator is
             the whole ledger, which is the only reason the numerator can move. */}
         {gaps.length > 0 && (
@@ -171,6 +232,12 @@ export default function GapList({
           </span>
         )}
       </div>
+      {/* WHAT JUST HAPPENED, above the standing explanation of what the list is.
+          The learner arriving at an auto-opened ledger needs to know why it
+          opened before they need to know how ledgers work. */}
+      {marked && note && (
+        <p className={`measure text-meta ${marked.label}`}>{note}</p>
+      )}
       <p className="text-meta text-graphite">{t.lesson.gapsHelp}</p>
 
       {open.length > 0 && <ul className="flex flex-col gap-2">{open.map(row)}</ul>}

@@ -90,17 +90,57 @@ export interface ArrivalNotice {
 }
 
 /**
- * Has the learner dealt with this stop at all?
+ * Had the learner dealt with this stop **when they arrived**?
  *
  * Mirrors `progress.is_settled` deliberately — visited, answered, or explicitly
  * acted on. Coverage, not mastery: a wrong answer finishes a stop for this
  * purpose exactly as a right one does, because the question here is where the
  * route would send them next, not how well they did.
+ *
+ * ── WHY THIS IS AS-OF THE ARRIVAL AND NOT AS-OF NOW ──────────────────────────
+ *
+ * This used to read the live node, and that made the notice appear out of
+ * nowhere on a stop the learner had walked to perfectly normally. The sequence
+ * is ordinary and it was reported from a real session:
+ *
+ *   1. The learner picks the route's next stop off the rail. `/jump` records an
+ *      arrival, because a jump is a jump whatever it lands on.
+ *   2. `arrivalNotice` runs. The reference — the first unfinished stop — IS this
+ *      stop, so `refIndex === toIndex` and the notice is correctly suppressed:
+ *      going where the route was sending you is not a departure.
+ *   3. The learner answers the question. Correctly.
+ *   4. `arrivalNotice` runs again on the refreshed graph. The stop now has an
+ *      attempt, so it is finished, so the reference MOVES FORWARD to the next
+ *      one — and the arrival is suddenly behind the reference. Direction flips
+ *      to "back", and "Off the route — you came back to stop 5, already taken"
+ *      appears as a consequence of answering correctly.
+ *
+ * The suppression in step 2 is a judgement about a MOMENT — "was this a
+ * departure when it happened" — and it was being recomputed against a graph the
+ * learner had since changed. Answering a question is not navigation, and nothing
+ * a learner does *at* a stop can retroactively make arriving there a departure.
+ *
+ * So the reference is computed from the state as of `arrival.at`. Only attempts
+ * carry a timestamp, and only attempts can be added while an arrival is live:
+ * `visited` and `user_override` are written by `/advance`, which CLEARS the
+ * arrival, so anything of theirs on the record necessarily predates it.
+ *
+ * Both stamps come from `datetime.now(timezone.utc).isoformat(timespec="seconds")`
+ * — `record_arrival` and `record_attempt` — so they are the same format and
+ * compare lexicographically. An attempt stamped in the same second as the
+ * arrival counts as AFTER it: a pre-existing attempt is minutes or days older,
+ * whereas a same-second one can only be the answer that has just landed.
+ *
+ * An attempt with NO stamp counts as pre-existing. The backend does not produce
+ * one — `record_attempt` always stamps — so this is only reachable from a
+ * hand-built record, and the safe reading of "I do not know when this happened"
+ * is "not just now": it keeps such a stop behind the learner, which is what it
+ * was before this function learned about time.
  */
-function isFinished(node: GraphNode): boolean {
+function isFinished(node: GraphNode, arrivedAt: string): boolean {
   return (
     node.visited ||
-    (node.attempts?.length ?? 0) > 0 ||
+    (node.attempts ?? []).some((a) => (a.at ?? "") < arrivedAt) ||
     Boolean(node.user_override)
   );
 }
@@ -141,7 +181,7 @@ export function arrivalNotice(
   // `optional` does NOT count: it is depth off the default walk, so the route
   // would never have sent them there in the first place.
   let refIndex = stops.findIndex(
-    (s) => s.node.priority !== "optional" && !isFinished(s.node)
+    (s) => s.node.priority !== "optional" && !isFinished(s.node, arrival.at)
   );
   if (refIndex === -1) {
     // Nothing unfinished left. Fall back to the stop actually left behind, which
@@ -168,7 +208,10 @@ export function arrivalNotice(
       measurable && ref
         ? Math.max(0, Math.abs(to.position - ref.position) - 1)
         : 0,
-    revisited: isFinished(to.node),
+    // As of the arrival, like the reference. "Already taken" is a claim about
+    // what the learner walked into, and answering the question they walked into
+    // must not rewrite it after the fact.
+    revisited: isFinished(to.node, arrival.at),
     returnTo: ref
       ? { nodeId: ref.node.id, title: ref.node.title, position: ref.position }
       : null,

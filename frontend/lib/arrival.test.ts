@@ -238,3 +238,83 @@ describe("arrivalNotice — a journey with nothing left unfinished", () => {
     expect(notice!.passed).toBe(0);
   });
 });
+
+describe("answering a question is not navigation", () => {
+  /**
+   * THE FALSE POSITIVE, from a real session. Reported as: "Off the route
+   * appeared after normal successful progression — I had not intentionally
+   * navigated away."
+   *
+   * The learner picks the route's next stop off the rail, which records an
+   * arrival and is correctly silent. Then they answer it. Before the fix that
+   * answer moved the reference forward, the arrival landed BEHIND it, and the
+   * banner appeared as a consequence of getting the question right.
+   */
+  const AT = "2026-08-21T10:00:00+00:00";
+  const attempt = (at: string) =>
+    [{ classification: "understood", at }] as never;
+
+  /** a is done; b is the route's next stop; the learner jumps straight to b. */
+  const routeNextStop = (bAttempts: GraphNode["attempts"]) =>
+    buildRoute(
+      [
+        node("a", { attempts: attempt("2026-08-21T09:00:00+00:00") }),
+        node("b", { attempts: bAttempts }),
+        node("c"),
+      ],
+      [seq("a", "b"), seq("b", "c")]
+    );
+
+  test("silent on arrival at the stop the route was sending them to", () => {
+    expect(arrivalNotice(jumped("b", "a"), "b", routeNextStop([]))).toBeNull();
+  });
+
+  test("STILL silent once they answer it", () => {
+    // The attempt is stamped after the arrival, so it cannot move the reference:
+    // "was this a departure" is a question about the moment they arrived.
+    const stops = routeNextStop(attempt("2026-08-21T10:04:00+00:00"));
+    expect(arrivalNotice(jumped("b", "a"), "b", stops)).toBeNull();
+  });
+
+  test("silent even when the answer lands in the same second as the jump", () => {
+    const stops = routeNextStop(attempt(AT));
+    expect(arrivalNotice(jumped("b", "a"), "b", stops)).toBeNull();
+  });
+
+  test("a genuine departure is NOT silenced by answering", () => {
+    // The other half of the guarantee: this must still fire. The learner skips
+    // past b to c and answers there — they are off the route either way, and the
+    // fix must not have turned the notice off wholesale.
+    const stops = buildRoute(
+      [
+        node("a", { attempts: attempt("2026-08-21T09:00:00+00:00") }),
+        node("b"),
+        node("c", { attempts: attempt("2026-08-21T10:04:00+00:00") }),
+      ],
+      [seq("a", "b"), seq("b", "c")]
+    );
+
+    const notice = arrivalNotice(jumped("c", "a"), "c", stops);
+    expect(notice!.direction).toBe("ahead");
+    expect(notice!.returnTo!.nodeId).toBe("b");
+  });
+
+  test("`already taken` describes what they walked into, not what they then did", () => {
+    // `revisited` is read as-of the arrival for the same reason the reference is:
+    // answering a stop must not retroactively make arriving at it a return.
+    const stops = buildRoute(
+      [
+        node("a", { attempts: attempt("2026-08-21T09:00:00+00:00") }),
+        node("b", { attempts: attempt("2026-08-21T09:30:00+00:00") }),
+        node("c"),
+        // Never reached, and jumped to from b.
+        node("d", { attempts: attempt("2026-08-21T10:04:00+00:00") }),
+      ],
+      [seq("a", "b"), seq("b", "c"), seq("c", "d")]
+    );
+
+    const notice = arrivalNotice(jumped("d", "b"), "d", stops);
+    expect(notice!.direction).toBe("ahead");
+    expect(notice!.revisited).toBe(false);
+  });
+});

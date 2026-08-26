@@ -33,8 +33,8 @@ import { standingOf, standingStyle } from "@/lib/standing";
  * ── The settled bar ───────────────────────────────────────────────────────────
  *
  * A pin may carry a bar across it, meaning **the learner closed this question
- * without demonstrating it** — moved on, waived it, skipped it, or asserted they
- * already knew it. The colour still says what the evidence shows; the bar says a
+ * without demonstrating it** — moved on, waived it, skipped it, asserted they
+ * already knew it, or walked past without answering at all. The colour still says what the evidence shows; the bar says a
  * decision was taken over the top of it. Two claims, two channels, so neither
  * overwrites the other — which is the whole reason understanding and disposition
  * are separate dimensions server-side.
@@ -75,6 +75,7 @@ export default function StatePin({
   understanding,
   disposition,
   attempted,
+  visited,
   isCurrent,
   role,
   className = "",
@@ -84,12 +85,14 @@ export default function StatePin({
   disposition?: Disposition;
   /** Have they answered this stop's own question? Omit where unknown. */
   attempted?: boolean;
+  /** Have they walked PAST it? What separates a skipped stop from an unopened one. */
+  visited?: boolean;
   isCurrent: boolean;
   role: PinRole;
   /** Positioning that belongs to the row, not the pin — margins, z-index. */
   className?: string;
 }) {
-  const standing = standingOf({ understanding, disposition, attempted });
+  const standing = standingOf({ understanding, disposition, attempted, visited });
   const style = standingStyle(standing, understanding);
   const r = ROLE[role];
   return (

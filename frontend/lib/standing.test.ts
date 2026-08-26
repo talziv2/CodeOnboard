@@ -125,7 +125,7 @@ describe("standingOf", () => {
 });
 
 describe("standingOfNode", () => {
-  it("reads the three facts straight off a node", () => {
+  it("reads the facts straight off a node", () => {
     expect(
       standingOfNode(
         node("a", {
@@ -145,6 +145,7 @@ describe("standingStyle", () => {
       open: false,
       attempted: false,
       untouched: false,
+      passed_by: true,
       set_aside: true,
     };
     for (const [standing, expected] of Object.entries(settled)) {
@@ -181,5 +182,67 @@ describe("standingLabel", () => {
     expect(standingLabel("demonstrated")).toBeNull();
     expect(standingLabel("open")).toBeNull();
     expect(standingLabel("untouched")).toBeNull();
+  });
+});
+
+describe("a stop the learner walked past without answering", () => {
+  /**
+   * #8. The learner reaches a stop, does not answer, and moves on. Before this
+   * that rendered identically to a stop they had never opened — dashed grey, no
+   * bar — so the map could not tell "not yet" from "decided not to".
+   */
+  const passed = node("a", {
+    understanding: "insufficient",
+    attempted: false,
+    visited: true,
+  });
+
+  it("is not the same thing as an untouched stop", () => {
+    expect(standingOfNode(passed)).toBe("passed_by");
+    expect(standingOfNode(node("b", { understanding: "insufficient" }))).toBe(
+      "untouched"
+    );
+  });
+
+  it("carries the bar, so the decision is visible", () => {
+    expect(standingStyle("passed_by", "insufficient").settled).toBe(true);
+    expect(standingStyle("passed_by", "insufficient").borderStyle).toBe("solid");
+  });
+
+  it("keeps the GREY ring — no evidence means no claim either way", () => {
+    // The distinction the report asked to preserve: it must not read like a
+    // correct answer and must not read like a wrong one.
+    const grey = standingStyle("passed_by", "insufficient");
+    const wrong = standingStyle("open", "unresolved");
+    const right = standingStyle("demonstrated", "strength");
+    expect(grey.stroke).not.toBe(wrong.stroke);
+    expect(grey.stroke).not.toBe(right.stroke);
+    expect(grey.stroke).toBe(standingStyle("untouched", "insufficient").stroke);
+  });
+
+  it("yields to every fact that says more", () => {
+    // `visited` is the LAST question asked. Anything the evidence or a recorded
+    // decision can say about the stop outranks it, so advancing past a stop can
+    // never overwrite what happened there.
+    expect(
+      standingOfNode(node("c", { understanding: "strength", visited: true }))
+    ).toBe("demonstrated");
+    expect(
+      standingOfNode(node("d", { understanding: "unresolved", visited: true }))
+    ).toBe("open");
+    expect(
+      standingOfNode(
+        node("e", { understanding: "insufficient", attempted: true, visited: true })
+      )
+    ).toBe("attempted");
+    expect(
+      standingOfNode(
+        node("f", {
+          understanding: "insufficient",
+          disposition: "waived",
+          visited: true,
+        })
+      )
+    ).toBe("set_aside");
   });
 });

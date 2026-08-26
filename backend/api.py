@@ -1209,6 +1209,8 @@ def _respond_to_verification(
         "kind": history.VERIFICATION,
         "resolved": result.get("resolved", []),
         "unresolved": result.get("unresolved", []),
+        # Same key, same meaning, on both replies — a check can open a gap too.
+        "gaps_opened": opened,
         "rationale": result.get("rationale"),
         "gaps": _gaps_payload(node),
         "understanding_state": understanding_of(node),
@@ -1679,6 +1681,19 @@ def session_respond(session_id: str, body: RespondRequest, user: CurrentUser = D
         # unchanged, so an un-updated client keeps working and simply does not
         # render it.
         "gaps": _gaps_payload(graph.nodes[current]),
+        # WHICH OF THEM THIS ANSWER OPENED. Already recorded on the attempt's
+        # response envelope; it simply was not on the reply, so the one surface
+        # that needs it — the ledger, deciding whether to open itself — had to
+        # diff two payloads it happened to be holding. A client diff is a second
+        # implementation of a fact the server already computed, and it is wrong
+        # the first time a refresh lands between the two halves.
+        #
+        # ALWAYS PRESENT on this path, unlike the response envelope's key, which
+        # is omitted when empty because absent-means-none is that record's
+        # convention. Here an empty list is the answer, and a client that had to
+        # tell "no gaps opened" from "this backend does not say" would end up
+        # guessing on the commonest case.
+        "gaps_opened": opened,
         # WHAT "ASK ME AGAIN" WOULD DO HERE, computed from the learning state
         # rather than reconstructed by the client from four partial flags. The
         # frontend renders this; it no longer decides it.

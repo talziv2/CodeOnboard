@@ -186,9 +186,20 @@ export default function SessionPage() {
    * being thrown to an error page would suggest otherwise.
    */
   const [startOverError, setStartOverError] = useState<string | null>(null);
-  // Owned here, not in LessonPanel, because two things end the journey now: the
-  // walk running out, and `Finish session` in the header menu.
-  const [finished, setFinished] = useState(false);
+  /**
+   * How the journey ended, or null while it has not.
+   *
+   * A boolean until #9. The completion screen has to be BACKED OUT OF when the
+   * learner chose to stop — `Finish session early` is one unconfirmed click on a
+   * quiet link, and `Finish session` one item in a menu — and it must NOT offer a
+   * way back when the walk itself ran out, because there is nothing left to go
+   * back to. A flag cannot tell those apart, so it records which door was used.
+   *
+   * Purely client state either way: finishing writes nothing to the server, which
+   * is what makes backing out free.
+   */
+  const [finishedBy, setFinishedBy] = useState<"walk" | "choice" | null>(null);
+  const finished = finishedBy !== null;
   const [scoping, setScoping] = useState(false);
   // Going back to the route. Its own flag rather than reusing a jump spinner: the
   // notice's button is the only thing that shows it, and it must not be disabled
@@ -255,7 +266,7 @@ export default function SessionPage() {
     try {
       const { graph: restored } = await resetSession(id);
       setGraph(restored);
-      setFinished(false);
+      setFinishedBy(null);
       introduced.current.clear();
       setDismissedArrivalAt(null);
       setOverviewAreaId(null);
@@ -555,7 +566,7 @@ export default function SessionPage() {
         canStartOver={graph.has_plan === true}
         onRebuild={rebuild}
         rebuilding={rebuilding}
-        onFinish={() => setFinished(true)}
+        onFinish={() => setFinishedBy("choice")}
       />
 
       {/* A failed reset, said in place. The session behind it is untouched and
@@ -740,7 +751,12 @@ export default function SessionPage() {
                   onAdvance={handleAdvance}
                   onRespond={loadGraph}
                   finished={finished}
-                  onFinish={() => setFinished(true)}
+                  // The panel says which door was used: its foot-of-page link is
+                  // a decision, and the walk running out is not.
+                  onFinish={setFinishedBy}
+                  onResume={
+                    finishedBy === "choice" ? () => setFinishedBy(null) : undefined
+                  }
                   onLeave={() => router.push("/")}
                   // Which surface the active tab means. Null under `next`, where
                   // there is one column and the panel draws all of it.

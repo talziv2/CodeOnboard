@@ -135,6 +135,7 @@ export default function SectionOverview({
                     understanding={node.understanding}
                     disposition={node.disposition}
                     attempted={node.attempted}
+                    visited={node.visited}
                     isCurrent={isCurrent}
                     role="list"
                     className="mt-[calc(4rem/16)]"
