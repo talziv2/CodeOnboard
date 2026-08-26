@@ -3,7 +3,7 @@ import { understandingStyle, type UnderstandingStyle } from "@/lib/tags";
 import { t } from "@/lib/strings";
 
 /**
- * How a stop should READ, from the three facts the server sends about it.
+ * How a stop should READ, from the four facts the server sends about it.
  *
  * ── Why this exists ───────────────────────────────────────────────────────────
  *
@@ -19,8 +19,9 @@ import { t } from "@/lib/strings";
  *   `unresolved`    covers both "you are stuck here" and "you decided to move on".
  *
  * The missing bits are already on the wire and were simply not read: `disposition`
- * (what the learner DECIDED) and `attempted` (did they try). This composes all
- * three into the one value every surface renders from.
+ * (what the learner DECIDED), `attempted` (did they try) and `visited` (did they
+ * walk past it). This composes all four into the one value every surface renders
+ * from.
  *
  * ── The encoding ──────────────────────────────────────────────────────────────
  *
@@ -36,6 +37,7 @@ import { t } from "@/lib/strings";
  *   open            rust      solid     no     assessed, short of it, still live
  *   attempted       graphite  solid     no     they tried; it told us nothing
  *   untouched       graphite  dashed    no     nothing has happened here
+ *   passed_by       graphite  solid     YES    reached, never answered, moved on
  *   set_aside       inherited inherited YES    not demonstrated, and they closed it
  *
  * TWO SHAPE CHANNELS, ONE BIT EACH, so neither depends on colour: the DASH says
@@ -55,14 +57,27 @@ export type Standing =
   | "open"
   | "attempted"
   | "untouched"
+  | "passed_by"
   | "set_aside";
 
-/** The three server-sent facts this reads. Nothing else is consulted. */
+/** The four server-sent facts this reads. Nothing else is consulted. */
 export interface StandingInput {
   understanding?: UnderstandingClass;
   disposition?: Disposition;
   /** Has the learner answered this stop's own question at least once? */
   attempted?: boolean;
+  /**
+   * Has the learner advanced PAST this stop?
+   *
+   * Written by `/advance` and by an explicit `skip`, and by nothing else — so
+   * unlike presence it is always a click. A refresh does not set it, scrolling
+   * does not set it, and opening a lesson does not set it.
+   *
+   * It is read here for exactly one case, `passed_by`. Everywhere else the other
+   * three facts already decide the answer, and `visited` would only ever agree
+   * with them.
+   */
+  visited?: boolean;
 }
 
 /**
@@ -81,6 +96,7 @@ export function standingOf({
   understanding,
   disposition,
   attempted,
+  visited,
 }: StandingInput): Standing {
   const state = understanding ?? "insufficient";
 
@@ -96,7 +112,34 @@ export function standingOf({
 
   // `insufficient`, and nobody has decided anything. The only remaining question
   // is whether they tried.
-  return attempted ? "attempted" : "untouched";
+  if (attempted) return "attempted";
+
+  /**
+   * REACHED, NEVER ANSWERED, AND WALKED PAST.
+   *
+   * The one standing the wire could always support and nothing read. A learner
+   * who arrives at a stop, does not answer, and moves on rendered EXACTLY like a
+   * stop they had never opened: dashed grey, no bar, "nothing has happened
+   * here". Two very different facts, and the honest one is the one the rail was
+   * not showing.
+   *
+   * WHY IT IS NOT `set_aside`. `set_aside` is the disposition channel — a
+   * decision the SERVER recorded — and the server deliberately records nothing
+   * here: `continue_past` writes `continue` only where there is an unmet
+   * objective plus at least one assessment, on the rule that a decision must be
+   * about something (`learning-loop.md`). Advancing past a stop nobody answered
+   * is about nothing, so no disposition is written, and inventing one in the
+   * client would put a decision into a channel the server owns.
+   *
+   * So this is a DISPLAY standing over a fact the server already sends. It
+   * carries the bar, because the learner did close the question by walking on,
+   * and it keeps the grey ring, because no evidence was ever produced about
+   * them — which is exactly the pair of claims the two shape channels exist to
+   * keep separate.
+   */
+  if (visited) return "passed_by";
+
+  return "untouched";
 }
 
 /** The same, read straight off a node. */
@@ -105,6 +148,7 @@ export function standingOfNode(node: GraphNode): Standing {
     understanding: node.understanding,
     disposition: node.disposition,
     attempted: node.attempted,
+    visited: node.visited,
   });
 }
 
@@ -133,6 +177,13 @@ export function standingStyle(
     // means "nothing has happened" and something has.
     case "attempted":
       return { ...base, borderStyle: "solid", settled: false };
+    // Reached and walked past with nothing shown. The BAR, because the learner
+    // closed the question; the grey ring it inherits from `insufficient`,
+    // because they produced no evidence either way and colouring it as a
+    // shortfall would claim they got something wrong. Solid for the same reason
+    // `attempted` is: being here at all took a click.
+    case "passed_by":
+      return { ...base, borderStyle: "solid", settled: true };
     case "untouched":
       return { ...base, settled: false };
     case "set_aside":
@@ -156,6 +207,8 @@ export function standingLabel(standing: Standing): string | null {
   switch (standing) {
     case "attempted":
       return t.rail.attempted;
+    case "passed_by":
+      return t.rail.passedBy;
     case "set_aside":
       return t.rail.setAside;
     default:

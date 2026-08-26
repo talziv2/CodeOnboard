@@ -639,6 +639,16 @@ export const t = {
      */
     attempted: "◦ attempted",
     attemptedHint: "You answered here, but the answer didn't show either way",
+    /**
+     * Reached, never answered, walked past.
+     *
+     * Deliberately not "skipped in error" and not "set aside": nothing here
+     * claims the learner got anything wrong, because nothing was ever assessed.
+     * It reports the movement and stops, which is the same rule the arrival
+     * notice's copy follows.
+     */
+    passedBy: "◦ moved past",
+    passedByHint: "You moved on from here without answering",
     /** Why a stop is settled without being demonstrated. */
     movedOnHint: "You chose to move on without demonstrating this",
     assertedHint: "You marked this as already known — not demonstrated",
