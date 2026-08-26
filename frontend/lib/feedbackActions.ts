@@ -54,6 +54,19 @@ export type ActionId =
    * IS rewritten material the learner has not seen.
    */
   | "readMaterial"
+  /**
+   * Go and read the explanation this answer UNLOCKED.
+   *
+   * A different act from `readMaterial` and deliberately a different id. That
+   * one is "the lesson you already read was rewritten because you got something
+   * wrong"; this is "you answered, so the withheld explanation is now on the
+   * Lesson tab" — the payoff for having committed to an answer, which is the
+   * whole mechanism the withholding exists for.
+   *
+   * They are never both offered: a re-teach installs a new `reveal` with the new
+   * lesson, so the rewrite subsumes the unlock and `readMaterial` wins.
+   */
+  | "readExplanation"
   /** Have the Mutator build a prerequisite warm-up. */
   | "warmUp"
   /** Begin the warm-up that was just inserted. */
@@ -97,6 +110,26 @@ export interface ActionInput {
    * False under the single-column build, where there is nowhere else to go.
    */
   materialUnread?: boolean;
+  /**
+   * This answer unlocked the withheld explanation, and the learner has not been
+   * to Lesson since.
+   *
+   * The same kind of input as `materialUnread` and client-owned for the same
+   * reason — it is "have I looked at that tab", not a fact about understanding.
+   *
+   * WHY IT NEEDED AN INPUT OF ITS OWN. The unlock already fired a tab dot, and a
+   * dot is one bit in the chrome: reported from a real session, "it is easy to
+   * continue without realising there is new material to read". The relationship
+   * the learner has to infer from a dot — *answered → this is why the other tab
+   * changed → go and read it* — is exactly the one an action in this card can
+   * state outright. `materialUnread` could not carry it, because the explanation
+   * is not rewritten material and captioning it "Read what changed" would be
+   * wrong about what happened.
+   *
+   * False under the single column, where the explanation is already below the
+   * verdict.
+   */
+  explanationUnread?: boolean;
 }
 
 const FAILED = ["confused", "off-topic"];
@@ -130,9 +163,24 @@ export function feedbackActions(input: ActionInput): ActionPlan {
     return { primary: "startWarmUp", secondary: "skipWarmUp", tertiary: "moveOn" };
   }
 
-  // Nothing left to do here. `next` leads, and it is the ONLY row where moving on
-  // is primary — which is the rule this module exists to hold.
-  if (objectiveMet(input)) return { primary: "next" };
+  // Nothing left to do here — except read the thing the answer just earned.
+  //
+  // `next` is otherwise the ONLY row where moving on is primary, which is the
+  // rule this module exists to hold. The explanation does not break it: the rule
+  // is that the primary is whatever most directly closes the distance to the
+  // objective, and on a correct answer the remaining distance is between having
+  // ANSWERED the question and having READ WHY. Withholding the explanation until
+  // an answer is committed is the product's central mechanism; walking straight
+  // past it at the one moment it unlocks makes the withholding pointless.
+  //
+  // GUIDANCE, NOT A GATE, exactly as the `materialUnread` row below: `next` stays
+  // on the row one place down, nothing is disabled, and a learner who wants to
+  // move on still can in one click.
+  if (objectiveMet(input)) {
+    return input.explanationUnread
+      ? { primary: "readExplanation", secondary: "next" }
+      : { primary: "next" };
+  }
 
   const canRetry = retry?.available ?? false;
 
@@ -187,6 +235,18 @@ export function feedbackActions(input: ActionInput): ActionPlan {
   if (input.materialUnread) {
     return {
       primary: "readMaterial",
+      secondary: canRetry ? "askAgain" : leave,
+      tertiary: canRetry ? leave : undefined,
+    };
+  }
+
+  // The same argument one step down: the objective is NOT met, and the
+  // explanation the answer unlocked is the material the next attempt would be
+  // built on. Below `materialUnread` because a rewrite supersedes the unlock —
+  // both cannot be true of the same lesson without the rewrite being newer.
+  if (input.explanationUnread) {
+    return {
+      primary: "readExplanation",
       secondary: canRetry ? "askAgain" : leave,
       tertiary: canRetry ? leave : undefined,
     };

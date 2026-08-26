@@ -185,6 +185,39 @@ export default function LessonPanel({
   // it outlives any one answer, because what it records is a fact about the
   // stop's surroundings rather than about the attempt that asked.
   const [warmUpDeclined, setWarmUpDeclined] = useState(false);
+  /**
+   * THE EXPLANATION THIS ANSWER UNLOCKED, and whether it has been read.
+   *
+   * The withheld `reveal` opens on the first graded answer — that withholding IS
+   * the active-learning mechanism — and under the surface split it opens on the
+   * OTHER TAB. All that said so was a dot on the tab, which a learner can walk
+   * straight past; the relationship *answered → material appeared → read it* was
+   * left for them to infer from one bit of chrome.
+   *
+   * Set at submit time, because that is the only moment the BEFORE state is
+   * knowable: one render later `revealed` is already true and the fact that this
+   * answer is what unlocked it is gone. Cleared by arriving at Lesson, and by
+   * moving to another stop.
+   *
+   * Deliberately NOT durable, unlike `materialSeen`. A rewrite is an unread
+   * correction that must survive a reload; this is transient news about the
+   * answer on screen — the same lifetime as the tab dot it reinforces — and a
+   * flag that outlived the verdict card would offer to show the learner an
+   * explanation they read ten minutes ago.
+   */
+  const [explanationUnlocked, setExplanationUnlocked] = useState(false);
+  /**
+   * WHAT THE LAST ANSWER DID TO THE LEDGER, captured at reply time.
+   *
+   * `gaps_opened` comes from the server (it computes the before/after delta
+   * around grading) and `resolved` from the verification reply. Held here rather
+   * than read off `result` at render time only because the check path splits the
+   * two: an assessment reports what opened, a verification what closed, and the
+   * ledger's accent needs one answer to "did this change".
+   */
+  const [ledgerChange, setLedgerChange] = useState<
+    { kind: "opened" | "resolved"; count: number } | null
+  >(null);
 
   // ── the rewritten material, and whether it has been looked at (M3) ──────────
   //
@@ -249,6 +282,14 @@ export default function LessonPanel({
     setSeenAt(now);
   }, [lookingAtMaterial, installedAt, sessionId, nodeId]);
 
+  // Looking at Lesson is what makes "you have not read the explanation" false.
+  // The same rule the rewrite notice follows, and the same reason: the offer must
+  // disappear at the moment it stops being true, or it becomes an instruction to
+  // go somewhere the learner is already standing.
+  useEffect(() => {
+    if (lookingAtMaterial) setExplanationUnlocked(false);
+  }, [lookingAtMaterial]);
+
   // Only meaningful where there is somewhere else to go. Under `next` the material
   // is in the same column as the verdict, so "go and read it" would be an
   // instruction to look slightly further up the page.
@@ -283,6 +324,8 @@ export default function LessonPanel({
     setAnswer("");
     setChecked(null);
     setWarmUpDeclined(false);
+    setExplanationUnlocked(false);
+    setLedgerChange(null);
     // AND THE OUTSTANDING CHECK. A verification question belongs to the gap it
     // was written for, on the node that carries it. Leaving it set turned the
     // NEXT stop into `VERIFY` — `lessonPhase` reads `verification` — so its
@@ -354,14 +397,36 @@ export default function LessonPanel({
       // Understanding. Reported even when the learner is looking at it — the page
       // is what knows whether that makes it news.
       onSurfaceChanged?.("understanding");
+      // WHAT THIS ANSWER ADDED TO THE LEDGER. Server-sent (`gaps_opened`), not
+      // diffed here — see the field's note in `lib/api.ts`. Absent against an
+      // older backend, and absent must read as "unknown", so the accent is
+      // simply not applied rather than being claimed as zero.
+      setLedgerChange(
+        res.gaps_opened && res.gaps_opened.length > 0
+          ? { kind: "opened", count: res.gaps_opened.length }
+          : null
+      );
       // The explanation unlocks on the first graded answer, which is material
       // appearing in Lesson while the learner is somewhere else.
-      if (!revealed && lesson?.lesson.reveal) onSurfaceChanged?.("lesson");
+      //
+      // `revealed` is read from the closure, so it is the state BEFORE this
+      // answer — which is the only place that fact exists. One render later the
+      // explanation is simply open and nothing records that this is what opened
+      // it. Under the split only: on the single column it is already directly
+      // below the verdict.
+      if (!revealed && lesson?.lesson.reveal) {
+        onSurfaceChanged?.("lesson");
+        if (splitSurfaces) setExplanationUnlocked(true);
+      }
       // A re-teach replaced the cached lesson with one that names the
       // misconception. Pull it, so what is on screen is the corrected lesson
       // rather than the one that misled them.
       if (res.adaptation?.retaught) {
         getLesson(sessionId).then(setLesson).catch(() => {});
+        // A rewrite is newer than the unlock and says more — it names the
+        // misconception. `materialUnread` takes over from here, so the two
+        // offers can never both be on the row.
+        setExplanationUnlocked(false);
         // The prose itself changed. This is the case R1 was written for: it happens
         // in Lesson, it happens because of something done in Understanding, and
         // nothing about the verdict card would tell the learner unless we say so.
@@ -512,6 +577,19 @@ export default function LessonPanel({
       // Only for a check: a re-assessment answer IS an assessment, so it lands in
       // "Your answers" like any other and does not need rescuing from the wire.
       if (isVerification) setChecked({ answer, targeted: verification.gaps ?? [] });
+      // The ledger changed on BOTH paths, in opposite directions. A check
+      // normally closes something; a re-assessment is an ordinary assessment and
+      // can open something. Opening outranks closing when a reply does both —
+      // a new misconception is the more consequential news.
+      const opened = got.gaps_opened?.length ?? 0;
+      const closed = got.resolved?.length ?? 0;
+      setLedgerChange(
+        opened > 0
+          ? { kind: "opened", count: opened }
+          : closed > 0
+            ? { kind: "resolved", count: closed }
+            : null
+      );
       setResult(got);
       setVerification(null);
       setAnswer("");
@@ -781,12 +859,27 @@ export default function LessonPanel({
     drawing === "lesson" &&
     installedAt !== null &&
     noticeKey === `${nodeId}:${installedAt}`;
+  /**
+   * Is there an unlocked explanation the learner has not been to see?
+   *
+   * Both halves matter. `explanationUnlocked` says THIS answer opened it — set at
+   * submit time and cleared by a visit — and `blocks.reveal`/`isSplit` say there
+   * is genuinely something there to read. A lesson with no withheld explanation
+   * must not offer to show one.
+   */
+  const explanationUnread =
+    explanationUnlocked && isSplit && Boolean(lesson.lesson.reveal);
+
   const blocks = lessonBlocks({
     phase,
     locationCount: locations.length,
     openGapCount: openGaps.length,
     gapCount: allGaps.length,
     attemptCount: answerLog.length,
+    // #3: the ledger opens itself for the ONE verdict that changed it. Held in
+    // state rather than read off `result`, because the two reply shapes report
+    // the change in different keys — see `ledgerChange`.
+    gapsJustChanged: ledgerChange !== null,
     revealed,
     hasReveal: isSplit && Boolean(lesson.lesson.reveal),
     // Zero on the single canvas, which is how `next` stays exactly as it was: the
@@ -1019,6 +1112,17 @@ export default function LessonPanel({
                   onWaive={onWaive}
                   disabled={loading || verifying}
                   solvingGapId={solvingGapId}
+                  // The mark, and the sentence explaining why the block opened.
+                  // Decided here because "did the last answer change this" is a
+                  // fact about the grading reply; `GapList` only draws.
+                  accent={ledgerChange?.kind ?? null}
+                  note={
+                    ledgerChange?.kind === "opened"
+                      ? t.lesson.gapsOpenedNow(ledgerChange.count)
+                      : ledgerChange?.kind === "resolved"
+                        ? t.lesson.gapsResolvedNow(ledgerChange.count)
+                        : null
+                  }
                 />
               </div>
             }
@@ -1084,6 +1188,7 @@ export default function LessonPanel({
                     openGaps={openGaps}
                     retry={retryOffer}
                     materialUnread={materialUnread}
+                    explanationUnread={explanationUnread}
                     warmUpInserted={warmUpInserted}
                     // ONE gate for the whole table. The assessment path uses the
                     // panel's own flag; on a check that flag is false by
@@ -1102,6 +1207,12 @@ export default function LessonPanel({
                     onAdvanceStop={handleAdvance}
                     onAskAgain={onAskAgain}
                     onReadMaterial={
+                      onGoToSurface ? () => onGoToSurface("lesson") : undefined
+                    }
+                    // Same destination, different claim about why. Kept as its own
+                    // callback so the card cannot offer the action without the
+                    // page having provided a way to honour it.
+                    onReadExplanation={
                       onGoToSurface ? () => onGoToSurface("lesson") : undefined
                     }
                     onBuildWarmUp={handleRetry}
@@ -1127,6 +1238,50 @@ export default function LessonPanel({
               ) : null
             }
           />
+
+          {/* THE WAY ON, FROM A STOP ALREADY DEALT WITH.
+              
+              `Next stop →` lives inside the verdict card, and the verdict card
+              lives on Understanding and lasts exactly as long as the answer is on
+              screen. So a learner who finished a stop, went somewhere else and
+              came back had no way forward at all: the card was gone with the
+              result, the composer was spent, and Lesson — where they were most
+              likely to be reading — has never had an action of any kind. The only
+              route on was to reconstruct the walk from the rail, which is asking
+              them to navigate a route the product is supposed to be walking for
+              them. Reported as: "returning to a completed stop should still
+              provide Next stop".
+              
+              OUTSIDE `LessonCanvas`, which is what puts it on BOTH surfaces —
+              the canvas draws one surface at a time, and this is not a block of
+              either one. It is the same act from either tab.
+              
+              Only where the card is NOT up: `result` is the live verdict, and two
+              `Next stop →` buttons on one screen would be the second one
+              competing with the plan `feedbackActions` just made. And only once
+              something has been graded here, so an unanswered stop keeps
+              `Skip this stop` in the composer as its way past — a different act,
+              honestly named.
+              
+              It coexists with the arrival notice rather than fighting it. That
+              offers the way BACK to the route; this offers the way ON from where
+              the learner is, and `/advance` clears the arrival, so taking it
+              resolves the off-route state instead of leaving it behind. */}
+          {!result && !verification && attempts.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 border-t border-rule pt-4">
+              <Button
+                variant="primary"
+                size="md"
+                onClick={handleAdvance}
+                disabled={loading}
+              >
+                {loading ? t.lesson.loadingShort : t.lesson.nextStop}
+              </Button>
+              <span className="measure text-meta text-graphite">
+                {t.lesson.alreadyDealtWith}
+              </span>
+            </div>
+          )}
 
           <div className="border-t border-rule pt-4">
             <button

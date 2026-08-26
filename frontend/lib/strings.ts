@@ -893,31 +893,62 @@ export const t = {
     briefAttempts: (count: number) =>
       count === 1 ? "1 answer" : `${count} answers`,
     gapsHeading: "What you got wrong here",
+    /**
+     * Why the ledger opened itself, said once, at the top of it.
+     *
+     * Counted rather than named, because the claims are directly underneath: a
+     * sentence that repeated them would be the same information twice in the
+     * same box, which is the crowding the disclosure discipline exists to stop.
+     */
+    gapsOpenedNow: (count: number) =>
+      count === 1
+        ? "Your answer added one to this list."
+        : `Your answer added ${count} to this list.`,
+    gapsResolvedNow: (count: number) =>
+      count === 1
+        ? "Your answer cleared one from this list."
+        : `Your answer cleared ${count} from this list.`,
     gapsHelp:
-      "Each one stays on the record. Clear it by answering a fresh question about it — it then reads as resolved rather than disappearing.",
+      "Each one stays on the record. Resolve it by answering a fresh question about it — it then reads as resolved rather than disappearing.",
     /** The ledger's own tally: resolved over total, never a bare count of debt. */
     gapsTally: (resolved: number, total: number) =>
       `${resolved} of ${total} resolved`,
-    /** Per-gap actions and status. */
-    gapSolve: "Clear this",
+    /**
+     * THE TWO VERBS, and the wording is the whole point of the pair.
+     *
+     * They were `Clear this` and `Set aside`, which read as two ways of getting
+     * rid of the same row — so the one that ASKS FOR A QUESTION looked like a
+     * second way to dismiss. They do opposite things: one is the only act that
+     * can ever produce `verified`, the other records that the learner is
+     * deliberately not doing it. The labels now say which is which before the
+     * learner has to find out by pressing one.
+     *
+     * `Ignore for now` is also the honest end of the semantics: waiving is
+     * reversible, is never evidence, and keeps the stop short of `understood` —
+     * so "ignored" and "resolved" are different states and the copy must not let
+     * them blur (see `gapWaivedNote` and `gapStatusWaived`).
+     */
+    gapSolve: "Check me on this",
     gapSolveBusy: "Writing a question…",
     gapStatusOpen: "Unresolved",
     gapStatusVerified: "Resolved",
-    gapStatusWaived: "Set aside",
+    gapStatusWaived: "Ignored for now",
     gapSettledHeading: "Settled",
     /** Shown on a resolved gap: what closed it, and that only an answer could. */
     gapResolvedNote: "You answered a check on this correctly.",
-    gapWaivedNote: "You chose to stop being asked. It can still be cleared.",
+    /** NOT resolved, and the sentence has to keep saying so. */
+    gapWaivedNote:
+      "Still unresolved — you chose not to work on it now. Ask to be checked whenever you want.",
     /** The system stopped offering; the learner can still ask. */
-    gapAskedTwice: "Asked twice already — you can still try again.",
+    gapAskedTwice: "Asked twice already — you can still ask to be checked.",
     gapBlocking: "Holding this stop back",
     gapNonBlocking: "Worth knowing",
-    gapWaived: "You set this aside",
+    gapWaived: "You chose to ignore this for now",
     gapVerified: "Checked and cleared",
     gapExhausted: "No more checks offered here",
-    waiveOne: "Set aside",
+    waiveOne: "Ignore for now",
     notNow: "Not now",
-    waiveAll: "Set all aside",
+    waiveAll: "Ignore all for now",
     gapResolved: "Cleared",
     gapStillOpen: "Still open",
     // The M7 case the drawer could not previously explain.
@@ -947,6 +978,13 @@ export const t = {
     compareEarlier: "The version you read before is under “Earlier explanations”.",
     /** The primary action while rewritten material is unread. */
     readWhatChanged: "Read what changed",
+    /**
+     * The primary action once an answer has unlocked the withheld explanation.
+     *
+     * Names the THING, not the tab. "Go to Lesson" would describe our layout;
+     * this describes what is waiting there, which is the half a dot cannot say.
+     */
+    readNewExplanation: "Read the new explanation",
     newMaterialBody: "This stop was rewritten after your last answer.",
     // The control on the consequence line. Deliberately not "Go to Lesson": it
     // names what the learner would DO there, and the tab it lands on is visible.
@@ -1034,6 +1072,14 @@ export const t = {
     startWarmUp: "Start the warm-up →",
     skipItMoveOn: "Skip it, move on",
     moveOnAnyway: "Move on anyway",
+    /**
+     * Beside `Next stop →` on a stop the learner has already answered.
+     *
+     * Says why the button is there without claiming anything about how well they
+     * did — a revisit to a stop they got wrong shows the same row, and captioning
+     * it "done" would be a verdict this line has no business giving.
+     */
+    alreadyDealtWith: "You've already worked on this stop.",
     finishEarly: "Finish session early",
     gradeFailed: "Couldn't grade that answer. Try again.",
     advanceFailed: "Couldn't move to the next stop.",
@@ -1220,7 +1266,7 @@ export const t = {
     gapsLabel: "What is unresolved",
     gapBlocking: "Holding this back",
     gapNonBlocking: "Worth knowing",
-    gapWaived: "Set aside by you",
+    gapWaived: "Ignored for now, by you",
     gapVerified: "Checked and cleared",
     gapExhausted: "No more checks offered",
     // One sentence explaining an `unresolved` state. Each names a different

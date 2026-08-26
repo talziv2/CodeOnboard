@@ -182,6 +182,81 @@ def test_respond_exposes_the_verification_budget(client):
     assert shown["exhausted"] is True
 
 
+def test_respond_names_the_gaps_this_answer_opened(client):
+    """WHICH of the gaps is new, so the ledger can open itself for it.
+
+    The frontend needs "did this answer change the ledger" to decide whether to
+    expand "What you got wrong here" — a consequence behind a collapsed
+    disclosure is one the learner walks past. It could only get there by diffing
+    two payloads it happened to be holding, which is a second implementation of
+    a delta the server already computes for `gaps_opened` on the attempt record.
+
+    So the same list ships on the reply. `gaps` is the whole ledger; this is the
+    subset that did not exist a moment ago.
+    """
+    node = _node("A")
+    old = Gap.create("wrong_model", "an older misconception")
+    node.gap_state.gaps.append(old)
+    session_id = _start(client, _graph(node, _node("B")))
+
+    # A Grader that actually mints one, which is what the delta is measured over.
+    fresh = Gap.create("wrong_model", CLAIM)
+
+    def _grader(state, user_response, client=None):
+        state.graph.nodes[node.id].gap_state.gaps.append(fresh)
+        state.last_grade = {"classification": "confused",
+                            "gap_kind": "wrong_model", "rationale": "because"}
+        return state
+
+    with patch("backend.api.run_grader", side_effect=_grader),          patch("backend.api._node_source", return_value="source"),          patch("backend.api.teaching_respond") as respond,          patch("backend.api.mutate_graph"):
+        respond.reteach.return_value = MagicMock()
+        respond.hint.return_value = "h"
+        respond.followup.return_value = "f"
+        body = client.post(
+            f"/session/{session_id}/respond", json={"response": "my answer"},
+        ).json()
+
+    assert body["gaps_opened"] == [fresh.id]
+    assert old.id not in body["gaps_opened"], "a pre-existing gap is not newly opened"
+    # And it is one of the gaps on the ledger, not a parallel vocabulary.
+    assert set(body["gaps_opened"]) <= {g["id"] for g in body["gaps"]}
+
+
+def test_respond_says_plainly_when_an_answer_opened_nothing(client):
+    """An empty list, never an absent key.
+
+    Absent would have to read as UNKNOWN — that is what it means on the attempt
+    record, where keys are omitted when empty — and a client that could not tell
+    "nothing opened" from "this backend does not say" would be guessing on the
+    commonest case of all.
+    """
+    node = _node("A", "understood")
+    session_id = _start(client, _graph(node, _node("B")))
+
+    body = _respond(client, session_id, "understood", "none").json()
+    assert body["gaps_opened"] == []
+
+
+def test_a_verification_reply_carries_the_same_key(client):
+    """One shape across both replies. A check can open a gap too."""
+    node = _node("A")
+    gap = Gap.create("wrong_model", CLAIM)
+    node.gap_state.gaps.append(gap)
+    node.gap_state.pending_verification = {"question": "q", "targets": [gap.id]}
+    session_id = _start(client, _graph(node, _node("B")))
+
+    with patch("backend.api.grade_verification") as grade:
+        grade.return_value = {"resolved": [gap.id], "unresolved": [],
+                              "rationale": "yes"}
+        body = client.post(
+            f"/session/{session_id}/respond",
+            json={"response": "a good answer", "kind": "verification"},
+        ).json()
+
+    assert body["resolved"] == [gap.id]
+    assert body["gaps_opened"] == []
+
+
 def test_respond_reports_journey_completion(client):
     node = _node("A", "understood")
     session_id = _start(client, _graph(node))

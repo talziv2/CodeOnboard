@@ -40,6 +40,12 @@ import { t } from "@/lib/strings";
  * infers from the classification — which is how "Build me a warm-up" once became the
  * only button after a correct check.
  *
+ * TWO READ ACTIONS, AND THEY ARE NOT THE SAME CLAIM. `readMaterial` means "the
+ * lesson you read was rewritten because of what you said"; `readExplanation`
+ * means "you answered, so the withheld explanation is now on Lesson". Only ever
+ * one at a time — a re-teach installs a new reveal, so the rewrite subsumes the
+ * unlock — and both are offered only where there is another surface to go to.
+ *
  * THE RETRY IS ONE BUTTON AND THE BACKEND CHOOSES ITS MECHANISM (M2). What used to
  * be `check` and `answerAgain` is now `askAgain`, and the panel no longer works out
  * whether either is possible — `retry` arrives decided. When there is none, the
@@ -56,6 +62,7 @@ export default function FeedbackCardNext({
   openGaps,
   retry,
   materialUnread,
+  explanationUnread,
   warmUpInserted,
   warmUpAvailable,
   warmUpDeclined,
@@ -69,6 +76,7 @@ export default function FeedbackCardNext({
   onBuildWarmUp,
   onStartWarmUp,
   onReadInLesson,
+  onReadExplanation,
 }: {
   result: RespondResult;
   isCheck: boolean;
@@ -80,6 +88,17 @@ export default function FeedbackCardNext({
   retry?: RetryOffer;
   /** A re-teach rewrote the material and the learner has not looked since. */
   materialUnread?: boolean;
+  /**
+   * This answer unlocked the withheld explanation and the learner has not been to
+   * Lesson since.
+   *
+   * The dot on the tab already says "something changed over there". This says
+   * WHAT, and offers the click, from the card that caused it — the same two-signal
+   * arrangement `onReadInLesson` uses for a rewrite, and for the same reason:
+   * either alone is missable. The dot is one bit of chrome, and a learner who
+   * moves straight on never looks at the other tab at all.
+   */
+  explanationUnread?: boolean;
   warmUpInserted: boolean;
   warmUpAvailable: boolean;
   /** The Mutator refused one for this node — on EITHER call. Panel-owned. */
@@ -92,6 +111,8 @@ export default function FeedbackCardNext({
   onAskAgain: () => void;
   /** Take the learner to the rewritten material. Absent on the single column. */
   onReadMaterial?: () => void;
+  /** Take the learner to the newly unlocked explanation. Absent on the single column. */
+  onReadExplanation?: () => void;
   onBuildWarmUp: () => void;
   onStartWarmUp: () => void;
   /**
@@ -125,6 +146,7 @@ export default function FeedbackCardNext({
     retry,
     // Only where there is somewhere to go AND something unread there.
     materialUnread: Boolean(materialUnread && onReadMaterial),
+    explanationUnread: Boolean(explanationUnread && onReadExplanation),
     warmUpInserted,
     // Declined, by EITHER route. The automatic one is still read from the grading
     // response: the backend chose `prerequisite` and produced no mutation. The
@@ -160,6 +182,7 @@ export default function FeedbackCardNext({
     next: waiting("next") ? t.lesson.loadingShort : t.lesson.nextStop,
     askAgain: waiting("askAgain") ? t.lesson.askAgainBusy : t.lesson.askAgain,
     readMaterial: t.lesson.readWhatChanged,
+    readExplanation: t.lesson.readNewExplanation,
     warmUp: waiting("warmUp") ? t.lesson.loadingShort : t.lesson.buildWarmUp,
     startWarmUp: waiting("startWarmUp") ? t.lesson.loadingShort : t.lesson.startWarmUp,
     skipWarmUp: waiting("skipWarmUp") ? t.lesson.loadingShort : t.lesson.skipItMoveOn,
@@ -169,6 +192,7 @@ export default function FeedbackCardNext({
     next: onAdvanceStop,
     askAgain: onAskAgain,
     readMaterial: onReadMaterial ?? onAdvanceStop,
+    readExplanation: onReadExplanation ?? onAdvanceStop,
     warmUp: onBuildWarmUp,
     startWarmUp: onStartWarmUp,
     skipWarmUp: onAdvanceStop,

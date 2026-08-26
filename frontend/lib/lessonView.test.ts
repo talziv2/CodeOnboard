@@ -169,3 +169,52 @@ describe("the reveal is earned, and stays earned", () => {
     expect(lessonBlocks({ ...base, phase: "VERIFY" }).reveal).toBe("open");
   });
 });
+
+describe("the ledger opens itself when an answer changes it", () => {
+  /**
+   * #3. "What you got wrong here" was collapsed in every phase but `STUDY`, so
+   * an answer that opened two gaps put the system's conclusion about the learner
+   * behind a disclosure labelled with a number. Reported as: the most important
+   * consequence of an answer is the easiest thing on the page to miss.
+   */
+  test("FEEDBACK opens the gaps when this answer changed them", () => {
+    const b = lessonBlocks({ ...base, phase: "FEEDBACK", gapsJustChanged: true });
+    expect(b.gaps).toBe("open");
+  });
+
+  test("and leaves them collapsed when it did not", () => {
+    // The narrowness is the point: a stop carrying three long-standing gaps must
+    // not re-expand the ledger on every verdict, or the block that matters most
+    // becomes the one the learner has learned to close.
+    const b = lessonBlocks({ ...base, phase: "FEEDBACK", gapsJustChanged: false });
+    expect(b.gaps).toBe("collapsed");
+  });
+
+  test("RESOLVED opens them too — a check that CLOSED one changed the ledger", () => {
+    const b = lessonBlocks({ ...base, phase: "RESOLVED", gapsJustChanged: true });
+    expect(b.gaps).toBe("open");
+  });
+
+  test("a stop with no ledger at all still has nothing to open", () => {
+    const b = lessonBlocks({
+      ...base,
+      phase: "FEEDBACK",
+      openGapCount: 0,
+      gapCount: 0,
+      gapsJustChanged: true,
+    });
+    expect(b.gaps).toBe("absent");
+  });
+
+  test("it costs at most one extra open block, and never a second composer", () => {
+    // The §3a gate. FEEDBACK is two open blocks — the verdict and the reveal —
+    // so the ledger takes it to three, which is still under the four-block worst
+    // case a revisit already produces.
+    const changed = lessonBlocks({ ...base, phase: "FEEDBACK", gapsJustChanged: true });
+    const quiet = lessonBlocks({ ...base, phase: "FEEDBACK", gapsJustChanged: false });
+
+    expect(openCount(changed)).toBe(openCount(quiet) + 1);
+    expect(openCount(changed)).toBeLessThanOrEqual(4);
+    expect(changed.question).toBe("absent");
+  });
+});

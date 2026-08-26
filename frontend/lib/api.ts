@@ -834,6 +834,18 @@ export interface RespondResult {
   current_node_id: string | null;
   /** Every gap on the graded stop after this answer, settled ones included. */
   gaps?: NodeGap[];
+  /**
+   * The ids THIS ANSWER opened — the subset of `gaps` that did not exist a
+   * moment ago.
+   *
+   * Server-computed and server-sent, rather than diffed here against the gaps
+   * the panel happened to be holding: "which of these is new" is a fact about
+   * two points in time, and a client only reliably has one of them. Optional
+   * because a pre-fix backend does not send it, and absent must read as
+   * UNKNOWN — a surface that treated it as "none" would silently stop
+   * announcing new gaps against an older server.
+   */
+  gaps_opened?: string[];
   /** Journey completion — separate from readiness, and neither gates the other. */
   complete?: boolean;
   /** Present only on a verification reply: ids this answer closed / left open. */
