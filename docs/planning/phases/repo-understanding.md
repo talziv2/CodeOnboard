@@ -23,7 +23,7 @@ repository, and for the migration away from the hand-built vector-RAG layer in
 `backend/rag/`.
 
 It cuts across Phases 1–3 rather than extending them: it replaces the
-repository-understanding substrate that Phase 1 built ([`phase1.md`](phase1.md)),
+repository-understanding substrate that Phase 1 built ([`phase1.md`](../../../project-archive/superseded-architecture/phase1.md)),
 that Phase 2 tuned, and that Phase 3 ([`phase3.md`](phase3.md)) now depends on at
 session time. The learning graph, grading, translation and UI are **not** in scope
 and are expected to survive untouched.
@@ -1027,7 +1027,7 @@ fastapi 932 files / 4,942 symbols / 28 subsystems with `security` visible.
 
 **Verification:** `tests/test_skeleton.py` (22), `tests/test_anchors.py` (18),
 plus new cases in the mentor / mutator / reviewer / learning-store suites.
-`scripts/smoke_stage0.py` demonstrates both halves of the boundary on
+`project-archive/rag-migration/harnesses/smoke_stage0.py` demonstrates both halves of the boundary on
 `psf/requests`. Full suite: 414 passed, 7 failed — all 7 pre-existing on the
 clean tree and unrelated (stale `"not_yet"` state assertions, a `~200 words`
 prompt string).
@@ -1077,7 +1077,7 @@ script pattern. No agent depends on it.
 | `backend/repo/skeleton.py` | Extended with an **import graph**: `ImportEntry`, `imports_in()`, `resolve_import()`. Imports were already chunked and then discarded (P3); they are now parsed with `ast` and resolved to in-repo files, which is what makes `neighbors` real rather than name-guessed |
 | `backend/repo/tools.py` *(new)* | The six primitives from [§8](#8-repository-tools) — `list_files`, `read_file`, `search_code`, `symbols`, `neighbors`, `propose_anchor` — plus `run_tool()` dispatch. Every result is `{"ok": …}`, every ceiling clamps, every filesystem access goes through `safe_repo_path()` |
 | `backend/repo/explore.py` *(new)* | `explore()` — the budgeted loop; `Budget`, `Exploration`, `ToolCall`, `Usage`, `ReportSpec`; the model-facing tool schemas; `seed_blocks()` / `skeleton_brief()` for the cached Layer-A seed |
-| `scripts/smoke_stage1.py` *(new)* | Drives both halves. Offline by default (all six tools against a real checkout, no API key); `--live` runs one real exploration and prints M5/M8/M9/H6 |
+| `project-archive/rag-migration/harnesses/smoke_stage1.py` *(new)* | Drives both halves. Offline by default (all six tools against a real checkout, no API key); `--live` runs one real exploration and prints M5/M8/M9/H6 |
 
 **Decisions taken while building, each with a reason:**
 
@@ -1142,7 +1142,7 @@ asserted byte-identical across turns; and a test asserts **no agent or pipeline
 module imports `repo.explore`**, so "Stage 1 wires nothing in" cannot rot.
 
 **Measured on the first live run** — `psf/requests`, Haiku, 8-turn budget,
-`scripts/smoke_stage1.py --live`:
+`project-archive/rag-migration/harnesses/smoke_stage1.py --live`:
 
 ```
 19 tool calls over 9 API calls, 24.0 s wall clock, 52,877 chars of tool output
@@ -1215,7 +1215,7 @@ Mentor's evidence is still the old retrieval slice.
 | `backend/repo/survey.py` *(new)* | `SURVEY_SPEC` (the report contract), `SURVEY_INSTRUCTIONS` (the goal-agnostic brief), `validate_survey()` / `Coverage` / `SurveyCheck` (the D13 contract, deterministic), `SurveyValidator`, `run_survey()` |
 | `backend/repo/metrics.py` *(new)* | `Behavior` / `Quality` / `Cost` / `Consistency` / `Row` — every experiment number, derived from the recorded trace rather than from a model's self-report |
 | `backend/repo/explore.py` | Extended: a `validate` hook that feeds a contract gap back and **continues within the same budget** (§5.4), selectable `tool_guide` (policy A/B) and `conversation_breakpoints` (cache A/B), per-call `facts` for behaviour measurement, and `contract_met` |
-| `scripts/experiment_stage2.py` *(new)* | The experiment: cells, repeats, aggregation, contrasts, M2 scoring, JSON results under `data/experiments/` |
+| `project-archive/rag-migration/harnesses/experiment_stage2.py` *(new)* | The experiment: cells, repeats, aggregation, contrasts, M2 scoring, JSON results under `project-archive/rag-migration/results/` |
 
 **How coverage validation works.** `Skeleton.subsystems()` is ground truth. Every
 inventory name must appear in the survey's `subsystems[]` (described) or
@@ -1322,7 +1322,7 @@ This is a genuine argument *for* caching the Survey rather than against it: cach
 turns depth non-determinism into a single one-off coin flip per commit instead of a
 fresh one per session (RK4).
 
-**Artifacts.** `data/experiments/stage2-*.json` — every run's full payload,
+**Artifacts.** `project-archive/rag-migration/results/stage2-*.json` — every run's full payload,
 trace-derived behaviour, coverage verdict and cost.
 
 #### Second pass under D16 (cost demoted to a metric) — and where it stopped
@@ -1466,7 +1466,7 @@ is the obvious upside not yet measured. Second limit: the Mentor's evidence cap
 
 **Limitations:** one run per cell (no consistency measurement at Stage 3);
 relevance/discovery labels are single-annotator; pedagogical ordering was
-reviewed by eye (paths are saved in `data/experiments/stage3-*.json`), not
+reviewed by eye (paths are saved in `project-archive/rag-migration/results/stage3-*.json`), not
 scored mechanically.
 
 #### Production integration to the Mentor boundary (2026-08-13, user-approved)
@@ -2790,7 +2790,7 @@ Append-only. Every entry: date, decision, rationale, and what would reverse it.
 | 2026-08-13 | **Teachability cap (≤400 lines) implemented but disabled** — `resolve(max_lines=...)` is opt-in | Enabling it at Stage 0 would reject oversized anchors that pass today: a coverage *decrease*, outside "verify anchors are real" | Stage 3, alongside the anchor-granularity rules |
 | 2026-08-13 | **`Skeleton.subsystems()` shipped early**, ahead of Stage 2 | ~30 deterministic lines, no contract machinery. Validates the OQ7 regression criterion (`fastapi/security/`) while the rule is still cheap to change | Reviewer may defer it back to Stage 2 |
 | 2026-08-13 | **Symbols are derived by the resolver, not emitted by the Mentor**, at Stage 0 | Full G1 (model emits a symbol instead of a range) needs prompt and wire-format changes, which belong with the Stage-3 evidence swap. Deriving the symbol now still gives D14's stable identity without touching prompts | Stage 3 changes the Mentor's wire format to emit symbols directly |
-| 2026-08-13 | **Stage 1 implemented.** `backend/repo/{tools,explore}.py`, the skeleton's import graph, `scripts/smoke_stage1.py`. Six tools exactly — no `semantic_search` (H4) | Delivers the exploration substrate Stages 2–4 consume, with nothing depending on it yet, so a wrong turn here is cheap to reverse | — |
+| 2026-08-13 | **Stage 1 implemented.** `backend/repo/{tools,explore}.py`, the skeleton's import graph, `project-archive/rag-migration/harnesses/smoke_stage1.py`. Six tools exactly — no `semantic_search` (H4) | Delivers the exploration substrate Stages 2–4 consume, with nothing depending on it yet, so a wrong turn here is cheap to reverse | — |
 | 2026-08-13 | **Budget exhaustion spends one extra "report what you have" API call** | §5.4 requires a partial dossier rather than a discarded run, and the run has already paid to read the code. The stop reason stays the budget that was hit, so `confidence` still degrades honestly | Evidence that salvage turns produce vacuous reports more often than useful partial ones |
 | 2026-08-13 | **Tool output is budgeted in characters, not tokens** | Chars are exactly countable locally with no tokenizer call; a token budget would need an API round trip per measurement or a wrong local estimate | A cheap local tokenizer, or evidence that the ~4 chars/token assumption misleads on real repos |
 | 2026-08-13 | **Cost and cache-hit accounting shipped at Stage 1, ahead of the §14 harness** | H6 and M9 need per-turn numbers from the first run; instrumenting after Stage 2 would leave the earliest measurements without a baseline. Surfaced Haiku's 4096-token cache minimum as a real constraint on H6 | — |
@@ -2799,7 +2799,7 @@ Append-only. Every entry: date, decision, rationale, and what would reverse it.
 | 2026-08-13 | **First live exploration measured** — `requests`, Haiku, 8 turns: 65% cache hit, `$0.0751`, M5 10/10, salvage path exercised in production | The request shape, forced-`tool_choice` salvage and grounding chain cannot be validated against a fake client. Recorded as a baseline so Stage 2 produces a comparison row rather than an anecdote | — |
 | 2026-08-13 | **Cost is dominated by cache writes, not uncached input** — noted against H6, and breakpoint placement moved ahead of turn-budget cuts as the first lever | Writes bill at 1.25×, reads at 0.1×; a 12× gap makes placement matter more than turn count, and cutting turns sacrifices coverage while cutting write volume does not | Measurement showing one conversation breakpoint reads worse than two |
 | 2026-08-13 | **Two conversation breakpoints kept for now, despite suspecting one is enough** | The lookback justification only bites at ~20 blocks per turn and observed turns emitted ≤4 — but this document's rule is that such things are settled by measurement, not argument. Queued as the first Stage-2 cost experiment | The A/B at Stage 2 |
-| 2026-08-13 | **Stage 2 run as an isolated experiment, not an integration.** `backend/repo/{survey,metrics}.py`, `scripts/experiment_stage2.py`; `module_map`, Code Structure, Prioritization, Reviewer and Mentor untouched; production still on the RAG path | H1 asks whether Layer B earns its place, and wiring it in first would make that unanswerable. A test asserts no agent or pipeline module imports it | Review of the Stage-2 results |
+| 2026-08-13 | **Stage 2 run as an isolated experiment, not an integration.** `backend/repo/{survey,metrics}.py`, `project-archive/rag-migration/harnesses/experiment_stage2.py`; `module_map`, Code Structure, Prioritization, Reviewer and Mentor untouched; production still on the RAG path | H1 asks whether Layer B earns its place, and wiring it in first would make that unanswerable. A test asserts no agent or pipeline module imports it | Review of the Stage-2 results |
 | 2026-08-13 | **P2 is closed, measurably.** 16/16 runs accounted for every subsystem (0 unaccounted); `fastapi/security` covered in every run | The defect that started this migration was a silent omission, so the fix has to be a mechanical guarantee rather than a better prompt. D13's contract delivers it | Evidence that the contract is satisfiable only vacuously — not observed: 0/16 runs skipped anything |
 | 2026-08-13 | **Structural-navigation policy adopted as the better default** — source read −27%/−42%, `read_file` calls −32%/−37%, whole-file reads −23%/−50%, cost −16%/−6%, coverage and flows unchanged, grounding equal or better, on both repositories | Cheaper *and* not worse, which is the only kind of cost reduction worth having. Ranges overlap, so this is a consistent direction across seven metrics rather than a separated effect | A larger sample reversing the direction, or a repository where structure is too sparse to navigate |
 | 2026-08-13 | **The two-vs-one cache-breakpoint hypothesis is falsified; two breakpoints kept** | Normalised for exploration volume the two are indistinguishable. `cache_creation_input_tokens` counts only tokens not already cached, so a second breakpoint does not re-write the prefix — Stage 1's `−31%` was an exploration-volume artifact | Nothing foreseeable; this replaces an argument with a measurement |
@@ -2857,7 +2857,7 @@ Append-only. Every entry: date, decision, rationale, and what would reverse it.
 | 2026-08-14 | **§14's decision rule was NOT literally met, and deletion proceeded anyway on a revised basis** | The rule required M5 (grounding) *strictly better*. Both arms measured 100% because Stage 0 gave them the same resolver — the metric cannot discriminate, so the rule was unsatisfiable rather than failed. The revised basis: every responsibility retrieval held has a demonstrated structural replacement, each measured before its code was deleted. Recording this rather than quietly re-reading the rule as satisfied | A future result showing a retrieval responsibility we missed |
 | 2026-08-14 | **FINAL: the migration is a validated functional replacement with measured advantages in specific dimensions — not a demonstrated overall improvement, and not a demonstrated learning improvement** ([§21](#21-final-conclusion)) | Strong two-sided evidence for coverage (33–68% → complete), multi-file flows (56% → 100% relevance), structural reasoning and traceability (100% vs 0% by construction). Genuinely mixed on relevance and discovery; RAG won `fastapi-di` discovery and `fastapi-security` relevance; latency and API cost are worse. Learning-path quality rests on proxies, and learning *effectiveness* was never evaluated | A concrete future result. This decision is closed |
 | 2026-08-14 | **Evaluation moves from benchmarking to product development; no further comparison runs for this decision** | Two Python fixtures cannot carry more weight than they already have — Stage 4b exists because of one file in one repository, which is the overfitting warning arriving early. Future evaluation is real repositories, with the pipeline-trace method (find where information was lost *before* changing anything) and a preference for general architectural fixes over repo-specific hints | — |
-| 2026-08-14 | **`data/experiments/` preserved, including the runs where RAG beat the explorer** | 33 files across Stages 2–5 are the evidence base for the final report. A migration record that keeps only its wins is not evidence, and the `fastapi-di` result — RAG finding the public factory that exploration walked past — is the most instructive single finding in the set | — |
+| 2026-08-14 | **the experiment corpus preserved, including the runs where RAG beat the explorer** (now `project-archive/rag-migration/results/`) | 33 files across Stages 2–5 are the evidence base for the final report. A migration record that keeps only its wins is not evidence, and the `fastapi-di` result — RAG finding the public factory that exploration walked past — is the most instructive single finding in the set | — |
 | 2026-08-13 | **Two Stage-0 defects fixed while testing Stage 1** — `read_file` now recovers an abbreviated path; `search_code` skips NUL-bearing binaries | The first was the tool layer disagreeing with its own resolver about the same input, reintroducing the false rejection Stage 0 existed to remove; the second charged tokens for garbage matches | — |
 
 ---
@@ -2979,7 +2979,7 @@ another benchmark phase.
 
 ### Artifacts
 
-`data/experiments/` is **preserved deliberately** — 33 result files across
+`project-archive/rag-migration/results/` is **preserved deliberately** — 33 result files across
 Stages 2–5, including the RAG-vs-explorer A/B (`stage3-merged.json`, the only
 complete 4-goal × 3-arm comparison), the full-loop comparison
 (`stage4-explorer*.json` vs `stage4-rag.json`), the reliability gate

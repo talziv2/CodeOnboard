@@ -18,7 +18,7 @@
 #   3. EVERY CALL IS RECORDED. `Exploration.trace` is the replayable log (OQ5)
 #      and `Exploration.usage` is the per-run cost accounting (M9, H6).
 #
-# Stage 1 wires this into nothing. `scripts/smoke_stage1.py` drives it; the
+# Stage 1 wires this into nothing. `project-archive/rag-migration/harnesses/smoke_stage1.py` drives it; the
 # Survey (Stage 2) and `goal_investigation` (Stage 3) become callers later.
 #
 # Model choice follows CLAUDE.md: this is a loop, so it is Haiku. Sonnet in a

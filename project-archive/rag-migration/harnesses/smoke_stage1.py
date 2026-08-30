@@ -1,7 +1,7 @@
 """Stage 1 smoke test — the tool layer and the budgeted exploration harness.
 
-    uv run python scripts/smoke_stage1.py [repo_path] [--live] [--turns N]
-    uv run python scripts/smoke_stage1.py --live --goal "understand authentication"
+    uv run python project-archive/rag-migration/harnesses/smoke_stage1.py [repo_path] [--live] [--turns N]
+    uv run python project-archive/rag-migration/harnesses/smoke_stage1.py --live --goal "understand authentication"
 
 Two halves, matching docs/planning/phases/repo-understanding.md §12 Stage 1:
 
@@ -22,7 +22,7 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from dotenv import load_dotenv  # noqa: E402
 

@@ -10,7 +10,7 @@ This is a final-year CS project. Prefer working code over perfect architecture. 
 
 Full end-to-end roadmap: `docs/planning/phases/roadmap.md`
 
-- **Phase 1:** Goal Agent → Code Structure Agent → Mentor Agent → FastAPI → minimal Next.js UI → see `docs/planning/phases/phase1.md`
+- **Phase 1:** Goal Agent → Code Structure Agent → Mentor Agent → FastAPI → minimal Next.js UI → see `project-archive/superseded-architecture/phase1.md`
 - **Phase 2:** Documentation Agent, Prioritization Agent, LangGraph migration
 - **Learning engine (current):** turn the code tour into a curriculum — see `docs/planning/phases/learning-engine.md`
 - **Phase 3:** Interactive learning graph — Mentor splits into Planner + Teaching + Grader; static path becomes an adaptive, stateful learning session
