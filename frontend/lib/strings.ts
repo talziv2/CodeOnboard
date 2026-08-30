@@ -643,8 +643,17 @@ export const t = {
       },
       map: {
         title: "The journey, whole",
+        // Says what the DRAWING means, because the drawing is now carrying real
+        // claims: the line's colour is progress, a marker is evidence, and a stop
+        // set off to the side is the journey having changed around an answer. A
+        // learner who is not told that reads three signals as decoration.
         body:
-          "Every stop and how they connect; click one to go and read it. The Analysis tab beside it is the evidence behind your progress — what you've demonstrated, what's still open, and everything the session has changed.",
+          "Every stop and how they connect; click one to go and read it. The line runs cyan as far as where you are, each marker says how that stop went, and a stop set off to the side is one the journey added for you after an answer fell short.",
+      },
+      legend: {
+        title: "The key, when you need it",
+        body:
+          "Every marker and every kind of line, spelled out — branches included, since those are the part that changes as you go. It opens from here whenever you want a reminder. The Analysis tab beside the map is the evidence behind all of it.",
       },
       back: {
         title: "And back again",
@@ -1205,6 +1214,54 @@ export const t = {
       `${understood} of ${total} required objectives demonstrated`,
     stopsTaken: (settled: number, total: number) =>
       `${settled} of ${total} stops taken`,
+    // --- the map's one context line ---
+    //
+    // The shape of the route, plus the one thing about it the session header does
+    // not already say. Both are counted off the stops on screen, with the same
+    // definitions `progress.py` uses, so neither can disagree with the header —
+    // and neither is a measure the header already reports, which is what would
+    // turn the map back into the dashboard it stopped being.
+    //
+    // "need work" rather than "need attention": it is the wording the
+    // understanding vocabulary already uses for `unresolved`, and a route that
+    // called the same state two things would be the exact drift M3a.3 closed.
+    chapterCount: (count: number) =>
+      count === 1 ? "1 chapter" : `${count} chapters`,
+    needWork: (count: number) =>
+      count === 1 ? "1 needs work" : `${count} need work`,
+    // --- the map's key ---
+    //
+    // WORDING RULE: a row names the symbol in the words the MAP already uses and
+    // then says what it means. Never the model's own vocabulary — a learner never
+    // meets `standing`, `disposition` or `insufficient`, and a key is the last
+    // place to introduce them.
+    //
+    // The bar gets ONE row although two standings draw it. `passed_by` and
+    // `set_aside` differ to the model and not to the symbol: the bar says "you
+    // closed this", the card's own caption says which way, and a second row would
+    // teach a distinction the marker does not make.
+    legend: {
+      open: "Key",
+      hint: "What the markers on this map mean",
+      stopGroup: "The markers",
+      routeGroup: "The line",
+      here: "The stop you are standing on.",
+      demonstrated: "You explained it, and never fell short here.",
+      needsWork: "Assessed, and not demonstrated yet.",
+      untouched: "Nothing has happened here yet.",
+      closedLabel: "Closed without demonstrating",
+      closed: "You moved on, skipped it, or said you already knew it.",
+      walkedLabel: "Behind you",
+      walked: "The part of the route you have already walked.",
+      aheadLabel: "Still ahead",
+      ahead: "Where the route goes next.",
+      // The two branch kinds, and the difference between them is the whole
+      // reason they are drawn in different colours: one is the journey reacting
+      // to an answer, the other was never promised in the first place.
+      branchWarmUp: "The journey changed shape: a warm-up added after an answer fell short.",
+      optionalLabel: "Off the default walk",
+      branchOptional: "Depth you did not ask for. Still yours to read.",
+    },
     // Remedial work is reported rather than folded into a percentage (OQ-2).
     detoursTaken: (count: number) =>
       `${count} warm-up${count === 1 ? "" : "s"} taken`,

@@ -54,6 +54,7 @@ export type TourTarget =
   | "mode-route"
   | "mode-learn"
   | "surface"
+  | "map-legend"
   | "progress";
 
 /** The attribute a component carries to become a target. */
@@ -71,6 +72,7 @@ export type TourStepId =
   | "understanding"
   | "route"
   | "map"
+  | "legend"
   | "back"
   | "progress";
 
@@ -107,7 +109,7 @@ export interface TourStep {
 }
 
 /**
- * The walk. Eleven steps, in the order the workspace is actually used: where you
+ * The walk. Twelve steps, in the order the workspace is actually used: where you
  * are, what you are being asked, the code it is anchored to, how you answer, what
  * the answer produced, and only then the session-level views.
  */
@@ -139,6 +141,22 @@ export const TOUR_STEPS: readonly TourStep[] = [
   // `inset`, not `center`: this target is the entire column, so the bubble sits in
   // its top corner and leaves the map itself legible underneath.
   { id: "map", target: "surface", side: "inset" },
+  /**
+   * The key, and it FOLLOWS the map rather than being folded into it.
+   *
+   * The step before says what the drawing means; this one says where to look it
+   * up again, and it is a separate step because the value is the spotlight on the
+   * control — a learner who is told the key exists but not shown the button has
+   * been told nothing they can act on later.
+   *
+   * NOT GATED, unlike the three round trips. The gate rule is that the tour
+   * advances on the state an action produces, and the disclosure's open state is
+   * not in `TourContext` — deliberately, since that context is two fields about
+   * the session and a tour that reached into a component's own UI state would be
+   * the first thing to break when that component changes. Opening a key is also
+   * the kind of control nobody has to be taught to press.
+   */
+  { id: "legend", target: "map-legend", side: "bottom" },
   {
     id: "back",
     target: "mode-learn",
@@ -190,6 +208,7 @@ export function entryFix(step: TourStep, ctx: TourContext): TabEvent | null {
 
     // …and the way back cannot start in Learn.
     case "map":
+    case "legend":
     case "back":
       return mode === "learn" ? { kind: "switchedMode", mode: "route" } : null;
 

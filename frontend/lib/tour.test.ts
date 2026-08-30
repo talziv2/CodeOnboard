@@ -238,6 +238,8 @@ describe("entryFix", () => {
   test("…and the way back cannot start in Learn", () => {
     expect(entryFix(step("back"), AT_START)).toEqual({ kind: "switchedMode", mode: "route" });
     expect(entryFix(step("map"), AT_START)).toEqual({ kind: "switchedMode", mode: "route" });
+    // The key is drawn by the map, so its step needs the same column the map does.
+    expect(entryFix(step("legend"), AT_START)).toEqual({ kind: "switchedMode", mode: "route" });
   });
 
   test("steps that are not about the column move nothing", () => {
@@ -329,5 +331,42 @@ describe("the copy exists for every step", () => {
       if (step.reached) expect(copy.cue, step.id).toBeTruthy();
       else expect(copy.cue, step.id).toBeUndefined();
     }
+  });
+});
+
+/**
+ * The key's step. It FOLLOWS the map rather than replacing anything in it: the map
+ * step says what the drawing means, and this one shows where to look it up again.
+ */
+describe("the key has its own step", () => {
+  const step = (stepId: string) => TOUR_STEPS.find((s) => s.id === stepId)!;
+
+  test("it comes straight after the map", () => {
+    const map = walkTo("map");
+    const next = reduceTour(map, { kind: "advance" }, { tab: "map", sourceOpen: false });
+    expect(id(next)).toBe("legend");
+  });
+
+  test("it points at the control, not at the column the map step already had", () => {
+    expect(step("legend").target).toBe("map-legend");
+    expect(step("map").target).toBe("surface");
+  });
+
+  /**
+   * NOT GATED, unlike the three round trips. A gate advances on the state an
+   * action produces, and the key's open state is not in `TourContext` — that
+   * context is two fields about the SESSION, and a tour reaching into one
+   * component's own UI state is the first thing that breaks when the component
+   * changes.
+   */
+  test("and it does not wait — opening a key needs no teaching", () => {
+    const state = walkTo("legend");
+    expect(state.armed).toBe(false);
+  });
+
+  test("the way back into Learn still follows it", () => {
+    const legend = walkTo("legend");
+    const next = reduceTour(legend, { kind: "advance" }, { tab: "map", sourceOpen: false });
+    expect(id(next)).toBe("back");
   });
 });
