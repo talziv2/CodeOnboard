@@ -40,13 +40,18 @@ These provide a contrast between complex and lightweight architectures.
 ---
 
 ## High-Level Architecture
-- Chat / Web UI
-- Backend API
-- GitHub Connector
-- Code & Docs Parser
-- Vector Store (RAG)
-- Agent Orchestrator
-- LLM Provider
+- Web UI (Next.js)
+- Backend API (FastAPI)
+- GitHub connector — shallow clone of a public repository
+- Deterministic code index — tree-sitter AST → files, symbols, exact line ranges
+- Budgeted exploration loop over that index
+- Agent orchestrator (LangGraph)
+- LLM provider (Anthropic)
+
+There is no retrieval layer, no embedding model and no vector store. Repository
+understanding is parsing plus tool-driven exploration; every citation resolves
+against the repository itself, so a hallucinated line range is structurally
+impossible.
 
 ---
 
@@ -61,50 +66,49 @@ These provide a contrast between complex and lightweight architectures.
 ---
 
 ## Tech Stack
-- Python 3.14 + uv
+- Python 3.11+ with [uv](https://docs.astral.sh/uv/)
 - FastAPI + uvicorn
 - Anthropic API (claude-haiku-4-5, claude-sonnet-4-6)
-- nomic-embed-text-v1.5 via sentence-transformers (embeddings, runs locally)
-- ChromaDB (vector store)
+- LangGraph (agent orchestration)
 - tree-sitter (AST parsing)
+- SQLite — one local file holding learning graphs, sessions and accounts
 - Next.js + Tailwind (frontend)
 
 ---
 
-## Setup
+## Running it
 
-### 1. Backend
+CodeOnboard is **self-hosted and local-first**: the backend, the frontend and
+the database all run on your own machine, and it calls Claude with your own
+Anthropic API key.
+
+**→ [RUN.md](RUN.md) is the full setup guide.**
+
+The short version:
 
 ```bash
-# Install Python dependencies
 uv sync
-
-# Copy env file and fill in your keys
-cp .env.example .env
-
-# Run backend (exclude data/ to prevent false reloads when repos are cloned)
-uv run uvicorn backend.api:app --reload 
+cp .env.example .env          # then paste your ANTHROPIC_API_KEY into it
+cd frontend && npm install && cd ..
 ```
 
-Required env vars: `ANTHROPIC_API_KEY`, `GITHUB_TOKEN` (optional)
-
-### 2. Frontend
+Then, in two terminals:
 
 ```bash
-# First time only — install Node dependencies
-cd frontend && npm install
-
-# Run frontend (in a separate terminal)
-cd frontend && npm run dev
+uv run uvicorn backend.api:app --reload    # terminal 1 — http://localhost:8000
+```
+```bash
+cd frontend && npm run dev                 # terminal 2 — http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open <http://localhost:3000>. The database is created for you on first use —
+there is no migration or seeding step.
 
-> **Note:** `node_modules/` is gitignored. Run `npm install` after every fresh clone or pull.
-> If you see `sh: next: command not found`, run `npm install` first.
+**Prerequisites:** Python 3.11+, uv, Node.js 18.18+, and `git` on your `PATH`
+(the backend shells out to it to clone the repository you want to learn).
 
-### Running both together
+---
 
-You need **two terminals running at the same time**:
-- Terminal 1: backend on `http://localhost:8000`
-- Terminal 2: frontend on `http://localhost:3000`
+## License
+
+[MIT](LICENSE) — © 2026 Shira Zakov and Tal Ziv.
