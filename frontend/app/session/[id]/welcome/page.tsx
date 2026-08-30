@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import DashboardLink from "@/components/DashboardLink";
 import ProfileCard from "@/components/ProfileCard";
 import RouteOverview from "@/components/RouteOverview";
 import SettingsMenu from "@/components/SettingsMenu";
@@ -139,8 +140,14 @@ export default function WelcomePage() {
   return (
     <main className="flex min-h-screen flex-col bg-ink">
       <header className="flex shrink-0 items-center gap-4 border-b border-rule bg-slab px-5 py-2.5">
-        <span className="font-display text-aside tracking-tight text-chalk">
-          {t.appName}
+        {/* The same way out, in the same place as the workspace header's — this
+            page is where a never-opened session lands, so it is the FIRST screen
+            that needs a door back to the list the learner arrived from. */}
+        <span className="flex shrink-0 items-center gap-3">
+          <span className="font-display text-aside tracking-tight text-chalk">
+            {t.appName}
+          </span>
+          <DashboardLink />
         </span>
         <span className="min-w-0 flex-1 truncate font-mono text-meta text-graphite">
           {repo}
