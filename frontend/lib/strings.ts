@@ -48,6 +48,12 @@ export const t = {
     noneArchived: "Nothing archived.",
     startNew: "Start a new session",
     backToDashboard: "Back to my sessions",
+    // The same act, at header width. `backToDashboard` is the spoken name and
+    // the tooltip; this is what fits beside a repository path and a goal without
+    // taking the room the goal needs. Both say "sessions" rather than "home" or
+    // "dashboard" — the destination is the learner's OWN list, and the one thing
+    // the words have to rule out is that this ends or restarts anything.
+    mySessions: "My sessions",
     continue: "Continue",
     // Planning runs in the background, so the card exists from the first second
     // and says what it is doing. Closing the tab no longer loses the session.

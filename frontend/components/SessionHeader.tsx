@@ -1,5 +1,6 @@
 "use client";
 
+import DashboardLink from "@/components/DashboardLink";
 import SessionMenu from "@/components/SessionMenu";
 import SettingsMenu from "@/components/SettingsMenu";
 import type { SessionGraph } from "@/lib/api";
@@ -10,6 +11,11 @@ import { t } from "@/lib/strings";
  *
  *   identity │ context ─────────── │ progress │ controls
  *   shrink-0 │ flex-1, floor 15rem │ shrink-0 │ shrink-0
+ *
+ * IDENTITY also holds the way out — `DashboardLink`, at the leading edge, where
+ * a way back belongs and where it cannot be mistaken for one of the trailing
+ * controls that change the session. Its label collapses under `sm` so the floor
+ * below still holds; see the component for why it is not in the `⋯` menu.
  *
  * The zone that matters is CONTEXT — the repository, the goal, and how deep the
  * learner asked to go. It is what says which session this is and what it is for,
@@ -66,12 +72,15 @@ export default function SessionHeader({
 }) {
   return (
     <header className="flex shrink-0 items-center gap-4 border-b border-rule bg-slab px-5 py-2.5">
-      {/* identity */}
-      <span className="flex shrink-0 items-center gap-2">
-        <span aria-hidden className="h-2 w-2 rotate-45 bg-signal" />
-        <span className="font-display text-aside tracking-tight text-chalk">
-          {t.appName}
+      {/* identity, and the way out */}
+      <span className="flex shrink-0 items-center gap-3">
+        <span className="flex items-center gap-2">
+          <span aria-hidden className="h-2 w-2 rotate-45 bg-signal" />
+          <span className="font-display text-aside tracking-tight text-chalk">
+            {t.appName}
+          </span>
         </span>
+        <DashboardLink />
       </span>
 
       {/* context — the zone with a floor */}
