@@ -3,6 +3,10 @@
 Multi-user M1. Two checks, and they are deliberately different in severity —
 one refuses to start, the other repairs quietly — because they protect against
 different failures.
+
+A third thing happens first, and it is neither: `ensure_schema` CREATES what the
+checks then read. See its docstring for why that has to be here rather than in
+each reader.
 """
 
 from __future__ import annotations
@@ -11,13 +15,62 @@ import logging
 import sqlite3
 from pathlib import Path
 
-from backend.learning.store import DEFAULT_DB_PATH, _connect
+from backend.learning.store import DEFAULT_DB_PATH, _connect, init_db
 
 logger = logging.getLogger(__name__)
 
 
 class UnownedSessionsError(RuntimeError):
     """Sessions exist with no owner. The migration has not run, or half ran."""
+
+
+def ensure_schema(db_path: Path = DEFAULT_DB_PATH) -> None:
+    """Create both halves of the schema before anything reads either. Idempotent.
+
+    ## The bug this fixes
+
+    A brand-new installation used to answer `GET /sessions` with a 500. The
+    sequence was three steps and every one of them looked right on its own:
+
+    1. Nothing creates the database at startup, so a fresh install has no file.
+    2. `POST /auth/register` writes through `init_auth_schema`, which CREATES THE
+       FILE and the six account tables — and none of the learning store's.
+    3. `list_sessions_for_user` guards with `if not Path(db_path).exists()`,
+       which was written for "no file at all". The file now exists, so the guard
+       passes and the query hits `no such table: sessions`.
+
+    So the first screen a learner saw after signing up carried a red error. It
+    cleared itself once they started a session — `create_pending_session` calls
+    `init_db` — which is exactly why it survived: it is invisible to anyone whose
+    database already has rows in it.
+
+    ## Why here, and not a guard in each reader
+
+    `list_sessions_for_user` is not the only reader with that shape;
+    `delete_session` has it too, and nothing stops a third from being written.
+    Fixing them one at a time treats "the tables exist" as something each caller
+    must remember, which is the same class of mistake as the one being fixed.
+
+    Doing it once at startup makes it true of the process instead. That is the
+    discipline this module already applies to its other invariants, and it is
+    strictly less code than the per-reader alternative.
+
+    ## Order
+
+    `init_db` first. `init_auth_schema` creates two indexes over `sessions`
+    columns (`user_id`, `repo_id`) that `init_db` adds through
+    `_ADDITIVE_COLUMNS`; it tolerates their absence, so this is not a
+    correctness requirement — but running in this order means the normal boot
+    stops relying on that tolerance.
+
+    Both are `CREATE … IF NOT EXISTS` throughout, and `_add_missing_columns`
+    reads `PRAGMA table_info` before altering anything, so on an existing
+    database this is a no-op costing two connections.
+    """
+    from backend.auth.schema import init_auth_schema
+
+    init_db(db_path)
+    init_auth_schema(db_path)
 
 
 def count_unowned_sessions(db_path: Path = DEFAULT_DB_PATH) -> int:
@@ -138,7 +191,14 @@ def run_startup_checks(db_path: Path = DEFAULT_DB_PATH) -> dict:
     Ordered by severity, deliberately: the repairs run FIRST so a tidy-up never
     appears to be the thing that failed, and the assertion runs LAST so its
     exception is the one that reaches the caller.
+
+    `ensure_schema` runs before all of them, because it is not a check at all —
+    it is the precondition the checks read. Every guard below stays exactly as
+    it is: they tolerate a missing table because a caller may pass a path this
+    function never saw, and that tolerance is now a second line rather than the
+    only one.
     """
+    ensure_schema(db_path)
     swept = sweep_orphaned_investigations(db_path)
     stale = fail_stale_generating(db_path)
     drafts_purged = purge_old_drafts(db_path)
