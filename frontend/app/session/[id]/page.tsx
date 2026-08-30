@@ -832,6 +832,10 @@ export default function SessionPage() {
                   <MapView
                     nodes={graph.nodes}
                     edges={graph.edges}
+                    // The chapters, so the map groups the route the way the rail
+                    // beside it does. Both go through `buildSections`, so the two
+                    // renderings cannot disagree about which chapter a stop is in.
+                    areas={graph.areas}
                     currentNodeId={currentNodeId}
                     repoUrl={graph.repo_url}
                     onGoToLesson={handleJump}

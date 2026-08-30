@@ -168,3 +168,130 @@ describe("an optional stop is not on the promised walk", () => {
     expect(screen.queryByText(t.rail.addedAfterConfusion)).toBeNull();
   });
 });
+
+/**
+ * ── The route reads as a route ────────────────────────────────────────────────
+ *
+ * Everything asserted below is a DISTINCTION THE GRAPH ALREADY CARRIED and the
+ * map was throwing away: the planner's chapters, which stop the learner is on,
+ * what is still outstanding on a stop, and which stops left the trunk. None of
+ * it is a new fact, which is why each test names the field it comes from.
+ */
+
+const AREAS = [
+  { id: "contract", title: "Problem contract", why: "What is promised.", order: 1 },
+  { id: "search", title: "Search and node", why: "How it is found.", order: 2 },
+];
+
+const CHAPTERED = [
+  node("n1", { title: "Entry points", area_id: "contract", visited: true,
+               understanding: "strength", attempted: true }),
+  node("n2", { title: "The Response", area_id: "contract", visited: true }),
+  node("n3", { title: "The Session object", area_id: "search",
+               objective: "Say what a Session owns that a bare call does not." }),
+  node("n4", { title: "Pool keys", area_id: "search", attempted: true,
+               understanding: "unresolved",
+               gaps: [{ id: "g1", kind: "wrong_model", claim: "a key is the host",
+                        blocking: true, status: "open" }] }),
+];
+
+const CHAPTERED_EDGES = [seq("n1", "n2"), seq("n2", "n3"), seq("n3", "n4")];
+
+const chaptered = (currentNodeId = "n3") =>
+  render(
+    <MapView
+      nodes={CHAPTERED}
+      edges={CHAPTERED_EDGES}
+      areas={AREAS}
+      currentNodeId={currentNodeId}
+      repoUrl="https://github.com/psf/requests"
+      onGoToLesson={vi.fn()}
+    />
+  );
+
+describe("chapters come from the planner's areas", () => {
+  test("each area heads its own run, numbered in walk order", () => {
+    chaptered();
+    expect(screen.getByText("Problem contract")).toBeTruthy();
+    expect(screen.getByText("Search and node")).toBeTruthy();
+    expect(screen.getByText("01")).toBeTruthy();
+    expect(screen.getByText("02")).toBeTruthy();
+  });
+
+  // Counted by `buildSections`, which counts stations the way `progress.py`
+  // does — so a chapter's counter cannot disagree with the rail's.
+  test("a chapter counts the stops behind you within it", () => {
+    chaptered();
+    expect(screen.getByText(t.rail.sectionProgress(2, 2))).toBeTruthy();
+    expect(screen.getByText(t.rail.sectionProgress(0, 2))).toBeTruthy();
+  });
+
+  // A pre-B3 graph has no areas. It rendered as one plain run before chapters
+  // existed and must still do so, rather than growing an invented heading.
+  test("a graph with no areas grows no headings", () => {
+    view();
+    expect(screen.queryByText("01")).toBeNull();
+  });
+});
+
+describe("where you are standing", () => {
+  test("the current stop says so in words, not only in cyan", () => {
+    chaptered();
+    expect(screen.getByText(t.rail.youAreHere)).toBeTruthy();
+  });
+
+  test("and it is the only stop that shows its objective", () => {
+    chaptered();
+    const objective = "Say what a Session owns that a bare call does not.";
+    expect(screen.getByText(objective)).toBeTruthy();
+    expect(screen.getAllByText(objective)).toHaveLength(1);
+  });
+
+  test("with no current node nothing claims to be here", () => {
+    chaptered("");
+    expect(screen.queryByText(t.rail.youAreHere)).toBeNull();
+  });
+});
+
+/**
+ * ONE status line per stop, in the rail's own words. The map used to print the
+ * understanding class alone, so a stop the learner walked past and one nobody
+ * had opened were captioned identically — with nothing.
+ */
+describe("what is still true of a stop", () => {
+  test("open misconceptions outrank everything else", () => {
+    chaptered();
+    expect(screen.getByText(t.rail.unresolvedCount(1))).toBeTruthy();
+  });
+
+  test("a stop reached and walked past says so", () => {
+    chaptered();
+    expect(screen.getByText(t.rail.passedBy)).toBeTruthy();
+  });
+
+  test("a demonstrated stop is named by its understanding class", () => {
+    chaptered();
+    expect(screen.getByText(t.map.understanding.strength)).toBeTruthy();
+  });
+});
+
+/**
+ * The one line of context the map adds. Every number is counted off the stops on
+ * screen with the definitions the backend uses, and none of them repeats a
+ * measure the session header already reports.
+ */
+describe("the route's own shape", () => {
+  test("stops walked, chapters, and what is outstanding", () => {
+    chaptered();
+    expect(screen.getByText(t.map.stopsTaken(2, 4))).toBeTruthy();
+    expect(screen.getByText(t.map.chapterCount(2))).toBeTruthy();
+    expect(screen.getByText(t.map.needWork(1))).toBeTruthy();
+  });
+
+  // "needs work" is an OPEN task — unresolved understanding that the learner has
+  // not closed. A journey with none of those must not display a zero.
+  test("nothing outstanding says nothing at all", () => {
+    view();
+    expect(screen.queryByText(t.map.needWork(0))).toBeNull();
+  });
+});

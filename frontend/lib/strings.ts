@@ -1205,6 +1205,21 @@ export const t = {
       `${understood} of ${total} required objectives demonstrated`,
     stopsTaken: (settled: number, total: number) =>
       `${settled} of ${total} stops taken`,
+    // --- the map's one context line ---
+    //
+    // The shape of the route, plus the one thing about it the session header does
+    // not already say. Both are counted off the stops on screen, with the same
+    // definitions `progress.py` uses, so neither can disagree with the header —
+    // and neither is a measure the header already reports, which is what would
+    // turn the map back into the dashboard it stopped being.
+    //
+    // "need work" rather than "need attention": it is the wording the
+    // understanding vocabulary already uses for `unresolved`, and a route that
+    // called the same state two things would be the exact drift M3a.3 closed.
+    chapterCount: (count: number) =>
+      count === 1 ? "1 chapter" : `${count} chapters`,
+    needWork: (count: number) =>
+      count === 1 ? "1 needs work" : `${count} need work`,
     // Remedial work is reported rather than folded into a percentage (OQ-2).
     detoursTaken: (count: number) =>
       `${count} warm-up${count === 1 ? "" : "s"} taken`,

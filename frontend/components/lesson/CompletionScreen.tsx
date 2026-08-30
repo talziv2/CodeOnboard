@@ -147,6 +147,7 @@ export default function CompletionScreen({
           <MapView
             nodes={graph.nodes}
             edges={graph.edges}
+            areas={graph.areas}
             currentNodeId={graph.current_node_id}
             repoUrl={graph.repo_url}
             // A read-only recap: the stop card still describes a stop, and with
