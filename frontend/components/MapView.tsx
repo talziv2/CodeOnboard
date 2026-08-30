@@ -10,6 +10,7 @@ import SectionLabel from "@/components/ui/SectionLabel";
 import ConceptTag from "@/components/ui/ConceptTag";
 import StatePin from "@/components/ui/StatePin";
 import StopCard from "@/components/StopCard";
+import MapLegend from "@/components/MapLegend";
 import { InlineProse } from "@/components/ui/Prose";
 import { t } from "@/lib/strings";
 
@@ -289,6 +290,27 @@ function StopRow({
           borderColor,
         }}
       >
+        {/* "you are here", and it leads the card — ORIENTATION OUTRANKS
+            PROVENANCE, so on the one stop that is both current and a warm-up this
+            comes before the reason it exists.
+
+            A SOLID chip rather than a line of cyan text. It was
+            `text-micro text-signal`, which put the single most important
+            orientation cue on the page at the same weight as the file path two
+            lines below it and in the same family — findable once you knew where
+            to look, invisible while scanning. Solid `signal` with `ink` on it is
+            not a new treatment: it is exactly the primary button's pairing, so it
+            arrives already measured at 9.91:1 in dark and 6.73:1 in light. And it
+            spends the accent on the one thing the accent is reserved for — the
+            palette's own rule is that signal means "you are here" and is never
+            decorative, which makes a solid block of it saying so the most
+            on-system emphasis available. */}
+        {isCurrent && (
+          <span className="w-fit rounded-chip bg-signal px-2 py-1 font-mono text-micro font-semibold uppercase tracking-[0.18em] text-ink">
+            {t.rail.youAreHere}
+          </span>
+        )}
+
         {/* WHY THIS STOP IS OFF THE TRUNK, in the colour of the spur that took it
             there — so the caption and the drawing are one statement rather than
             two. The line that used to precede this text is now the spur itself. */}
@@ -304,15 +326,6 @@ function StopRow({
         {kind === "optional" && (
           <span className="font-mono text-micro tracking-[0.06em] text-graphite">
             {t.map.stop.optional}
-          </span>
-        )}
-
-        {/* "you are here", in words as well as in cyan. The pin's halo and the
-            trunk's colour change both mark it, and neither survives being read
-            aloud or seen without colour. */}
-        {isCurrent && (
-          <span className="font-mono text-micro uppercase tracking-[0.16em] text-signal">
-            {t.rail.youAreHere}
           </span>
         )}
 
@@ -463,6 +476,12 @@ export default function MapView({
         {/* ── THE JOURNEY ──────────────────────────────────────────────────── */}
         <section className="flex flex-col gap-4">
           <SectionLabel as="h3">{t.map.journeyTitle}</SectionLabel>
+
+          {/* The key sits between the heading and the route, which is where a map
+              key goes: above the thing it explains, closed until asked for. Not in
+              the header row above — a disclosure expands in flow, and one opened
+              from there would push the route down from inside the title block. */}
+          <MapLegend />
 
           <div className="flex flex-col">
             {sections.map((section, si) => {

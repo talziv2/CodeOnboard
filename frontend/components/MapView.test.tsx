@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import MapView from "@/components/MapView";
 import { node, seq } from "@/test/factories";
@@ -44,6 +44,19 @@ function view(onGoToLesson: ((n: unknown) => void) | null = vi.fn()) {
 /** The stop row in the route list, as distinct from the same title inside the card. */
 const row = (title: string) =>
   screen.getAllByText(title).map((el) => el.closest("button")).find(Boolean)!;
+
+/**
+ * Text on the ROUTE, as opposed to the same words inside the key.
+ *
+ * The key speaks the map's vocabulary on purpose — that is what makes it a key —
+ * so every assertion about what the route says has to say which of the two it
+ * means. Addressed by the tour attribute rather than by a role, because that
+ * attribute is a contract the tour already depends on.
+ */
+const onRoute = (text: string) => {
+  const legend = document.querySelector('[data-tour="map-legend"]')?.closest("details");
+  return screen.queryAllByText(text).filter((el) => !legend?.contains(el));
+};
 
 describe("the route", () => {
   test("every stop is on it, under the journey heading", () => {
@@ -115,7 +128,7 @@ describe("a stop opens before it moves you", () => {
 describe("the analysis is not here", () => {
   test("no measures", () => {
     view();
-    expect(screen.queryByText(t.map.demonstratedLabel)).toBeNull();
+    expect(onRoute(t.map.demonstratedLabel)).toHaveLength(0);
     expect(screen.queryByText(t.map.moreBreakdowns)).toBeNull();
   });
 
@@ -165,7 +178,7 @@ describe("an optional stop is not on the promised walk", () => {
   // happened here; this stop was simply never promised.
   test("it is not captioned as inserted after a wrong answer", () => {
     renderOptional();
-    expect(screen.queryByText(t.rail.addedAfterConfusion)).toBeNull();
+    expect(onRoute(t.rail.addedAfterConfusion)).toHaveLength(0);
   });
 });
 
@@ -237,7 +250,7 @@ describe("chapters come from the planner's areas", () => {
 describe("where you are standing", () => {
   test("the current stop says so in words, not only in cyan", () => {
     chaptered();
-    expect(screen.getByText(t.rail.youAreHere)).toBeTruthy();
+    expect(onRoute(t.rail.youAreHere)).toHaveLength(1);
   });
 
   test("and it is the only stop that shows its objective", () => {
@@ -249,7 +262,7 @@ describe("where you are standing", () => {
 
   test("with no current node nothing claims to be here", () => {
     chaptered("");
-    expect(screen.queryByText(t.rail.youAreHere)).toBeNull();
+    expect(onRoute(t.rail.youAreHere)).toHaveLength(0);
   });
 });
 
@@ -271,7 +284,7 @@ describe("what is still true of a stop", () => {
 
   test("a demonstrated stop is named by its understanding class", () => {
     chaptered();
-    expect(screen.getByText(t.map.understanding.strength)).toBeTruthy();
+    expect(onRoute(t.map.understanding.strength)).toHaveLength(1);
   });
 });
 
@@ -293,5 +306,72 @@ describe("the route's own shape", () => {
   test("nothing outstanding says nothing at all", () => {
     view();
     expect(screen.queryByText(t.map.needWork(0))).toBeNull();
+  });
+});
+
+/**
+ * ── The key ───────────────────────────────────────────────────────────────────
+ *
+ * A visual language nobody is taught is decoration. What is asserted here is that
+ * the key covers what a learner can actually meet on the route — including the
+ * branches, which are the part that changes under them — that it costs nothing
+ * while closed, and that it is a `<details>`, which is where its keyboard
+ * behaviour comes from.
+ */
+describe("the key", () => {
+  const legend = () => document.querySelector('[data-tour="map-legend"]')!.closest("details")!;
+
+  test("is closed on arrival and opens from its own control", () => {
+    chaptered();
+    expect((legend() as HTMLDetailsElement).open).toBe(false);
+    // A `<summary>` is keyboard-operable as itself — Enter and Space toggle the
+    // `<details>` with no handler of ours, which is the reason it is one.
+    const summary = legend().querySelector("summary")!;
+    expect(summary.tagName).toBe("SUMMARY");
+    expect(screen.getByText(t.map.legend.open)).toBeTruthy();
+  });
+
+  test("names every marker the route can draw", () => {
+    chaptered();
+    const key = within(legend() as HTMLElement);
+    expect(key.getByText(t.rail.youAreHere)).toBeTruthy();
+    expect(key.getByText(t.map.understanding.strength)).toBeTruthy();
+    expect(key.getByText(t.map.understanding.recovered)).toBeTruthy();
+    expect(key.getByText(t.map.understanding.unresolved)).toBeTruthy();
+    expect(key.getByText(t.map.understanding.insufficient)).toBeTruthy();
+    expect(key.getByText(t.rail.attempted)).toBeTruthy();
+    expect(key.getByText(t.map.legend.closedLabel)).toBeTruthy();
+  });
+
+  // The branches are the reason the key matters most: they are the only thing on
+  // the map that means the journey changed because of what the learner did.
+  test("and both kinds of branch, with the difference between them", () => {
+    chaptered();
+    const key = within(legend() as HTMLElement);
+    expect(key.getByText(t.rail.addedAfterConfusion)).toBeTruthy();
+    expect(key.getByText(t.map.legend.branchWarmUp)).toBeTruthy();
+    expect(key.getByText(t.map.legend.optionalLabel)).toBeTruthy();
+    expect(key.getByText(t.map.legend.branchOptional)).toBeTruthy();
+  });
+
+  test("and both halves of the line", () => {
+    chaptered();
+    const key = within(legend() as HTMLElement);
+    expect(key.getByText(t.map.legend.walkedLabel)).toBeTruthy();
+    expect(key.getByText(t.map.legend.aheadLabel)).toBeTruthy();
+  });
+
+  /**
+   * The pins in the key are the REAL component, driven by the same server-sent
+   * facts the route passes it, so the key cannot drift from what it explains.
+   * Seven rows, seven pins — the count is what would break first if a row were
+   * ever replaced by a hand-drawn circle.
+   */
+  test("draws the markers rather than describing them", () => {
+    chaptered();
+    // The marker cell's own child, not every circle in the tree: the current
+    // pin carries an inner dot that is a `rounded-full` of its own.
+    const drawn = legend().querySelectorAll("li > span > span.rounded-full");
+    expect(drawn.length).toBe(7);
   });
 });
