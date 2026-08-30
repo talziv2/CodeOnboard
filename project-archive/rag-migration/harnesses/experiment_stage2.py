@@ -1,8 +1,8 @@
 """Stage 2 experiment — does Layer B (the repository Survey) earn its place?
 
-    uv run python scripts/experiment_stage2.py --dry-run
-    uv run python scripts/experiment_stage2.py --repos requests
-    uv run python scripts/experiment_stage2.py --repos requests fastapi --repeats 3
+    uv run python project-archive/rag-migration/harnesses/experiment_stage2.py --dry-run
+    uv run python project-archive/rag-migration/harnesses/experiment_stage2.py --repos requests
+    uv run python project-archive/rag-migration/harnesses/experiment_stage2.py --repos requests fastapi --repeats 3
 
 This does not prove the proposed architecture was right. It is built to find out
 whether a lightweight, cacheable, goal-agnostic Survey provides enough reusable
@@ -38,7 +38,7 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from dotenv import load_dotenv  # noqa: E402
 

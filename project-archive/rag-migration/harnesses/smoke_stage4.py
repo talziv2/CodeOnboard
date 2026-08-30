@@ -1,7 +1,7 @@
 """Stage 4 smoke test — the full adaptive learning loop over a persisted Dossier.
 
-    uv run python scripts/smoke_stage4.py --dry-run
-    uv run python scripts/smoke_stage4.py
+    uv run python project-archive/rag-migration/harnesses/smoke_stage4.py --dry-run
+    uv run python project-archive/rag-migration/harnesses/smoke_stage4.py
 
 Exercises the whole experience, not the pieces:
 
@@ -25,7 +25,7 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from dotenv import load_dotenv  # noqa: E402
 

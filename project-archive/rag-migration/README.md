@@ -5,6 +5,10 @@ Raw results from Stages 2–5 of the repository-understanding migration
 evidence base for the final report, and they record **both** where the new
 architecture improved on RAG and where RAG did better.
 
+> **Layout.** Every file named in the tables below is in [`results/`](results).
+> The harnesses that produced them are in [`harnesses/`](harnesses). This corpus
+> is historical and is not written to; see [`../README.md`](../README.md).
+
 Superseded, aborted and precursor runs have been removed. What is left is the
 smallest set that still supports every measured claim in the decision log.
 
@@ -50,4 +54,6 @@ smallest set that still supports every measured claim in the decision log.
 `gate-*.json` and `mutation-probe-*.json` are lists of per-attempt records.
 `stage2-*.json` have a `rows` array (one per run) plus `cells`/`consistency`
 summaries. `stage3-merged.json` and `integration-*.json` are keyed by goal, then
-by arm. The harnesses that produced them are in `scripts/`.
+by arm. The harnesses that produced them are in [`harnesses/`](harnesses), except the
+Stage-4 gate and the mutation probe, which still measure the current system and
+stayed in `scripts/`.

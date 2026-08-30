@@ -1,6 +1,6 @@
 """Stage 0 smoke test — repository-backed anchor resolution on a real checkout.
 
-    uv run python scripts/smoke_stage0.py [repo_path]
+    uv run python project-archive/rag-migration/harnesses/smoke_stage0.py [repo_path]
 
 Demonstrates the two halves of the Stage-0 migration boundary
 (docs/planning/phases/repo-understanding.md §12):
@@ -19,7 +19,7 @@ No LLM calls, no network, no ChromaDB.
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from backend.repo import anchors  # noqa: E402
 from backend.repo.skeleton import build_skeleton  # noqa: E402

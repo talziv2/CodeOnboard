@@ -27,6 +27,7 @@ as reference.
 | Directory | Contents |
 |---|---|
 | `superseded-architecture/` | Design documents for the pre-migration architecture, plus the Phase 1 completion record. |
+| `rag-migration/` | The measured comparison between retrieval-based repository understanding and the exploration-based architecture that replaced it — the curated results, and the harnesses that produced them. |
 
 ## Why it is kept
 
@@ -35,6 +36,27 @@ migration away from vector retrieval is the largest design decision in the
 project, and it is only assessable if the thing that was replaced is still
 legible. Deleting the old design would leave the current one looking inevitable
 rather than chosen.
+
+A migration record that keeps only its wins is not evidence, so the results in
+`rag-migration/results/` include the runs where the **replaced** architecture did
+better — most instructively `integration-rest.json`, where retrieval scored 100%
+discovery on `fastapi-di` and exploration scored 80%.
+
+## This archive is read, not written
+
+`rag-migration/results/` is a historical corpus, fixed at the point the migration
+closed. Nothing writes into it.
+
+The harnesses in `rag-migration/harnesses/` were moved out of `scripts/`; each one
+resolves the repository root from its own location, so that root was recomputed
+for the new depth and they still run from the repository root:
+
+    uv run python project-archive/rag-migration/harnesses/smoke_stage0.py
+
+Where a harness produces output, it writes to `data/experiments/` — outside this
+directory — exactly as it did before. Harnesses that measure the *current* system
+never moved: they are in `scripts/`, and their results go to
+`docs/planning/phases/evidence/`.
 
 ## What is deliberately *not* here
 

@@ -1,6 +1,6 @@
 """Does the Mutator still need retrieval? — re-probe persisted gate sessions.
 
-    uv run python scripts/gate_mutation_probe.py data/experiments/gate-run2.json
+    uv run python scripts/gate_mutation_probe.py project-archive/rag-migration/results/gate-run2.json
     uv run python scripts/gate_mutation_probe.py <gate.json> --at 0.5
 
 The gate's inline probe always fired at the session's FIRST node, which is the
