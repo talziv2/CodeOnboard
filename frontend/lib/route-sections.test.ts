@@ -3,6 +3,7 @@ import type { Area } from "@/lib/api";
 import { node, prereq, seq } from "@/test/factories";
 import { buildRoute } from "@/lib/graph-layout";
 import {
+  arrivalIntro,
   buildSections,
   currentSection,
   isComplete,
@@ -175,5 +176,88 @@ describe("isComplete", () => {
   test("complete only when every station has been dealt with", () => {
     expect(isComplete({ total: 3, settled: 2 } as never)).toBe(false);
     expect(isComplete({ total: 3, settled: 3 } as never)).toBe(true);
+  });
+});
+
+describe("the chapter introduction", () => {
+  /**
+   * Two chapters, `a` behind and `b` ahead, with the learner standing on the
+   * first stop of `b` — nothing settled there, nothing introduced yet. This is
+   * the exact state a click on a chapter's FIRST stop produces, and the state
+   * every other guard on the introduction lets through.
+   */
+  const arriving = (current: string) => {
+    const nodes = [
+      node("a1", { area_id: "a", visited: true }),
+      node("a2", { area_id: "a", visited: true }),
+      node("b1", { area_id: "b" }),
+      node("b2", { area_id: "b" }),
+    ];
+    const stops = buildRoute(nodes, [seq("a1", "a2"), seq("a2", "b1"), seq("b1", "b2")]);
+    return buildSections(stops, [area("a", 1), area("b", 2)], current);
+  };
+
+  test("walking into a chapter with nothing behind it introduces it", () => {
+    expect(arrivalIntro(arriving("b1"), new Set(["a"]), false)).toEqual({
+      record: "b",
+      introduce: "b",
+    });
+  });
+
+  test("NAMING a stop inside it does not — the lesson was what was asked for", () => {
+    expect(arrivalIntro(arriving("b1"), new Set(["a"]), true)).toEqual({
+      record: "b",
+      introduce: null,
+    });
+  });
+
+  test("the chapter is recorded as seen either way, so it is never introduced late", () => {
+    const seen = new Set(["a"]);
+    const { record } = arrivalIntro(arriving("b1"), seen, true);
+    seen.add(record!);
+    // The learner now moves inside the chapter they picked into. Nothing settled
+    // yet — they have answered nothing — and the introduction must still not
+    // appear.
+    expect(arrivalIntro(arriving("b2"), seen, false)).toEqual({
+      record: null,
+      introduce: null,
+    });
+  });
+
+  test("the first chapter of a visit is a resume, not an arrival", () => {
+    expect(arrivalIntro(arriving("b1"), new Set(), false)).toEqual({
+      record: "b",
+      introduce: null,
+    });
+  });
+
+  test("a chapter already stood in is not introduced again", () => {
+    expect(arrivalIntro(arriving("b1"), new Set(["a", "b"]), false)).toEqual({
+      record: null,
+      introduce: null,
+    });
+  });
+
+  test("a chapter with a stop behind it is not new, whatever is remembered", () => {
+    const nodes = [
+      node("a1", { area_id: "a", visited: true }),
+      node("b1", { area_id: "b", visited: true }),
+      node("b2", { area_id: "b" }),
+    ];
+    const stops = buildRoute(nodes, [seq("a1", "b1"), seq("b1", "b2")]);
+    const sections = buildSections(stops, [area("a", 1), area("b", 2)], "b2");
+
+    expect(arrivalIntro(sections, new Set(["a"]), false)).toEqual({
+      record: "b",
+      introduce: null,
+    });
+  });
+
+  test("an ungrouped bucket has no chapter to introduce", () => {
+    const stops = buildRoute([node("x"), node("y")], [seq("x", "y")]);
+    expect(arrivalIntro(buildSections(stops, [], "y"), new Set(["a"]), false)).toEqual({
+      record: null,
+      introduce: null,
+    });
   });
 });
