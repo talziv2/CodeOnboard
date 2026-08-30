@@ -307,6 +307,22 @@ def test_no_source_file_logs_a_password_or_a_token():
 
     A `logger.info` with a password in it survives code review far more easily
     than it survives a grep.
+
+    ## The one deliberate exception, named here because this grep cannot see it
+
+    `/auth/forgot` logs the reset link — which contains a live token — at
+    WARNING, and that is the intended behaviour: this build mails nothing, so the
+    log and the response body are the only delivery mechanisms there are. It is
+    gated on `config.reveals_reset_link()`, so production logs the user id and no
+    token.
+
+    This check does not catch it, and not because the line is safe: the call
+    spans several lines and the scan is line-by-line, so `logger.warning(` and
+    the string never appear on the same line. Recorded rather than fixed, because
+    tightening the pattern to multi-line calls would make this suite fail on a
+    line that is deliberate — and a passing grep must not be read as proof that
+    nothing in `backend/` logs a credential. It is proof that nothing does *by
+    accident*.
     """
     offenders = []
     # `password` and `secret_hash` are unambiguous, and `raw_token` is the name

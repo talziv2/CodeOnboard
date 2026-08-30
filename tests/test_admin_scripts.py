@@ -163,13 +163,20 @@ def test_it_refuses_when_the_identity_belongs_to_someone_else(db):
 def test_no_route_exposes_the_password_setter(db):
     """THE BOUNDARY THAT MUST NOT ERODE.
 
-    D-5 ships no email verification, so a reset ENDPOINT would have nothing to
-    authenticate the request with — which is exactly why reset was deferred.
-    This tool's safety comes entirely from needing shell access to the machine.
+    `POST /auth/reset` now exists, so the claim this once made — that no reset
+    endpoint can exist at all — is narrower than it was. What still holds, and
+    what this asserts, is that THIS tool never becomes one.
+
+    The difference is what each can be trusted with. The endpoint authenticates a
+    token it handed to whoever asked for it, because D-5 ships no verified address
+    to mail it to; that makes it a development affordance, and `config.reveals_reset_link`
+    keeps it inert in production. This tool sets any account's password with no
+    token at all, and its safety comes entirely from needing shell access to the
+    machine holding the database. Reachable over HTTP it would be a total
+    authentication bypass.
 
     Asserted structurally rather than trusted, so a future "small helper
-    endpoint" fails the suite instead of quietly becoming a password-reset API
-    that anyone on the network can call.
+    endpoint" fails the suite instead of quietly becoming exactly that.
     """
     import backend.api as api
 

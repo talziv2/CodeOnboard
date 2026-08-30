@@ -141,6 +141,37 @@ CREATE INDEX IF NOT EXISTS idx_authsessions_user ON auth_sessions (user_id)
 """
 
 
+# ── password_resets ───────────────────────────────────────────────────────────
+#
+# Single-use reset tokens. Only the sha256 of the link's token is stored, so this
+# table is not a set of live keys to accounts — same rule as `auth_sessions`, and
+# it matters more here, because a reset token is worth a password rather than a
+# session.
+#
+# `subject` is the password identity this reset was issued FOR. Storing it beats
+# re-deriving the email at consume time, which would target the wrong identity if
+# the address had changed in between.
+#
+# NOT a production password-reset facility: nothing mails the link. See
+# `backend/auth/reset.py` for what that does and does not buy.
+_CREATE_PASSWORD_RESETS = """
+CREATE TABLE IF NOT EXISTS password_resets (
+    token_hash TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL,
+    subject    TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at    TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+)
+"""
+
+# Serves the "delete anything outstanding for this user" in `reset.create`.
+_CREATE_PASSWORD_RESETS_USER = """
+CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets (user_id)
+"""
+
+
 # ── repositories ──────────────────────────────────────────────────────────────
 #
 # `canonical_url` is what `cloner.normalize_repo_url` produces; `slug` is
@@ -213,6 +244,8 @@ _STATEMENTS = (
     _CREATE_IDENTITIES_USER,
     _CREATE_AUTH_SESSIONS,
     _CREATE_AUTH_SESSIONS_USER,
+    _CREATE_PASSWORD_RESETS,
+    _CREATE_PASSWORD_RESETS_USER,
     _CREATE_REPOSITORIES,
     _CREATE_REPOSITORIES_UNIQUE,
     _CREATE_DRAFTS,

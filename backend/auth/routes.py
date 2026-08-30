@@ -21,6 +21,14 @@ not a question an anonymous caller should be able to ask.
 That is [OPEN-3]'s recommended answer, implemented rather than left pending
 because M2 could not ship without choosing one. It is reversible in one place —
 `_TAKEN` below — if the UX cost is judged too high.
+
+## Password reset
+
+`/forgot` and `/reset` are here too, and they are **development-grade on
+purpose**: nothing mails the link. Outside production `/forgot` returns it, which
+is the whole delivery mechanism; in production it returns nothing and the flow is
+inert. `backend/auth/reset.py` states the limitation and why it is not closed
+here. `scripts/set_password.py` remains the recovery path that is safe anywhere.
 """
 
 from __future__ import annotations
@@ -33,7 +41,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from backend.auth import identity, passwords, throttle, tokens
+from backend.auth import config, identity, passwords, reset, throttle, tokens
 from backend.auth.deps import CurrentUser, current_user
 
 logger = logging.getLogger(__name__)
@@ -103,19 +111,37 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _guard(request: Request, account_key: str) -> None:
-    """Refuse early when this IP or this account is locked out."""
-    ip = _client_ip(request)
-    wait = max(
-        throttle.by_ip.retry_after(f"ip:{ip}"),
-        throttle.by_account.retry_after(f"acct:{account_key}"),
-    )
+def _refuse_if_locked(wait: float) -> None:
     if wait > 0:
         raise HTTPException(
             status_code=429,
             detail="too_many_attempts",
             headers={"Retry-After": str(int(wait) + 1)},
         )
+
+
+def _guard(request: Request, account_key: str) -> None:
+    """Refuse early when this IP or this account is locked out."""
+    ip = _client_ip(request)
+    _refuse_if_locked(max(
+        throttle.by_ip.retry_after(f"ip:{ip}"),
+        throttle.by_account.retry_after(f"acct:{account_key}"),
+    ))
+
+
+def _guard_ip(request: Request) -> None:
+    """Per-IP only, for `/reset` — which has no account to key on.
+
+    The account is not known until the token resolves, and keying on a constant
+    instead would let five bad guesses lock every reset in the deployment: a
+    denial of service handed to an anonymous caller. Per-IP is what actually
+    bounds token guessing, and the token itself is 256 bits.
+    """
+    _refuse_if_locked(throttle.by_ip.retry_after(f"ip:{_client_ip(request)}"))
+
+
+def _penalise_ip(request: Request) -> None:
+    throttle.by_ip.record_failure(f"ip:{_client_ip(request)}")
 
 
 def _penalise(request: Request, account_key: str) -> None:
@@ -131,9 +157,9 @@ def _forgive(request: Request, account_key: str) -> None:
 class RegisterRequest(BaseModel):
     # `str`, not pydantic's `EmailStr`, which would pull in `email-validator`
     # for a precision this system cannot use: nothing here ever sends mail
-    # (D-5 ships no verification and no reset), so the address is contact
-    # information rather than an endpoint. `identity.validate_email` does the
-    # shape check.
+    # (D-5 ships no verification, and `/forgot` hands its link to the caller
+    # rather than mailing it), so the address is contact information rather than
+    # an endpoint. `identity.validate_email` does the shape check.
     email: str = Field(min_length=3, max_length=254)
     password: str = Field(min_length=1, max_length=1024)
     display_name: str | None = Field(default=None, max_length=80)
@@ -292,6 +318,141 @@ def logout_all(
     logger.info("logout-all user=%s sessions=%d", user.user_id, ended)
     response.status_code = 204
     return response
+
+
+# ── password reset (development-grade — see `backend/auth/reset.py`) ──────────
+
+class ForgotRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+
+
+class ForgotResponse(BaseModel):
+    """`reset_url` is populated only outside production.
+
+    One response model for both cases rather than two status codes, so the
+    production shape is identical whether or not the address has an account —
+    the enumeration rule that governs `/login` governs this too.
+    """
+
+    reset_url: str | None = None
+
+
+def _reset_link(raw: str) -> str:
+    """The URL a person opens to finish the reset.
+
+    Built against the app's first allowed origin — the Next dev server — because
+    the reset PAGE is served by Next while this endpoint is served by FastAPI, so
+    `request.base_url` would point at the API and produce a link to nothing.
+    """
+    from backend import api
+
+    origin = api.ALLOWED_ORIGINS[0] if api.ALLOWED_ORIGINS else ""
+    return f"{origin}/reset-password?token={raw}"
+
+
+@router.post("/forgot", response_model=ForgotResponse)
+def forgot_password(body: ForgotRequest, request: Request) -> ForgotResponse:
+    """Begin a password reset. Always 200, and never says whether the email exists.
+
+    Normalised but NOT shape-validated, for the same reason as `/login`: a
+    malformed address is simply one that matches no identity, and a different
+    status for it would tell an attacker which strings are candidates.
+    """
+    db_path = _db_path()
+    email = identity.normalize_email(body.email)
+    _guard(request, email)
+
+    record = identity.find_identity(identity.PASSWORD, email, db_path)
+    if record is None or not record["secret_hash"]:
+        # Two cases, one answer: no identity at all, or a federated one. A Google
+        # row keeps no secret of ours, so there is nothing to replace — and
+        # creating a password for it here would be identity LINKING, which D-7
+        # deliberately costs a password confirmation. Neither is a reset.
+        _penalise(request, email)
+        logger.info("reset requested for an address that cannot be reset")
+        return ForgotResponse()
+
+    raw = reset.create(record["user_id"], email, db_path=db_path)
+    _forgive(request, email)
+
+    if not config.reveals_reset_link():
+        # Production. The token exists and is unreachable: nothing mails it and
+        # nothing here will say it, so the endpoint is inert. Logged WITHOUT the
+        # token, so an operator can still see that somebody is locked out.
+        logger.warning(
+            "password reset requested user=%s — no delivery configured, "
+            "use scripts/set_password.py",
+            record["user_id"],
+        )
+        return ForgotResponse()
+
+    link = _reset_link(raw)
+    # WARNING, not INFO: this is a live credential on stdout. The line should
+    # look like the compromise it would be anywhere but a development machine.
+    logger.warning(
+        "PASSWORD RESET LINK (development only) user=%s %s", record["user_id"], link
+    )
+    return ForgotResponse(reset_url=link)
+
+
+class ResetRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=512)
+    password: str = Field(min_length=1, max_length=1024)
+
+
+@router.post("/reset", response_model=UserOut)
+def reset_password(
+    body: ResetRequest, request: Request, response: Response
+) -> UserOut:
+    """Spend a reset token, set the new password, and sign this browser in.
+
+    The order of the last three steps is load-bearing: replace the hash, revoke
+    EVERY existing session, then issue one. Revoking after issuing would kill the
+    session just created; not revoking at all would preserve exactly the access
+    the reset exists to close, since a password is reset by someone who believes
+    the old one is known to somebody else. Same reasoning as `set_password.py`.
+    """
+    db_path = _db_path()
+    _guard_ip(request)
+
+    try:
+        passwords.validate(body.password)
+    except passwords.WeakPasswordError as exc:
+        # Checked BEFORE the token is spent, so a rejected password leaves the
+        # link usable. Spending it on a typo would send the learner back to
+        # `/forgot` for a new one, which is a bad enough experience that people
+        # would reach for a weaker password to avoid repeating it.
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    claim = reset.consume(body.token, db_path)
+    if claim is None:
+        # Unknown, already used, or expired — one refusal for all three.
+        _penalise_ip(request)
+        raise HTTPException(status_code=401, detail="invalid_reset_token")
+
+    user = identity.get_user(claim["user_id"], db_path)
+    if user is None or not user.get("is_active", 1):
+        # Deactivated between issue and use. The token is already spent, which is
+        # the safe direction.
+        raise HTTPException(status_code=401, detail="invalid_reset_token")
+
+    identity.set_password_hash(
+        claim["user_id"], claim["subject"], passwords.hash_password(body.password),
+        db_path,
+    )
+    tokens.revoke_all(claim["user_id"], db_path)
+
+    identity.touch_login(user["user_id"], db_path)
+    raw = tokens.issue(
+        user["user_id"], user_agent=request.headers.get("user-agent"), db_path=db_path
+    )
+    _set_cookie(response, raw)
+    logger.info("reset completed user=%s", user["user_id"])
+    return UserOut(
+        user_id=user["user_id"],
+        email=user.get("email"),
+        display_name=user.get("display_name"),
+    )
 
 
 @router.get("/me", response_model=UserOut)

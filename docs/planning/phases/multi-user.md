@@ -741,6 +741,39 @@ than discovered later:
 somewhere real. Until then the honest position is: this is a demo-grade account
 system, and the doc says so.
 
+#### What shipped later: a development-grade reset (D-5 stands)
+
+`POST /auth/forgot` and `POST /auth/reset` now exist, with
+`backend/auth/reset.py` owning single-use tokens (30 minutes, sha256-only
+storage, spent by the same UPDATE that validates them). **This does not close
+D-5**, and the split is worth being precise about, because the tempting reading
+is that reset is now done:
+
+| Part of a reset flow | Status |
+|---|---|
+| Token lifecycle — issue, expire, single-use, replace the hash, revoke every session | **Shipped.** Reused unchanged on the day a provider is added. |
+| Deciding *who* may reset an account | **Not shipped.** The link goes to whoever asked for it. |
+| Delivery | **Not shipped.** Nothing mails anything. |
+| Email verification | **Not shipped.** Unchanged from D-5. |
+
+So the endpoint does not authenticate the requester at all — it authenticates a
+token it handed to the requester. In development that is the point: it is how the
+flow is demonstrated and tested without infrastructure. In production
+`config.reveals_reset_link()` is False, the link is neither returned nor logged,
+and the flow is **inert**: a token is created and is reachable by nobody.
+
+That is containment, not a fix. Two consequences to keep in view:
+
+- **`scripts/set_password.py` is still the only recovery path safe to expose
+  outside a laptop**, and `tests/test_admin_scripts.py` still forbids it a route.
+  The tool sets any account's password with no token at all; over HTTP it would
+  be a total authentication bypass. The endpoint is a strictly weaker capability.
+- **A real deployment must add verification with delivery, in one change.**
+  Mailing a reset link to an unverified address hands the account to whoever
+  registered the address first — which is the squat in the table above, promoted
+  from nuisance to takeover. Shipping delivery alone is the one change here that
+  would be actively worse than shipping nothing.
+
 ---
 
 ## 7. Authorization model

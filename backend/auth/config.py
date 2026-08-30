@@ -38,6 +38,25 @@ def _cookies_are_secure() -> bool:
     return os.environ.get("CODEONBOARD_COOKIE_SECURE", "1") != "0"
 
 
+def reveals_reset_link() -> bool:
+    """Whether `POST /auth/forgot` may hand the reset link back to its caller.
+
+    THE ONE PLACE THIS IS DECIDED, so the rule has a name and cannot be
+    re-litigated per call site.
+
+    True outside production, where it is the entire delivery mechanism: this
+    project ships no mail provider (D-5), and a reset flow whose link goes
+    nowhere cannot be demonstrated or tested.
+
+    False in production, where returning it would make the endpoint an
+    account-takeover API for anybody able to type an email address. The endpoint
+    still answers there — it simply reveals nothing and mails nothing, so it is
+    inert rather than dangerous. That is a degradation, not a fix; the fix is
+    email verification plus a provider, and it is not in this scope.
+    """
+    return not is_production()
+
+
 def check() -> list[str]:
     """Problems with the current environment. Empty means fine.
 

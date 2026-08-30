@@ -96,6 +96,40 @@ export const t = {
       switchPrompt: "Already have an account?",
       switchAction: "Sign in",
     },
+    // Sits under the sign-in form. Named as the question the learner is asking,
+    // not as the mechanism ("Reset password"), because at that moment they do
+    // not yet know a reset is what they need.
+    forgotLink: "Forgot password?",
+    forgot: {
+      title: "Reset your password",
+      subtitle: "Enter your email and we'll make you a reset link.",
+      submit: "Get a reset link",
+      busy: "Preparing…",
+      failed: "Could not start a reset. Try again.",
+      // Shown for EVERY address, including one with no account — the server
+      // answers identically either way and this copy must not undo that.
+      sent: "If that email has an account with a password, a reset link is ready.",
+      // Development only. The banner says so, because a link handed straight to
+      // whoever asked for it is not how this would work anywhere real.
+      devNotice: "Development build: no email is sent, so the link is shown here.",
+      devOpen: "Open the reset link",
+      back: "Back to sign in",
+    },
+    reset: {
+      title: "Choose a new password",
+      subtitle: "Pick a new password for your account.",
+      newPasswordLabel: "New password",
+      submit: "Set password and sign in",
+      busy: "Saving…",
+      failed: "Could not set the password. Try again.",
+      // The link is single-use and short-lived, so the two ways to arrive here
+      // without a usable one get the same instruction: start again.
+      missingToken: "That reset link is incomplete. Start again from the sign-in page.",
+      restart: "Start again",
+      // Says the consequence BEFORE the click, because it is one a learner on
+      // another device would otherwise discover by being logged out.
+      revokeNotice: "Setting a new password signs you out everywhere else.",
+    },
     signOut: "Sign out",
     google: "Continue with Google",
     // The link step exists because the app verifies no email of its own, so
@@ -1338,9 +1372,28 @@ export const t = {
     last_identity:
       "That's the only way into this account, so it can't be removed. Set a password first.",
     too_many_attempts: "Too many attempts. Wait a moment, then try again.",
+    // One message for unknown, expired and already-used, because the API
+    // returns one refusal for all three — a reset link that has been spent must
+    // not be distinguishable from one that never existed.
+    invalid_reset_token:
+      "That reset link has expired or has already been used. Request a new one.",
     "Email or password is incorrect.": "Email or password is incorrect.",
     "That email cannot be used to register.":
       "That email can't be used. Try signing in instead.",
+    // `passwords.validate`'s refusals, mapped so they survive `errorTextOr`.
+    // These are the opposite case to the login refusals above: this is the
+    // caller's OWN password being judged, so it reveals nothing about anyone
+    // else and the person cannot act without being told what is wrong. Worded
+    // identically to the API on purpose — the mapping exists to mark them as
+    // messages we have vetted, not to reword them.
+    //
+    // COUPLED to `passwords.MIN_PASSWORD_LENGTH`: raising it there changes the
+    // sentence and this key stops matching, at which point the learner gets the
+    // generic failure instead of the actionable one. Cheap to notice, so it is
+    // recorded rather than engineered around.
+    "Use at least 10 characters.": "Use at least 10 characters.",
+    "That password is too common. Pick another.":
+      "That password is too common. Pick another.",
     // A session planned before the route was snapshotted, so there is nothing to
     // restore it to. Says what to do instead, because the learner cannot fix this
     // one and rebuilding genuinely is the way out.
@@ -1385,4 +1438,18 @@ export const t = {
  */
 export function errorText(message: string): string {
   return t.errors[message.trim()] ?? message;
+}
+
+/**
+ * `errorText`, but never shows a backend string we have not worded ourselves.
+ *
+ * The fall-through in `errorText` is right where the API's `detail` slugs are
+ * the only thing that can arrive. It is wrong for anything a *transport* failure
+ * can reach: a stale server missing a new route answers `{"detail":"Not Found"}`,
+ * and "Not Found" rendered under an email field tells a learner nothing about
+ * their email, their account, or what to do. Prefer this wherever an unmapped
+ * message would be shown to somebody who cannot act on it.
+ */
+export function errorTextOr(message: string, fallback: string): string {
+  return t.errors[message.trim()] ?? fallback;
 }
