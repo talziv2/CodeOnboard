@@ -2,23 +2,14 @@
 setlocal
 cd /d "%~dp0"
 
-rem Objective-first planner (B3). Set to 0 to use the pre-B3 planner.
-set "CODEONBOARD_CURRICULUM=1"
-
-rem Gap model (learning-graph.md §11 OQ-4, decided 2026-08-17). DEVELOPMENT
-rem ONLY — `flags.gaps_enabled()` still defaults to 0, so the shipped default
-rem and the test suite are unaffected.
+rem Opens both servers in their own windows. A convenience — the supported path
+rem is the two commands in RUN.md, and this runs exactly those.
 rem
-rem THIS IS NOT DATA COLLECTION ONLY. It also changes runtime adaptation: the
-rem Grader derives the scalar `gap_kind` from the gaps it finds, and that scalar
-rem selects the intervention (hint / re-teach / prerequisite / follow-up). The
-rem measured direction is an improvement — gap_kind agreement 47-48/48 against a
-rem baseline of 45, missing_prerequisite 4/6 -> 6/6 — but a flag-on session can
-rem receive a different intervention than the same session flag-off.
-rem
-rem Gaps are collected but NOT shown to the learner: nothing can close one until
-rem gap-model M6 ships verification, so a displayed list would only ever grow.
-set "CODEONBOARD_GAPS=1"
+rem NO FLAGS ARE SET HERE, deliberately. This used to force
+rem CODEONBOARD_CURRICULUM=1 and CODEONBOARD_GAPS=1, so anyone who launched the
+rem project this way got a different planner and a different remediation path
+rem than the documented commands give, with nothing on screen to say so. Put
+rem either in `.env` if you want it; see `.env.example`.
 
 netstat -ano | findstr "LISTENING" | findstr ":8000 " >nul
 if %errorlevel%==0 (
@@ -35,5 +26,5 @@ if %errorlevel%==0 (
 )
 
 echo.
-echo   Backend:  http://localhost:8000  (CODEONBOARD_CURRICULUM=%CODEONBOARD_CURRICULUM%)
+echo   Backend:  http://localhost:8000
 echo   Frontend: http://localhost:3000
