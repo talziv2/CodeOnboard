@@ -38,7 +38,7 @@ which swaps its whole subtree for `CompletionScreen`.
 
 Tailwind v4 with **no `tailwind.config`** and **no component library**. The
 entire design system is ~40 CSS custom properties in an `@theme` block in
-[globals.css](frontend/app/globals.css), consumed as ordinary Tailwind colour
+[globals.css](../../../frontend/app/globals.css), consumed as ordinary Tailwind colour
 utilities (`bg-slab`, `text-chalk`, `border-rule`).
 
 This is the single best architectural decision in the frontend. A theme is a
@@ -483,10 +483,10 @@ consequence.
 
 | File | Purpose | Owns |
 |---|---|---|
-| [app/page.tsx](frontend/app/page.tsx) | Entry funnel | `Step` machine (repo / goal / starting / failed), repo URL, recents, progress id, retained goal for retry |
+| [app/page.tsx](../../../frontend/app/page.tsx) | Entry funnel | `Step` machine (repo / goal / starting / failed), repo URL, recents, progress id, retained goal for retry |
 | [app/session/[id]/welcome/page.tsx](frontend/app/session/[id]/welcome/page.tsx) | Pre-session orientation | graph + briefing, independently loaded |
 | [app/session/[id]/page.tsx](frontend/app/session/[id]/page.tsx) | Session shell | **All session state** — graph, tab, source visibility, viewed file / range, focus key, overview layer, evidence node, scope busy + note, restart |
-| [app/layout.tsx](frontend/app/layout.tsx) | Root | fonts, theme boot script, `data-theme` |
+| [app/layout.tsx](../../../frontend/app/layout.tsx) | Root | fonts, theme boot script, `data-theme` |
 
 ### Components
 
@@ -571,7 +571,7 @@ re-implemented inline elsewhere.
 ### 5.1 Confirmed defects — wrong, not stylistic
 
 **a) The gap list and verification block use undefined and inverted tokens.**
-In [LessonPanel.tsx:468–518](frontend/components/LessonPanel.tsx#L468) six
+In [LessonPanel.tsx:468–518](../../../frontend/components/LessonPanel.tsx#L468) six
 elements use `bg-paper`, `text-ink` and `border-hairline`:
 
 - `--color-hairline` **does not exist**. Tailwind emits nothing for
@@ -713,7 +713,7 @@ at all. Shiki 4 is the only runtime dependency beyond React and Next.
 styled-components, no `clsx` / `cva`. Class strings are template literals with
 ternaries.
 
-**Design tokens:** all in [globals.css](frontend/app/globals.css) — surfaces,
+**Design tokens:** all in [globals.css](../../../frontend/app/globals.css) — surfaces,
 text, accents, semantic colours, tag hues (dark and light), code-pane colours,
 `--font-display`, `--ui-scale`, `--source-width`. Plus `.measure` (62ch), `.tok`
 and `.code-cold` for the syntax layer, and the reduced-motion block.

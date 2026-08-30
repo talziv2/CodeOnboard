@@ -220,13 +220,13 @@ produced. What happened instead:
 
 - stop 2 has **no cached lesson, 0 attempts, `not_started`** — it was never taught;
 - **every `visited` flag in the graph is 0**, including stop 1, which *was* taught and answered;
-- `/advance` marks the current node visited unconditionally ([api.py:607](../../../../backend/api.py)), so **`/advance` was never called in this session**;
+- `/advance` marks the current node visited unconditionally ([api.py:607](../../../../../backend/api.py)), so **`/advance` was never called in this session**;
 - `journey_events` is empty, so no mutation moved the pointer;
-- the only endpoint that moves `current_node_id` without marking visited is `/jump` ([api.py:1061-1068](../../../../backend/api.py)) — rail navigation.
+- the only endpoint that moves `current_node_id` without marking visited is `/jump` ([api.py:1061-1068](../../../../../backend/api.py)) — rail navigation.
 
 Frontend wiring is correct and not the cause: Continue calls `advance`
-([LessonPanel.tsx:189](../../../../frontend/components/LessonPanel.tsx)), a rail
-click calls `jump` ([page.tsx:151](../../../../frontend/app/session/[id]/page.tsx)).
+([LessonPanel.tsx:189](../../../../../frontend/components/LessonPanel.tsx)), a rail
+click calls `jump` ([page.tsx:151](../../../../../frontend/app/session/[id]/page.tsx)).
 So the learner reached stop 3 from the rail, and **`why_now` claimed a transfer
 that never occurred.** `_previous_unit()` takes the predecessor from
 `path_order()` (LQ4) — whose recorded justification is that it "stays correct
@@ -392,7 +392,7 @@ the journey for good: **only a second rail click can ever reach it**, which is
 what happened here.
 
 **The area introduction itself is intended behaviour, not part of the defect.**
-[page.tsx:113-119](../../../../frontend/app/session/[id]/page.tsx) opens the
+[page.tsx:113-119](../../../../../frontend/app/session/[id]/page.tsx) opens the
 section overview when the current node enters a not-yet-introduced area whose
 `settled` count is 0, and the comment at line 41 is explicit that it is a layer
 over the lesson column rather than a destination. Entering a2 at stop 4 satisfies
@@ -402,19 +402,19 @@ the first still untaken and no indication of it.
 
 **F18 — [FACT] `visited` records "was advanced through", never "was studied", and
 this is already visible in stored state.** Only `/advance` calls `mark_visited`
-([api.py:607](../../../../backend/api.py)); `/jump` does not
-([api.py:1061-1068](../../../../backend/api.py)). So stop 1 — taught, answered
+([api.py:607](../../../../../backend/api.py)); `/jump` does not
+([api.py:1061-1068](../../../../../backend/api.py)). So stop 1 — taught, answered
 and `understood` — is `visited=0` and will stay that way. `resume_point()` returns
-the first unvisited non-optional node ([graph.py:634](../../../../backend/learning/graph.py)),
+the first unvisited non-optional node ([graph.py:634](../../../../../backend/learning/graph.py)),
 which for this session is **stop 1**: a returning learner is sent back to a lesson
 they already completed. Confirmed by calling it — it returns "Map the Problem
 contract", not stop 2.
 
 **Checked and clean — the progress numbers do *not* inherit this.** The header's
 "2 of 15 stops taken" is right. `journey_progress` counts `progress.is_settled`
-([progress.py:173-180](../../../../backend/learning/progress.py)), the weaker
+([progress.py:173-180](../../../../../backend/learning/progress.py)), the weaker
 coverage predicate, not `visited`; the strict settling predicate lives separately
-in [graph.py:163-177](../../../../backend/learning/graph.py) and also does not
+in [graph.py:163-177](../../../../../backend/learning/graph.py) and also does not
 read `visited`. Recorded so that a fix to F18 is not mistaken for a fix to a
 progress bug that does not exist.
 
@@ -447,9 +447,9 @@ the round.**
 
 **F19 — [FACT] The rail displays a different order than the walk follows, and it
 is what induced the jump in F10.** `buildRoute`
-([graph-layout.ts:72](../../../../frontend/lib/graph-layout.ts)) walks the
+([graph-layout.ts:72](../../../../../frontend/lib/graph-layout.ts)) walks the
 sequence chain, so stop order is correct. But `buildSections`
-([route-sections.ts:80-118](../../../../frontend/lib/route-sections.ts)) buckets
+([route-sections.ts:80-118](../../../../../frontend/lib/route-sections.ts)) buckets
 **every** stop by `area_id` and emits the buckets in `area.order`:
 
 | | order presented |
@@ -539,7 +539,7 @@ conflict.*
 grading side there is no source in the room at all.**
 
 **F23 — [FACT] The Grader never receives any source code.** `_build_user_content`
-([grader/agent.py:367-383](../../../../backend/agents/grader/agent.py)) assembles
+([grader/agent.py:367-383](../../../../../backend/agents/grader/agent.py)) assembles
 the entire user message from:
 
 | field | value sent |
@@ -562,12 +562,12 @@ repository was marked down by a call that had never seen it.
 
 **F24 — [FACT] Teaching *does* get source, and the mechanism is sound; the scope
 is what failed.** `_read_node_source`
-([teaching/agent.py:329-360](../../../../backend/agents/teaching/agent.py)) reads
+([teaching/agent.py:329-360](../../../../../backend/agents/teaching/agent.py)) reads
 **every** anchor in order and `_source_header` labels it; `reteach`
-([respond.py:244-264](../../../../backend/agents/teaching/respond.py)) takes a
+([respond.py:244-264](../../../../../backend/agents/teaching/respond.py)) takes a
 `source` argument and injects it as *"The source code for this unit"*, fed from
 `_node_source(graph, node)` at the call site
-([api.py:928](../../../../backend/api.py)). So the re-teach in F20 **did** hold
+([api.py:928](../../../../../backend/api.py)). So the re-teach in F20 **did** hold
 source — `Graph` 1006–1058 — which does not contain `GraphProblem.h`. It was
 asked to correct a claim about code it had been handed the wrong pages for, and it
 confabulated rather than declining. The two layers therefore fail differently:
@@ -575,7 +575,7 @@ confabulated rather than declining. The two layers therefore fail differently:
 no way to say "that is not in front of me".**
 
 **F25 — [FACT] Verification cannot rescue a false gap either.** `_user_content`
-([grader/verification.py:109-122](../../../../backend/agents/grader/verification.py))
+([grader/verification.py:109-122](../../../../../backend/agents/grader/verification.py))
 sends the objective, the gap claims under the heading **"OUTSTANDING FALSE
 BELIEFS"**, the question and the answer — again **no source**. Gap `5a3b067d…`
 records a *true* statement under that heading. So closing it requires the learner
@@ -608,16 +608,16 @@ with exactly one control: **Set aside**.
 **F26 — [FACT] Every action available to the learner records a false thing, and
 none of them is "this gap is wrong".** The list renders one button per gap,
 `t.lesson.waiveOne`
-([LessonPanel.tsx:476-483](../../../../frontend/components/LessonPanel.tsx)), plus
+([LessonPanel.tsx:476-483](../../../../../frontend/components/LessonPanel.tsx)), plus
 the verification box below it. Tracing each path for a gap that should never have
 been opened:
 
 | the learner can | what the code does | what the record then says |
 |---|---|---|
-| **Check my understanding** | verification graded with no source ([verification.py:109-122](../../../../backend/agents/grader/verification.py)) | closes **only** if they assert `h` returns 0 — the falsehood (F25). Restating the code leaves it `unresolved` |
-| **Set aside** | `waive_gap` ([graph.py:429-447](../../../../backend/learning/graph.py)) — *"Never evidence: `waived` does not permit `understood`"* | *"you chose not to pursue this"* ([strings.ts:486](../../../../frontend/lib/strings.ts)); the stop is capped below demonstrated **forever**, for an answer that was right |
+| **Check my understanding** | verification graded with no source ([verification.py:109-122](../../../../../backend/agents/grader/verification.py)) | closes **only** if they assert `h` returns 0 — the falsehood (F25). Restating the code leaves it `unresolved` |
+| **Set aside** | `waive_gap` ([graph.py:429-447](../../../../../backend/learning/graph.py)) — *"Never evidence: `waived` does not permit `understood`"* | *"you chose not to pursue this"* ([strings.ts:486](../../../../../frontend/lib/strings.ts)); the stop is capped below demonstrated **forever**, for an answer that was right |
 | **nothing** | gap stays `open`, `blocking` | the stop is *"holding this stop back"* indefinitely |
-| **mark understood** (override) | `understanding_of` is the single owner and *"`verified` is the only status that permits `understood`"* ([graph.py:189-215](../../../../backend/learning/graph.py)) | no effect on the block |
+| **mark understood** (override) | `understanding_of` is the single owner and *"`verified` is the only status that permits `understood`"* ([graph.py:189-215](../../../../../backend/learning/graph.py)) | no effect on the block |
 
 **There is no truthful exit.** The gap lifecycle has states for *learner was
 wrong and fixed it* (`verified`), *learner was wrong and stopped* (`waived`) and
@@ -635,7 +635,7 @@ failure F20–F25 describe. Naming it is not designing it; the shape (does a dis
 delete the gap, flag it, or trigger a grounded re-check against the anchors?) is a
 product decision that belongs with the other end-of-round calls.
 
-**Note on the design comment.** [LessonPanel.tsx:456-459](../../../../frontend/components/LessonPanel.tsx)
+**Note on the design comment.** [LessonPanel.tsx:456-459](../../../../../frontend/components/LessonPanel.tsx)
 describes this list as *"the product's most honest surface: it tells the learner
 what they still do not know, by name"*. That is true **only while the gaps are
 true**, and F23 shows nothing at grading time can establish that. The most honest
@@ -727,7 +727,7 @@ not be regenerating its reasoning from grounded facts.
 
 **F29 — [FACT] The conclusion did not survive. It was regenerated from nothing,
 and that is the stronger result.** The re-teach prompt is built by `_node_context`
-([respond.py:175-187](../../../../backend/agents/teaching/respond.py)) from **this
+([respond.py:175-187](../../../../../backend/agents/teaching/respond.py)) from **this
 node only**: objective, question, the learner's answer, the grader's rationale,
 the gap block, and `lesson.get('setup') or lesson.get('walkthrough')`. There is no
 cross-node carrier, and every input was checked:
@@ -797,13 +797,13 @@ is not evidence the original failure is fixed.
 
 **F31 — [FACT] The warm-up was never aimed at either gap, and the code says so.**
 `/retry` calls `mutate_graph(state, "prerequisite", origin=LEARNER_REQUEST)` with
-**no diagnosis** ([api.py:1039-1041](../../../../backend/api.py)), so the Mutator
+**no diagnosis** ([api.py:1039-1041](../../../../../backend/api.py)), so the Mutator
 rebuilds one via `Diagnosis.from_node`
-([mutator.py:100-133](../../../../backend/agents/mentor/mutator.py)), which
+([mutator.py:100-133](../../../../../backend/agents/mentor/mutator.py)), which
 attaches a `Gap` **only if** `decide_all(...).action == "prerequisite"`. Both
 stop-4 gaps are `wrong_model`, whose policy action is **`reteach`** — so
 `gap is None`, `remediates` is omitted
-([mutator.py:482-483](../../../../backend/agents/mentor/mutator.py)), and the
+([mutator.py:482-483](../../../../../backend/agents/mentor/mutator.py)), and the
 warm-up is, in the source's own words, *"aimed by the answer rather than"* by a
 gap. The reviewer's conclusion — *the warm-up should be derived from the specific
 misconceptions detected, not from a nearby prerequisite concept* — is therefore a
@@ -880,7 +880,7 @@ is different, which changes the fix.
 written in the second person about one past answer.** From its docstring:
 *"Replaces `cached_lesson` — the corrected lesson is the lesson now, and a
 learner who returns should not meet the version that misled them"*
-([respond.py:249-254](../../../../backend/agents/teaching/respond.py)). The first
+([respond.py:249-254](../../../../../backend/agents/teaching/respond.py)). The first
 half of that reasoning is sound — the misleading original should not come back.
 The unexamined half is that **the corrective version is equally permanent**, and
 it is addressed to a learner state that expires: after the warm-up, after the
@@ -922,11 +922,11 @@ correctly. Documented only.
 
 **F38 — [FACT] Nothing is wrong with the count; the state vocabulary has no word
 for what the learner just did.** The wire sends **open gaps only**
-([graph.py:764-772](../../../../backend/learning/graph.py)), so "2" is accurate,
+([graph.py:764-772](../../../../../backend/learning/graph.py)), so "2" is accurate,
 and `understanding_state` is the *derived* value, correctly withholding
 `understood` while two blocking gaps are unverified. The rail renders
 `unresolvedCount(gaps.length)` for every `unresolved` node carrying gaps
-([RouteRail.tsx:190-191](../../../../frontend/components/RouteRail.tsx)).
+([RouteRail.tsx:190-191](../../../../../frontend/components/RouteRail.tsx)).
 
 What that collapses is two states a learner would never call the same thing:
 
@@ -940,8 +940,8 @@ What that collapses is two states a learner would never call the same thing:
 chain's `state_matches_latest_answer`. Neither surface uses it for this case:
 
 - the **rail** never consults it;
-- the **drawer** gates `pendingVerification` behind `chain.understanding !== "unresolved"` ([EvidenceDrawer.tsx:115-116](../../../../frontend/components/EvidenceDrawer.tsx)), which excludes exactly this node;
-- the four `why…` sentences cover *check waiting*, *waived*, *gaps open*, *answer fell short* ([strings.ts:583-597](../../../../frontend/lib/strings.ts)) — **none covers "your latest answer was right, the gaps are simply unverified"**, so stop 4 falls to `whyOpenGaps(2)`: *"2 misconceptions are still open here."*
+- the **drawer** gates `pendingVerification` behind `chain.understanding !== "unresolved"` ([EvidenceDrawer.tsx:115-116](../../../../../frontend/components/EvidenceDrawer.tsx)), which excludes exactly this node;
+- the four `why…` sentences cover *check waiting*, *waived*, *gaps open*, *answer fell short* ([strings.ts:583-597](../../../../../frontend/lib/strings.ts)) — **none covers "your latest answer was right, the gaps are simply unverified"**, so stop 4 falls to `whyOpenGaps(2)`: *"2 misconceptions are still open here."*
 
 **Why this is worth recording rather than shrugging at.** M9's browser pass fixed
 the *wrong* caption here (`⚑ marked weak` for a learner whose latest answer
@@ -1356,7 +1356,7 @@ continue."* Three `POST /retry` calls in the log, all **200 OK** — no exceptio
 node count unchanged at 17.
 
 **F52 — [FACT] The Mutator records why, and three layers throw it away.**
-`_mutate_prerequisite` ([mutator.py:241-284](../../../../backend/agents/mentor/mutator.py))
+`_mutate_prerequisite` ([mutator.py:241-284](../../../../../backend/agents/mentor/mutator.py))
 sets `state.last_mutation` to one of **three materially different** outcomes:
 
 | reason | meaning |
@@ -1366,9 +1366,9 @@ sets `state.last_mutation` to one of **three materially different** outcomes:
 | `generation_failed` | the call failed or produced nothing groundable — **an error** |
 
 Then: `/retry` returns only `{"current_node_id", "inserted": false}`
-([api.py:1053-1055](../../../../backend/api.py)) — reason and rationale dropped;
+([api.py:1053-1055](../../../../../backend/api.py)) — reason and rationale dropped;
 `last_mutation` is never persisted; `state.errors` is discarded too. `handleRetry`
-([LessonPanel.tsx:199-211](../../../../frontend/components/LessonPanel.tsx)) then
+([LessonPanel.tsx:199-211](../../../../../frontend/components/LessonPanel.tsx)) then
 renders one string for all three, and its comment asserts the *specific*
 interpretation — *"no candidate was a smaller foundation than the stop they are
 on"* — which is true of only one of them.
@@ -1395,10 +1395,10 @@ across every database that exists**; this is the first, and it exercised M6's
 Two observations from it:
 
 - **`verification_attempts: 0` on a verified gap is correct, not a bug.** Only
-  `record_failed_verification` increments ([gaps.py:217](../../../../backend/learning/gaps.py));
+  `record_failed_verification` increments ([gaps.py:217](../../../../../backend/learning/gaps.py));
   `mark_verified` does not, and `gap_insight` compensates by defining the tested
   population as `verification_attempts > 0 **or** status == "verified"`
-  ([gap_insight.py:171](../../../../backend/learning/gap_insight.py)). Checked
+  ([gap_insight.py:171](../../../../../backend/learning/gap_insight.py)). Checked
   because it looks wrong at a glance. *(Low-confidence aside: `"retried"` counts
   `verification_attempts > 1`, so a gap that failed once and then verified is not
   counted as retried — worth a look when M3b's thresholds are calibrated.)*
@@ -1723,7 +1723,7 @@ about the technical content; it is confused about who is right.
 2. `gap-model.md` limitation #3 states `right_idea_wrong_altitude` is *"nearly unreachable as a gap — the addendum excludes true statements from the gaps list, and altitude errors are true at some level"*. It fired here — **on a true statement**, which is precisely the route the limitation assumed was closed. The post-M10 boundary work sharpened `wrong_model` vs `right_idea_wrong_altitude`; it did not consider a claim that is true *and more precise than the objective*.
 
 **Mitigation that did hold:** `right_idea_wrong_altitude` is non-blocking
-([graph.py:213-215](../../../../backend/learning/graph.py)), so this gap does not
+([graph.py:213-215](../../../../../backend/learning/graph.py)), so this gap does not
 withhold `understood`; it renders as *"Worth knowing"* rather than *"Holding this
 stop back"*. The damage is to the record, the follow-up and the learner's
 confidence — not to progression.
@@ -2464,7 +2464,7 @@ guarantee the gap denies.**
 **Why this is the round's most serious finding.** `mark_verified` is documented as
 *"The ONLY producer of `verified` … No learner action, override or UI path reaches
 here, which is what keeps the artifact meaningful"*
-([gaps.py:194-200](../../../../backend/learning/gaps.py)), and gap-model **M6's
+([gaps.py:194-200](../../../../../backend/learning/gaps.py)), and gap-model **M6's
 AC2** was accepted on a *double dissociation* — an answer still holding the
 misconception fails, a corrected one passes. **Here the holding answer passed.**
 The corpus now contains a `verified` gap whose closing evidence contradicts it, and
@@ -2472,7 +2472,7 @@ The corpus now contains a `verified` gap whose closing evidence contradicts it, 
 can distinguish this from a real closure.
 
 **Cause, and it needs no new diagnosis:** `_user_content`
-([verification.py:109-122](../../../../backend/agents/grader/verification.py))
+([verification.py:109-122](../../../../../backend/agents/grader/verification.py))
 sends the objective, the gap claims, the question and the answer — **no source**
 (F25). But note this failure did not even require source: the answer and the gap
 claim are both in the prompt and are textually near-identical. A comparison the
@@ -2498,7 +2498,7 @@ M3b's `verification_outcomes` template would count both.
 
 **F91 — [FACT] The verification question is not persisted, so this cannot be
 audited from stored state.** `pending_verification` is cleared on grading
-([verification.py](../../../../backend/agents/grader/verification.py)) and the
+([verification.py](../../../../../backend/agents/grader/verification.py)) and the
 attempt record stores only `answer`, `rationale`, `kind` and `gaps_resolved`. The
 question that was asked is **gone**. For a mechanism whose whole purpose is to be
 the trustworthy producer of `verified`, the one artifact needed to review a

@@ -17,7 +17,7 @@ as reference.
 
 | Question | Where to look |
 |---|---|
-| How does the system work today? | [`docs/reference/system-architecture.md`](../docs/reference/system-architecture.md) — written against the code, with `[implemented]` / `[known limitation]` / `[planned]` labels |
+| How does the system work today? | [`docs/architecture/`](../docs/architecture/overview.md) — written against the code, one document per subsystem |
 | How do I run it? | [`README.md`](../README.md) |
 | What are the conventions and rules? | [`CLAUDE.md`](../CLAUDE.md) |
 | How was the *current* system evaluated? | `docs/planning/phases/evidence/`, and the harnesses that produce it in `scripts/` |
@@ -26,7 +26,7 @@ as reference.
 
 | Directory | Contents |
 |---|---|
-| `superseded-architecture/` | Design documents for the pre-migration architecture, plus the Phase 1 completion record. |
+| `superseded-architecture/` | Design documents for the pre-migration architecture, the Phase 1 completion record, and `project-summary.md` — the long architecture-and-design report written against that architecture. |
 | `rag-migration/` | The measured comparison between retrieval-based repository understanding and the exploration-based architecture that replaced it — the curated results, and the harnesses that produced them. |
 
 ## Why it is kept

@@ -1,6 +1,9 @@
-# Patterns & Utilities
+# Patterns and utilities
 
-Reference for the recurring tools and patterns used across this codebase.
+Reference for the recurring Python idioms this codebase uses, and when to reach
+for each.
+
+> Index: [docs/README.md](../README.md)
 
 ---
 
@@ -34,7 +37,11 @@ class GoalSession:
 ```python
 class GoalOutput(BaseModel):
     primary_goal: str
-    goal_type: Literal["understand_system", "understand_component", "contribute_code", "debug_issue"]
+    goal_type: Literal[
+        "use_library", "understand_system", "understand_component",
+        "understand_architecture", "contribute_code",
+        "improve_existing_system", "debug_issue",
+    ]
     focus_area: str
 ```
 
@@ -46,12 +53,12 @@ If the LLM returns a wrong type or an invalid `goal_type` value, Pydantic raises
 
 **What it is:** A type annotation that constrains a field to a fixed set of string values.
 
-**When we use it:** For enum-like fields where the set of valid values is small and known — `goal_type`, `depth`.
+**When we use it:** For enum-like fields where the set of valid values is small and known — `goal_type`, `code_depth`, `prompt_kind`, a gap's `status`.
 
 ```python
 from typing import Literal
 
-goal_type: Literal["understand_system", "understand_component", "contribute_code", "debug_issue"]
+code_depth: Literal["map", "working", "implementation"]
 ```
 
 Pydantic enforces this at runtime; a value not in the list raises `ValidationError`.
