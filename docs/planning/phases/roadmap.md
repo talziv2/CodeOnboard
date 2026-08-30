@@ -61,7 +61,7 @@ Layer 5 — LLM (Anthropic API)
 
 ## Phase 1 — Core pipeline
 
-**Detail:** [`docs/planning/phases/phase1.md`](phase1.md)
+**Detail:** [`project-archive/superseded-architecture/phase1.md`](../../../project-archive/superseded-architecture/phase1.md) *(archived)*
 
 **Goal:** Working end-to-end pipeline on one real repo before anything else.
 

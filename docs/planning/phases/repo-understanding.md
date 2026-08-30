@@ -23,7 +23,7 @@ repository, and for the migration away from the hand-built vector-RAG layer in
 `backend/rag/`.
 
 It cuts across Phases 1–3 rather than extending them: it replaces the
-repository-understanding substrate that Phase 1 built ([`phase1.md`](phase1.md)),
+repository-understanding substrate that Phase 1 built ([`phase1.md`](../../../project-archive/superseded-architecture/phase1.md)),
 that Phase 2 tuned, and that Phase 3 ([`phase3.md`](phase3.md)) now depends on at
 session time. The learning graph, grading, translation and UI are **not** in scope
 and are expected to survive untouched.

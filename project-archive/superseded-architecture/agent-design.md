@@ -32,7 +32,7 @@ structured `GoalOutput` Pydantic object.
 - Input: `repo_url` from `OnboardState`
 - Output: `state.goal` (validated `GoalOutput` dict)
 - LLM calls: 1 (synthesis only)
-- See [`docs/goal-agent.md`](../goal-agent.md) for full detail.
+- See [`goal-agent.md`](goal-agent.md) for full detail.
 
 ### Code Structure Agent  `backend/agents/code_structure/`
 
@@ -45,7 +45,7 @@ entry through a `ModuleEntry` Pydantic model before writing to state.
 - Output: `state.repo_path`, `state.module_map`, `state.chunks_embedded`
 - LLM calls: 1
 - Embedding model: `nomic-ai/nomic-embed-text-v1.5` via sentence-transformers (local)
-- See [`docs/design/code-structure-agent.md`](code-structure-agent.md) for full detail.
+- See [`code-structure-agent.md`](code-structure-agent.md) for full detail.
 
 ### Mentor Agent  `backend/agents/mentor/`
 
@@ -64,7 +64,7 @@ biasing the LLM toward narrower teaching anchors.
   the Code Structure Agent
 - Output: `state.learning_path`, `state.confidence`
 - LLM calls: 1, plus at most 1 retry on duplicate anchors
-- See [`docs/reference/agents/mentor-agent.md`](../reference/agents/mentor-agent.md) for full detail.
+- See [`mentor-agent.md`](mentor-agent.md) for full detail.
 
 ---
 

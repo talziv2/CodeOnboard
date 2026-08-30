@@ -149,7 +149,7 @@ Install: `sentence-transformers`, `chromadb` ✅ (added to pyproject.toml)
 - `scripts/smoke_onboard_submarines.py` — submarine planner repo across all 4 goal types ✅
 
 **Reference docs:**
-- [`docs/reference/agents/mentor-agent.md`](../../reference/agents/mentor-agent.md) — full agent reference
+- [`mentor-agent.md`](mentor-agent.md) — full agent reference
 
 ---
 
