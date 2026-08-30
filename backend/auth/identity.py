@@ -288,9 +288,16 @@ def set_password_hash(
 ) -> None:
     """Replace the stored hash on a password identity.
 
-    Two callers: rehash-on-login when the parameters have been raised, and
-    `scripts/set_password.py`. Never an endpoint — with no email verification
-    shipping (D-5) there is no safe way to authenticate a reset request.
+    Three callers: rehash-on-login when the parameters have been raised,
+    `scripts/set_password.py`, and `POST /auth/reset` once it has spent a
+    single-use token.
+
+    That third one used to be ruled out here, on the grounds that with no email
+    verification (D-5) there is nothing to authenticate a reset request with.
+    That grounds still holds and the endpoint does not escape it: it authenticates
+    the token, and the token is only ever *delivered* to whoever asked for it,
+    which is why `backend/auth/reset.py` is development-grade and says so. The
+    console tool remains the recovery path that is safe outside a laptop.
     """
     with _connect(db_path) as conn:
         conn.execute(

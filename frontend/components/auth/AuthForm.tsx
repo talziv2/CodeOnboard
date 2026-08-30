@@ -133,6 +133,18 @@ export default function AuthForm({ mode }: { mode: "login" | "signup" }) {
         <p className="text-meta text-graphite">{t.auth.passwordHint}</p>
       )}
 
+      {/* Login only, and not while confirming a Google link — during that step
+          the password field is proving an identity, not signing in, and a
+          "forgot it?" escape from there would abandon a half-finished link. */}
+      {mode === "login" && !linking && (
+        <a
+          href="/forgot-password"
+          className="self-end text-meta text-graphite underline decoration-rule underline-offset-4 hover:text-chalk hover:decoration-signal"
+        >
+          {t.auth.forgotLink}
+        </a>
+      )}
+
       {mode === "signup" && (
         <>
           <label

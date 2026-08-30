@@ -1005,6 +1005,19 @@ export const register = (email: string, password: string, display_name?: string)
 export const login = (email: string, password: string) =>
   post<AuthUser>("/auth/login", { email, password });
 
+/** Ask for a reset link.
+ *
+ *  `reset_url` is populated only outside production, where it IS the delivery
+ *  mechanism — this build mails nothing. It is null for an address with no
+ *  password account, and null in production for every address, so the caller
+ *  must treat "no link" as the ordinary case rather than as a failure. */
+export const requestPasswordReset = (email: string) =>
+  post<{ reset_url: string | null }>("/auth/forgot", { email });
+
+/** Spend a reset token. Succeeds into a signed-in session, like `login`. */
+export const resetPassword = (token: string, password: string) =>
+  post<AuthUser>("/auth/reset", { token, password });
+
 /**
  * Who is calling, or null when nobody is. The whole client-side auth model.
  *

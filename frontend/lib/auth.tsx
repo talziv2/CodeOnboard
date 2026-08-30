@@ -42,8 +42,17 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 /** Where an interrupted visit is remembered, so login can return the learner to it. */
 export const NEXT_PARAM = "next";
 
-/** Routes a signed-out visitor may see. Everything else redirects to /login. */
-const PUBLIC_PATHS = new Set(["/login", "/signup"]);
+/** Routes a signed-out visitor may see. Everything else redirects to /login.
+ *
+ *  The password-reset pair belongs here for the reason the whole flow exists:
+ *  somebody who cannot sign in is the only person who ever needs it, so
+ *  requiring a session would make it unreachable by exactly its audience. */
+const PUBLIC_PATHS = new Set([
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+]);
 
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.has(pathname);

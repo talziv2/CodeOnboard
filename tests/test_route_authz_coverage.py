@@ -34,6 +34,8 @@ PUBLIC = {
     "/docs":                 "the Swagger page itself; its calls are enforced",
     "/docs/oauth2-redirect": "part of the Swagger page",
     "/redoc":                "rendered documentation only; every path it lists is still enforced",
+    "/auth/forgot":          "asks for a reset link for an account nobody is signed in to; answers identically for a known and an unknown address, and outside production the link it returns is the flow's only delivery mechanism",
+    "/auth/reset":           "spends a single-use reset token, which IS the credential being presented — requiring a session would defeat the purpose",
     "/auth/providers":       "which sign-in methods this deployment offers — the sign-in page must read it before anybody is signed in, and it describes the server, never a person",
     "/health":               "liveness only — returns a constant, reveals nothing about state",
 }
