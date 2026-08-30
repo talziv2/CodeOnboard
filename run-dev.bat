@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0"
 
 rem Opens both servers in their own windows. A convenience — the supported path
-rem is the two commands in RUN.md, and this runs exactly those.
+rem is the two commands in README.md, and this runs exactly those.
 rem
 rem NO FLAGS ARE SET HERE, deliberately. This used to force
 rem CODEONBOARD_CURRICULUM=1 and CODEONBOARD_GAPS=1, so anyone who launched the

@@ -338,7 +338,7 @@ Two conditional routes:
 
 ### 4.3 Shared state
 
-Every agent reads from and writes to a single dataclass called `OnboardState`, defined in [`backend/pipeline/state.py`](../backend/pipeline/state.py). This is the *only* communication channel between agents — there is no global module state, no shared mutable singletons, no cross-agent imports of intermediate results.
+Every agent reads from and writes to a single dataclass called `OnboardState`, defined in [`backend/pipeline/state.py`](../../backend/pipeline/state.py). This is the *only* communication channel between agents — there is no global module state, no shared mutable singletons, no cross-agent imports of intermediate results.
 
 The state carries:
 
@@ -945,7 +945,7 @@ Documenting this in the prompt is what keeps the rules from contradicting each o
 
 ### 7.9 Demo proof
 
-The script [`scripts/smoke_field_impact.py`](../scripts/smoke_field_impact.py) runs the pipeline twice on the same repo + goal_type with two contrasting field combinations:
+The script `scripts/smoke_field_impact.py` (removed) runs the pipeline twice on the same repo + goal_type with two contrasting field combinations:
 
 | | Run A | Run B |
 |---|---|---|
@@ -1302,7 +1302,7 @@ The Documentation Agent now exists (Part 5.3) and feeds Teaching with real READM
 
 ## Part 13 — Future Roadmap
 
-The full phase plan lives in [`docs/planning/phases/roadmap.md`](planning/phases/roadmap.md). This is a compressed view emphasizing what's next.
+The full phase plan lives in [`docs/planning/phases/roadmap.md`](../../docs/planning/phases/roadmap.md). This is a compressed view emphasizing what's next.
 
 ### 13.1 Near-term (builds directly on what exists)
 
