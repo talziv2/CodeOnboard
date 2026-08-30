@@ -187,6 +187,42 @@ export function isComplete(section: RouteSection): boolean {
   return section.total > 0 && section.settled === section.total;
 }
 
+/**
+ * Which chapter should introduce itself now, and which to record as seen.
+ *
+ * The chapter introduction is for a chapter the ROUTE walked the learner into:
+ * it stands in place of the lesson, so it may only appear when the learner did
+ * not ask for a lesson. `arrivedByChoice` is that distinction — the learner
+ * named this stop — and it is the whole fix for a real bug: clicking the first
+ * stop of a chapter opened the chapter over the top of it. Every other guard
+ * lets that case through, because the first stop of a fresh chapter is exactly
+ * "a chapter with nothing settled that has not been introduced yet".
+ *
+ * `record` is returned separately from `introduce` because a chapter is seen by
+ * being stood in, whether or not it introduced itself. Collapsing the two would
+ * re-introduce a chapter the learner resumed into the moment they moved inside
+ * it.
+ *
+ * Pure, and returning both decisions, so the page holds no policy: the caller
+ * adds `record` to its set and opens `introduce` if it is there.
+ */
+export function arrivalIntro(
+  sections: RouteSection[],
+  seen: ReadonlySet<string>,
+  arrivedByChoice: boolean
+): { record: string | null; introduce: string | null } {
+  const section = currentSection(sections);
+  const areaId = section?.area?.id;
+  if (!areaId || seen.has(areaId)) return { record: null, introduce: null };
+  // Nothing seen yet means this is where the learner came IN — a resume or a
+  // reload, not an arrival — so the first chapter of a visit never introduces
+  // itself.
+  const resumed = seen.size === 0;
+  const introduce =
+    !resumed && !arrivedByChoice && section.settled === 0 ? areaId : null;
+  return { record: areaId, introduce };
+}
+
 /** The section the learner is in, if any section holds the current stop. */
 export function currentSection(sections: RouteSection[]): RouteSection | null {
   return sections.find((s) => s.containsCurrent) ?? null;

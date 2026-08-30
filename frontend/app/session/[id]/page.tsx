@@ -16,7 +16,7 @@ import SurfaceTabs from "@/components/lesson/SurfaceTabs";
 import { getSession, jump, resetSession, sessionStart, setScope } from "@/lib/api";
 import type { GraphNode, SessionGraph } from "@/lib/api";
 import { buildRoute, spineLength } from "@/lib/graph-layout";
-import { currentSection, splitJourney } from "@/lib/route-sections";
+import { arrivalIntro, splitJourney } from "@/lib/route-sections";
 import { useSourcePane } from "@/lib/source-pane";
 import { RAIL_REM, useBand, useRootFontPx, sourceMustOverlay } from "@/lib/layout-bands";
 import Button from "@/components/ui/Button";
@@ -217,6 +217,26 @@ export default function SessionPage() {
   // cause a render, and paired with an evidence guard below — a section with
   // stops behind it is not new, whatever this page happens to remember.
   const introduced = useRef<Set<string>>(new Set());
+  /**
+   * The stop the learner NAMED, while the pointer is still standing on it.
+   *
+   * A chapter introduction stands in place of the lesson, so it must never
+   * answer a click that asked for a lesson. The rail's first stop under a
+   * chapter was doing exactly that: `/jump` moved the pointer into a chapter
+   * nothing had settled in, the arrival effect below saw a chapter it had not
+   * introduced, and the overview opened over the lesson that had just been
+   * asked for. Intermittently, because every other condition — a chapter with
+   * a stop behind it, one already stood in, the first one of the visit — hides
+   * it.
+   *
+   * Compared against the CURRENT node rather than cleared, which is what makes
+   * it self-invalidating: walking on, or a jump that failed, leaves it naming a
+   * stop the learner is no longer on, and it stops applying with no bookkeeping.
+   *
+   * The server's `arrival` record is not used for this. It is cleared by a
+   * `resume` jump, which is also a destination the learner named.
+   */
+  const picked = useRef<string | null>(null);
 
   // §5.3: scope is derived from evidence, then adjusted against a plan the
   // learner can see. This is the "adjusted" half — it moves existing units
@@ -439,14 +459,22 @@ export default function SessionPage() {
   // chain. It is offered only for a section with nothing behind it, so resuming
   // mid-chapter, re-reading a finished one, or reloading the page never
   // re-introduces anything.
+  //
+  // ARRIVING means the ROUTE brought them here. A stop the learner named is not
+  // an arrival — the introduction stands in place of the lesson, so answering a
+  // click for a lesson with it is the bug `picked` exists to stop. The whole
+  // decision is `arrivalIntro`, which is pure and tested; this only supplies the
+  // two facts it needs and applies what it says.
   useEffect(() => {
-    const section = currentSection(journey.sections);
-    const areaId = section?.area?.id;
-    if (!areaId || introduced.current.has(areaId)) return;
-    const isFirstSeen = introduced.current.size === 0;
-    introduced.current.add(areaId);
-    if (!isFirstSeen && section!.settled === 0) setOverviewAreaId(areaId);
-  }, [journey.sections]);
+    const currentId = graph?.current_node_id ?? null;
+    const { record, introduce } = arrivalIntro(
+      journey.sections,
+      introduced.current,
+      picked.current !== null && picked.current === currentId
+    );
+    if (record) introduced.current.add(record);
+    if (introduce) setOverviewAreaId(introduce);
+  }, [journey.sections, graph?.current_node_id]);
 
   // Esc closes the overview, like it returns from the map.
   useEffect(() => {
@@ -471,6 +499,7 @@ export default function SessionPage() {
   // including from the section overview, which is what makes its lesson list a
   // way in rather than a table of contents.
   const handleJump = async (node: GraphNode) => {
+    picked.current = node.id;
     setOverviewAreaId(null);
     setViewingFile(null);
     setViewingRange(null);
@@ -488,6 +517,9 @@ export default function SessionPage() {
   // raising another one, while still being recorded — a log showing only
   // departures would imply the learner never came back.
   const handleReturnToRoute = async (nodeId: string) => {
+    // Rejoining the route is a destination the learner named too — the notice
+    // says which stop it is, and they clicked it.
+    picked.current = nodeId;
     setReturning(true);
     setViewingFile(null);
     setViewingRange(null);
