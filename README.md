@@ -33,6 +33,33 @@ answer, naming what you got wrong, and reshaping the route around it.
 
 ---
 
+## Contents
+
+**Understanding the project**
+
+- [What problem this solves](#what-problem-this-solves)
+- [The ideas the system is built on](#the-ideas-the-system-is-built-on)
+- [Architecture](#architecture)
+- [How it works at runtime](#how-it-works-at-runtime)
+- [Repository structure](#repository-structure)
+
+**Getting it running**
+
+- [Setup from a fresh clone](#setup-from-a-fresh-clone) — [prerequisites](#prerequisites) · [install](#install) · [configure](#configure) · [the database](#the-database)
+- [Running the application](#running-the-application) — [check that it works](#check-that-it-works)
+- [First-run walkthrough](#first-run-walkthrough)
+
+**Working on it**
+
+- [Tests and validation](#tests-and-validation)
+- [What it costs](#what-it-costs)
+- [Troubleshooting](#troubleshooting)
+- [Documentation](#documentation)
+- [Status and scope](#status-and-scope)
+- [License](#license)
+
+---
+
 ## What problem this solves
 
 A developer handed an unfamiliar codebase has three bad options. A README explains
