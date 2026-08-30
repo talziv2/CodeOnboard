@@ -3,6 +3,11 @@
 .venv/
 data/repos/
 data/*.db
+# Hand-made copies of a database, kept beside it while something is being
+# compared or rolled back — `sessions.db.post-f2`, `sessions.db.<date>-backup`.
+# `data/*.db` does not match them, because the suffix comes AFTER the extension,
+# and one of these is the whole development corpus under a different name.
+data/sessions.db.*
 # SQLite's WAL sidecars. The learning store runs in WAL mode, so these two sit
 # beside every database file the app or the test suite touches — and `data/*.db`
 # does not match them, because the suffix comes AFTER the extension.
@@ -19,3 +24,7 @@ frontend/.next/
 frontend/node_modules/
 node_modules/
 data/quarantine/
+# A throwaway copy of the frontend, used to view two builds side by side.
+.ui-audit-fe/
+# Scratch file written into the served directory while probing the UI.
+frontend/public/probe.txt
