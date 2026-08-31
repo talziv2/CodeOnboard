@@ -10,26 +10,26 @@ answer, naming what you got wrong, and reshaping the route around it.
 
 **Backend**
 
-![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![uv](https://img.shields.io/badge/uv-packaging-DE5FE9?style=for-the-badge&logo=uv&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-API-009688?style=for-the-badge&logo=fastapi&logoColor=white)
-![Pydantic](https://img.shields.io/badge/Pydantic-validation-E92063?style=for-the-badge&logo=pydantic&logoColor=white)
-![LangGraph](https://img.shields.io/badge/LangGraph-orchestration-1C3C3C?style=for-the-badge&logo=langgraph&logoColor=white)
-![Anthropic](https://img.shields.io/badge/Claude-Haiku_%2B_Sonnet-D97757?style=for-the-badge&logo=anthropic&logoColor=white)
-![tree-sitter](https://img.shields.io/badge/tree--sitter-AST_index-4B32C3?style=for-the-badge)
-![SQLite](https://img.shields.io/badge/SQLite-persistence-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![uv](https://img.shields.io/badge/uv-packaging-DE5FE9?style=for-the-badge&logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-API-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Pydantic](https://img.shields.io/badge/Pydantic-validation-E92063?style=for-the-badge&logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-orchestration-1C3C3C?style=for-the-badge&logo=langgraph&logoColor=white)](https://langchain-ai.github.io/langgraph/)
+[![Anthropic](https://img.shields.io/badge/Claude-Haiku_%2B_Sonnet-D97757?style=for-the-badge&logo=anthropic&logoColor=white)](https://www.anthropic.com/claude)
+[![tree-sitter](https://img.shields.io/badge/tree--sitter-AST_index-4B32C3?style=for-the-badge)](https://tree-sitter.github.io/tree-sitter/)
+[![SQLite](https://img.shields.io/badge/SQLite-persistence-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 
 **Frontend**
 
-![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
-![React](https://img.shields.io/badge/React-19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
+[![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 
 **Testing**
 
-![pytest](https://img.shields.io/badge/pytest-1801_passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)
-![Vitest](https://img.shields.io/badge/Vitest-783_passing-6E9F18?style=for-the-badge&logo=vitest&logoColor=white)
+[![pytest](https://img.shields.io/badge/pytest-1801_passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](https://docs.pytest.org/)
+[![Vitest](https://img.shields.io/badge/Vitest-783_passing-6E9F18?style=for-the-badge&logo=vitest&logoColor=white)](https://vitest.dev/)
 
 ---
 
