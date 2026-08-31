@@ -15,8 +15,10 @@ const BASE = "/api";
 async function fail(res: Response): Promise<never> {
   const raw = await res.text();
   let message = raw;
+  let isJson = false;
   try {
     const body = JSON.parse(raw);
+    isJson = true;
     const detail = body?.detail ?? body;
     if (typeof detail === "string") message = detail;
     else if (Array.isArray(detail?.errors) && detail.errors.length > 0) {
@@ -25,6 +27,25 @@ async function fail(res: Response): Promise<never> {
   } catch {
     /* not JSON — the raw body is the best we have */
   }
+  // A 5xx whose body is not JSON did not come from FastAPI, which answers every
+  // error it handles with a JSON `detail`. It is the Next.js `/api/*` rewrite
+  // (see `next.config.ts`) failing to reach the backend at all, and its body is
+  // the bare string "Internal Server Error".
+  //
+  // `send()` already turns an unreachable backend into `server_unreachable`, but
+  // it only sees failures where the BROWSER's fetch rejects — which needs
+  // Next.js itself to be down. With the rewrite in front, a dead FastAPI is a
+  // perfectly successful request to Next that happens to return 500, so that
+  // branch never fired and the proxy's own text was rendered as if the server had
+  // said it. On the login form that made a dead backend look exactly like a
+  // rejected password.
+  //
+  // An unhandled exception INSIDE FastAPI lands here too: Starlette answers it
+  // with the same plain-text "Internal Server Error", so the two cannot be told
+  // apart from the response alone. Reporting both as unreachable is the
+  // deliberate trade — it names a cause the reader can actually check, and
+  // the backend is where they have to look either way.
+  if (!isJson && res.status >= 500) throw new Error("server_unreachable");
   throw new Error(message.trim() || `Request failed (${res.status})`);
 }
 

@@ -341,9 +341,65 @@ demand; both paths are gitignored.
 
 ## Running the application
 
-Two terminals, both from the repository root. **Both must be running**, and the
-backend should be up first — the frontend proxies to it, and a UI whose every call
-fails is harder to read than a backend that is simply not there yet.
+There are two ways in, and they start the same two processes — the Windows
+launcher runs exactly the commands from Option 2.
+
+### Option 1 — Windows: `run-dev.bat`
+
+Double-click it in Explorer, or run it from a terminal at the repository root:
+
+```bash
+run-dev.bat
+```
+
+It opens the backend and the frontend in their own windows, and then **waits
+until each one actually answers an HTTP request** before reporting anything:
+
+```text
+- Checking the Python environment - ok.
+
+- Backend: starting . ready.
+- Frontend: port 3000 is in use, checking whether it is CodeOnboard - yes.
+
+  ---------------------------------------------
+  Backend   http://localhost:8000   UP       - started by this script
+  Frontend  http://localhost:3000   UP       - already running, reused
+  ---------------------------------------------
+
+  Both services are up. Open the app at:
+
+      http://localhost:3000
+```
+
+Each service ends as exactly one of:
+
+| Status | What it means |
+| --- | --- |
+| `UP` | It answered. Either this run started it, or it was already healthy and was reused. |
+| `BLOCKED` | The port is held by a process that is **not** CodeOnboard — named, with its PID. Nothing was started, because it could not have bound the port anyway. |
+| `FAILED` | It was started and never answered. Its window is left open with the error still in it. |
+
+The script exits non-zero unless both are `UP`, and running it twice is safe: a
+healthy service is reused rather than duplicated. On a first checkout it also
+runs `npm install`, and it refuses to start anything if `uv` cannot produce a
+Python interpreter — a failure that otherwise happens inside a child window,
+where the only symptom is a long silence.
+
+Two knobs, both in seconds, for machines slower than the defaults:
+`CODEONBOARD_BACKEND_WAIT` (90) and `CODEONBOARD_FRONTEND_WAIT` (150).
+
+**Why it verifies instead of assuming.** It used to count occupied ports and then
+print a success banner unconditionally. A backend that never started left a
+working frontend, no backend, and a launcher insisting everything was fine —
+which reached the browser as `Internal Server Error` under the password field,
+because the `/api/*` proxy answers an unreachable backend with its own 500. A
+held port is not a healthy service, so nothing that was not observed is reported.
+
+### Option 2 — any platform: two terminals
+
+Both from the repository root. **Both must be running**, and the backend should
+be up first — the frontend proxies to it, and a UI whose every call fails is
+harder to read than a backend that is simply not there yet.
 
 **Terminal 1 — backend**, on `http://localhost:8000`:
 
@@ -362,9 +418,6 @@ Then open **<http://localhost:3000>**.
 That is the only URL you need. The frontend proxies `/api/*` through to the
 backend, so port 8000 is there for `curl` and for the generated API reference at
 <http://localhost:8000/docs> — the browser never calls it directly.
-
-On Windows, `run-dev.bat` opens both in their own windows. It is a convenience
-that runs exactly these two commands, not a separate supported path.
 
 ### Check that it works
 
