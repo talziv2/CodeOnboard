@@ -45,6 +45,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from backend.learning.gaps import GapState
+from backend.learning.tutor import TutorState
 from backend.learning.graph import (
     CodeAnchor,
     LearningEdge,
@@ -288,6 +289,15 @@ _ADDITIVE_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # session column rather than a node one because it describes the session's
     # POSITION, not any unit.
     ("sessions", "arrival_json", "TEXT"),
+    # ── the Tutor (tutor.md §4.2) ─────────────────────────────────────────────
+    #
+    # The transcript is SESSION-scoped and the ladder counters are NODE-scoped,
+    # which is why this is two columns rather than one. Both are written and read
+    # UNCONDITIONALLY: `CODEONBOARD_TUTOR` gates behaviour, never storage — the
+    # same contract `gaps_json` holds, and for the same reason. A flag-off save
+    # that loads a tutor-bearing graph must not destroy the conversation.
+    ("sessions", "tutor_json", "TEXT"),
+    ("nodes", "tutor_json", "TEXT"),
 
     # ── the account layer (multi-user M1) ─────────────────────────────────────
     #
@@ -553,9 +563,10 @@ def _write_graph(
         INSERT INTO sessions
             (session_id, repo_url, goal_json, current_node_id,
              doc_context_json, areas_json, journey_events_json, briefing_json,
-             arrival_json, schema_version, user_id, repo_id, last_active_at,
+             arrival_json, tutor_json, schema_version, user_id, repo_id,
+             last_active_at,
              readiness_cached, stops_settled_cached, stops_total_cached)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 strftime('%Y-%m-%dT%H:%M:%S', 'now'), ?, ?, ?)
         ON CONFLICT(session_id) DO UPDATE SET
             repo_url            = excluded.repo_url,
@@ -566,6 +577,7 @@ def _write_graph(
             journey_events_json = excluded.journey_events_json,
             briefing_json       = excluded.briefing_json,
             arrival_json        = excluded.arrival_json,
+            tutor_json          = excluded.tutor_json,
             -- SCHEMA_VERSION IS NOT REWRITTEN BY A SAVE.
             --
             -- `excluded.schema_version` here would relabel a version-2 session
@@ -600,6 +612,7 @@ def _write_graph(
             json.dumps(graph.journey_events) if graph.journey_events else None,
             json.dumps(graph.briefing) if graph.briefing is not None else None,
             json.dumps(graph.arrival) if graph.arrival is not None else None,
+            json.dumps(graph.tutor) if graph.tutor else None,
             SCHEMA_VERSION,
             owner,
             repo_id,
@@ -617,8 +630,8 @@ def _write_graph(
             node_id, session_id, title, file, line_start, line_end,
             concept_tags_json, lesson_brief_json, understanding_state,
             visited, weak_spot, user_override, cached_lesson_json,
-            attempts_json, symbol, gaps_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            attempts_json, symbol, gaps_json, tutor_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [_node_row(graph.session_id, n) for n in graph.nodes.values()],
     )
@@ -899,6 +912,7 @@ def _load_graph_rows(
             journey_events=_json_or_default(session_row, "journey_events_json", []),
             briefing=_json_or_default(session_row, "briefing_json", None),
             arrival=_json_or_default(session_row, "arrival_json", None),
+            tutor=_json_or_default(session_row, "tutor_json", []),
         )
         # Can this session be started over? One row's existence answers it, and
         # asking here means every consumer of a loaded graph gets the answer
@@ -1272,6 +1286,7 @@ def _node_row(session_id: str, node: LearningNode) -> tuple:
         json.dumps(node.attempts),
         node.code_anchor.symbol,
         json.dumps(node.gap_state.to_dict()),
+        json.dumps(node.tutor_state.to_dict()),
     )
 
 
@@ -1298,6 +1313,7 @@ def _row_to_node(row: sqlite3.Row) -> LearningNode:
         ),
         attempts=_json_or_default(row, "attempts_json", []),
         gap_state=GapState.from_dict(_json_or_default(row, "gaps_json", None)),
+        tutor_state=TutorState.from_dict(_json_or_default(row, "tutor_json", None)),
     )
 
 

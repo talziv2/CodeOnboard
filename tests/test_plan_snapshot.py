@@ -452,7 +452,7 @@ def test_the_plan_tables_hold_no_learner_state_columns(db_path):
     forbidden = {
         "understanding_state", "visited", "weak_spot", "user_override",
         "attempts_json", "gaps_json", "current_node_id", "arrival_json",
-        "journey_events_json",
+        "journey_events_json", "tutor_json",
     }
     assert columns & forbidden == set()
     assert columns == {
@@ -478,8 +478,12 @@ def test_every_learning_node_field_is_planned_or_defaulted(db_path):
     planned = {"id", "title", "code_anchor", "concept_tags", "lesson_brief",
                "cached_lesson"}
     # Learner state: absent from the plan tables, so it arrives at its default.
+    # `tutor_state` is STATE, deliberately: it counts hints written for the
+    # question in front of THIS learner and whether they asked to see an answer,
+    # which is a fact about a walk rather than about a plan. Carrying it into
+    # `plan_nodes` would restore a spent hint ladder onto a freshly started route.
     stateful = {"understanding_state", "visited", "weak_spot", "user_override",
-                "attempts", "gap_state"}
+                "attempts", "gap_state", "tutor_state"}
 
     assert planned | stateful == set(LearningNode.__dataclass_fields__), (
         "a LearningNode field is neither planned nor known-stateful — classify it "
