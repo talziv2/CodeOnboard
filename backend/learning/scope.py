@@ -91,15 +91,32 @@ def deepen(graph: LearningGraph) -> list[str]:
     Returns the ids promoted; an empty list means the journey has no further
     material, which the caller should say plainly rather than paper over.
     """
-    moved = [
+    moved = deepenable(graph)
+    for node_id in moved:
+        _set_priority(graph, node_id, "recommended")
+    return moved
+
+
+def deepenable(graph: LearningGraph) -> list[str]:
+    """Which units `deepen` WOULD promote, without promoting them.
+
+    Extracted from `deepen` rather than written beside it, so there is exactly one
+    definition of "material this journey still has in reserve". A second copy is
+    how an offer comes to disagree with the endpoint it offers — the Tutor asks
+    this before proposing `deepen`, and an offer the endpoint would answer with
+    an empty list is an offer that reads as broken when pressed.
+    """
+    return [
         node_id
         for node_id in graph.path_order()
         if _brief(graph, node_id).get("priority") == "optional"
         and _adjustable(graph, node_id)
     ]
-    for node_id in moved:
-        _set_priority(graph, node_id, "recommended")
-    return moved
+
+
+def can_deepen(graph: LearningGraph) -> bool:
+    """Has this journey anything deeper left to offer?"""
+    return bool(deepenable(graph))
 
 
 def is_locked(graph: LearningGraph, node_id: str) -> bool:

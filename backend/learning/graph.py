@@ -386,6 +386,7 @@ class LearningGraph:
         graded: bool = True,
         question: str = "",
         question_source: str = "",
+        assistance: dict | None = None,
     ) -> dict:
         """One graded answer, and THE QUESTION IT ANSWERED (M1).
 
@@ -439,6 +440,12 @@ class LearningGraph:
             attempt["question"] = question
         if question_source:
             attempt["question_source"] = question_source
+        # HOW MUCH HELP PRECEDED THIS ANSWER (tutor.md §6.4). Omitted when the
+        # caller had nothing to record, which reads as UNKNOWN — the state of
+        # every attempt written before the Tutor existed, and a different claim
+        # from "they had none".
+        if assistance:
+            attempt[history.ASSISTANCE] = assistance
         node = self.nodes[node_id]
         node.attempts.append(attempt)
         # A new answer WITHDRAWS a prior `continue` (M8, §3.6). "I chose to move

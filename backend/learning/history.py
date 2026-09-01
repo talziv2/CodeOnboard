@@ -169,6 +169,49 @@ ACTIONS = frozenset({"none", "hint", "reteach", "prerequisite", "followup"})
 ASSISTIVE_ACTIONS = frozenset({"hint", "reteach", "followup"})
 
 
+# --- assistance: what the system did BEFORE the answer (tutor.md §6.4) --------
+#
+# `RESPONSE` records what the system did ABOUT an answer. This records the
+# conditions the answer was given UNDER — how many Tutor hints preceded it, and
+# whether the learner had asked to see the explanation.
+#
+# It is metadata on evidence, NOT evidence. Nothing here changes a grade: the
+# Grader marks the answer, not the route to it, and a learner who reasons to a
+# correct answer with two hints understands it — which is what a hint that does
+# not contain the answer is FOR. What it changes is what `retry.py` offers next,
+# and that is an offer rather than a measurement.
+#
+# Absent means UNKNOWN — every attempt written before the Tutor existed — and
+# never "no help was given". Same discipline as `RESPONSE` and `QUESTION`, and for
+# the same reason: defaulting the stored corpus to unassisted would invent a fact
+# about answers nobody observed.
+ASSISTANCE = "assistance"
+
+
+def new_assistance(hints: int, revealed: bool) -> dict:
+    """The record of how much help preceded one answer."""
+    return {"hints": int(hints), "revealed": bool(revealed)}
+
+
+def assistance_of(attempt: dict) -> dict | None:
+    """How much help preceded this answer, or None when unrecorded.
+
+    `None` is deliberately not `{"hints": 0}`. The first means "we have no
+    record"; the second is a claim that the learner had none, and there are
+    hundreds of stored attempts about which we cannot honestly make it.
+    """
+    record = attempt.get(ASSISTANCE)
+    return record if isinstance(record, dict) else None
+
+
+def was_assisted(attempt: dict) -> bool | None:
+    """Did any help precede this answer? None when unrecorded."""
+    record = assistance_of(attempt)
+    if record is None:
+        return None
+    return bool(record.get("hints")) or record.get("revealed") is True
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 

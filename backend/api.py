@@ -57,12 +57,19 @@ from backend.agents.teaching import run as run_teaching
 from backend.agents.teaching import respond as teaching_respond
 from backend.agents.teaching import reassess as teaching_reassess
 from backend.agents.teaching import verify as teaching_verify
+from backend.agents.tutor import context as tutor_context
+from backend.agents.tutor import explain as tutor_explain
+from backend.agents.tutor import mode as tutor_mode
+from backend.agents.tutor import scaffold as tutor_scaffold
+from backend.agents.tutor import suggest as tutor_suggest
 from backend.learning import adaptation
 from backend.learning import history
 from backend.learning import progress
 from backend.learning import retry as retry_model
 from backend.learning import scope
 from backend.learning import store as learning_store
+from backend.learning import tutor as tutor_model
+from backend.learning.flags import tutor_enabled
 from backend.learning import understanding
 from backend.auth import config as auth_config
 from backend.auth import drafts
@@ -72,7 +79,7 @@ from backend.auth.google_routes import identities_router
 from backend.auth.google_routes import router as google_router
 from backend.auth.routes import router as auth_router
 from backend.auth.startup import run_startup_checks
-from backend.learning.graph import understanding_of
+from backend.learning.graph import is_settled, understanding_of
 from backend.learning.reset import reset_to_plan
 from backend.pipeline import progress as pipeline_progress
 from backend.pipeline.runner import run_pipeline
@@ -1498,6 +1505,28 @@ def session_respond(session_id: str, body: RespondRequest, user: CurrentUser = D
         graded=bool(grade.get("graded", True)),
         question=asked,
         question_source=asked_source,
+        # THE CONDITIONS THIS ANSWER WAS GIVEN UNDER (tutor.md §6.4).
+        #
+        # Read here, at the same point `question` and `question_source` are, and
+        # for the same reason: a `reteach` later in this request calls
+        # `new_question()`, which clears the counters — so reading them late would
+        # file every re-taught answer as unassisted.
+        #
+        # It does NOT change the grade. Everything below this line runs exactly as
+        # it did: the Grader has already marked the answer, `decide_all` responds
+        # to the verdict, and nothing consults this. What reads it is `retry.py`,
+        # afterwards, to decide what to OFFER.
+        #
+        # `None` when the Tutor is off, so no attempt is recorded as unassisted on
+        # the strength of a feature that was not running.
+        assistance=(
+            history.new_assistance(
+                graph.nodes[current].tutor_state.hints_used,
+                graph.nodes[current].tutor_state.revealed,
+            )
+            if tutor_enabled()
+            else None
+        ),
     )
 
     # WHAT the answer earns is decided deterministically from why it fell short
@@ -1924,3 +1953,436 @@ def session_file(session_id: str, path: str, user: CurrentUser = Depends(current
         content = f.read()
     return {"path": path, "content": content}
 
+
+# ── the Tutor (docs/planning/phases/tutor.md) ────────────────────────────────
+#
+# Five routes, one law:
+#
+#     A conversation turn is not evidence about the learner.
+#
+# The only writes any of them make are the transcript append and the per-node
+# counters. No attempt, no gap, no grade, no understanding state, no readiness, no
+# journey event, no graph mutation — and `tests/test_tutor_boundary.py` asserts
+# both halves of that: the import boundary structurally, and the graph payload by
+# comparing `to_dict()` before and after.
+#
+# Ownership follows the same four layers as every other session route:
+# `Depends(current_user)` in the signature, `_load_session_or_404` naming the
+# owner, 404 rather than 403, and the coverage test failing the build if either is
+# forgotten.
+
+
+class TutorAskRequest(BaseModel):
+    question: str
+    node_id: str | None = None
+
+
+class TutorNodeRequest(BaseModel):
+    node_id: str | None = None
+
+
+class TutorPinRequest(BaseModel):
+    turn_id: str
+    pinned: bool = True
+
+
+def _tutor_available() -> None:
+    """404 while the flag is off — the route does not exist, rather than refusing.
+
+    A 403 or a 501 would tell a caller the feature is there and withheld, which is
+    a fact about our deployment that nobody outside it needs.
+    """
+    if not tutor_enabled():
+        raise HTTPException(status_code=404, detail="not_found")
+
+
+def _tutor_node(graph, node_id: str | None):
+    """The stop a Tutor call is about. `None` only when the session has none."""
+    target = node_id or graph.current_node_id
+    if target is None:
+        return None
+    if target not in graph.nodes:
+        raise HTTPException(status_code=404, detail="node_not_found")
+    return graph.nodes[target]
+
+
+def _tutor_citable(node) -> tuple:
+    """The locations an answer may cite — every anchor the unit is grounded on.
+
+    Built from `lesson_brief["anchors"]` when the unit has them (a flow crossing
+    three files is citable in all three) and from the display anchor otherwise.
+    The RANGES ARE OURS: the model names a file and a symbol, and these are what
+    it is resolved against, so a line number it invented has nowhere to land.
+    """
+    stored = (node.lesson_brief or {}).get("anchors") or []
+    citable = []
+    for anchor in stored:
+        try:
+            citable.append(tutor_context.Citable(
+                file=str(anchor["file"]),
+                symbol=anchor.get("symbol"),
+                line_start=int(anchor["line_start"]),
+                line_end=int(anchor["line_end"]),
+            ))
+        except (KeyError, TypeError, ValueError):
+            continue
+    if not citable:
+        citable.append(tutor_context.Citable(
+            file=node.code_anchor.file,
+            symbol=node.code_anchor.symbol,
+            line_start=node.code_anchor.line_start,
+            line_end=node.code_anchor.line_end,
+        ))
+    return tuple(citable)
+
+
+def _tutor_repo_inputs(graph, node) -> tutor_context.RepoInputs:
+    """Everything that has to be read off a disk, read once.
+
+    The fallback order is the project's — **Dossier, then Skeleton, then
+    nothing** — and every step of it is non-fatal, exactly as it is in
+    `teaching/agent.py::run`. The one thing that is NOT degraded silently is the
+    source: when no anchor can be read, `source` stays None and the context says
+    so, because a Tutor answering fluently about code it could not open is the
+    failure the grounding rules exist to prevent.
+    """
+    from backend.agents.teaching.agent import _read_node_source
+    from backend.repo import dossier_context, dossier_store, structure, survey_store
+    from backend.repo.skeleton import build_skeleton
+
+    if node is None:
+        return tutor_context.RepoInputs()
+
+    try:
+        repo_path = clone_repo(graph.repo_url)
+    except Exception as e:
+        logger.warning("tutor: checkout unavailable for %s: %s", graph.session_id, e)
+        return tutor_context.RepoInputs()
+
+    source = None
+    try:
+        source = _read_node_source(repo_path, node)
+    except Exception as e:
+        # A unit whose every anchor is gone. Reported, then declared to the model
+        # as "could not be read" rather than quietly omitted.
+        logger.warning("tutor: no readable source for node %s: %s", node.id, e)
+
+    skeleton = None
+    try:
+        skeleton = build_skeleton(repo_path)
+    except Exception as e:
+        logger.warning("tutor: skeleton unavailable (non-fatal): %s", e)
+
+    system_context = ""
+    if skeleton is not None:
+        anchor = node.code_anchor
+        try:
+            stored = dossier_store.load_investigation(
+                graph.session_id, get_commit_sha(repo_path), db_path=SESSIONS_DB_PATH
+            )
+            dossier = (stored or {}).get("dossier")
+            if dossier:
+                system_context = dossier_context.context_for_node(
+                    skeleton, dossier, anchor.file, symbol=anchor.symbol,
+                    line_start=anchor.line_start, line_end=anchor.line_end,
+                ).as_prompt_section()
+        except Exception as e:
+            logger.warning("tutor: dossier context failed (non-fatal): %s", e)
+        if not system_context:
+            try:
+                system_context = structure.neighbour_context(
+                    skeleton, anchor.file, symbol=anchor.symbol,
+                    line_start=anchor.line_start, line_end=anchor.line_end,
+                )
+            except Exception as e:
+                logger.warning("tutor: structural context failed (non-fatal): %s", e)
+
+    survey = None
+    try:
+        owner, repo = parse_repo_url(graph.repo_url)
+        survey = survey_store.load_survey(
+            f"{owner}/{repo}", get_commit_sha(repo_path), db_path=SESSIONS_DB_PATH
+        )
+    except Exception as e:
+        logger.warning("tutor: survey unavailable (non-fatal): %s", e)
+
+    return tutor_context.RepoInputs(
+        source=source,
+        system_context=system_context or "",
+        survey=survey,
+        citable=_tutor_citable(node),
+    )
+
+
+def _tutor_offers(graph, node) -> list[dict]:
+    """Deterministic offers the SYSTEM makes, from the tier-2 signals (§5.2).
+
+    Distinct from a model's `suggestion`, and deliberately computed rather than
+    proposed: "they have asked four questions here" is a fact, where "they seem
+    confused" is a judgement. Both end at the same place — a validated control the
+    learner may press — but only one of them is allowed to be wrong about the
+    learner.
+
+    Never offered while a question is outstanding. Putting an exit in front of
+    somebody who is mid-thought is the system telling them to give up.
+    """
+    if node is None or tutor_mode.mode_for(node).is_scaffold:
+        return []
+    signal = None
+    if tutor_model.returning(node, is_settled(node)):
+        signal = "returning"
+    elif tutor_model.dwelling(node):
+        signal = "dwelling"
+    if signal is None:
+        return []
+    offer = tutor_suggest.validate(graph, node, {"kind": tutor_model.SUGGEST_REASSESS})
+    return [{**offer.to_dict(), "signal": signal}] if offer else []
+
+
+def _tutor_payload(graph, node, turn: dict | None = None) -> dict:
+    """One shape for every Tutor response, so a client never has to branch.
+
+    `mode` is recomputed from the graph on EVERY call rather than carried from the
+    request. A client that told us which mode it was in would be a client that
+    could ask for the answer key.
+    """
+    mode = tutor_mode.mode_for(node)
+    payload = {
+        "mode": mode.to_wire(),
+        "remaining": tutor_model.remaining(graph.tutor),
+        "cap": tutor_model.TUTOR_QUESTION_CAP,
+        "node_id": node.id if node is not None else None,
+        "offers": _tutor_offers(graph, node),
+    }
+    if turn is not None:
+        payload["turn"] = turn
+    return payload
+
+
+def _tutor_spend_or_409(graph) -> None:
+    if tutor_model.remaining(graph.tutor) <= 0:
+        raise HTTPException(status_code=409, detail="tutor_limit_reached")
+
+
+@app.get("/session/{session_id}/tutor")
+def tutor_transcript(
+    session_id: str, user: CurrentUser = Depends(current_user)
+) -> dict:
+    """The conversation, the mode, and the counters.
+
+    Called on mount and after `/advance`, so a refresh restores the panel exactly
+    — the same reason `/lesson` returns `retry` and `pending`. Reloading is not a
+    decision about the learner's understanding, so it must not change what is on
+    offer.
+
+    The whole transcript, not a page of it: the cap is twenty turns, so the
+    largest possible payload is small, and a panel that had to paginate to show a
+    learner their own questions would be paginating for nobody.
+    """
+    _tutor_available()
+    graph = _load_session_or_404(session_id, user.user_id)
+    node = _tutor_node(graph, None)
+    return {**_tutor_payload(graph, node), "turns": graph.tutor}
+
+
+@app.post("/session/{session_id}/tutor/ask")
+def tutor_ask(
+    session_id: str, body: TutorAskRequest,
+    user: CurrentUser = Depends(current_user),
+) -> dict:
+    """A question. Which agent answers it is decided here, never by the caller."""
+    _tutor_available()
+    question = (body.question or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question_empty")
+    if len(question) > tutor_model.MAX_QUESTION_CHARS:
+        raise HTTPException(status_code=400, detail="question_too_long")
+
+    graph = _load_session_or_404(session_id, user.user_id)
+    _tutor_spend_or_409(graph)
+    node = _tutor_node(graph, body.node_id)
+    mode = tutor_mode.mode_for(node)
+
+    client = _new_client()
+    errors: list[str] = []
+    repo = _tutor_repo_inputs(graph, node)
+
+    if mode.is_scaffold:
+        built = tutor_context.build_scaffold_context(
+            graph, node, mode.question, repo, graph.tutor,
+            hint_level=node.tutor_state.hints_used,
+        )
+        result = tutor_scaffold.reply(question, built, client=client, errors=errors)
+    else:
+        built = tutor_context.build_explain_context(graph, node, repo, graph.tutor)
+        result = tutor_explain.answer(question, built, client=client, errors=errors)
+
+    # A FAILED CALL IS NOT A TURN.
+    #
+    # It is not stored, it does not count against the cap, and it does not appear
+    # in the transcript — charging a learner's allowance for our own outage would
+    # spend their budget on our mistakes, which is the rule `remediation_rounds`
+    # already follows. The apology is returned so the panel can say something.
+    if errors:
+        logger.warning("tutor: call failed session=%s errors=%s", session_id, errors)
+        return {**_tutor_payload(graph, node), "turn": None, "failed": True,
+                "text": result["text"]}
+
+    suggestion = tutor_suggest.validate(graph, node, result.get("suggestion"))
+    turn = tutor_model.new_turn(
+        node_id=node.id if node is not None else None,
+        mode=mode.mode,
+        question=question,
+        answer=result["text"],
+        scope=result["scope"],
+        hint_level=node.tutor_state.hints_used if node is not None else 0,
+        citations=result["citations"],
+        suggestion=suggestion.to_dict() if suggestion else None,
+        grounded=result["grounded"],
+        usage=result["usage"],
+    )
+    graph.tutor.append(turn)
+    if node is not None:
+        node.tutor_state.turns += 1
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
+    return _tutor_payload(graph, node, turn)
+
+
+@app.post("/session/{session_id}/tutor/hint")
+def tutor_hint(
+    session_id: str, body: TutorNodeRequest | None = None,
+    user: CurrentUser = Depends(current_user),
+) -> dict:
+    """One rung of the Socratic ladder.
+
+    409 `not_asking` in EXPLAIN: a hint for a question that is not outstanding is
+    a client bug, not a learner action, and inventing one would mean scaffolding
+    toward nothing.
+    """
+    _tutor_available()
+    graph = _load_session_or_404(session_id, user.user_id)
+    _tutor_spend_or_409(graph)
+    node = _tutor_node(graph, (body.node_id if body else None))
+    mode = tutor_mode.mode_for(node)
+    if not mode.is_scaffold:
+        raise HTTPException(status_code=409, detail="not_asking")
+    if not mode.can_hint:
+        raise HTTPException(status_code=409, detail="hint_ladder_spent")
+
+    rung = node.tutor_state.hints_used + 1
+    errors: list[str] = []
+    built = tutor_context.build_scaffold_context(
+        graph, node, mode.question, _tutor_repo_inputs(graph, node), graph.tutor,
+        hint_level=rung,
+    )
+    result = tutor_scaffold.hint(built, rung, client=_new_client(), errors=errors)
+
+    if errors:
+        # THE RUNG IS SPENT ON SUCCESS ONLY. A hint that failed to generate leaves
+        # the learner with nothing new, and charging them a rung for it would be
+        # the budget paying for our outage.
+        logger.warning("tutor hint failed: session=%s errors=%s", session_id, errors)
+        return {**_tutor_payload(graph, node), "turn": None, "failed": True,
+                "text": result["text"]}
+
+    turn = tutor_model.new_turn(
+        node_id=node.id,
+        mode=mode.mode,
+        question="",
+        answer=result["text"],
+        scope=result["scope"],
+        hint_level=rung,
+        citations=result["citations"],
+        grounded=result["grounded"],
+        usage=result["usage"],
+    )
+    graph.tutor.append(turn)
+    node.tutor_state.hints_used = rung
+    node.tutor_state.turns += 1
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
+    return _tutor_payload(graph, node, turn)
+
+
+@app.post("/session/{session_id}/tutor/reveal")
+def tutor_reveal(
+    session_id: str, body: TutorNodeRequest | None = None,
+    user: CurrentUser = Depends(current_user),
+) -> dict:
+    """Show the explanation, and spend the question (tutor.md §6.3).
+
+    THE ONLY ENDPOINT THAT RETURNS A REVEAL EARLY, and deliberately a separate,
+    explicit, logged act rather than a field on another response. The learner is
+    choosing to step out of assessment and back into learning; that is legitimate,
+    and it is theirs to make — the UI states the consequence on the control itself
+    before this is ever called.
+
+    What happens after is entirely the existing machinery: `prompt_is_unanswered`
+    reads `revealed` and returns False, so `retry.offer` falls through to the gap
+    branch or the objective branch and hands back a `verify` or a `reassess` — a
+    fresh question that ships no answer, bounded by the caps that already exist.
+    No parallel assessment flow, and nothing about the objective changes.
+
+    Makes no model call, so it costs nothing and never touches the cap.
+    """
+    _tutor_available()
+    graph = _load_session_or_404(session_id, user.user_id)
+    node = _tutor_node(graph, (body.node_id if body else None))
+    mode = tutor_mode.mode_for(node)
+    # ALREADY REVEALED IS CHECKED FIRST, and the order is the whole point.
+    #
+    # Revealing spends the prompt, which makes `mode_for` report EXPLAIN — so a
+    # second reveal would otherwise be refused as `not_asking`. That is literally
+    # true and useless: the learner is not being told that nothing is outstanding,
+    # they are being told they already did this. The specific reason has to
+    # outrank the general one, or this branch is unreachable and the slug is a lie.
+    if node is not None and node.tutor_state.revealed:
+        raise HTTPException(status_code=409, detail="already_revealed")
+    if not mode.is_scaffold:
+        raise HTTPException(status_code=409, detail="not_asking")
+
+    # The unit's own reveal. A verification or re-assessment question ships NO
+    # answer by design (`teaching/verify.py`), so there is nothing to show for
+    # one — and refusing is the honest response rather than showing the lesson's
+    # reveal, which answers a different question.
+    if mode.question_source in (history.SOURCE_VERIFICATION, history.SOURCE_REASSESSMENT):
+        raise HTTPException(status_code=409, detail="no_explanation_for_this_question")
+
+    reveal = str((node.cached_lesson or {}).get("reveal") or "")
+    if not reveal.strip():
+        raise HTTPException(status_code=409, detail="no_explanation_available")
+
+    node.tutor_state.revealed = True
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
+    logger.info(
+        "tutor reveal: session=%s node=%s hints=%s",
+        session_id, node.id, node.tutor_state.hints_used,
+    )
+    return {
+        **_tutor_payload(graph, node),
+        "reveal": reveal,
+        # The consequence, computed rather than described: this is what the
+        # learner gets instead of the question they just spent.
+        "retry": retry_model.to_wire(node),
+    }
+
+
+@app.post("/session/{session_id}/tutor/pin")
+def tutor_pin(
+    session_id: str, body: TutorPinRequest,
+    user: CurrentUser = Depends(current_user),
+) -> dict:
+    """Keep an explanation with the lesson (tutor.md §11.2).
+
+    Sets a flag on a turn ALREADY IN the transcript. Nothing is copied into
+    `cached_lesson` and nothing reaches `plan_nodes.lesson_json` — the canonical
+    lesson stays canonical, and a pinned note renders beside it as what it is: an
+    answer the Tutor wrote for this learner, attributed.
+    """
+    _tutor_available()
+    graph = _load_session_or_404(session_id, user.user_id)
+    for turn in graph.tutor:
+        if turn.get("id") == body.turn_id:
+            turn["pinned"] = bool(body.pinned)
+            learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
+            return {"turn": turn}
+    raise HTTPException(status_code=404, detail="turn_not_found")
