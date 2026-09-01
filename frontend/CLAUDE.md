@@ -117,3 +117,27 @@ because keeping it alive is how one derived flag came to be computed two ways.
 For a second dev server on this repo, set `NEXT_DIST_DIR`. Two servers sharing
 `.next` corrupt each other's view of it, and neither failure announces itself: the
 page renders, it is simply the wrong page.
+
+---
+
+## Two companion panes, one column
+
+Source and Chat are the same kind of thing and share the same shell —
+`components/panel/PaneShell.tsx` holds the float window, the dock divider and the
+mode switch, extracted from `CodeViewer` when the Tutor needed them. Do not fork
+it, and do not build a second window system: two implementations of "a pane you
+can undock" diverge on the first bug fixed in one of them.
+
+`lib/panes.ts` owns the rule the layout depends on — **at most one pane may be
+docked and open** — as a pure reducer, because opening one pane is a change to
+both. Opening in `dock` evicts whichever pane holds the column; floating never
+evicts, which is what lets Source and Chat be on screen together; closing never
+restores the other, because eviction is not a stack.
+
+Both panes share `--source-width`. There is only ever one column, and a learner
+who dragged it to the width they like meant the column rather than whatever
+happened to be in it.
+
+The Tutor renders server decisions and computes none of them: `mode`, `can_hint`,
+`can_reveal`, `remaining` and `offers` all arrive on every response. This is D22,
+and here it is also the security property — see `backend/agents/CLAUDE.md`.

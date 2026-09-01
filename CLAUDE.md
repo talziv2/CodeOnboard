@@ -84,6 +84,7 @@ the file you are about to open.
 | `backend/learning/store.py` | **D16** `save_graph` never writes a plan table · D18 the two schema-version questions · D19 the flag gates behaviour, never storage · D20 ownership |
 | `backend/learning/reset.py` | D17 nothing is ever synthesised for a session that has no plan |
 | `backend/api.py` · `backend/auth/` | D20 ownership at the persistence boundary, **404 never 403** · D21 nothing about a learner is inferred from an email |
+| `backend/agents/tutor/` · `backend/learning/tutor.py` | skill `change-the-tutor` — a turn is not evidence · `ScaffoldContext` is a type with no field for the answer · revealing spends the prompt through `retry.py` |
 | `frontend/lib/` · `frontend/components/` | D22 the frontend renders learning decisions; it does not compute them |
 | `frontend/lib/markdown.ts` · `strings.ts` | D23 learner-written text is never markdown · D24 fixed keys are parsed; only labels are chosen |
 
@@ -106,6 +107,10 @@ not apply.
   `repo/skeleton.py` can compute, and never ask one for a line number.
 - **One exploration loop.** `goal_investigation` is the only place the system
   explores; everything else reads what it produced.
+- **A conversation is never evidence.** The Tutor may describe learner state
+  and may offer an action the system already supports; it may never be the
+  reason one changed. Structural: nothing under `backend/agents/tutor/`
+  imports `run_grader`, `mutate_graph`, `adaptation` or `record_attempt`.
 - **The frontend renders learning decisions; it does not compute them.**
 - **Python only, structurally.** Another language is a sibling adapter, not a
   rewrite — designed in `docs/planning/phases/multi-language.md`, **not built**.
@@ -146,6 +151,13 @@ to `0`, `tests/conftest.py` deletes both for every test — and the developer's 
 objective-first planner and the gap model, while the suite tests neither unless a
 test says so. "Works in tests, wrong in the app" is a flag difference until proven
 otherwise. When behaviour depends on a flag, pin it in the test and say which.
+
+`CODEONBOARD_TUTOR` is the third, and it is default `0` **on evidence rather
+than caution**: `docs/planning/phases/evidence/tutor/` measures 1 leak in 30
+adversarial prompts against a stated gate of 0. It has a build-time twin,
+`NEXT_PUBLIC_CODEONBOARD_TUTOR`, because Next inlines `NEXT_PUBLIC_*` — the
+backend gates the routes at request time, the bundle gates the control at build
+time. Neither gates storage: a conversation survives both being turned off.
 
 ---
 

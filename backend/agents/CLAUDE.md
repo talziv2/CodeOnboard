@@ -93,3 +93,28 @@ should be described that way rather than as verified.
 If a flag selects between implementations (`CODEONBOARD_CURRICULUM` picks
 `curriculum.py` over `dossier.py`), pin it in the test: `tests/conftest.py`
 deletes both flags and the developer's `.env` sets both to `1`.
+
+---
+
+## The Tutor is two agents, and the split is the security property
+
+`tutor/mode.py` decides EXPLAIN or SCAFFOLD from the graph — server-side, on every
+call, because a client that could name its own mode could ask for the answer key.
+The two modes then run **different agents over different types**.
+
+`ScaffoldContext` has no `reveal` field, no `expected_answer` field and no
+`rationale` field. That is not an omission to be tidied up later: it is why the
+assessment-mode Tutor cannot hand over an answer it does not hold. The obvious
+implementation — one builder with `include_reveal=False` — is rejected, because a
+boolean is one wrong caller away from a leak and a type with no field for the
+answer cannot leak it however it is called.
+
+Three defences, in descending order of strength, and the order matters when you
+are deciding what to trust: **the type**, then **the builder never reading the
+keys**, then **the prompt**. `tests/test_tutor_context.py` asserts all three, the
+last by an AST walk. A failure there is measuring the feature, not obstructing it.
+
+What remains after all three is a model reasoning to the answer from source it
+legitimately holds. That is measured, not assumed —
+`docs/planning/phases/evidence/tutor/` — and bounded by the product rather than
+the prompt: the reveal is one click away and states its own price.

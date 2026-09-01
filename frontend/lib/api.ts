@@ -1159,3 +1159,118 @@ export const unlinkGoogle = async (): Promise<void> => {
 
 /** A full navigation, not a fetch — the browser has to follow Google's redirect. */
 export const GOOGLE_START = "/api/auth/google/start";
+
+
+// --- The Tutor (docs/planning/phases/tutor.md) ---
+//
+// Everything the panel renders is DECIDED BY THE SERVER: which mode it is in,
+// whether a hint is available, whether the reveal is, what an offer would do.
+// The frontend renders learning decisions; it does not compute them (D22), and
+// the mode in particular must never be inferred client-side — a client that
+// could name its own mode could ask for the answer key.
+
+/** One place in the repository. The range is derived by the backend, never sent by a model. */
+export interface TutorCitation {
+  file: string;
+  symbol: string | null;
+  line_start: number;
+  line_end: number;
+}
+
+/**
+ * A validated offer — an existing action, rendered as one control.
+ *
+ * `label_key` names a string in `strings.ts` rather than carrying prose: the
+ * backend decides WHICH action is offered and the frontend decides what it is
+ * called, the same split as `retry.mechanism`.
+ */
+export interface TutorSuggestion {
+  kind: "verify" | "reassess" | "jump" | "deepen";
+  label_key: string;
+  node_id: string | null;
+  gap_id: string | null;
+  /** Present only on a system offer: which deterministic signal produced it. */
+  signal?: "dwelling" | "returning";
+}
+
+export interface TutorTurn {
+  id: string;
+  at: string;
+  node_id: string | null;
+  mode: "explain" | "scaffold";
+  hint_level: number;
+  question: string;
+  answer: string;
+  scope: "answered" | "out_of_scope" | "is_the_assessment";
+  grounded: boolean;
+  pinned: boolean;
+  citations?: TutorCitation[];
+  suggestion?: TutorSuggestion;
+  usage?: Record<string, number>;
+}
+
+/**
+ * Which Tutor is running, and everything a surface needs to say so.
+ *
+ * `can_hint` and `can_reveal` are the server's answers, not predicates to
+ * re-derive: `can_reveal` is true from rung zero because the ladder bounds hints
+ * rather than honesty, and a client that re-implemented that rule would get it
+ * wrong the first time the ladder changed.
+ */
+export interface TutorMode {
+  mode: "explain" | "scaffold";
+  reason: string;
+  question: string;
+  question_source: string;
+  hints_used: number;
+  hints_left: number;
+  revealed: boolean;
+  can_hint: boolean;
+  can_reveal: boolean;
+}
+
+export interface TutorState {
+  mode: TutorMode;
+  remaining: number;
+  cap: number;
+  node_id: string | null;
+  offers: TutorSuggestion[];
+  turn?: TutorTurn | null;
+  /** Set when the call failed. No turn was stored and nothing was spent. */
+  failed?: boolean;
+  /** What to show when `failed` — an apology, never a fabricated answer. */
+  text?: string;
+}
+
+export interface TutorTranscript extends TutorState {
+  turns: TutorTurn[];
+}
+
+export interface TutorReveal extends TutorState {
+  reveal: string;
+  /** What the learner gets INSTEAD of the question they just spent. */
+  retry: RetryOffer;
+}
+
+export const getTutor = (session_id: string) =>
+  get<TutorTranscript>(`/session/${session_id}/tutor`);
+
+export const askTutor = (session_id: string, question: string, node_id?: string) =>
+  post<TutorState>(`/session/${session_id}/tutor/ask`, { question, node_id });
+
+export const tutorHint = (session_id: string, node_id?: string) =>
+  post<TutorState>(`/session/${session_id}/tutor/hint`, { node_id });
+
+/**
+ * Show the explanation, and spend the current question.
+ *
+ * The consequence is stated on the control that calls this, before it is pressed
+ * — see `t.tutor.revealWarning`. Afterwards the learner is in exactly the state
+ * any graded answer leaves them in, and `retry` on the response says what they
+ * get next.
+ */
+export const tutorReveal = (session_id: string, node_id?: string) =>
+  post<TutorReveal>(`/session/${session_id}/tutor/reveal`, { node_id });
+
+export const tutorPin = (session_id: string, turn_id: string, pinned: boolean) =>
+  post<{ turn: TutorTurn }>(`/session/${session_id}/tutor/pin`, { turn_id, pinned });

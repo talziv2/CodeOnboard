@@ -20,6 +20,7 @@
 | Something the AST already knows — files, symbols, ranges, imports | `repo/skeleton.py`, never a model | — |
 | HTTP concerns — routing, status codes, request parsing | `api.py` | skill `api-endpoint` |
 | Reading or writing a row | `learning/store.py` or `auth/schema.py` | skill `persistence-change` |
+| What the Tutor may see, say, or propose | `agents/tutor/` — and never a writer | skill `change-the-tutor` |
 
 Two mistakes this table exists to stop: putting policy in a prompt where nothing
 can test it, and putting IO in a module whose header promises purity.

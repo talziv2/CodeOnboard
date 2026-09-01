@@ -47,7 +47,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from backend.learning import adaptation, history
+from backend.learning import adaptation, history, tutor as tutor_model
 from backend.learning.gaps import REASSESSMENT_CAP
 from backend.learning.graph import understanding_of
 
@@ -82,6 +82,12 @@ EXHAUSTED = "budget_spent"
 PENDING = "already_asked"
 # Nothing to assess: no objective, or a node that has never been taught.
 NOT_APPLICABLE = "not_applicable"
+# The objective was reached under substantial assistance, so a fresh question is
+# still worth offering (tutor.md §6.5). NOT a refusal and NOT a demotion — the
+# learner is `understood`, `understanding_of` says so, readiness counts it, and
+# `is_complete` is satisfied. All this changes is that the surface keeps offering
+# instead of reporting the matter closed.
+ASSISTED = "assisted"
 
 
 @dataclass(frozen=True)
@@ -129,6 +135,25 @@ def prompt_is_unanswered(node: "LearningNode") -> bool:
     """
     if not (node.cached_lesson or {}).get("prompt"):
         return False
+    # THE LEARNER ASKED TO SEE THE ANSWER (tutor.md §6.3).
+    #
+    # This is the same rule as the line below, reached a different way. The
+    # docstring's claim is that "once anything has been graded, the reveal has
+    # been shown and this prompt is spent for good" — `POST /tutor/reveal` shows
+    # the reveal without anything being graded, so the antecedent is satisfied and
+    # the consequent has to follow. A prompt whose explanation is on screen cannot
+    # assess anything; leaving it answerable would let a learner read the reveal
+    # and then submit it back as their answer.
+    #
+    # The assessment is not lost, it is deferred: with this False, `offer` falls
+    # through to the gap and objective branches, so the learner is handed a
+    # `verify` or a `reassess` — a fresh question that ships no answer, bounded by
+    # the caps that already exist. Nothing about the objective changes.
+    #
+    # Inert when the Tutor is off: nothing can set `revealed` without the
+    # endpoint, so this reads False on every session that never used it.
+    if tutor_model.was_revealed(node):
+        return False
     return not any(
         history.is_graded(a) for a in history.assessments(node.attempts)
     )
@@ -164,7 +189,22 @@ def offer(node: "LearningNode") -> RetryOffer:
         return RetryOffer(None, PENDING, reassessments_left=reassessments_left(node))
 
     if understanding_of(node) == "understood":
-        return RetryOffer(None, MET, reassessments_left=reassessments_left(node))
+        # REACHED WITH SUBSTANTIAL HELP (tutor.md §6.5). Offer another, do not
+        # take anything away.
+        #
+        # The asymmetry is the point, and it is the same one `understanding.py`
+        # draws: assistance is a DECISION the learner made, and a decision is
+        # never evidence — so it may not move `understanding_state`, may not open
+        # a gap, may not lower readiness and may not block completion. What it may
+        # do is change what the system PUTS IN FRONT of them, which is this
+        # function's entire job.
+        #
+        # It terminates: taking the offer calls `new_question()`, which clears
+        # `hints_used`, so a re-assessment answered without help reports MET.
+        left = reassessments_left(node)
+        if tutor_model.heavily_scaffolded(node) and left > 0:
+            return RetryOffer(REASSESS, ASSISTED, reassessments_left=left)
+        return RetryOffer(None, MET, reassessments_left=left)
 
     if not node.objective().strip() and not node.gaps:
         return RetryOffer(None, NOT_APPLICABLE)

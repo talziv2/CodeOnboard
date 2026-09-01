@@ -65,6 +65,10 @@ class ResetSummary:
     gaps: int
     remedial_nodes: int
     lessons_restored: int
+    # Tutor turns discarded. Counted for the same reason every other number here
+    # is: the act is irreversible, so the honest thing to show afterwards is what
+    # it took. Defaulted, so a caller written before the Tutor still constructs.
+    tutor_turns: int = 0
 
     def to_dict(self) -> dict:
         return {
@@ -73,6 +77,7 @@ class ResetSummary:
             "gaps": self.gaps,
             "remedial_nodes": self.remedial_nodes,
             "lessons_restored": self.lessons_restored,
+            "tutor_turns": self.tutor_turns,
         }
 
 
@@ -103,6 +108,16 @@ def learner_state(graph: LearningGraph) -> dict:
         "pending_verifications": sum(
             1 for n in graph.nodes.values() if n.gap_state.pending_verification
         ),
+        # THE TUTOR TRANSCRIPT IS LEARNER STATE (tutor.md §4.3).
+        #
+        # It has to appear here or this enumeration is wrong, and this
+        # enumeration is the only description of the plan/state boundary the
+        # reset can be tested against. The conversation is something the learner
+        # produced against a route they have since asked to restart; a surviving
+        # transcript would be the first exception to "anything not in the plan is
+        # gone by construction", and it would sit beside a fresh route as a list
+        # of stops that had already confused them.
+        "tutor_turns": len(graph.tutor),
     }
 
 
@@ -140,6 +155,15 @@ def reset_to_plan(live: LearningGraph, plan: LearningGraph) -> ResetSummary:
     # SESSION and the plan legitimately has no opinion about them.
     live.journey_events = []
     live.arrival = None
+    # The conversation goes with the walk. Cleared HERE rather than in
+    # `load_plan` for exactly the reason the two lines above are: it is a fact
+    # about the SESSION, and the plan legitimately has no opinion about it.
+    #
+    # The node-scoped counters need no line at all — `live.nodes` was replaced
+    # wholesale above with fresh `LearningNode`s whose `tutor_state` is at its
+    # dataclass default. That is the property this module is built on, and the
+    # Tutor is the first feature added since that gets it for free.
+    live.tutor = []
     live.current_node_id = live.path_head()
 
     # The single boundary marker, on the now-empty list. Written after the clear,
@@ -159,4 +183,5 @@ def reset_to_plan(live: LearningGraph, plan: LearningGraph) -> ResetSummary:
         lessons_restored=sum(
             1 for n in plan.nodes.values() if n.cached_lesson is not None
         ),
+        tutor_turns=before["tutor_turns"],
     )

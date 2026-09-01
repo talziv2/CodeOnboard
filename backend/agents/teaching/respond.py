@@ -266,6 +266,10 @@ def reteach(
         output = _generate_lesson(_client(client), user_content, _RETEACH_SYSTEM)
         output.prompt_kind = lesson_form(node)
         node.cached_lesson = output.model_dump()
+        # A re-teach installs a prompt built so it CANNOT be answered while
+        # still holding the diagnosed misconception — a genuinely new question
+        # (`history.SOURCE_RETEACH`), so the Tutor's hint ladder resets with it.
+        node.tutor_state.new_question()
         return output
     except Exception as e:
         state.errors.append(f"adaptation: re-teach failed (non-fatal): {e}")

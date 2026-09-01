@@ -268,4 +268,12 @@ def store(node: LearningNode, prompt: ReassessmentPrompt) -> dict:
     }
     node.gap_state.pending_reassessment = payload
     node.gap_state.reassessments += 1
+    # A QUESTION THE LEARNER HAS NOT SEEN (tutor.md §4.2). The Tutor's hint
+    # ladder is per question, so it resets here: carrying a spent ladder onto a
+    # new question would deny hints on something nobody has had a hint about, and
+    # carrying `revealed` would leave a fresh question already marked as spent.
+    #
+    # `turns` is deliberately NOT cleared — dwelling is a fact about the stop, not
+    # about any one question.
+    node.tutor_state.new_question()
     return payload

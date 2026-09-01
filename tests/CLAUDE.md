@@ -51,7 +51,7 @@ module that exercises authentication itself opts out with
 - Frontend tests live beside the code in `frontend/`, are behavioural rather than
   snapshot-based, and build payloads from `frontend/test/factories.ts`.
 
-## Four tests that guard the architecture rather than a feature
+## Six tests that guard the architecture rather than a feature
 
 Read them before changing anything nearby, and be suspicious of a change that
 edits one to pass.
@@ -62,6 +62,8 @@ edits one to pass.
 | `test_gap_model.py::test_the_persistence_path_never_reads_the_flag` | Structurally: nothing in the persistence path reads `CODEONBOARD_GAPS` |
 | `test_gap_understanding.py` (AST check) | Nothing re-derives the understanding state outside `graph.understanding_of()` |
 | `test_progress.py` | Every plan mutation, against the rule that goal readiness may fall only when evidence changes |
+| `test_tutor_context.py` | Structurally, three ways: the scaffold context has no field that could hold the answer, its rendered prompt contains none, and its builder never reads the keys |
+| `test_tutor_boundary.py` | A conversation is not evidence — no tutor module imports a writer, and `/tutor/ask` leaves `to_dict()` byte-identical |
 
 `test_admin_scripts.py` and `test_calibration_harness.py` are unit tests **of the
 measurement harnesses** — a wrong instrument produces wrong evidence, which is

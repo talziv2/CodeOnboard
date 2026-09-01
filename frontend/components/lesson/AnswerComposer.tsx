@@ -25,6 +25,7 @@ export default function AnswerComposer({
   onSkip,
   loading,
   error,
+  onStuck,
 }: {
   prompt: string;
   answer: string;
@@ -33,6 +34,19 @@ export default function AnswerComposer({
   onSkip: () => void;
   loading: boolean;
   error: string | null;
+  /**
+   * Opens the Tutor, already in assessment mode.
+   *
+   * A LINK, never a second textarea — the single-composer invariant this file
+   * documents is exactly what a second input here would break. The label names
+   * the INTENT rather than the tool ("I'm stuck", not "Chat"), which is what
+   * keeps it from reading as an unrestricted assistant parked beside a graded
+   * question.
+   *
+   * Absent when the Tutor is not built into the bundle, so this file has no
+   * opinion about the flag.
+   */
+  onStuck?: () => void;
 }) {
   return (
     <div data-tour="composer" className="flex flex-col gap-3">
@@ -63,6 +77,15 @@ export default function AnswerComposer({
         <Button variant="secondary" size="md" onClick={onSkip} disabled={loading}>
           {t.lesson.skipStop}
         </Button>
+        {onStuck && (
+          <button
+            type="button"
+            onClick={onStuck}
+            className="font-mono text-micro text-graphite transition hover:text-signal"
+          >
+            {t.tutor.stuck}
+          </button>
+        )}
         <span className="ms-auto font-mono text-micro text-graphite">
           {t.lesson.submitHint}
         </span>

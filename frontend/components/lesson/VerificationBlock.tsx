@@ -29,6 +29,7 @@ export default function VerificationBlock({
   onDismiss,
   loading,
   error,
+  onStuck,
 }: {
   question: string;
   answer: string;
@@ -42,6 +43,8 @@ export default function VerificationBlock({
    * learner pressing Submit against a button that did nothing and said nothing.
    */
   error?: string | null;
+  /** Opens the Tutor in assessment mode. A link, never a second composer. */
+  onStuck?: () => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -62,6 +65,15 @@ export default function VerificationBlock({
         <Button variant="secondary" size="md" onClick={onDismiss} disabled={loading}>
           {t.lesson.notNow}
         </Button>
+        {onStuck && (
+          <button
+            type="button"
+            onClick={onStuck}
+            className="ms-auto font-mono text-micro text-graphite transition hover:text-signal"
+          >
+            {t.tutor.stuck}
+          </button>
+        )}
       </div>
     </div>
   );

@@ -44,6 +44,7 @@ from typing import Literal
 
 from backend.learning import history
 from backend.learning.gaps import Gap, GapState
+from backend.learning.tutor import TutorState
 
 
 UnderstandingState = Literal["not_started", "failed", "partial", "understood"]
@@ -123,6 +124,16 @@ class LearningNode:
     # never consults `CODEONBOARD_GAPS` — the flag gates behaviour, never
     # storage, which is what makes the round-trip contract true by construction.
     gap_state: GapState = field(default_factory=GapState)
+    # What the Tutor has done on this stop: how many hints were written for the
+    # question in front of the learner, whether they asked to see the answer, and
+    # how many turns this stop has drawn (tutor.md §4.2).
+    #
+    # NOT EVIDENCE, and the placement says so: it sits beside `gap_state` because
+    # both are per-node persisted facts, but nothing here can reach
+    # `understanding_state`. Two consumers read it — `retry.py`, to decide what to
+    # OFFER, and the attempt record, as metadata about the conditions an answer
+    # was given under. Neither is a claim about understanding.
+    tutor_state: TutorState = field(default_factory=TutorState)
 
     @property
     def gaps(self) -> list[Gap]:
@@ -325,6 +336,21 @@ class LearningGraph:
     # NOT learner state, and not persisted — it is a fact about what the database
     # holds, so `save_graph` never writes it and every reader gets it fresh.
     has_plan: bool = False
+    # THE TUTOR TRANSCRIPT — every exchange in this session, oldest first, each
+    # anchored to the stop it was asked from (tutor.md §4).
+    #
+    # Session-scoped for the same reason `areas` and `journey_events` are: it
+    # belongs to the journey rather than to any one unit, and there is no node
+    # payload it could ride in — nodes are rebuilt from `plan_nodes` on a reset,
+    # which has no column for it and must not grow one.
+    #
+    # Deliberately ABSENT from `to_dict`. A transcript that grew with every
+    # question would make each session poll heavier for a surface that may never
+    # be opened; `GET /session/{id}/tutor` serves it, like lessons.
+    #
+    # LEARNER-PRODUCED, so `Start over` clears it — see `reset.py`, and
+    # `reset.learner_state`, which is the enumeration this has to appear in.
+    tutor: list[dict] = field(default_factory=list)
 
     # --- construction helpers ---
 
@@ -360,6 +386,7 @@ class LearningGraph:
         graded: bool = True,
         question: str = "",
         question_source: str = "",
+        assistance: dict | None = None,
     ) -> dict:
         """One graded answer, and THE QUESTION IT ANSWERED (M1).
 
@@ -413,6 +440,12 @@ class LearningGraph:
             attempt["question"] = question
         if question_source:
             attempt["question_source"] = question_source
+        # HOW MUCH HELP PRECEDED THIS ANSWER (tutor.md §6.4). Omitted when the
+        # caller had nothing to record, which reads as UNKNOWN — the state of
+        # every attempt written before the Tutor existed, and a different claim
+        # from "they had none".
+        if assistance:
+            attempt[history.ASSISTANCE] = assistance
         node = self.nodes[node_id]
         node.attempts.append(attempt)
         # A new answer WITHDRAWS a prior `continue` (M8, §3.6). "I chose to move

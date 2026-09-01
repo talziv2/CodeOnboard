@@ -54,3 +54,24 @@ export function lessonUi(): LessonUi {
 export function isSplitSurfaces(ui: LessonUi): boolean {
   return ui === "surfaces";
 }
+
+
+/**
+ * Is the Tutor's UI built into this bundle?
+ *
+ * Mirrors the backend's `CODEONBOARD_TUTOR`, and the two are deliberately
+ * separate variables rather than one: they are read in different processes at
+ * different times. The backend's gates BEHAVIOUR at request time (the routes
+ * answer 404); this one gates whether the CHAT control is drawn at all, at build
+ * time, because Next inlines `NEXT_PUBLIC_*`.
+ *
+ * The pairing that matters is the safe one: with the backend off and this on, the
+ * control appears and the panel reports a failure — noisy but harmless. With this
+ * off, no Tutor code is reachable whatever the backend does.
+ *
+ * Neither gates STORAGE. A conversation written with both on survives both being
+ * turned off (see `backend/learning/flags.py`).
+ */
+export function tutorUi(): boolean {
+  return process.env.NEXT_PUBLIC_CODEONBOARD_TUTOR === "1";
+}

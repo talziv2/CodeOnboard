@@ -13,7 +13,10 @@ export type ThemeChoice = "system" | "light" | "dark";
 export type TextSize = "small" | "medium" | "large" | "xlarge";
 
 /** Docked: a resizable third column. Floating: a window over the lesson. */
-export type SourceMode = "dock" | "float";
+export type PaneMode = "dock" | "float";
+
+/** @deprecated the shape is shared by both companion panes — use `PaneMode`. */
+export type SourceMode = PaneMode;
 
 /**
  * Where the floating pane sits, in px. `null` means "never placed" — the pane
@@ -27,8 +30,8 @@ export interface FloatRect {
   h: number;
 }
 
-export interface SourcePrefs {
-  mode: SourceMode;
+export interface PanePrefs {
+  mode: PaneMode;
   /**
    * Whether the pane is showing. Persisted, and **false by default**: the source
    * used to open with every session whether or not the lesson had sent anyone to
@@ -52,6 +55,14 @@ export interface SourcePrefs {
   float: FloatRect;
 }
 
+/**
+ * @deprecated The shape is no longer specific to the source pane — the Tutor uses
+ * exactly the same one, and only one pane may be docked at a time
+ * (`lib/panes.ts`). Retained as an alias so no call site had to churn for a
+ * rename that changes nothing.
+ */
+export type SourcePrefs = PanePrefs;
+
 export const DOCK_MIN_REM = 15;
 export const DOCK_MAX_REM = 70;
 export const FLOAT_MIN_W = 320;
@@ -60,23 +71,48 @@ export const FLOAT_MIN_H = 200;
 export interface Prefs {
   theme: ThemeChoice;
   textSize: TextSize;
-  source: SourcePrefs;
+  source: PanePrefs;
+  /**
+   * The Tutor pane. Absent from every preference blob written before the Tutor
+   * existed, which `readPane` resolves to the default rather than to `undefined`
+   * — an older stored preference must not leave a pane in a state React treats as
+   * uncontrolled.
+   */
+  tutor: PanePrefs;
 }
 
-export const DEFAULT_SOURCE: SourcePrefs = {
+export const DEFAULT_SOURCE: PanePrefs = {
   mode: "dock",
   open: false,
   dockWidth: 21.25,
   float: { x: null, y: null, w: 680, h: 620 },
 };
 
+/**
+ * The Tutor's default float is narrower and taller than the source pane's: a
+ * transcript is a column of short paragraphs, where source is wide lines. The
+ * DOCKED width is deliberately NOT its own — `dockWidth` is shared through
+ * `--source-width`, because only one pane occupies the column at a time and a
+ * learner who sized that column meant the column.
+ */
+export const DEFAULT_TUTOR: PanePrefs = {
+  mode: "dock",
+  open: false,
+  dockWidth: 21.25,
+  float: { x: null, y: null, w: 460, h: 640 },
+};
+
 export const DEFAULT_PREFS: Prefs = {
   theme: "dark",
   textSize: "medium",
   source: DEFAULT_SOURCE,
+  tutor: DEFAULT_TUTOR,
 };
 
-export const SOURCE_MODES: SourceMode[] = ["dock", "float"];
+export const PANE_MODES: PaneMode[] = ["dock", "float"];
+
+/** @deprecated use `PANE_MODES`. */
+export const SOURCE_MODES: PaneMode[] = PANE_MODES;
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -108,22 +144,22 @@ export function resolveTheme(choice: ThemeChoice): "light" | "dark" {
 }
 
 /** Every field is checked, because storage may hold a shape from an older build. */
-function readSource(raw: unknown): SourcePrefs {
-  const s = (raw ?? {}) as Partial<SourcePrefs>;
+function readPane(raw: unknown, fallback: PanePrefs): PanePrefs {
+  const s = (raw ?? {}) as Partial<PanePrefs>;
   const f = (s.float ?? {}) as Partial<FloatRect>;
-  const num = (v: unknown, fallback: number) =>
-    typeof v === "number" && Number.isFinite(v) ? v : fallback;
+  const num = (v: unknown, d: number) =>
+    typeof v === "number" && Number.isFinite(v) ? v : d;
   return {
-    mode: SOURCE_MODES.includes(s.mode as SourceMode) ? (s.mode as SourceMode) : DEFAULT_SOURCE.mode,
+    mode: PANE_MODES.includes(s.mode as PaneMode) ? (s.mode as PaneMode) : fallback.mode,
     // Strict `=== true`, so anything an older or corrupt prefs blob holds here
     // resolves to closed rather than to something truthy.
     open: s.open === true,
-    dockWidth: clamp(num(s.dockWidth, DEFAULT_SOURCE.dockWidth), DOCK_MIN_REM, DOCK_MAX_REM),
+    dockWidth: clamp(num(s.dockWidth, fallback.dockWidth), DOCK_MIN_REM, DOCK_MAX_REM),
     float: {
       x: typeof f.x === "number" && Number.isFinite(f.x) ? f.x : null,
       y: typeof f.y === "number" && Number.isFinite(f.y) ? f.y : null,
-      w: Math.max(FLOAT_MIN_W, num(f.w, DEFAULT_SOURCE.float.w)),
-      h: Math.max(FLOAT_MIN_H, num(f.h, DEFAULT_SOURCE.float.h)),
+      w: Math.max(FLOAT_MIN_W, num(f.w, fallback.float.w)),
+      h: Math.max(FLOAT_MIN_H, num(f.h, fallback.float.h)),
     },
   };
 }
@@ -141,7 +177,8 @@ export function readPrefs(): Prefs {
       textSize: TEXT_SIZE_ORDER.includes(parsed.textSize as TextSize)
         ? (parsed.textSize as TextSize)
         : DEFAULT_PREFS.textSize,
-      source: readSource(parsed.source),
+      source: readPane(parsed.source, DEFAULT_SOURCE),
+      tutor: readPane(parsed.tutor, DEFAULT_TUTOR),
     };
   } catch {
     /* storage unavailable or corrupt — the defaults are a working app */
