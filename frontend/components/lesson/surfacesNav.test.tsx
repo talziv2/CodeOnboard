@@ -364,3 +364,49 @@ describe("the learner's own moves still work", () => {
     await waitFor(() => expect(activeTab()).toBe("Lesson"));
   });
 });
+
+/**
+ * The foot of each surface crosses to the other one.
+ *
+ * The tab bar is the top of the column and the material is long, so the crossing
+ * a learner most often wants — read the stop, now answer it — was the one the
+ * layout made hardest. These assert the pair exists on both sides and that it goes
+ * through the same reducer as every other navigation, which is what keeps R5 true
+ * while the foot of the page becomes useful.
+ */
+describe("each surface offers the other at its foot", () => {
+  test("from Lesson, the foot of the page goes to Understanding", async () => {
+    const user = userEvent.setup();
+    render(<Harness Panel={await panel()} />);
+    await screen.findByText(LESSON.lesson.setup!);
+    expect(activeTab()).toBe("Lesson");
+
+    await user.click(screen.getByRole("button", { name: t.lesson.toUnderstanding }));
+
+    await waitFor(() => expect(activeTab()).toBe("Understanding"));
+    // Not merely selected: the surface it names is what is now on screen.
+    expect(textareas().length).toBe(1);
+  });
+
+  test("from Understanding, the foot of the page goes back to Lesson", async () => {
+    const user = userEvent.setup();
+    render(<Harness Panel={await panel()} />);
+    await screen.findByText(LESSON.lesson.setup!);
+    await user.click(screen.getByRole("button", { name: "Understanding" }));
+
+    await user.click(screen.getByRole("button", { name: t.lesson.toLesson }));
+
+    await waitFor(() => expect(activeTab()).toBe("Lesson"));
+    expect(screen.getByText(LESSON.lesson.setup!)).toBeTruthy();
+  });
+
+  test("each surface offers only the other one, never itself", async () => {
+    const user = userEvent.setup();
+    render(<Harness Panel={await panel()} />);
+    await screen.findByText(LESSON.lesson.setup!);
+    expect(screen.queryByRole("button", { name: t.lesson.toLesson })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Understanding" }));
+    expect(screen.queryByRole("button", { name: t.lesson.toUnderstanding })).toBeNull();
+  });
+});

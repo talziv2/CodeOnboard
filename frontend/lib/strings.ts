@@ -1146,6 +1146,21 @@ export const t = {
      * it "done" would be a verdict this line has no business giving.
      */
     alreadyDealtWith: "You've already worked on this stop.",
+    /**
+     * THE OTHER HALF OF THIS STOP, at the foot of each surface.
+     *
+     * Lesson and Understanding are two views of one activity, and the only way
+     * between them was the tab bar at the very top of the column — so a learner
+     * who had read the material to the bottom had to scroll all the way back up
+     * to answer, and one who had finished with their verdict had to do the same
+     * to re-read what it was about.
+     *
+     * Named for the DESTINATION rather than the act. `Continue` or `Back` would
+     * be a second name for a place the tab bar already labels, and two names for
+     * one place is two places.
+     */
+    toUnderstanding: "Understanding →",
+    toLesson: "← Lesson",
     finishEarly: "Finish session early",
     gradeFailed: "Couldn't grade that answer. Try again.",
     advanceFailed: "Couldn't move to the next stop.",

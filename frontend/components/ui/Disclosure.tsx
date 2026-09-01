@@ -27,6 +27,7 @@ export default function Disclosure({
   children,
   className = "",
   tour,
+  initiallyOpen = false,
 }: {
   label: string;
   count?: number;
@@ -43,9 +44,24 @@ export default function Disclosure({
    * what is inside reachable through the hole.
    */
   tour?: string;
+  /**
+   * Arrive unfolded — still a disclosure, and still the learner's to fold.
+   *
+   * Not the same thing as a block being `open` in `lessonView`: `open` means the
+   * content is rendered bare, with no summary row and no way to put it away. This
+   * is the third weight the model did not have — *shown, but foldable* — which is
+   * why the caps in `lessonSurfaces` still count only `open` and are still right.
+   *
+   * UNCONTROLLED ON PURPOSE. It sets the initial `open` attribute and React never
+   * touches it again, because the prop never changes: a learner who folds this
+   * keeps it folded through every re-render. Holding the state here instead would
+   * mean re-opening it under them every time a verdict landed.
+   */
+  initiallyOpen?: boolean;
 }) {
   return (
     <details
+      open={initiallyOpen}
       data-tour={tour}
       className={`group rounded-card border border-rule bg-slab ${className}`}
     >
