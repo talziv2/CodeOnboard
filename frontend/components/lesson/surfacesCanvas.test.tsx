@@ -385,15 +385,40 @@ describe("the accumulation did not move into Understanding", () => {
       (d) => !d.open && d.textContent!.includes(LESSON.lesson.setup!)
     );
     expect(setupCollapsed).toBe(true);
-    // Still exactly one expanded thing on Lesson, whichever it is.
-    expect(openDisclosures()).toBe(0);
+    // Still exactly one expanded thing on Lesson, whichever it is — plus the code
+    // path, which arrives unfolded and is not one of them: it is a disclosure the
+    // learner can fold, not a section of the document.
+    expect(openDisclosures()).toBe(1);
   });
 
-  test("every disclosure on both surfaces arrives closed", async () => {
+  test("every disclosure arrives closed, except the code path on Lesson", async () => {
+    // The rule and its one exception, in one place. Understanding is untouched by
+    // it: the code locations are a MIRROR there, consulted mid-answer rather than
+    // read, and a mirror is never expanded.
     for (const surface of ["lesson", "understanding"] as const) {
       document.body.innerHTML = "";
       await renderSurface(surface);
-      expect(openDisclosures(), surface).toBe(0);
+      expect(openDisclosures(), surface).toBe(surface === "lesson" ? 1 : 0);
+      const unfolded = disclosures().filter((d) => d.open);
+      for (const d of unfolded) {
+        expect(d.querySelector("summary")!.textContent, surface)
+          .toContain(t.lesson.tracePath);
+      }
     }
+  });
+
+  test("the learner can fold the code path, and it stays folded", async () => {
+    // The whole reason it is a `<details>` with an initial `open` rather than a
+    // block the view model calls `open`: `open` renders bare, with no summary row
+    // and no way to put it away.
+    const user = userEvent.setup();
+    await renderSurface("lesson");
+    const path = disclosures().find((d) =>
+      d.querySelector("summary")!.textContent!.includes(t.lesson.tracePath)
+    )!;
+    expect(path.open).toBe(true);
+
+    await user.click(path.querySelector("summary")!);
+    expect(path.open).toBe(false);
   });
 });
