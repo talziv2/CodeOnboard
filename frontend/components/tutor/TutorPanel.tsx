@@ -52,6 +52,7 @@ export default function TutorPanel({
   onCite,
   onSuggestion,
   onTranscriptChange,
+  onRevealed,
 }: {
   sessionId: string;
   /** The stop the learner is on. Changing it re-filters, never re-fetches. */
@@ -65,6 +66,16 @@ export default function TutorPanel({
   onSuggestion: (suggestion: TutorSuggestion) => void;
   /** So the lesson surface can show pinned notes without a second fetch. */
   onTranscriptChange?: (turns: Turn[]) => void;
+  /**
+   * The learner spent the current question to see the explanation.
+   *
+   * The lesson surface has to be told, and told by us: its composer is still
+   * showing a prompt that is now spent, and a learner looking at both panes
+   * would see an answer box beside its own answer. The server refuses that
+   * submission (`prompt_revealed`), so this is the half that stops them
+   * meeting a 409 rather than a read-only prompt.
+   */
+  onRevealed?: () => void;
 }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [mode, setMode] = useState<TutorMode | null>(null);
@@ -152,6 +163,7 @@ export default function TutorPanel({
       const body = await tutorReveal(sessionId, nodeId ?? undefined);
       absorb(body);
       setReveal(body.reveal);
+      onRevealed?.();
     } catch (e: unknown) {
       setError(errorTextOr(e instanceof Error ? e.message : "", t.tutor.failed));
     } finally {

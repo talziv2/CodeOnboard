@@ -318,6 +318,82 @@ def test_reveal_returns_the_explanation_and_spends_the_prompt(client):
     assert _stored(session_id).nodes[_stored(session_id).current_node_id].tutor_state.revealed
 
 
+def test_a_revealed_prompt_can_no_longer_be_answered(client):
+    """The back door the E2E pass found, closed at the server.
+
+    The frontend remounts the lesson on a reveal so the composer goes read-only —
+    but a client holding a stale lesson (a second tab, a pane revealed after the
+    page loaded) would still post an answer to a question whose explanation is on
+    screen beside it. Grading that is grading what they just read.
+    """
+    session_id = _start(client, _graph(_node()))
+    client.post(f"/session/{session_id}/tutor/reveal", json={})
+
+    with patch("backend.api.run_grader") as grader:
+        refused = client.post(f"/session/{session_id}/respond",
+                              json={"response": "the answer I just read"})
+    assert refused.status_code == 409
+    assert refused.json()["detail"] == "prompt_revealed"
+    assert not grader.called, "a refused answer must never reach the Grader"
+    assert _stored(session_id).nodes[_stored(session_id).current_node_id].attempts == []
+
+
+def test_a_reassessment_answer_is_never_refused_by_the_reveal_guard(client):
+    """Issuing a fresh question clears `revealed`, so the guard cannot catch it."""
+    graph = _graph(_node())
+    session_id = _start(client, graph)
+    client.post(f"/session/{session_id}/tutor/reveal", json={})
+
+    stored = _stored(session_id)
+    node = stored.nodes[stored.current_node_id]
+    node.tutor_state.new_question()          # what /reassess does
+    node.gap_state.pending_reassessment = {"question": "a fresh one"}
+    _save(stored)
+
+    def _grader(state, user_response, client=None):
+        state.last_grade = {"classification": "understood", "gap_kind": "none",
+                            "rationale": "good"}
+        return state
+
+    with patch("backend.api.run_grader", side_effect=_grader),          patch("backend.api._node_source", return_value="source"):
+        graded = client.post(f"/session/{session_id}/respond",
+                             json={"response": "my fresh answer", "kind": "reassessment"})
+    assert graded.status_code == 200
+    assert graded.json()["classification"] == "understood"
+
+
+def test_assistance_is_recorded_on_the_attempt_it_preceded(client):
+    """§6.4 — metadata about evidence, never evidence."""
+    graph = _graph(_node())
+    session_id = _start(client, graph)
+    stored = _stored(session_id)
+    stored.nodes[stored.current_node_id].tutor_state.hints_used = 2
+    _save(stored)
+
+    def _grader(state, user_response, client=None):
+        # The real Grader applies the verdict to the node as well as reporting it
+        # (`_apply_grade`). A stub that only reports leaves the node at
+        # `not_started`, and `retry.offer` then answers a different question than
+        # the one under test.
+        state.last_grade = {"classification": "understood", "gap_kind": "none",
+                            "rationale": "good"}
+        state.graph.nodes[state.graph.current_node_id].understanding_state = "understood"
+        return state
+
+    with patch("backend.api.run_grader", side_effect=_grader),          patch("backend.api._node_source", return_value="source"):
+        body = client.post(f"/session/{session_id}/respond",
+                           json={"response": "an answer"}).json()
+
+    attempt = _stored(session_id).nodes[_stored(session_id).current_node_id].attempts[-1]
+    assert attempt["assistance"] == {"hints": 2, "revealed": False}
+    # The GRADE is untouched by assistance — the Grader marks the answer, not the
+    # route to it.
+    assert body["classification"] == "understood"
+    # And the offer stays open, because two hints is heavy assistance.
+    assert body["retry"]["mechanism"] == "reassess"
+    assert body["retry"]["reason"] == "assisted"
+
+
 def test_reveal_makes_no_model_call_and_costs_no_allowance(client):
     session_id = _start(client, _graph(_node()))
     with patch("backend.api.tutor_scaffold.hint") as hint, \

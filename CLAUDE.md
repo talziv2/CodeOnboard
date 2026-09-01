@@ -59,6 +59,13 @@ backend/
     reviewer/     # architectural review for goal types that need one
     teaching/     # one graph node → the lesson the user reads
     grader/       # classifies the user's answer
+    tutor/        # the conversational assistant. TWO agents, not one:
+                  # mode.py decides EXPLAIN vs SCAFFOLD from the graph;
+                  # context.py builds two DIFFERENT types, and ScaffoldContext
+                  #   has no field that could hold the answer;
+                  # explain.py / scaffold.py are the two Haiku calls;
+                  # suggest.py validates a proposal into an existing action.
+                  # Imports no writer — a turn is never evidence.
   repo/           # Layers A–C: repository understanding
     cloner.py     # git clone --depth 1
     parser.py     # tree-sitter → AST units with exact ranges  (Layer A)
@@ -78,6 +85,7 @@ backend/
     runner.py     # public entry point: run_pipeline()
     explorer_nodes.py   # repo_survey + goal_investigation nodes
   learning/       # LearningGraph model and its SQLite store
+    tutor.py      # the Tutor's record, its caps, and the ladder counters
   api.py          # FastAPI endpoints
 frontend/         # Next.js
 tests/
@@ -105,7 +113,17 @@ POST /goal/start            → { session_id, first_question }
 POST /goal/answer           → { next_question } | { goal: {...} }
 POST /goal/back             → { question, answer }   un-answers the last question
 POST /onboard               → { learning_path, module_map, confidence }
+
+GET  /sessions/{id}/tutor        → { turns, mode, remaining, cap, offers }
+POST /sessions/{id}/tutor/ask    → { turn, mode, remaining }
+POST /sessions/{id}/tutor/hint   → one rung of the Socratic ladder
+POST /sessions/{id}/tutor/reveal → { reveal, retry }   spends the question
+POST /sessions/{id}/tutor/pin    → keep an answer with the lesson
 ```
+
+The Tutor's five routes 404 while `CODEONBOARD_TUTOR` is off. `mode` is
+recomputed from the graph on EVERY call and never taken from the caller — a
+client that could name its own mode could ask for the answer key.
 
 `/goal/back` un-answers exactly one question, so stepping back N questions is N
 calls. It is the **only** way backwards, because the server owns the consequence:
@@ -296,7 +314,22 @@ Optional flags:
 ```
 CODEONBOARD_CURRICULUM=1   # objective-first planner (B3). Default 0 = pre-B3 planner
 CODEONBOARD_GAPS=1         # gap model. Default 0. ON IN DEV ONLY — see below
+CODEONBOARD_TUTOR=1        # the Tutor. Default 0 — see the leakage measurement below
 ```
+
+`NEXT_PUBLIC_CODEONBOARD_TUTOR=1` in `frontend/.env.local` is its build-time
+twin: Next inlines `NEXT_PUBLIC_*`, so the control is drawn or not drawn at build
+time while the backend gates the routes at request time.
+
+**`CODEONBOARD_TUTOR` is default off on evidence, not on caution.**
+`docs/planning/phases/evidence/tutor/` measures 1 leak in 30 adversarial prompts
+against a stated gate of 0. What the architecture removes is the CHEAP leak — the
+scaffold context is a type with no `reveal`, no `expected_answer` and no
+`rationale` field, so there is nothing to copy. What remains is a model reasoning
+to the answer from source it legitimately holds, which no context boundary can
+prevent and which the ladder's terminus bounds instead: `Show answer & get a new
+question` gives it away for the price of a fresh `/reassess`, so extraction is not
+worth the effort.
 
 **`CODEONBOARD_GAPS` is not data-collection-only.** As well as recording the
 misconceptions an answer contains, it makes the Grader *derive* the scalar
@@ -404,4 +437,44 @@ Full design: `docs/planning/phases/multi-user.md`.
   made `is_complete()` unreachable for the whole session. See
   `docs/planning/phases/learning-loop.md`.
 - **A learning unit is grounded by one *or more* verified anchors.** A flow crossing three files is anchored on all three. `nodes.file` / `line_start` / `line_end` hold a *derived display projection*; `lesson_brief["anchors"]` is the semantic truth. The invariant, asserted in tests and in the sanity script: the display columns always equal one member of `anchors`.
+- **The Tutor is a sensor and a guide, never a second learning engine.** A
+  conversation turn is not evidence about the learner, and that is structural:
+  no module under `backend/agents/tutor/` may import `run_grader`,
+  `mutate_graph`, `adaptation` or `record_attempt`, and `POST /tutor/ask` leaves
+  `graph.to_dict()` byte-identical except for the transcript
+  (`tests/test_tutor_boundary.py` asserts both halves). Conversation may
+  **describe** learner state, may **offer** an action the system already
+  supports — a closed vocabulary validated against the graph and rendered as a
+  control the learner presses — and may **never** be the reason a state changed.
+  `test_progress.py` and `test_decision_is_not_evidence.py` remain authoritative.
+- **Two agents behind one Tutor, because a flag is one wrong caller from a leak.**
+  `mode.py` decides EXPLAIN vs SCAFFOLD server-side, delegating "is the prompt
+  still live" to `retry.py` rather than re-deriving the four-flag seam that module
+  exists to prevent. The two modes then run different agents over **different
+  types**: `ScaffoldContext` has no `reveal`, no `expected_answer` and no
+  `rationale` field, so the assessment-mode Tutor does not possess the answer it
+  is being asked not to give. Asked the question in different words, it produces a
+  scaffold, because a scaffold is the only thing it has the material to produce.
+- **Revealing spends the prompt, and nothing else changes.** "Show answer & get a
+  new question" states its whole trade in its label, sets `tutor_state.revealed`,
+  and stops there. `retry.prompt_is_unanswered` reads that flag, so `retry.offer`
+  falls through to `/verify` or `/reassess` — a fresh question that ships no
+  answer, bounded by `REASSESSMENT_CAP`. There is no parallel assessment flow: the
+  learner ends in exactly the state any graded answer leaves them in. `/respond`
+  refuses an assessment answer on a revealed prompt (`prompt_revealed`), because
+  a stale client would otherwise have it graded.
+- **Assistance is metadata on evidence, not evidence.** `history.ASSISTANCE`
+  records how many hints preceded an answer, with the module's absent-means-
+  unknown discipline. It never changes a grade — the Grader marks the answer, not
+  the route to it. Two or more hints keep the retry OFFER open past `understood`
+  (`retry.ASSISTED`) and change nothing about `understanding_of`, readiness or
+  completion: the asymmetry `understanding.py` already draws between what evidence
+  demonstrates and what the learner decided.
+- **Chat is a second Source pane, not a second window system.** `FloatShell`,
+  `DockDivider` and the pane chrome were extracted from `CodeViewer` into
+  `components/panel/PaneShell.tsx` and are shared; `CodeViewer`'s tests pass
+  unchanged, which is the acceptance criterion for the move. `lib/panes.ts` owns
+  the one rule the layout needs: **at most one pane may be docked and open**, so
+  opening Chat in the dock evicts Source and floating either lets both coexist.
+  Both share `--source-width`, because only one column ever exists.
 - **Interactive learning graph (Phase 3, future).** The current Mentor Agent will retire; its responsibilities split across a Planner Agent (owns and mutates the learning graph), a Teaching Agent (expands a node into the actual lesson), and a Grader Agent (classifies user responses). The current step JSON becomes the *lesson brief*, not the lesson itself. The Planner's learning graph is also the **user's understanding graph** — the same object, persisted across sessions and surfaced to the user as the product's centerpiece artifact (this is the project's X-factor). Strategic positioning: CodeOnboard complements AI code generation by training humans to understand, critique, and direct it — Grader scope expands to critique-of-AI-output tasks, and a new AI-Assisted Development Mode operationalizes this. See `docs/planning/phases/roadmap.md` for the full Phase 3 description and the deferred design decisions.

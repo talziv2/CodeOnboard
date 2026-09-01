@@ -1439,6 +1439,30 @@ def session_respond(session_id: str, body: RespondRequest, user: CurrentUser = D
     if body.kind == history.VERIFICATION:
         return _respond_to_verification(graph, state, current, body, client, user.user_id)
 
+    # THE REVEALED PROMPT IS SPENT, AND THIS IS WHERE THAT IS ENFORCED.
+    #
+    # `POST /tutor/reveal` shows the explanation and sets `revealed`, and
+    # `retry.prompt_is_unanswered` reads it — so the composer becomes read-only
+    # and the learner is offered a fresh question instead. That is the frontend's
+    # half, and it is not enough on its own: a client holding a stale lesson (a
+    # second tab, a pane revealed after the page loaded) would still let them type
+    # into a prompt whose answer is on screen beside it, and this endpoint would
+    # grade it.
+    #
+    # Found by driving the real UI. It is the same back door §18.7 closed for
+    # revisits, reached through the new door the Tutor opened, so it is refused in
+    # the same place the rest of the grading preconditions live.
+    #
+    # A RE-ASSESSMENT IS EXEMPT, and must be: `/reassess` calls `new_question()`,
+    # which clears `revealed`, so a pending re-assessment never reaches here with
+    # the flag set — but naming the exemption keeps the intent legible if that
+    # ordering ever changes.
+    if (
+        body.kind == history.ASSESSMENT
+        and graph.nodes[current].tutor_state.revealed
+    ):
+        raise HTTPException(status_code=409, detail="prompt_revealed")
+
     # A RE-ASSESSMENT ANSWER IS AN ORDINARY ASSESSMENT, and everything below it
     # runs unchanged — the Grader marks it against the same objective, the verdict
     # moves `understanding_state`, and `decide_all` responds to it exactly as it

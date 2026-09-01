@@ -1628,6 +1628,10 @@ export const t = {
     // rather than a learner action, but it must still read as a sentence.
     not_asking: "There's no open question here right now.",
     already_revealed: "You've already seen the explanation for this question.",
+    // The learner revealed the answer in the tutor and then submitted an answer
+    // to the same question — a stale composer, usually in a second tab.
+    prompt_revealed:
+      "You've seen the explanation for this question, so it can't be marked. Ask for a fresh question and answer that one instead.",
     no_explanation_for_this_question:
       "This is a fresh check, so there's no explanation to show — it's meant to be answered from what you already know.",
     no_explanation_available: "There's no explanation stored for this stop yet.",

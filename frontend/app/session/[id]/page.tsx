@@ -219,6 +219,8 @@ export default function SessionPage() {
    * remembers to add to it.
    */
   const [epoch, setEpoch] = useState(0);
+  /** Bumped when the tutor spends the current prompt — see the LessonPanel key. */
+  const [lessonEpoch, setLessonEpoch] = useState(0);
   /**
    * A reset that failed, reported without taking the session down.
    *
@@ -728,6 +730,14 @@ export default function SessionPage() {
                   }}
                   onSuggestion={handleSuggestion}
                   onTranscriptChange={setTutorTurns}
+                  // Revealing spends the prompt, so the lesson's composer is
+                  // stale the moment it happens. Bumping the epoch remounts
+                  // the panel, which refetches and renders `SpentPrompt` with
+                  // the retry offer beside it — the same remount a reset uses,
+                  // and for the same reason: clearing the typed answer and the
+                  // verdict field by field is a list somebody will forget to
+                  // add to.
+                  onRevealed={() => setLessonEpoch((n) => n + 1)}
                 />
               ),
             }
@@ -936,6 +946,19 @@ export default function SessionPage() {
                 />
               ) : currentNodeId && currentNode ? (
                 <LessonPanel
+                  /* REMOUNTED WHEN THE PROMPT IS SPENT.
+                  
+                     Revealing in the tutor makes this panel's composer stale: it
+                     is showing a question whose explanation is on screen beside
+                     it, and the server now refuses that submission. A remount
+                     refetches the lesson, and the payload's `retry` — recomputed
+                     from `revealed` — renders `SpentPrompt` with `Ask me again`.
+                  
+                     Its OWN key rather than the page-wide `epoch`, deliberately:
+                     `epoch` remounts the whole session body including the tutor
+                     pane, so the explanation the learner just paid for would
+                     vanish at the moment they asked for it. */
+                  key={`lesson-${lessonEpoch}`}
                   sessionId={id}
                   nodeId={currentNodeId}
                   node={currentNode}
