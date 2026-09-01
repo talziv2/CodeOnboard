@@ -1239,6 +1239,43 @@ export default function LessonPanel({
             }
           />
 
+          {/* THE OTHER HALF OF THIS STOP.
+
+              Lesson and Understanding are two views of ONE activity — read the
+              stop, then show what you took from it — and the only crossing
+              between them was the tab bar at the very top of the column. So the
+              foot of a long walkthrough was a dead end: the act the material
+              exists to prepare was a scroll back up away, and coming off a
+              verdict to re-read what it was about cost the same trip.
+
+              OUTSIDE `LessonCanvas`, like the row below it, because it is not a
+              block of either surface — it is the same crossing from either side,
+              and the canvas only ever draws one side.
+
+              `surfaces` only. Under `next` there is one column and no other half
+              to cross to, so `drawing` is undefined and nothing renders. It is
+              also gated on `onGoToSurface`: navigation is the page's decision
+              (R5), and a button the page has given no way to honour is a button
+              that does nothing.
+
+              Direction sets the alignment — forward sits at the end of the row,
+              back at the start — so the pair reads as one axis rather than as two
+              unrelated buttons that happen to be in the same place. */}
+          {drawing && onGoToSurface && (
+            <div className="flex border-t border-rule pt-4">
+              <Button
+                variant="secondary"
+                size="md"
+                className={drawing === "lesson" ? "ms-auto" : ""}
+                onClick={() =>
+                  onGoToSurface(drawing === "lesson" ? "understanding" : "lesson")
+                }
+              >
+                {drawing === "lesson" ? t.lesson.toUnderstanding : t.lesson.toLesson}
+              </Button>
+            </div>
+          )}
+
           {/* THE WAY ON, FROM A STOP ALREADY DEALT WITH.
               
               `Next stop →` lives inside the verdict card, and the verdict card
