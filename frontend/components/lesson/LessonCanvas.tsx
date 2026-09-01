@@ -100,14 +100,16 @@ export default function LessonCanvas({
     label: string,
     count?: number,
     /** `data-tour` for the collapsed form; the open form carries its own. */
-    tour?: string
+    tour?: string,
+    /** Arrive unfolded rather than folded — see the trace path's call below. */
+    initiallyOpen?: boolean
   ) => {
     const value = at(block);
     if (value === "absent") return null;
     return value === "open" ? (
       node
     ) : (
-      <Disclosure label={label} count={count} tour={tour}>
+      <Disclosure label={label} count={count} tour={tour} initiallyOpen={initiallyOpen}>
         {node}
       </Disclosure>
     );
@@ -120,7 +122,40 @@ export default function LessonCanvas({
           reference under the same label — a mirror the learner consults, not a
           second copy of something to read. */}
       {show("setup", setup, labels.setup)}
-      {show("tracePath", tracePath, labels.tracePath, labels.tracePathCount, "code-links")}
+      {/* THE CODE PATH ARRIVES UNFOLDED, ON THE SURFACE THAT OWNS IT.
+
+          `lessonView` records that opening this was tried and reverted the same
+          hour, for two reasons. The first — it took STUDY to five open blocks —
+          was about the SINGLE COLUMN, and does not survive the split: Lesson holds
+          the prose, this, and the explanation, and the prose and the explanation
+          supersede each other. The second — the brief already says where the unit
+          lives — holds for a single anchor and not for the case this block is
+          named after: the brief carries one location line, never the ordered walk
+          through four of them, which is the whole content of "this path crosses
+          several places".
+
+          Folded, that walk was a labelled row nobody opened, so the one thing the
+          block exists to show was the one thing nobody saw. Unfolded it is still a
+          `<details>`: the learner folds it and it stays folded.
+
+          NOT `open`, and not a change to `lessonBlocks`. `open` would render it
+          bare with no way to put it away, and the state stays `collapsed` because
+          foldable is what it still is — so the R3 cap, which counts `open`, keeps
+          measuring what it was written to measure.
+
+          THE OWNING SURFACE ONLY. On Understanding this is a MIRROR, and a mirror
+          is never expanded — it is there to be consulted mid-answer, not read.
+          Under `next` (no surface) it stays folded too: that build is the baseline
+          `surfaces` is measured against, and it is the one where the five-open-
+          blocks reason still bites literally. */}
+      {show(
+        "tracePath",
+        tracePath,
+        labels.tracePath,
+        labels.tracePathCount,
+        "code-links",
+        surface === "lesson"
+      )}
       {show("gaps", gaps, labels.gaps, labels.gapsCount)}
       {show("attempts", attempts, labels.attempts, labels.attemptsCount)}
 
