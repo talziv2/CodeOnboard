@@ -360,6 +360,9 @@ export const t = {
     readiness: "Readiness",
     hideSource: "Hide source",
     showSource: "Show source",
+    /** The Tutor's control, beside `showSource` and of the same prominence. */
+    showChat: "Chat",
+    hideChat: "Close the tutor",
     // ── two different actions, and they used to be one ──────────────────────
     //
     // `Start over` re-ran the whole pipeline: two to four minutes, and a
@@ -683,6 +686,88 @@ export const t = {
     float: "Float in a window",
     window: "Source",
     resize: "Drag to resize the source pane",
+  },
+
+  // --- the Tutor (docs/planning/phases/tutor.md) ---
+  //
+  // The copy here carries two things the architecture cannot: that the assessment
+  // Tutor genuinely does not hold the answer (§7.3 makes that literally true, and
+  // saying so is only honest because it is), and that revealing costs the current
+  // question (§6.3 — stated BEFORE the click, on the control itself).
+  tutor: {
+    window: "Tutor",
+    title: "Tutor",
+    /** The composer, in each mode. Never "Submit" — that word belongs to answers. */
+    ask: "Ask",
+    asking: "Thinking…",
+    placeholderExplain: "Ask about this code",
+    placeholderScaffold: "What's confusing you?",
+    /** Advertised beside the button, like the answer composer's own shortcut. */
+    askHint: "⌘↵ to ask",
+
+    /** The mode strip. Two modes that must never be confusable at a glance. */
+    modeExplain: "Explaining",
+    modeScaffold: "Helping you answer",
+    /**
+     * Printed because it is architecturally TRUE, not as a promise: the scaffold
+     * context has no field that could hold the reveal or the expected answer.
+     */
+    scaffoldBlurb: "I can see this stop's code and your question. I can't see the answer.",
+    explainBlurb: "I can see this repository, your route, and how you've done here.",
+    outOfScopeTag: "Outside what I can see",
+
+    /** The ladder. */
+    hintLevel: (used: number, max: number) => `Hint ${used} of ${max}`,
+    /** On the turn itself. No denominator — the ladder states the cap. */
+    hintTurn: (level: number) => `Hint ${level}`,
+    askForHint: "Give me a hint",
+    askForAnotherHint: "Another hint",
+    hintsSpent: "That's every hint I have for this one.",
+
+    /**
+     * §6.3, and the most carefully worded string in the product. The learner is
+     * choosing to leave assessment and return to learning; the trade is named in
+     * full before the control, and again inside the control's own label.
+     */
+    revealWarning:
+      "You can see the explanation now, but this question stops counting as your assessment. You'll get a new question on the same concept.",
+    revealAction: "Show answer & get a new question",
+    revealCancel: "Keep trying",
+    revealHeading: "The explanation",
+    revealedNotice:
+      "You've seen the explanation, so this question is done. Ask me again when you want a fresh one.",
+
+    /** Offers. `label_key` on a suggestion names one of these. */
+    offer: {
+      checkGap: "Check that misconception",
+      askAgain: "Try a fresh question",
+      goToStop: "Go to that stop",
+      goDeeper: "Add the optional material",
+    } as Record<string, string>,
+    offerDwelling: "You've been on this one a while.",
+    offerReturning: "You'd marked this done.",
+
+    /** The transcript. */
+    empty: "Ask me anything about this stop, this repository, or how you're doing.",
+    emptyScaffold: "Stuck? Ask me what's confusing you, or take a hint.",
+    earlier: (count: number) =>
+      count === 1 ? "1 question earlier in this session" : `${count} questions earlier in this session`,
+    earlierStop: "Asked at a stop that's no longer on your route",
+    you: "You",
+    /** Attribution, so canonical and personalized material are never confused. */
+    tutorSaid: "Tutor",
+    pin: "Keep this with the lesson",
+    unpin: "Remove from the lesson",
+    pinned: "Kept",
+    remaining: (left: number) => `${left} left`,
+    capReached: "You've used all your tutor questions for this session.",
+    failed: "That didn't go through. Nothing was used up — try again.",
+
+    /** The entry point beside the composer. Names the intent, not the tool. */
+    stuck: "I'm stuck",
+    /** Pinned notes, on the Lesson surface. */
+    notesHeading: (count: number) =>
+      count === 1 ? "Your note (1)" : `Your notes (${count})`,
   },
 
   // --- route rail ---
@@ -1530,6 +1615,23 @@ export const t = {
     no_plan_snapshot:
       "This session was created before routes could be restored, so it can't be started over. Rebuilding the learning path will give you a fresh one.",
     node_not_found: "That stop isn't part of this session.",
+    // --- the Tutor ---
+    tutor_limit_reached:
+      "You've used all your tutor questions for this session. Your route and your answers are unaffected.",
+    question_too_long: "That's a bit long — try asking it in a sentence or two.",
+    question_empty: "Type a question first.",
+    // The ladder is spent. Deliberately not phrased as a refusal to help: asking
+    // is never blocked, only being written another hint is.
+    hint_ladder_spent:
+      "That's every hint for this question. You can still ask me about the code, or see the explanation.",
+    // A hint or a reveal on a stop that is not asking anything. A client bug
+    // rather than a learner action, but it must still read as a sentence.
+    not_asking: "There's no open question here right now.",
+    already_revealed: "You've already seen the explanation for this question.",
+    no_explanation_for_this_question:
+      "This is a fresh check, so there's no explanation to show — it's meant to be answered from what you already know.",
+    no_explanation_available: "There's no explanation stored for this stop yet.",
+    turn_not_found: "That message is no longer in your conversation.",
     session_has_no_current_node: "This session has no current stop.",
     no_lesson_rendered_yet: "The lesson hasn't loaded yet — give it a moment.",
     invalid_path: "That file path isn't inside the repository.",

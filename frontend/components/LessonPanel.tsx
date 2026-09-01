@@ -64,6 +64,23 @@ interface Props {
   graph: SessionGraph;
   /** A range is passed for multi-anchor units so the pane highlights THAT step. */
   onFileClick: (file: string, lineStart?: number, lineEnd?: number) => void;
+  /**
+   * Open the Tutor, already in assessment mode, from beside the composer.
+   *
+   * Passed down rather than read from a flag here, so this component keeps having
+   * no opinion about whether the Tutor exists — absent means the control is not
+   * rendered, which is the same shape as every other optional action.
+   */
+  onStuck?: () => void;
+  /**
+   * Tutor answers the learner chose to keep, for THIS stop.
+   *
+   * Rendered below the reveal in an always-collapsed disclosure, styled like
+   * `EarlierExplanations` and for the same reason: reachable without being on the
+   * page. It is deliberately NOT merged into the lesson — `cached_lesson` stays
+   * canonical, and a note is attributed so the two can never be confused.
+   */
+  pinnedNotes?: { id: string; question: string; answer: string }[];
   onAdvance: () => Promise<void>;
   onRespond: () => void;
   /**
@@ -141,6 +158,7 @@ export default function LessonPanel({
   sessionId, nodeId, node, position, total, isPrerequisite,
   arrival = null, onReturnToRoute, onDismissArrival, returningToRoute = false,
   graph, onFileClick, onAdvance, onRespond, finished, onFinish, onLeave, onResume, surface,
+  onStuck, pinnedNotes,
   onSurfaceChanged, onGoToSurface, onMaterialUnread,
 }: Props) {
   const router = useRouter();
@@ -1083,7 +1101,45 @@ export default function LessonPanel({
               earlier: t.lesson.earlierExplanations(superseded.length),
               question: t.lesson.questionAsked,
             }}
-            earlier={<EarlierExplanations versions={superseded} />}
+            earlier={
+              <div className="flex flex-col gap-6">
+                <EarlierExplanations versions={superseded} />
+                {/* PINNED TUTOR ANSWERS (tutor.md §11.2).
+                    
+                    Beside the superseded explanations rather than in the lesson
+                    body, and for the same reason they are: this is material the
+                    learner may want back, not material the lesson claims. Nothing
+                    was copied into `cached_lesson` to put it here — these are
+                    turns flagged in the transcript, rendered with attribution so
+                    canonical and personalized prose stay distinguishable. */}
+                {pinnedNotes && pinnedNotes.length > 0 && (
+                  <div className="flex flex-col gap-4">
+                    <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
+                      {t.tutor.notesHeading(pinnedNotes.length)}
+                    </span>
+                    {pinnedNotes.map((note) => (
+                      <div key={note.id} className="flex flex-col gap-2">
+                        {note.question && (
+                          <div className="flex flex-col gap-1 border-s-2 border-rule ps-3">
+                            <span className="font-mono text-micro uppercase tracking-[0.14em] text-graphite">
+                              {t.tutor.you}
+                            </span>
+                            {/* Never markdown — the learner's own words. */}
+                            <p className="whitespace-pre-wrap text-aside text-paper">
+                              {note.question}
+                            </p>
+                          </div>
+                        )}
+                        <span className="font-mono text-micro uppercase tracking-[0.14em] text-signal">
+                          {t.tutor.tutorSaid}
+                        </span>
+                        <Prose text={note.answer} size="aside" tone="chalk" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            }
             /* Text only. The composer lives in `question` and renders only while
                that block is open, which is what keeps "exactly one composer" true
                while the question stays re-readable. */
@@ -1139,6 +1195,7 @@ export default function LessonPanel({
               <PracticeSurface label={practiceLabel}>
                 {verification ? (
                   <VerificationBlock
+                    onStuck={onStuck}
                     question={verification.question}
                     answer={answer}
                     onAnswerChange={setAnswer}
@@ -1149,6 +1206,7 @@ export default function LessonPanel({
                   />
                 ) : promptIsLive ? (
                   <AnswerComposer
+                    onStuck={onStuck}
                     prompt={lesson.lesson.prompt}
                     answer={answer}
                     onAnswerChange={setAnswer}

@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   DEFAULT_SOURCE,
+  DEFAULT_TUTOR,
   FLOAT_MIN_H,
   FLOAT_MIN_W,
   applyDockWidth,
@@ -21,17 +22,33 @@ import {
   readPrefs,
   writePrefs,
   type FloatRect,
-  type SourcePrefs,
+  type PanePrefs,
 } from "./prefs";
 
-export function useSourcePane() {
-  const [source, setSource] = useState<SourcePrefs>(DEFAULT_SOURCE);
+/**
+ * One companion pane's persisted preferences.
+ *
+ * Parameterised by `which` because there are two panes now and they store the
+ * same shape under two keys. The hook is otherwise unchanged, including the
+ * effect-not-initialiser read: the server renders the default, so reading storage
+ * during the first client render would be a hydration mismatch on the one
+ * preference that changes the markup.
+ *
+ * `applyDockWidth` runs for both, and that is deliberate rather than sloppy —
+ * `--source-width` sizes the single dock column, only one pane may occupy it
+ * (`lib/panes.ts`), and a learner who dragged that column meant the column rather
+ * than whatever happened to be in it at the time.
+ */
+export function useSourcePane(which: "source" | "tutor" = "source") {
+  const [source, setSource] = useState<PanePrefs>(
+    which === "tutor" ? DEFAULT_TUTOR : DEFAULT_SOURCE
+  );
 
   useEffect(() => {
-    setSource(readPrefs().source);
-  }, []);
+    setSource(readPrefs()[which]);
+  }, [which]);
 
-  const patch = useCallback((change: Partial<SourcePrefs>) => {
+  const patch = useCallback((change: Partial<PanePrefs>) => {
     setSource((prev) => ({ ...prev, ...change }));
   }, []);
 
@@ -39,10 +56,10 @@ export function useSourcePane() {
   // state updater twice, and writing to storage from one is a side effect.
   useEffect(() => {
     const stored = readPrefs();
-    if (JSON.stringify(stored.source) === JSON.stringify(source)) return;
-    writePrefs({ ...stored, source });
+    if (JSON.stringify(stored[which]) === JSON.stringify(source)) return;
+    writePrefs({ ...stored, [which]: source });
     applyDockWidth(source.dockWidth);
-  }, [source]);
+  }, [source, which]);
 
   return { source, patch };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useParams, useRouter } from "next/navigation";
 import MapView from "@/components/MapView";
 import AnalysisView from "@/components/AnalysisView";
@@ -9,18 +9,22 @@ import RouteRail from "@/components/RouteRail";
 import SectionOverview from "@/components/SectionOverview";
 import LessonPanel from "@/components/LessonPanel";
 import CodeViewer from "@/components/CodeViewer";
+import TutorPanel from "@/components/tutor/TutorPanel";
 import SessionHeader from "@/components/SessionHeader";
 import SessionTour from "@/components/tour/SessionTour";
 import RebuildingOverlay from "@/components/RebuildingOverlay";
 import SurfaceTabs from "@/components/lesson/SurfaceTabs";
 import { getSession, jump, resetSession, sessionStart, setScope } from "@/lib/api";
-import type { GraphNode, SessionGraph } from "@/lib/api";
+import type { GraphNode, SessionGraph, TutorSuggestion, TutorTurn } from "@/lib/api";
 import { buildRoute, spineLength } from "@/lib/graph-layout";
 import { arrivalIntro, splitJourney } from "@/lib/route-sections";
 import { useSourcePane } from "@/lib/source-pane";
+import { closePane, dockedPane, openPane, paneOf } from "@/lib/panes";
+import { tutorUi } from "@/lib/flags";
 import { RAIL_REM, useBand, useRootFontPx, sourceMustOverlay } from "@/lib/layout-bands";
 import Button from "@/components/ui/Button";
 import { lessonUi } from "@/lib/flags";
+import { DEFAULT_PREFS } from "@/lib/prefs";
 import {
   activeTab, INITIAL_TABS, modeOf, reduceTabs, surfaceForTab, tabsFor,
   type SessionTab, type TabEvent, type TabState,
@@ -48,7 +52,24 @@ export default function SessionPage() {
   // clicked twice, so without this the pane would just sit where it was.
   const [focusKey, setFocusKey] = useState(0);
   const { source, patch: patchSource } = useSourcePane();
+  const { source: tutor, patch: patchTutor } = useSourcePane("tutor");
   const showCode = source.open;
+  const showTutor = tutor.open;
+  /**
+   * The two panes as one object, for `lib/panes.ts`.
+   *
+   * That module reasons about BOTH panes at once, because opening one is a change
+   * to both — so it takes and returns a `Prefs`-shaped patch, and this is the
+   * adapter between it and the two independent `useSourcePane` hooks the page
+   * actually holds.
+   */
+  const prefsNow = () => ({ ...DEFAULT_PREFS, source, tutor });
+  const applyPanes = (patch: { source?: typeof source; tutor?: typeof tutor }) => {
+    if (patch.source) patchSource(patch.source);
+    if (patch.tutor) patchTutor(patch.tutor);
+  };
+  /** Pinned Tutor answers for the current stop, so the lesson can show them. */
+  const [tutorTurns, setTutorTurns] = useState<TutorTurn[]>([]);
   /**
    * Open or close the source pane.
    *
@@ -59,11 +80,33 @@ export default function SessionPage() {
    * time.
    */
   const setShowCode = (open: boolean) => {
-    if (open && source.mode === "dock" && sourceMustOverlay(band, viewportWidth, source.dockWidth, rootFontPx)) {
-      patchSource({ open: true, mode: "float" });
+    setPaneOpen("source", open);
+  };
+
+  /**
+   * Open or close a companion pane — the ONE place either is opened.
+   *
+   * Two rules, both delegated rather than restated here:
+   *
+   *   `dockWouldCrowd`  a dock that would leave the reading column under
+   *                     `LESSON_FLOOR` opens FLOATING instead, because a 300px
+   *                     lesson is not a lesson. A starting point, not a lock: the
+   *                     dock control stays live either way.
+   *   `openPane`        opening in `dock` closes whichever pane is holding the
+   *                     column, and floating never evicts anything. That is what
+   *                     makes Source-docked + Chat-floating reachable.
+   *
+   * Both are pure functions with their own tests, so this is plumbing.
+   */
+  const setPaneOpen = (which: "source" | "tutor", open: boolean) => {
+    if (!open) {
+      applyPanes(closePane(prefsNow(), which));
       return;
     }
-    patchSource({ open });
+    const crowded = sourceMustOverlay(
+      band, viewportWidth, paneOf(prefsNow(), which).dockWidth, rootFontPx
+    );
+    applyPanes(openPane(prefsNow(), which, crowded));
   };
   const { width: viewportWidth, band } = useBand();
   const rootFontPx = useRootFontPx();
@@ -512,6 +555,38 @@ export default function SessionPage() {
     }
   };
 
+  /**
+   * A validated Tutor offer, pressed.
+   *
+   * THE TUTOR IS NOT IN THIS PATH. Every branch below calls the endpoint that
+   * already existed, from the client function that already existed, with the
+   * validation and the caps that already existed — which is the whole of the
+   * tier-3 boundary (`tutor.md` §5.3). The Tutor's contribution was to put the
+   * control on screen; the learner's was to press it.
+   *
+   * `verify` and `reassess` are deliberately routed by REFRESHING rather than by
+   * calling `/verify` here: those two endpoints issue a question that belongs on the
+   * lesson surface, and `LessonPanel` already owns asking for one through the
+   * retry offer it is handed. Sending the learner there is the honest response —
+   * the question is not a thing the side panel should hold.
+   */
+  const handleSuggestion = async (suggestion: TutorSuggestion) => {
+    if (suggestion.kind === "jump" && suggestion.node_id) {
+      const target = graph?.nodes.find((n) => n.id === suggestion.node_id);
+      if (target) await handleJump(target);
+      return;
+    }
+    if (suggestion.kind === "deepen") {
+      await adjustScope("deeper");
+      return;
+    }
+    // `verify` / `reassess`: the retry offer on the lesson surface serves both,
+    // and it is already computed by the server on every lesson payload. Bring the
+    // learner back to it rather than issuing a question into a side panel.
+    dispatchTab({ kind: "picked", tab: "understanding" });
+    await loadGraph();
+  };
+
   // Rejoining the route. Same endpoint as a jump, with the intent that tells the
   // server this is the opposite act: it clears the arrival notice instead of
   // raising another one, while still being recorded — a log showing only
@@ -578,6 +653,90 @@ export default function SessionPage() {
   const overviewSection =
     journey.sections.find((s) => s.area?.id === overviewAreaId) ?? null;
 
+  /**
+   * Which pane holds the third grid track. `null` when nothing is docked open.
+   *
+   * One question, asked once, used by both the grid template and the render order
+   * below — so the track that is reserved and the pane that is placed into it can
+   * never disagree.
+   */
+  /**
+   * Tutor answers the learner kept, for the stop they are on.
+   *
+   * Filtered here rather than in `LessonPanel` because the transcript is
+   * session-scoped and the panel is stop-scoped — the same filter the Tutor panel
+   * applies to its own list, and the reason turns carry `node_id` at all.
+   */
+  const pinnedNotes = tutorTurns
+    .filter((turn) => turn.pinned && turn.node_id === currentNodeId)
+    .map((turn) => ({ id: turn.id, question: turn.question, answer: turn.answer }));
+
+  const dockedHere = graph ? dockedPane(prefsNow()) : null;
+
+  /**
+   * The companion panes, DOCKED ONE FIRST.
+   *
+   * A floating pane is `fixed`, so where it sits in the tree does not place it. A
+   * docked one is placed by document order into the grid's third track — so if a
+   * floating Chat rendered before a docked Source, Chat would take the column
+   * Source reserved and Source would be pushed out of the grid entirely. Ordering
+   * by `dockedHere` is what makes "either pane may be the docked one" true rather
+   * than true-for-Source.
+   */
+  const companions = graph
+    ? [
+        showCode && openFile
+          ? {
+              id: "source" as const,
+              node: (
+                <CodeViewer
+                  key="source"
+                  sessionId={id}
+                  filePath={openFile}
+                  // A chosen anchor wins; otherwise the node's display range, as
+                  // before. CodeViewer itself is unchanged — this is which range
+                  // it is handed, not how it renders one.
+                  highlightStart={viewingRange?.[0] ?? highlightForOpenFile?.start}
+                  highlightEnd={viewingRange?.[1] ?? highlightForOpenFile?.end}
+                  focusKey={focusKey}
+                  source={source}
+                  onSourceChange={patchSource}
+                  onClose={() => setPaneOpen("source", false)}
+                />
+              ),
+            }
+          : null,
+        tutorUi() && showTutor
+          ? {
+              id: "tutor" as const,
+              node: (
+                <TutorPanel
+                  key="tutor"
+                  sessionId={id}
+                  nodeId={currentNodeId ?? null}
+                  prefs={tutor}
+                  onPrefsChange={patchTutor}
+                  onClose={() => setPaneOpen("tutor", false)}
+                  onCite={(citation) => {
+                    // A CITATION IS NAVIGATION, and with two panes it no longer
+                    // has to steal the Tutor's slot: if the Tutor is floating,
+                    // Source docks beside it and both stay on screen.
+                    setViewingFile(citation.file);
+                    setViewingRange([citation.line_start, citation.line_end]);
+                    setPaneOpen("source", true);
+                    setFocusKey((k) => k + 1);
+                  }}
+                  onSuggestion={handleSuggestion}
+                  onTranscriptChange={setTutorTurns}
+                />
+              ),
+            }
+          : null,
+      ]
+        .filter((pane): pane is { id: "source" | "tutor"; node: ReactElement } => pane !== null)
+        .sort((a, b) => (a.id === dockedHere ? -1 : b.id === dockedHere ? 1 : 0))
+    : [];
+
   return (
     <main className="flex h-screen flex-col overflow-hidden bg-ink">
       <SessionHeader
@@ -643,9 +802,14 @@ export default function SessionPage() {
             "minmax(0,1fr)",
             // `dock` means a column, whatever the viewport. Squeezing the lesson
             // is the learner's call to make; taking the choice away was not.
-            mode === "learn" && showCode && openFile && source.mode === "dock"
-              ? "var(--source-width)"
-              : null,
+            //
+            // ONE TRACK FOR TWO PANES. `dockedPane` answers "which pane, if any,
+            // holds the column" — and it can only ever name one, because
+            // `lib/panes.ts` evicts on dock. Both panes share `--source-width`,
+            // so a learner who sized this column keeps that size whichever pane
+            // is in it. A floating pane is `fixed` and claims no track, which is
+            // what lets Source and Chat be on screen together.
+            mode === "learn" && dockedHere ? "var(--source-width)" : null,
           ]
             .filter(Boolean)
             .join(" "),
@@ -718,6 +882,19 @@ export default function SessionPage() {
                   {t.session.showSource}
                 </Button>
               )}
+              {/* THE CHAT CONTROL, a peer of `Show source` in every respect —
+                  same variant, same size, same place, same rule about vanishing
+                  while its own pane is open (the pane owns its close).
+
+                  A peer because the two ARE peers: both are contextual tools
+                  beside the lesson, both open into the same column, and both can
+                  be detached. Giving Chat a different prominence would say it is
+                  a different kind of thing. */}
+              {tutorUi() && mode === "learn" && !showTutor && (
+                <Button variant="chrome" size="sm" onClick={() => setPaneOpen("tutor", true)}>
+                  {t.session.showChat}
+                </Button>
+              )}
                 {/* ONLY THE WAY BACK IN (UI note 4, second pass).
                     `Hide route` moved into the rail's own header, where a control
                     for a column belongs. `Show route` cannot live there — once the
@@ -780,6 +957,8 @@ export default function SessionPage() {
                     setShowCode(true);
                     setFocusKey((k) => k + 1);
                   }}
+                  onStuck={tutorUi() ? () => setPaneOpen("tutor", true) : undefined}
+                  pinnedNotes={pinnedNotes}
                   onAdvance={handleAdvance}
                   onRespond={loadGraph}
                   finished={finished}
@@ -878,21 +1057,12 @@ export default function SessionPage() {
             `openSource` — which is a starting point rather than a lock: the dock
             control still works, and a learner who insists on docking in a narrow
             window gets what they asked for. */}
-        {mode === "learn" && showCode && openFile && (
-          <CodeViewer
-            sessionId={id}
-            filePath={openFile}
-            // A chosen anchor wins; otherwise the node's display range, as
-            // before. CodeViewer itself is unchanged — this is which range it
-            // is handed, not how it renders one.
-            highlightStart={viewingRange?.[0] ?? highlightForOpenFile?.start}
-            highlightEnd={viewingRange?.[1] ?? highlightForOpenFile?.end}
-            focusKey={focusKey}
-            source={source}
-            onSourceChange={patchSource}
-            onClose={() => setShowCode(false)}
-          />
-        )}
+        {/* THE DOCKED PANE MUST BE THE GRID'S THIRD CHILD, so the docked one is
+            rendered first and any floating one after it. A floating pane is
+            `fixed`, so where it sits in the tree does not place it — but a docked
+            one is placed by document order, and rendering Chat before a docked
+            Source would put Chat in the track Source reserved. */}
+        {mode === "learn" && companions.map((pane) => pane.node)}
 
         {/* THE TOUR, over everything. Mounted inside the grid rather than beside
             it only because that is where the page's other overlays live; it is
