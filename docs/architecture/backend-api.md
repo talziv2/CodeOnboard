@@ -203,6 +203,7 @@ sequenceDiagram
 | Status | Used for |
 |---|---|
 | 401 `not_authenticated` | No valid cookie, or a route that declares no auth |
+| 401 with its own message | A *refused credential*, not a lost session: `Email or password is incorrect.` from `/auth/login` and the Google link step, `invalid_reset_token` from `/auth/reset`. `send()` in `frontend/lib/api.ts` splits the two on `detail` — only `not_authenticated` reaches the app's single 401 handler, so a rejected password no longer renders as "Your session has ended." |
 | 404 `session_not_found` / `node_not_found` | Not yours, or not there — indistinguishable on purpose |
 | 409 | The request is well-formed and the session's *state* refuses it: `session_has_no_current_node`, `no_lesson_rendered_yet`, `no_pending_reassessment`, `no_plan_snapshot`, `generation_already_running` |
 | 400 | A bad value in a well-formed body: an unsupported signal, direction, action or intent |

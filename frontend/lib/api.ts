@@ -12,8 +12,11 @@ const BASE = "/api";
 /** FastAPI puts the useful part in `detail`, which may be a string or an
  *  object carrying the pipeline's error list. Raw JSON in a UI is useless, so
  *  unwrap it to something a person can read. */
-async function fail(res: Response): Promise<never> {
-  const raw = await res.text();
+async function fail(res: Response, prefetched?: string): Promise<never> {
+  // `prefetched` is the body when the caller has already read it. A Response
+  // body can only be read once, and `send()` has to read a 401's before it can
+  // tell a lost session from a refused password.
+  const raw = prefetched ?? (await res.text());
   let message = raw;
   let isJson = false;
   try {
@@ -67,6 +70,17 @@ export function setUnauthenticatedHandler(handler: (() => void) | null) {
   onUnauthenticated = handler;
 }
 
+/** The `detail` string of a FastAPI error body, or null if the body is not one
+ *  (no JSON, or a `detail` that is an object rather than a slug). */
+function detailOf(raw: string): string | null {
+  try {
+    const detail = JSON.parse(raw)?.detail;
+    return typeof detail === "string" ? detail : null;
+  } catch {
+    return null;
+  }
+}
+
 async function send(path: string, init?: RequestInit): Promise<Response> {
   let res: Response;
   try {
@@ -83,10 +97,30 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
     throw new Error("server_unreachable");
   }
   if (res.status === 401) {
-    // The session is gone — expired, revoked, or never there. Reported once,
-    // here, so no caller has to remember that 401 is the special one.
-    onUnauthenticated?.();
-    throw new NotAuthenticatedError();
+    // TWO DIFFERENT THINGS ARRIVE AS 401, AND ONLY ONE OF THEM IS A SESSION.
+    //
+    // `auth/deps.py` and the catch-all in `api.py` answer a missing, expired or
+    // revoked cookie with the slug `not_authenticated`. A REFUSED CREDENTIAL —
+    // a wrong password at `/auth/login`, a spent reset link — is also a 401,
+    // but it carries its own message and says nothing about the session.
+    //
+    // Collapsing both into NotAuthenticatedError rendered a rejected password
+    // as "Your session has ended. Sign in again." on a form the reader had just
+    // typed their password into: it named a problem they did not have, offered
+    // "sign in again" as the fix for the thing that had just failed, and hid
+    // the one fact they needed. So judge the body, not the status.
+    const raw = await res.text();
+    const detail = detailOf(raw);
+    // A 401 with no readable `detail` is treated as the session: that is the
+    // overwhelmingly common one, and it is the one with a recovery path.
+    if (detail === null || detail === "not_authenticated") {
+      // The session is gone — expired, revoked, or never there. Reported once,
+      // here, so no caller has to remember that 401 is the special one.
+      onUnauthenticated?.();
+      throw new NotAuthenticatedError();
+    }
+    // A refusal of what was just submitted. It gets to speak for itself.
+    await fail(res, raw);
   }
   return res;
 }

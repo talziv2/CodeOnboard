@@ -72,9 +72,32 @@ describe("what it must not swallow", () => {
 
   test("a wrong password still reads as a wrong password", async () => {
     // The symptom that started this: the real 401 and a dead backend rendered
-    // identically. 401 never reaches `fail()` -- `send()` throws
-    // NotAuthenticatedError first -- so this pins that they stay different.
+    // identically. A dead backend is now `server_unreachable` -- and the 401
+    // has to survive as itself, which it did not: `send()` turned EVERY 401
+    // into NotAuthenticatedError, so a rejected password reached the login form
+    // as "Your session has ended. Sign in again.", under the password field the
+    // learner had just filled in.
     respond(401, JSON.stringify({ detail: "Email or password is incorrect." }));
+
+    const err = (await login("a@b.co", "pw").catch((e: Error) => e)) as Error;
+
+    expect(errorText(err.message)).toBe("Email or password is incorrect.");
+    expect(errorText(err.message)).not.toBe(t.errors.not_authenticated);
+  });
+
+  test("a 401 that IS the session still reports the session", async () => {
+    // The other side of the same split: `auth/deps.py` answers a missing or
+    // expired cookie with this slug, and that one must keep reaching the auth
+    // layer's single 401 handler.
+    respond(401, JSON.stringify({ detail: "not_authenticated" }));
+
+    await expect(login("a@b.co", "pw")).rejects.toThrow("not_authenticated");
+  });
+
+  test("a 401 with no JSON body is treated as the session", async () => {
+    // Nothing to judge by, so fall back to the common case rather than
+    // rendering a bare proxy string as if the API had said it.
+    respond(401, "Unauthorized");
 
     await expect(login("a@b.co", "pw")).rejects.toThrow("not_authenticated");
   });
