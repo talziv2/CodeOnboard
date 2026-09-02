@@ -99,7 +99,7 @@ surface is a type error, and that is deliberate.
 ## Verifying
 
 ```bash
-npm test          # Vitest — 50 files, ~15s
+npm test          # Vitest — 52 files, 844 tests, ~14s
 npm run build     # this IS the type check; there is no linter
 ```
 

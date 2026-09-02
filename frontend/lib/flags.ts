@@ -65,13 +65,33 @@ export function isSplitSurfaces(ui: LessonUi): boolean {
  * answer 404); this one gates whether the CHAT control is drawn at all, at build
  * time, because Next inlines `NEXT_PUBLIC_*`.
  *
- * The pairing that matters is the safe one: with the backend off and this on, the
- * control appears and the panel reports a failure — noisy but harmless. With this
- * off, no Tutor code is reachable whatever the backend does.
+ * ── DEFAULT ON, and why the comparison points this way ────────────────────────
+ *
+ * Unset means ENABLED, so this reads `!== "0"` rather than `=== "1"`. The two are
+ * not stylistic variants of each other; the direction of the comparison IS the
+ * default, and it is the reason a fresh clone with no `.env.local` now builds a
+ * bundle that has the Tutor in it.
+ *
+ * THE FAILURE THIS PREVENTS. `=== "1"` meant an absent variable compiled the CHAT
+ * control out, silently and with no error anywhere. A fresh clone ran the complete
+ * backend behind a UI that had no way to reach it, and the only symptom was a
+ * feature that appeared not to have been built. Next inlining `NEXT_PUBLIC_*`
+ * makes that worse, not better: the variable has to exist at BUILD time, so even
+ * setting it in a running shell and reloading changes nothing, which is exactly
+ * the kind of non-symptom that costs an afternoon.
+ *
+ * An unrecognised value enables, matching `lessonUi`'s rule that a fallback lands
+ * on the default rather than throwing — now that the default is on, a typo can no
+ * longer take the feature away.
+ *
+ * THE PAIRING TO KEEP IN MIND. The safe direction is backend-off / bundle-on: the
+ * control appears and the panel reports a failure, which is noisy but harmless.
+ * With this off, no Tutor code is reachable whatever the backend does. Both now
+ * default on, so the fresh-clone case is the fully-working one.
  *
  * Neither gates STORAGE. A conversation written with both on survives both being
  * turned off (see `backend/learning/flags.py`).
  */
 export function tutorUi(): boolean {
-  return process.env.NEXT_PUBLIC_CODEONBOARD_TUTOR === "1";
+  return process.env.NEXT_PUBLIC_CODEONBOARD_TUTOR !== "0";
 }

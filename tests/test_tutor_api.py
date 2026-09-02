@@ -16,6 +16,7 @@ from backend.learning import retry as retry_model
 from backend.learning import store as learning_store
 from backend.learning.gaps import Gap
 from backend.learning.graph import CodeAnchor, LearningGraph, LearningNode
+from backend.learning.flags import tutor_enabled
 from backend.learning.tutor import HINT_LADDER_MAX, TUTOR_QUESTION_CAP, new_turn
 from tests.conftest import TEST_USER_ID, start_session
 from tests.test_session_api import FAKE_GOAL, FAKE_REPO_URL, _teaching_side_effect
@@ -100,6 +101,39 @@ def _no_repo():
 
 
 # ── the flag ──────────────────────────────────────────────────────────────────
+
+
+def test_the_flag_defaults_to_on_so_a_fresh_clone_has_a_tutor(client, monkeypatch):
+    """Unset means ON, and the routes are the proof rather than the predicate.
+
+    THE FAILURE THIS PINS. The default was `0`, so a clone with no `.env` served a
+    complete Tutor backend that answered 404 to every one of its own routes, and a
+    bundle with the CHAT control compiled out. Nothing was broken and nothing said
+    so — the feature simply appeared not to exist. `test_every_route_is_absent…`
+    below is its mirror, and the pair is the point: absent is now something a
+    deployment has to ASK for.
+    """
+    monkeypatch.delenv("CODEONBOARD_TUTOR", raising=False)
+    assert tutor_enabled()
+
+    session_id = _start(client, _graph(_node()))
+    assert client.get(f"/session/{session_id}/tutor").status_code == 200
+    assert client.post(f"/session/{session_id}/tutor/hint", json={}).status_code == 200
+
+
+def test_only_an_explicit_zero_turns_the_tutor_off(monkeypatch):
+    """`!= "0"`, not `== "1"` — a typo must not silently remove the feature.
+
+    The same rule `frontend/lib/flags.ts` follows: a fallback lands on the default,
+    and the default is on. A misspelled value used to mean off, which is the worst
+    reading of an ambiguous setting because it fails silently and looks deliberate.
+    """
+    for setting in ("1", "true", "yes", "on", "TRUE", "", "00", "junk"):
+        monkeypatch.setenv("CODEONBOARD_TUTOR", setting)
+        assert tutor_enabled(), f"{setting!r} should not disable the Tutor"
+
+    monkeypatch.setenv("CODEONBOARD_TUTOR", "0")
+    assert not tutor_enabled()
 
 
 def test_every_route_is_absent_while_the_flag_is_off(client, monkeypatch):

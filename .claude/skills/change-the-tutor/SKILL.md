@@ -153,9 +153,20 @@ Re-run the leakage measurement and record it:
 uv run python scripts/tutor_eval.py --eval leakage
 ```
 
-The gate is **0 leaks in 30**, and it gates `CODEONBOARD_TUTOR` defaulting to on —
-which it currently does not, on measured evidence
-(`docs/planning/phases/evidence/tutor/`). Record any new number there through the
-`measure-and-record` skill; do not quietly move the gate, and do not add a prompt
-rule aimed at one failing case, which is tuning to the eval set rather than fixing
-anything.
+The gate is **0 leaks in 30**. It was written as the condition for
+`CODEONBOARD_TUTOR` defaulting to on, and **that is no longer what decides the
+default**: both flags default ON as of 2026-09-02 with the gate unmet, last
+measured at 1/30 (`docs/planning/phases/evidence/tutor/`, which records the
+decision and why).
+
+So the gate is now a **standing measurement of a shipped default**, not a release
+condition — which makes a new number more consequential, not less. Record any
+through the `measure-and-record` skill. Do not quietly move the gate to match the
+default, do not delete the 1/30 finding, and do not add a prompt rule aimed at one
+failing case, which is tuning to the eval set rather than fixing anything.
+
+**A note on turning it off**, since the flags now read `!= "0"`: unset means
+enabled, and disabling needs BOTH `CODEONBOARD_TUTOR=0` and
+`NEXT_PUBLIC_CODEONBOARD_TUTOR=0` — the second at build time. Do not "restore
+symmetry" with the other flags by rewriting either comparison as `== "1"`; the
+direction of the comparison is the default.

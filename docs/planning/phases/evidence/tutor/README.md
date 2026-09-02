@@ -99,9 +99,38 @@ eliminated.
 
 `tutor.md` T8: *"The flag does not default on until Eval 1 is green."*
 
-**Eval 1 is not green (1/30), so `CODEONBOARD_TUTOR` stays default `0`** and
-`NEXT_PUBLIC_CODEONBOARD_TUTOR` with it. That is the current state of the code;
-nothing needs changing to honour it.
+**Eval 1 is not green (1/30), so on this evidence `CODEONBOARD_TUTOR` should
+stay default `0`** and `NEXT_PUBLIC_CODEONBOARD_TUTOR` with it.
+
+> ### ⚠️ SUPERSEDED BY DECISION — the flag now defaults ON
+>
+> **Both flags were changed to default `1` on 2026-09-02, with this gate still
+> unmet.** T8 was not satisfied and Eval 1 was not re-run; the measurement above
+> stands exactly as recorded, and the number it reports is still 1/30.
+>
+> The reason was not a new leakage result. It was that a feature gated off in two
+> places — one of them a `NEXT_PUBLIC_*` variable Next inlines at BUILD time — is
+> indistinguishable from a feature that was never built. A fresh clone ran the
+> complete Tutor backend behind a bundle with the CHAT control compiled out, and
+> the only symptom was the Tutor appearing not to exist. That was judged the
+> larger product failure.
+>
+> **So the honest statement of the current position is:** the residual leak
+> described above is now on by default, bounded by the architecture (a
+> `ScaffoldContext` has no field that can hold the answer) and by the hint
+> ladder's terminus, and not by the flag. The mitigating fact in the paragraph
+> below — that the Tutor gives the answer away for the price of a fresh question
+> anyway — is now carrying more weight than it was written to carry.
+>
+> **What would close this properly:** re-run
+> `uv run python scripts/tutor_eval.py --eval leakage` and record the result here
+> through the `measure-and-record` skill. If it comes back 0/30 the default and
+> the evidence agree again. If it comes back 1/30 or worse, that is a real finding
+> about a shipped default rather than a reason not to ship.
+>
+> Do not delete the assessment above to resolve the contradiction. The gate is
+> a measurement; the default is a decision; they are allowed to disagree as long
+> as the disagreement is written down.
 
 The mitigating fact, and the reason this is a defensible place to stop: **the
 Tutor gives the answer away for the price of a fresh question anyway.** "Show

@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Area, GraphEdge, SessionGraph } from "@/lib/api";
 import { node } from "@/test/factories";
 import { t } from "@/lib/strings";
@@ -228,5 +228,51 @@ describe("a click on the route resolves to the destination that was clicked", ()
     expect(api.jump).not.toHaveBeenCalled();
     expect(await heading()).toBe(TITLE_OF.u2);
     expect(screen.queryByText(t.section.label)).toBeNull();
+  });
+});
+
+/**
+ * The Tutor's CHAT control is on the page WITHOUT any environment set.
+ *
+ * THE DEFECT THIS PINS, and why it belongs in the page test rather than beside
+ * `tutorUi`. The flag defaulting off was invisible in exactly this composition:
+ * every Tutor unit test passed, `TutorPanel.test.tsx` passed, the five routes were
+ * covered — and a fresh clone still rendered a lesson with no way into any of it,
+ * because the one line that mattered was a `&&` in this file reading an unset
+ * `NEXT_PUBLIC_*`. Asserting `tutorUi()` alone would not have caught it; asserting
+ * the rendered control does.
+ *
+ * `delete` rather than assignment for the default case, because Next inlines
+ * `NEXT_PUBLIC_*` at build time and an absent variable is the case that ships.
+ */
+describe("the Tutor's way in", () => {
+  const setTutor = (value: string | undefined) => {
+    if (value === undefined) delete process.env.NEXT_PUBLIC_CODEONBOARD_TUTOR;
+    else process.env.NEXT_PUBLIC_CODEONBOARD_TUTOR = value;
+  };
+
+  afterEach(() => setTutor(undefined));
+
+  test("a lesson offers Chat with nothing configured at all", async () => {
+    setTutor(undefined);
+    await openSession();
+    expect(screen.getByRole("button", { name: t.session.showChat })).toBeTruthy();
+  });
+
+  test("it sits beside `Show source`, as its peer", async () => {
+    setTutor(undefined);
+    await openSession();
+    // Same variant, same size, same place — a different prominence would say the
+    // two are different kinds of thing.
+    expect(screen.getByRole("button", { name: t.session.showSource })).toBeTruthy();
+    expect(screen.getByRole("button", { name: t.session.showChat })).toBeTruthy();
+  });
+
+  test("an explicit `0` removes it — the escape hatch still works", async () => {
+    setTutor("0");
+    await openSession();
+    expect(screen.queryByRole("button", { name: t.session.showChat })).toBeNull();
+    // And it takes only the Tutor with it.
+    expect(screen.getByRole("button", { name: t.session.showSource })).toBeTruthy();
   });
 });

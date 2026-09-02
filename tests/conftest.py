@@ -43,9 +43,23 @@ import pytest
 
 # Every flag the backend reads from the environment. Listed rather than pattern
 # matched, so adding one is a decision someone makes here on purpose.
+#
+# Note what "neutralised" means here, because it is not "off". It means UNSET, so
+# each flag falls to the default the repository ships — `0` for the first two, and
+# `1` for `CODEONBOARD_TUTOR`, which defaults ON. That is deliberate: the suite
+# should exercise the configuration a fresh clone actually runs, not a fourth
+# configuration that exists only in tests.
+#
+# `CODEONBOARD_TUTOR` was added to this tuple when its default flipped. Before
+# that it was absent, which was a latent version of the very bug this file exists
+# to prevent: a developer `.env` carrying `CODEONBOARD_TUTOR=1` turned the Tutor
+# routes on for every test that imported `backend.api`, and nothing in the suite
+# said so. It is now pinned like the others, so the flag's value in a test is
+# either the shipped default or something the test asked for out loud.
 AMBIENT_FLAGS = (
     "CODEONBOARD_CURRICULUM",
     "CODEONBOARD_GAPS",
+    "CODEONBOARD_TUTOR",
 )
 
 
@@ -53,8 +67,9 @@ AMBIENT_FLAGS = (
 def _neutral_flags(monkeypatch):
     """Start every test with the flags unset, whatever the machine has.
 
-    `raising=False` because unset is the normal case: this is about guaranteeing a
-    known starting point, not about asserting one existed.
+    Unset, not off — each flag then reads its shipped default. `raising=False`
+    because unset is the normal case: this is about guaranteeing a known starting
+    point, not about asserting one existed.
     """
     for flag in AMBIENT_FLAGS:
         monkeypatch.delenv(flag, raising=False)

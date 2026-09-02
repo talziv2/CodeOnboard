@@ -1335,6 +1335,15 @@ tutor-bearing graph preserves the transcript byte for byte.
 Default off because of §10 and because the leakage properties want a real session
 before they are trusted.
 
+> **Amended 2026-09-02: both flags now default ON.** `CODEONBOARD_TUTOR` is read
+> `!= "0"` and `NEXT_PUBLIC_CODEONBOARD_TUTOR` `!== "0"`, so unset means enabled
+> and only a literal `0` disables. **T8 was not satisfied** — Eval 1 still stands
+> at 1/30 in `evidence/tutor/` — so this is a decision recorded against the
+> evidence rather than a gate being met; that file carries the full statement. The
+> paragraph above is left as written because it is what was decided at the time,
+> and the contract in the rest of this section is unaffected: the flag still gates
+> behaviour and never storage, whichever way it points.
+
 ---
 
 ## 13. MVP, and the boundary

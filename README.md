@@ -322,6 +322,22 @@ here.
 Everything else in `.env.example` is commented out and optional. **You do not need
 a GitHub token, a Google client, or a secret key to run this.**
 
+**The Tutor needs no configuration.** It is the CHAT control beside `Show source`
+inside a lesson — a conversational assistant that will orient you, narrow the
+problem down, or give you a hint, and that can show the answer outright at the
+cost of a fresh question. It is on by default. To turn it off you must set **both**
+halves, because they are read in different processes:
+`CODEONBOARD_TUTOR=0` in `.env`, and `NEXT_PUBLIC_CODEONBOARD_TUTOR=0` in
+`frontend/.env.local` — the second at build time, so restart the frontend rather
+than reloading the page.
+
+One thing to know before leaning on it: the Tutor's non-leakage was measured at
+**1 answer leak in 30** adversarial prompts against a target of 0
+(`docs/planning/phases/evidence/tutor/`). The architecture removes the cheap leak
+— the assistant working alongside a live question is given no field that could
+hold the answer — but a determined learner can still reason one out of it. Turn it
+off for any run where that matters.
+
 → [Full configuration reference](docs/configuration.md)
 
 ### The database

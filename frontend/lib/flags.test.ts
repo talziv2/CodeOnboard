@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest";
-import { isSplitSurfaces, lessonUi, type LessonUi } from "@/lib/flags";
+import { isSplitSurfaces, lessonUi, tutorUi, type LessonUi } from "@/lib/flags";
 
 /**
  * Two values now, and the default is the redesign.
@@ -55,5 +55,51 @@ describe("isSplitSurfaces", () => {
   test("it is total over the type", () => {
     const all: LessonUi[] = ["next", "surfaces"];
     for (const ui of all) expect(typeof isSplitSurfaces(ui)).toBe("boolean");
+  });
+});
+
+/**
+ * The Tutor's build-time flag, which now DEFAULTS ON.
+ *
+ * The bug these pin is not a wrong branch, it is a missing feature. While this
+ * read `=== "1"`, a fresh clone with no `.env.local` compiled the CHAT control out
+ * of the bundle, with no error and no warning — the Tutor looked unbuilt. And
+ * because Next inlines `NEXT_PUBLIC_*` at build time, setting the variable in an
+ * already-running dev server changes nothing, so the obvious check for "is the
+ * flag on" reports the wrong answer.
+ *
+ * So the case that matters most is the FIRST one below: unset must be on. The rest
+ * exist to keep the escape hatch honest — an explicit `0` still disables, and
+ * nothing else does.
+ */
+
+const setTutor = (value: string | undefined) => {
+  if (value === undefined) delete process.env.NEXT_PUBLIC_CODEONBOARD_TUTOR;
+  else process.env.NEXT_PUBLIC_CODEONBOARD_TUTOR = value;
+};
+
+describe("tutorUi", () => {
+  afterEach(() => setTutor(undefined));
+
+  test("unset means enabled — a fresh clone builds a bundle with the Tutor in it", () => {
+    setTutor(undefined);
+    expect(tutorUi()).toBe(true);
+  });
+
+  test("an explicit `0` still disables it, which is the whole escape hatch", () => {
+    setTutor("0");
+    expect(tutorUi()).toBe(false);
+  });
+
+  test("`1` remains the explicit way to say on", () => {
+    setTutor("1");
+    expect(tutorUi()).toBe(true);
+  });
+
+  test("only `0` disables — a typo must not remove the feature silently", () => {
+    for (const junk of ["", " ", "00", "0.0", "false", "off", "no", "junk", "-1"]) {
+      setTutor(junk);
+      expect(tutorUi(), junk).toBe(true);
+    }
   });
 });

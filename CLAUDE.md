@@ -120,8 +120,8 @@ not apply.
 ## Commands
 
 ```bash
-uv run pytest tests/                      # backend — ~70s, 1801 pass
-cd frontend && npm test                   # frontend — ~15s, 50 files
+uv run pytest tests/                      # backend — ~76s, 1945 pass, 1 skip
+cd frontend && npm test                   # frontend — ~14s, 52 files, 844 tests
 cd frontend && npm run build              # frontend — this IS the type check
 ```
 
@@ -146,18 +146,29 @@ HTTP and exits non-zero unless both answer), or two terminals:
 Open `http://localhost:3000` only; the browser never calls port 8000.
 
 **The flags trap.** `CODEONBOARD_CURRICULUM` and `CODEONBOARD_GAPS` both default
-to `0`, `tests/conftest.py` deletes both for every test — and the developer's local
-`.env` sets **both to `1`**. So the app as it is actually run uses the
-objective-first planner and the gap model, while the suite tests neither unless a
-test says so. "Works in tests, wrong in the app" is a flag difference until proven
-otherwise. When behaviour depends on a flag, pin it in the test and say which.
+to `0`, `tests/conftest.py` unsets all three flags for every test — and the
+developer's local `.env` sets **both of these to `1`**. So the app as it is
+actually run uses the objective-first planner and the gap model, while the suite
+tests neither unless a test says so. "Works in tests, wrong in the app" is a flag
+difference until proven otherwise. When behaviour depends on a flag, pin it in the
+test and say which.
 
-`CODEONBOARD_TUTOR` is the third, and it is default `0` **on evidence rather
-than caution**: `docs/planning/phases/evidence/tutor/` measures 1 leak in 30
-adversarial prompts against a stated gate of 0. It has a build-time twin,
-`NEXT_PUBLIC_CODEONBOARD_TUTOR`, because Next inlines `NEXT_PUBLIC_*` — the
-backend gates the routes at request time, the bundle gates the control at build
-time. Neither gates storage: a conversation survives both being turned off.
+`CODEONBOARD_TUTOR` is the third and **it does not follow the other two**: it is
+default **`1`**, and it is read `!= "0"`, so unset means on and only a literal `0`
+turns it off. Do not "fix" that comparison into `== "1"` for symmetry — the
+direction *is* the default. It has a build-time twin,
+`NEXT_PUBLIC_CODEONBOARD_TUTOR`, also default on, because Next inlines
+`NEXT_PUBLIC_*` — the backend gates the routes at request time, the bundle gates
+the control at build time, and **both halves must be set to disable it**. Neither
+gates storage: a conversation survives both being turned off.
+
+The default moved **against the evidence, by decision**, and that is worth knowing
+before you cite it: `docs/planning/phases/evidence/tutor/` measures 1 answer leak
+in 30 adversarial SCAFFOLD prompts against a stated gate of 0, and `tutor.md` T8
+made a green Eval 1 the condition for defaulting on. The gate is still not met.
+The reason it moved anyway is that a flag defaulting off in two files, one of them
+build-time, made a finished feature indistinguishable from an unbuilt one. If a
+run needs the old guarantee, set both halves to `0`.
 
 ---
 

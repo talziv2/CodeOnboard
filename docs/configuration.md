@@ -66,9 +66,17 @@ In production, `0` is a **refusal to start**.
 
 ## 3. Behaviour flags
 
-Both default to `0`. Both are set to `1` in the checked-in developer `.env`, and
-`tests/conftest.py` neutralises both for every test — so a test that depends on one
-has to say which and how.
+Three of them, and **they do not all default the same way**: the two planner/gap
+flags default `0`, and `CODEONBOARD_TUTOR` defaults `1`. Read each one's heading
+rather than assuming.
+
+`tests/conftest.py` neutralises all three for every test — *neutralised* meaning
+**unset**, so each falls to its shipped default rather than to off. A test that
+depends on a flag has to say which and how.
+
+The first two are also set to `1` in the developer's own `.env`, which is the
+flag trap worth knowing: the app as it is actually run uses the objective-first
+planner and the gap model, while the suite tests neither unless a test says so.
 
 ### `CODEONBOARD_CURRICULUM` — default `0`
 
@@ -94,6 +102,41 @@ different response than the same session flag-off.
 `backend/learning/store.py` reads it, so gap data written under the flag survives a
 flag-off load, a flag-off re-save, and is restored exactly when the flag comes back
 on. A test asserts that structurally.
+
+### `CODEONBOARD_TUTOR` — default `1`
+
+**The one flag here that is on unless you turn it off**, and it is read
+`!= "0"` rather than `== "1"`: unset, `1`, and any unrecognised value all enable
+it; only a literal `0` disables. A typo should not silently remove a feature.
+
+`1` serves five routes under `/session/{id}/tutor` — the conversational assistant
+in the same pane the source uses. `0` makes every one of them answer **404**
+rather than 403 or 501, because "withheld by this deployment" is a fact about our
+configuration that no caller needs.
+
+**It has a build-time twin that must be set to match** —
+`NEXT_PUBLIC_CODEONBOARD_TUTOR` in §7. Two variables rather than one because they
+are read in different processes at different times: this one gates behaviour per
+request, that one gates whether the CHAT control is compiled into the bundle at
+all. Setting only this one to `0` leaves a control on screen that fails on every
+turn.
+
+**The flag gates behaviour; it never gates storage.** Nothing in
+`backend/learning/store.py` reads it, so a conversation written flag-on survives a
+flag-off load and a flag-off re-save, and returns intact when the flag returns. A
+test asserts that structurally.
+
+*Why the default moved.* It was `0` on measured evidence rather than caution:
+`docs/planning/phases/evidence/tutor/` records **1 answer leak in 30** adversarial
+SCAFFOLD prompts against a stated gate of **0**, and `tutor.md` T8 made a green
+Eval 1 the condition for defaulting on. **That gate has not been met.** The
+default was changed by decision, so that a fresh clone plus `run-dev.bat` starts
+the complete product instead of a feature nobody could reach without finding two
+undocumented variables. The architecture still removes the cheap leak — a
+`ScaffoldContext` has no field that can hold the answer — so the residual is a
+model reasoning its way to the answer from source it legitimately holds, bounded
+by the hint ladder's terminus rather than eliminated. Set both halves to `0` for
+any run where that matters.
 
 ---
 
@@ -161,6 +204,7 @@ deployment fails loudly rather than quietly, not because a deployment path ships
 |---|---|---|
 | `API_ORIGIN` | `http://localhost:8000` | Where `/api/*` is proxied to, read by the **Next server** at request time. It replaced `NEXT_PUBLIC_API_URL`, which was baked into the browser bundle at build time — this one never reaches the client, so the API's address stops being public |
 | `NEXT_PUBLIC_CODEONBOARD_UI` | `surfaces` | The lesson renderer. `surfaces` = `Lesson · Understanding` plus the `Map · Analysis` mode; `next` = the earlier single phase-driven canvas, kept as the measurement baseline |
+| `NEXT_PUBLIC_CODEONBOARD_TUTOR` | `1` (on) | Whether the Tutor's CHAT control is **compiled into the bundle**. Read `!== "0"`, so only a literal `0` removes it. Must match `CODEONBOARD_TUTOR` in §3. Next inlines `NEXT_PUBLIC_*` at build time, so changing this needs a restart of `npm run dev` — setting it in a running shell does nothing, which is the trap it is worth knowing about |
 | `NEXT_DIST_DIR` | `.next` | Where the build cache lives. Two dev servers on this repo at once share `.next` and quietly corrupt each other's view of it — one served a chunk built from the other's environment, and another kept serving a stale chunk for minutes after the source had changed. Neither failure announces itself |
 
 ---

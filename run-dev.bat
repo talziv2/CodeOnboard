@@ -31,6 +31,17 @@ rem CODEONBOARD_CURRICULUM=1 and CODEONBOARD_GAPS=1, so anyone who launched the
 rem project this way got a different planner and a different remediation path
 rem than the documented commands give, with nothing on screen to say so. Put
 rem either in `.env` if you want it; see `.env.example`.
+rem
+rem THE TUTOR NEEDS NOTHING SET, and that is the point of its default rather
+rem than an accident. CODEONBOARD_TUTOR and NEXT_PUBLIC_CODEONBOARD_TUTOR both
+rem default ON and are read as "not explicitly 0", so a fresh clone launched
+rem from here starts the COMPLETE application. They used to default off, which
+rem meant this launcher reported both services UP and handed over an app whose
+rem Tutor was compiled out of the bundle - a working product that looked like a
+rem missing feature, diagnosable only by knowing to go looking for two
+rem variables. Setting them here instead would have rebuilt the original bug in
+rem a different place: the feature would work when launched THIS way and vanish
+rem for anyone following the two-terminal instructions.
 rem ===========================================================================
 
 rem --- Work from this script's own folder, however it was launched -----------
@@ -191,9 +202,15 @@ echo   ---------------------------------------------
 echo.
 
 if "!BACKEND_STATUS!"=="UP" if "!FRONTEND_STATUS!"=="UP" (
-  echo   Both services are up. Open the app at:
+  echo   Both services are up, with the Tutor enabled. Open the app at:
   echo.
   echo       %APP_URL%
+  echo.
+  echo   The Tutor is the CHAT control beside "Show source" inside a lesson.
+  echo   It needs no configuration. To turn it off, set CODEONBOARD_TUTOR=0
+  echo   in .env AND NEXT_PUBLIC_CODEONBOARD_TUTOR=0 in frontend\.env.local,
+  echo   then run this again - the second is read at build time, so a reload
+  echo   is not enough.
   echo.
   goto :finish
 )

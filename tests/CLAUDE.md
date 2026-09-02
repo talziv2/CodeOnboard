@@ -7,7 +7,7 @@
 uv run pytest tests/
 ```
 
-Expected: **1801 passed, 1 skipped, 1 failed**, ~70s. The failure
+Expected: **1945 passed, 1 skipped, 1 failed**, ~76s. The failure
 (`test_gap_understanding.py::test_every_stored_gap_free_node_derives_its_stored_state`)
 is a development gate that predates accounts and fails on any used database. Do
 not fix it as part of unrelated work.
@@ -18,9 +18,17 @@ not fix it as part of unrelated work.
 
 Both live in `conftest.py`, and both exist because of a real failure.
 
-**Ambient flags are deleted for every test.** `CODEONBOARD_CURRICULUM` and
-`CODEONBOARD_GAPS` are removed from the environment, so **a test that depends on
-one must set it explicitly**. This exists because `test_mentor_dossier.py` failed
+**Ambient flags are deleted for every test.** `CODEONBOARD_CURRICULUM`,
+`CODEONBOARD_GAPS` and `CODEONBOARD_TUTOR` are removed from the environment, so
+**a test that depends on one must set it explicitly**.
+
+*Deleted means unset, not off.* Each flag then reads the default the repository
+ships — `0` for the first two and **`1` for `CODEONBOARD_TUTOR`, which defaults
+on** — so the suite exercises the configuration a fresh clone actually runs rather
+than a fourth one that exists only in tests. A test wanting the Tutor absent sets
+`CODEONBOARD_TUTOR=0` and says so.
+
+This exists because `test_mentor_dossier.py` failed
 14 tests on any full run and passed all of them alone: importing `backend.api`
 loaded the developer's `.env`, which switched the planner for everything that ran
 afterwards. The lesson was not "pin the flag in that file" — it was that an

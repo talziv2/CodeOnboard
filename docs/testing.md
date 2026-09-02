@@ -30,7 +30,7 @@ formatter or type checker.
 
 | Suite | Result | Wall clock |
 |---|---|---|
-| `pytest tests/` | 1801 passed, 1 skipped, **1 failed** — see §5 | ~86s |
+| `pytest tests/` | 1945 passed, 1 skipped, **1 failed** — see §5 | ~76s |
 | `npm test` | 48 files, 783 tests, all passing | ~14s |
 | `npm run build` | succeeds, 11 routes | ~30s |
 
