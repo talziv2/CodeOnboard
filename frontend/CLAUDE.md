@@ -54,10 +54,12 @@ component:
 the way `backend/learning/progress.py` counts them, so the rail cannot disagree
 with the header) · `lessonPhase` / `lessonView` / `lessonSurfaces` / `surfaceTabs`
 · `feedbackActions` · `standing` · `arrival` · `sessionLog` · `layout-bands` ·
-`markdown` · `strings`.
+`markdown` · `strings` · `lessonIcons`.
 
 `lessonSurfaces` is a **total `Record`**: adding a block without placing it on a
-surface is a type error, and that is deliberate.
+surface is a type error, and that is deliberate. `lessonIcons` is keyed the same
+way for the same reason — a block with no marker beside eight that have one reads
+as a rendering fault with nothing on screen to notice it by.
 
 ---
 
@@ -93,13 +95,26 @@ surface is a type error, and that is deliberate.
   vocabulary), and **an unclosed delimiter stays literal**.
 - **Learner-written text is never markdown.** Attempt and check answers stay
   `whitespace-pre-wrap` exactly as typed.
+- **A block is named once.** A `Disclosure` names its contents on the summary
+  row, so a block's own eyebrow must not name it again — use `BlockTitle` from
+  `ui/SectionLabel.tsx` for a block's title and plain `SectionLabel` for a
+  sub-heading inside one (`GapList`'s `Settled`). The `AlreadyNamed` context is
+  how the disclosure says it; do not replace it with a prop from `LessonPanel`,
+  which would derive "is this collapsed" a second time from a different input.
+- **Emoji are not copy.** The lesson's markers live in `lib/lessonIcons.ts`, not
+  in `strings.ts`, and reach the page only through `components/ui/Marker.tsx` —
+  always `aria-hidden`, always a *sibling* of the label span. Nesting one inside a
+  label puts it in the accessible name and silently breaks every
+  `getByText(t.lesson.…)` query while the page still looks right. Pick a new glyph
+  by looking at it on **both** grounds; a mostly-white or mostly-black emoji
+  vanishes on one of them.
 
 ---
 
 ## Verifying
 
 ```bash
-npm test          # Vitest — 52 files, 844 tests, ~14s
+npm test          # Vitest — 54 files, 861 tests, ~14s
 npm run build     # this IS the type check; there is no linter
 ```
 

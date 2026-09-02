@@ -1,7 +1,8 @@
 "use client";
 
 import Prose from "@/components/ui/Prose";
-import SectionLabel from "@/components/ui/SectionLabel";
+import { BlockTitle } from "@/components/ui/SectionLabel";
+import { BLOCK_ICON, LESSON_ICON } from "@/lib/lessonIcons";
 import { t } from "@/lib/strings";
 
 /**
@@ -23,7 +24,15 @@ export default function SetupProse({
     <div className="flex flex-col gap-3">
       {/* A pre-B4 lesson has no halves to withhold, so it renders exactly as
           it always did, under the label it always had. */}
-      <SectionLabel>{isSplit ? t.lesson.setup : t.lesson.walkthrough}</SectionLabel>
+      {/* The marker follows the same flag as the label: the two names are two
+          different blocks as far as a reader is concerned, so a single glyph for
+          both would be the marker claiming a sameness the label denies. They
+          happen to resolve to the same glyph today because they are the same
+          ROLE — the thing you read before answering — and `lessonIcons` says so
+          beside the entry rather than here. */}
+      <BlockTitle icon={isSplit ? BLOCK_ICON.setup : LESSON_ICON.walkthrough}>
+        {isSplit ? t.lesson.setup : t.lesson.walkthrough}
+      </BlockTitle>
       {/* Markdown, because `agent.py` asks Teaching for markdown here. Printing
           the asterisks was never a rendering choice, only a missing renderer. */}
       <Prose text={body} size="body" tone="paper" />

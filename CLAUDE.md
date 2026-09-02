@@ -121,7 +121,7 @@ not apply.
 
 ```bash
 uv run pytest tests/                      # backend — ~76s, 1945 pass, 1 skip
-cd frontend && npm test                   # frontend — ~14s, 52 files, 844 tests
+cd frontend && npm test                   # frontend — ~14s, 54 files, 861 tests
 cd frontend && npm run build              # frontend — this IS the type check
 ```
 

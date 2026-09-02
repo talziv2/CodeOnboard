@@ -1,6 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Marker from "@/components/ui/Marker";
+import { AlreadyNamed } from "@/components/ui/SectionLabel";
 
 /**
  * A block the phase has superseded: present, reachable, and not spending height.
@@ -26,11 +28,24 @@ export default function Disclosure({
   count,
   children,
   className = "",
+  icon,
   tour,
   initiallyOpen = false,
 }: {
   label: string;
   count?: number;
+  /**
+   * A decorative marker from `lib/lessonIcons.ts`, before the summary label.
+   *
+   * This is the row the markers were most needed on. A collapsed lesson is four
+   * or five of these stacked, identical but for eleven-pixel uppercase text, and
+   * the whole promise of a disclosure — step back without leaving — depends on
+   * being findable again from the row alone.
+   *
+   * `LessonCanvas` passes it from `BLOCK_ICON`, so the collapsed row and the
+   * expanded block wear the same glyph and read as one thing folded.
+   */
+  icon?: string;
   children: ReactNode;
   className?: string;
   /**
@@ -67,6 +82,7 @@ export default function Disclosure({
     >
       <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2">
         <Chevron />
+        <Marker glyph={icon} />
         <span className="font-mono text-micro uppercase tracking-[0.13em] text-graphite transition group-hover:text-signal">
           {label}
         </span>
@@ -74,7 +90,14 @@ export default function Disclosure({
           <span className="font-mono text-micro tabular-nums text-graphite">{count}</span>
         )}
       </summary>
-      <div className="border-t border-rule px-3 py-3">{children}</div>
+      {/* The summary above has just named this block, so the block's own title
+          must not name it again — see `AlreadyNamed` in `SectionLabel`. Stated
+          here because this is the only component that knows it happened; a
+          sub-heading INSIDE the block (`GapList`'s `Settled`) is a plain
+          `SectionLabel` and survives. */}
+      <div className="border-t border-rule px-3 py-3">
+        <AlreadyNamed>{children}</AlreadyNamed>
+      </div>
     </details>
   );
 }

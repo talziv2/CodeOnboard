@@ -4,7 +4,9 @@ import { useEffect, useState, type RefObject } from "react";
 import type { NodeGap, RespondResult, RetryOffer } from "@/lib/api";
 import Button from "@/components/ui/Button";
 import Callout from "@/components/ui/Callout";
+import Marker from "@/components/ui/Marker";
 import Prose, { InlineProse } from "@/components/ui/Prose";
+import { CHECK_ICON, LESSON_ICON, VERDICT_ICON } from "@/lib/lessonIcons";
 import { feedbackActions, plannedActions, type ActionId } from "@/lib/feedbackActions";
 import { consequenceLine, keyPoint } from "@/lib/feedbackSummary";
 import { NEUTRAL, VERDICT_COLOR } from "@/lib/verdict";
@@ -132,6 +134,17 @@ export default function FeedbackCardNext({
   const verdictColor = isCheck
     ? checkOutcome.color
     : VERDICT_COLOR[result.classification] ?? NEUTRAL;
+  /**
+   * The verdict's glyph, and a CHECK takes the check's own rather than one from
+   * the verdict table.
+   *
+   * The same scar the rest of this file carries: a check's `classification` is
+   * null by design, so reading `VERDICT_ICON` for it would either mark a cleared
+   * check with nothing or — if the table were made to fall back — mark it with a
+   * cross. `checkOutcome` already supplies its word and its colour; this is the
+   * third channel following the same rule.
+   */
+  const verdictIcon = isCheck ? CHECK_ICON : VERDICT_ICON[result.classification];
 
   // On a check the key point IS the outcome word — a check reports what closed
   // rather than diagnosing a new misconception, and composing "you're working from"
@@ -211,14 +224,35 @@ export default function FeedbackCardNext({
       tabIndex={-1}
       className="flex flex-col gap-3"
     >
+      {/* THE ONE MARKER ON THIS CARD THAT IS DOING REAL WORK. The verdict is the
+          only thing here spoken in colour, and colour is the channel a learner
+          may not have: `jade` and `rust` at 4.5:1 on the same ground are a pair
+          of mid-tone greys to anybody who cannot separate the hues, and the
+          verdict word itself is the only other thing distinguishing "Understood"
+          from "Not yet" at a glance. The glyph is a second channel for the same
+          fact, from the table paired with the colour's.
+
+          Aligned to the first line rather than centred on the paragraph: the key
+          point is one line by contract, but a long claim wraps, and a glyph
+          floating beside the middle of a three-line sentence reads as belonging
+          to the wrong clause. */}
       <p
-        className="measure text-lede"
+        className="measure flex items-baseline gap-2 text-lede"
         style={{ color: verdictColor }}
       >
+        <Marker glyph={verdictIcon} size="lede" />
         {/* Inline, not block: the key point is one line by contract, and it keeps
             the verdict's own colour — `inherit` emphasises by weight so a bolded
             clause cannot repaint itself and drop the classification. */}
-        <InlineProse text={headline} tone="inherit" />
+        {/* `min-w-0` because this is now a flex item, and a flex item's default
+            `min-width: auto` refuses to shrink below its content — so one long
+            unbreakable token in a model-written gap claim would push the line
+            past the measure instead of wrapping inside it. `keyPoint`
+            interpolates exactly that kind of text, and the old block paragraph
+            had no such floor. */}
+        <span className="min-w-0">
+          <InlineProse text={headline} tone="inherit" />
+        </span>
       </p>
 
       {/* Never collapsed. The key point above orients; this is the reasoning, and
@@ -229,6 +263,9 @@ export default function FeedbackCardNext({
         <Callout
           tone="signal"
           label={result.adaptation?.kind === "hint" ? t.lesson.hint : t.lesson.followup}
+          icon={
+            result.adaptation?.kind === "hint" ? LESSON_ICON.hint : LESSON_ICON.followup
+          }
         >
           <Prose text={help} size="aside" tone="chalk" />
         </Callout>
@@ -258,7 +295,7 @@ export default function FeedbackCardNext({
           deliberately NOT re-listed — the brief's counter and the collapsed list
           are the authoritative copy of that. */}
       {isCheck && closed.length > 0 && (
-        <Callout tone="jade" label={t.lesson.checkClosedLabel}>
+        <Callout tone="jade" label={t.lesson.checkClosedLabel} icon={LESSON_ICON.checkClosed}>
           <ul className="flex flex-col gap-1">
             {closed.map((gap) => (
               <li

@@ -96,6 +96,7 @@ seam between them**.
 | `materialSeen.ts` | The one fact the client owns (see §5) |
 | `layout-bands.ts` | `wide` / `medium` / `narrow` at 1180px and 960px, and whether the source pane must overlay |
 | `strings.ts` | **All** user-facing copy, plus `errorText` mapping backend `detail` slugs |
+| `lessonIcons.ts` | The lesson's decorative emoji markers, one table. Keyed over `BlockName` for the blocks, so a new block with no marker is a type error; every glyph is `aria-hidden` at render (see §7) |
 
 ### The two surfaces
 
@@ -174,6 +175,42 @@ Values that are **parsed** rather than read stay fixed keys — JSON keys,
 classifications. The frontend switches on those, so they must not be reworded;
 only the displayed label is chosen, via `tagLabel` / `stateLabel`.
 
+**A block is named once.** A `Disclosure`'s summary row exists to say what is
+inside it, and every block `LessonCanvas` collapses also carries its own eyebrow —
+so opening one showed the name twice, four pixels apart. `SectionLabel` exports
+`BlockTitle` for a block's own title and an `AlreadyNamed` context that `Disclosure`
+wraps its contents in; `BlockTitle` renders nothing inside it. A *sub*-heading keeps
+plain `SectionLabel` — `GapList`'s `Settled` divides the ledger's two halves and no
+summary row has named it.
+
+The context exists because the two halves of the fact live in components that do
+not meet: the disclosure knows it has displayed the name, the title knows which of
+its labels *is* the name. The alternative — a `heading={false}` prop from
+`LessonPanel` — would mean deriving "is this block collapsed" a second time, from a
+different input, when `LessonCanvas` already decides it from `surfaceBlocks`.
+
+**Emoji are not copy, and they are not in `strings.ts`.** The lesson's attention
+markers live in `lib/lessonIcons.ts` and reach the page through
+`components/ui/Marker.tsx`, which renders every one of them `aria-hidden` and as a
+*sibling* of the label rather than inside it. Both halves are load-bearing: a
+glyph inside the label would enter the accessible name — a screen reader
+announcing "open book, before you answer" — and would change the text content that
+the suite's `getByText(t.lesson.…)` queries match, in a way that breaks the tests
+without changing anything visible on the page.
+
+A marker never carries information its label does not. Nothing in the product is
+"the ✅ one"; the glyphs make a column of identical 11px mono eyebrows
+distinguishable before it is read, and the screen says everything it said without
+them. Two exceptions where the marker is a real second channel rather than
+decoration: the **verdict** (paired with `VERDICT_COLOR`, because colour is the
+channel a learner may not have) and the **gap statuses**, where `Resolved` and
+`Ignored for now` must not blur.
+
+Glyph choice is constrained by the theme swap, and most candidates fail: an emoji
+is a colour image with no `currentColor` to follow, so one that is mostly white
+disappears on the light page and one that is mostly near-black disappears on
+`ink`. `lessonIcons.ts` records which candidates were rejected on which ground.
+
 ---
 
 ## 8. Component map
@@ -192,7 +229,7 @@ only the displayed label is chosen, via `tagLabel` / `stateLabel`.
 | `SessionCard` · `ProfileCard` | Dashboard and welcome cards |
 | `auth/` | `AuthForm`, `AuthShell` |
 | `tour/` | The first-run tour |
-| `ui/` | `Button`, `Callout`, `Prose`, `ProseCode`, `ConceptTag`, `StatePin`, `Disclosure`, `SectionLabel`, `PracticeSurface` |
+| `ui/` | `Button`, `Callout`, `Prose`, `ProseCode`, `ConceptTag`, `StatePin`, `Disclosure`, `SectionLabel` (+ `BlockTitle`), `PracticeSurface`, `Marker` |
 
 ---
 
@@ -224,7 +261,7 @@ itself — the page renders, it is simply the wrong page.
 
 ## 10. Tests
 
-48 test files, 783 tests, run with `npm test` (Vitest + jsdom). They are
+54 test files, 861 tests, run with `npm test` (Vitest + jsdom). They are
 behavioural rather than snapshot-based: `frontend/test/factories.ts` builds server
 payloads, and the tests assert what a learner can see and press.
 

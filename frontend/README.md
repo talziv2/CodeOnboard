@@ -6,7 +6,7 @@
 ```bash
 npm install
 npm run dev      # http://localhost:3000
-npm test         # Vitest — 48 files, 783 tests
+npm test         # Vitest — 54 files, 861 tests
 npm run build    # also the type check
 ```
 

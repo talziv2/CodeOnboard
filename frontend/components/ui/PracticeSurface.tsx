@@ -35,14 +35,26 @@ import SectionLabel from "@/components/ui/SectionLabel";
  */
 export default function PracticeSurface({
   label,
+  icon,
   children,
 }: {
   label: string;
+  /**
+   * The marker for whichever of the three contents is in the region.
+   *
+   * It changes with the eyebrow, and for the same reason the eyebrow changes at
+   * all: this frame persists across question → answer → feedback, so the label is
+   * the only thing that says which of the three the learner is looking at. A
+   * fixed glyph here would work against that.
+   */
+  icon?: string;
   children: React.ReactNode;
 }) {
   return (
     <section className="flex flex-col gap-4 rounded-panel border border-rule bg-well p-5">
-      <SectionLabel tone="raised">{label}</SectionLabel>
+      <SectionLabel tone="raised" icon={icon}>
+        {label}
+      </SectionLabel>
       {children}
     </section>
   );

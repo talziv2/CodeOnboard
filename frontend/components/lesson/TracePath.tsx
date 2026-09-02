@@ -1,7 +1,8 @@
 "use client";
 
 import type { Anchor } from "@/lib/api";
-import SectionLabel from "@/components/ui/SectionLabel";
+import { BlockTitle } from "@/components/ui/SectionLabel";
+import { BLOCK_ICON, LESSON_ICON } from "@/lib/lessonIcons";
 import { t } from "@/lib/strings";
 
 /**
@@ -26,7 +27,9 @@ export default function TracePath({
 
   return (
     <div data-tour="code-links" className="flex flex-col gap-2">
-      <SectionLabel>{isPath ? t.lesson.tracePath : t.lesson.codeLocation}</SectionLabel>
+      <BlockTitle icon={isPath ? BLOCK_ICON.tracePath : LESSON_ICON.codeLocation}>
+        {isPath ? t.lesson.tracePath : t.lesson.codeLocation}
+      </BlockTitle>
       <ol className="flex flex-col gap-1">
         {anchors.map((a, i) => (
           <li key={`${a.file}-${a.line_start}-${i}`}>

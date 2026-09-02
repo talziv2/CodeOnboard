@@ -89,8 +89,12 @@
      least 2px, so a level change is actually visible.
 
      Line height travels with the size — Tailwind's `--text-*--line-height`
-     pairing — because the two are one decision. Prose is set at 16/1.7 in a 62ch
-     measure, which lands 66–70 characters per line. */
+     pairing — because the two are one decision. Prose is set at 16/1.7, and the
+     measure that goes with it is `.measure` further down — 46ch, landing ~70
+     characters per line, MEASURED for the face actually loaded. Do not restate a
+     `ch` value here: it was `62ch` in this comment long after the rule said 48,
+     and a `ch` figure is only true of one font. The derivation lives in one
+     place, beside the rule. */
   --text-micro: calc(11rem / 16);
   --text-micro--line-height: 1.4;
   --text-meta: calc(12.5rem / 16);
@@ -354,27 +358,49 @@ html {
 body {
   background: var(--color-ink);
   color: var(--color-chalk);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  /* Red Hat Text — see the note beside the loader in `app/layout.tsx`. The
+     variable resolves to the loaded face plus next/font's metric-matched
+     fallback, so the generic families behind it are only reached when the font
+     request itself failed.
+   
+     THE FOUR EMOJI FAMILIES ARE LOAD-BEARING NOW, and they are the ones Tailwind
+     puts at the end of its own default sans for exactly this reason. A lesson
+     screen carries up to eight emoji markers (`lib/lessonIcons.ts`), and no text
+     font contains them — the browser falls through to whatever the platform
+     offers. Where that is nothing, an unnamed emoji font is not a missing glyph,
+     it is a row of tofu boxes: `Marker` guards the empty-glyph case and cannot
+     guard this one. Named explicitly so the fallthrough is a decision rather
+     than whatever the last generic family happens to cover. */
+  font-family: var(--font-red-hat-text), system-ui, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
 
 /* The lesson column holds long-form prose; cap the measure for readability.
  *
- * 48ch, not the 62ch this started at, and the difference is a unit trap worth
- * writing down. `ch` is the advance width of the `0` glyph, which in Geist is
- * 10.61px at 16px — while the average character in English prose measures
- * 7.29px. `ch` is therefore 1.45× a real character, so `62ch` renders about
- * NINETY characters per line, not sixty-two. Measured, not estimated.
+ * 46ch, and the number is a unit trap worth writing down. `ch` is the advance
+ * width of the `0` glyph, not of a character — in Red Hat Text it is 10.56px at
+ * 16px, while the average character in English prose measures 6.98px. `ch` is
+ * therefore 1.51× a real character, so the 62ch this started at rendered about
+ * NINETY-FOUR characters per line, not sixty-two. Measured in the browser on a
+ * rendered lesson, not estimated.
  *
- * Ninety is well outside the comfortable 60–75 band. 48ch lands at ~70 (507px at
- * 16px), which is also why the lesson column's floor is specified at 560px: that
- * is this measure plus its padding.
+ * The comfortable band is 60–75, and 46ch is 486px at 16px, which lands at ~70.
+ * The cap only bites with the source pane closed; the column is usually narrower
+ * than this and does the limiting itself.
  *
- * The old value was never exposed because the column was narrower than the cap
- * and did the limiting itself — prose sat at ~62 characters by accident. Raising
- * prose to 16px without fixing this would have traded one accident for a
- * genuinely too-wide line the moment the source pane is closed. */
+ * WAS 48ch, MEASURED FOR GEIST, and that is the whole reason this comment now
+ * names a face. Geist's `0` is 10.61px — near-identical — but its average
+ * character is 7.29px, so the same 48ch that landed at ~70 in Geist lands at ~73
+ * in Red Hat Text. A text face is narrower per character than a grotesque at the
+ * same nominal size, so swapping one for the other silently widens every measure
+ * specified in `ch`, and nothing about the CSS changes to say so.
+ *
+ * The lesson column's 560px floor was specified as this measure plus its
+ * padding. It is now a little generous rather than exact; left alone, because a
+ * floor with slack costs nothing and narrowing it is a layout decision rather
+ * than a consequence of the type. */
 .measure {
-  max-width: 48ch;
+  max-width: 46ch;
 }
 
 /* --- focus -----------------------------------------------------------------

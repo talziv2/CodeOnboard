@@ -17,9 +17,16 @@ import { useEffect, useState } from "react";
  *   narrow   <  960   both become overlays; the lesson has the window
  *
  * `LESSON_FLOOR` is the width below which the reading column stops being a
- * reading column. It is deliberately close to the measure the prose is set to
- * (48ch plus its gutters), because a column narrower than its own text is a
- * column that has stopped doing its job.
+ * reading column. It was derived as the prose measure plus its gutters — then
+ * `48ch`, now `46ch` after the reading face changed and `.measure` was
+ * re-measured for it (see `app/globals.css`) — because a column narrower than its
+ * own text is a column that has stopped doing its job.
+ *
+ * So 560 now has ~74px of slack over the 486px measure rather than sitting on it.
+ * Left at 560 deliberately: the floor only has to be at least the measure, slack
+ * costs nothing, and moving a band threshold is a layout decision rather than a
+ * consequence of the type. Do not re-derive it from `ch` here — that number is
+ * only true of one font, and this is the second time it went stale.
  */
 export type Band = "wide" | "medium" | "narrow";
 

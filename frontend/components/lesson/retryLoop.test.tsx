@@ -437,14 +437,32 @@ describe("a check appears in Your answers", () => {
     expect(screen.getByText(t.lesson.checkRowCleared(2))).toBeTruthy();
   });
 
-  test("counts both, so the heading matches what the learner did", async () => {
+  test("counts what it lists, so the row cannot disagree with its contents", async () => {
     api.getLesson.mockResolvedValue(lesson({ retry: CAN_REASSESS }));
     await renderPanel(CHECKED, "A FRESH CHECK QUESTION");
 
-    // BOTH labels — the block's own summary and the section heading inside it.
-    // They were computed from different lists, so the disclosure said "(1)"
-    // while listing two answers.
-    expect(screen.getAllByText(t.lesson.yourAnswers(2)).length).toBe(2);
+    /**
+     * The defect: the block's summary count and the section heading inside it
+     * were computed from DIFFERENT lists, so the row said "(1)" while listing
+     * two answers. This asserted both labels read `(2)`.
+     *
+     * There is now only one label. A disclosure names its block, so the block's
+     * own eyebrow is suppressed inside one — see `AlreadyNamed` in
+     * `ui/SectionLabel.tsx`; two identical headings four pixels apart was its
+     * own defect. That removes the way the two counts could disagree rather
+     * than checking that they agree, so the gate moves to the thing still worth
+     * gating: the count on the row against what the block actually contains.
+     *
+     * The wrong count is asserted absent as well. `getAllByText(…(2))` passing
+     * would not by itself prove the row is not ALSO claiming something else.
+     */
+    expect(screen.getAllByText(t.lesson.yourAnswers(2))).toHaveLength(1);
+    expect(screen.queryByText(t.lesson.yourAnswers(1))).toBeNull();
+
+    // Both answers, which is what "(2)" is counting: the failed assessment and
+    // the check that cleared the gaps.
+    expect(screen.getByText("My first, wrong answer.")).toBeTruthy();
+    expect(screen.getByText("My careful answer about connect().")).toBeTruthy();
   });
 
   test("and the check still never becomes evidence about the objective", async () => {

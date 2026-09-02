@@ -3,6 +3,7 @@
 import type { ArrivalNotice as Notice } from "@/lib/arrival";
 import Button from "@/components/ui/Button";
 import Callout from "@/components/ui/Callout";
+import { LESSON_ICON } from "@/lib/lessonIcons";
 import { t } from "@/lib/strings";
 
 /**
@@ -54,7 +55,7 @@ export default function ArrivalNotice({
         : t.lesson.arrival.here(place);
 
   return (
-    <Callout tone="brass" label={t.lesson.arrival.label}>
+    <Callout tone="brass" label={t.lesson.arrival.label} icon={LESSON_ICON.offRoute}>
       <p className="measure text-meta text-paper">{sentence}</p>
       <div className="mt-1 flex flex-wrap items-center gap-2">
         {/* Offered only when the stop they left still exists — see `returnTo` in
