@@ -1,8 +1,10 @@
 "use client";
 
 import type { Attempt } from "@/lib/api";
-import SectionLabel from "@/components/ui/SectionLabel";
+import { BlockTitle } from "@/components/ui/SectionLabel";
 import Prose from "@/components/ui/Prose";
+import Marker from "@/components/ui/Marker";
+import { BLOCK_ICON, CHECK_ICON, VERDICT_ICON } from "@/lib/lessonIcons";
 import { NEUTRAL, VERDICT_COLOR } from "@/lib/verdict";
 import { t } from "@/lib/strings";
 
@@ -22,7 +24,9 @@ import { t } from "@/lib/strings";
 export default function AttemptHistory({ attempts }: { attempts: Attempt[] }) {
   return (
     <div className="flex flex-col gap-3">
-      <SectionLabel>{t.lesson.yourAnswers(attempts.length)}</SectionLabel>
+      <BlockTitle icon={BLOCK_ICON.attempts}>
+        {t.lesson.yourAnswers(attempts.length)}
+      </BlockTitle>
       <div className="flex flex-col gap-2">
         {attempts.map((attempt, i) => (
           <AttemptCard key={`${attempt.at}-${i}`} attempt={attempt} index={i} />
@@ -78,6 +82,10 @@ function AttemptCard({ attempt, index }: { attempt: Attempt; index: number }) {
     ? t.lesson.checkRow
     : t.lesson.verdict[attempt.classification] ?? attempt.classification;
   const color = isCheck ? NEUTRAL : VERDICT_COLOR[attempt.classification] ?? NEUTRAL;
+  // The glyph tracks the colour, from the same pair of tables — so a row cannot
+  // be jade with a cross on it. An unknown classification gets no marker at all,
+  // which is `NEUTRAL` said in the other channel.
+  const icon = isCheck ? CHECK_ICON : VERDICT_ICON[attempt.classification];
 
   return (
     <details className="group rounded-card border border-rule bg-slab open:bg-trench">
@@ -85,6 +93,7 @@ function AttemptCard({ attempt, index }: { attempt: Attempt; index: number }) {
         <span aria-hidden className="font-mono text-micro text-graphite">
           {String(index + 1).padStart(2, "0")}
         </span>
+        <Marker glyph={icon} />
         <span
           className="font-mono text-micro uppercase tracking-[0.13em]"
           style={{ color }}

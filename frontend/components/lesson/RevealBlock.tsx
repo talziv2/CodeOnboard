@@ -3,6 +3,7 @@
 import Callout from "@/components/ui/Callout";
 import Prose from "@/components/ui/Prose";
 import SectionLabel from "@/components/ui/SectionLabel";
+import { BLOCK_ICON, LESSON_ICON } from "@/lib/lessonIcons";
 import { t } from "@/lib/strings";
 
 /**
@@ -30,17 +31,22 @@ export default function RevealBlock({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <SectionLabel>{t.lesson.reveal}</SectionLabel>
+      <SectionLabel icon={BLOCK_ICON.reveal}>{t.lesson.reveal}</SectionLabel>
       <Prose text={reveal} size="body" tone="paper" />
 
       {takeaway && (
-        <Callout tone="signal" label={t.lesson.takeaway} className="mt-1">
+        <Callout
+          tone="signal"
+          label={t.lesson.takeaway}
+          icon={LESSON_ICON.takeaway}
+          className="mt-1"
+        >
           <Prose text={takeaway} size="aside" tone="chalk" />
         </Callout>
       )}
 
       {ownership && (
-        <Callout tone="neutral" label={t.lesson.ownership}>
+        <Callout tone="neutral" label={t.lesson.ownership} icon={LESSON_ICON.ownership}>
           <Prose text={ownership} size="meta" tone="paper" />
         </Callout>
       )}

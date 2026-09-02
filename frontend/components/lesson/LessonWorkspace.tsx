@@ -62,9 +62,9 @@ const EXPAND_BELOW = 16;
  * to explicitly.
  *
  * THE CANVAS IS CAPPED BUT NOT CENTRED. The lesson column runs from 572px to
- * ~1170px depending on the band, and prose set to 48ch inside a 1170px column
- * leaves the cards and lists around it sprawling to twice the width of the text
- * they belong to — hence the cap. It is left-aligned because the lesson is the
+ * ~1170px depending on the band, and prose capped by `.measure` — 486px at the
+ * default text size — inside a 1170px column leaves the cards and lists around it
+ * sprawling to twice the width of the text they belong to; hence the cap. It is left-aligned because the lesson is the
  * column's subject, not a card floating in it, and the brief above is capped to the
  * same width so the two share a left edge.
  *

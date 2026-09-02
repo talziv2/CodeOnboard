@@ -1,3 +1,5 @@
+import Marker from "@/components/ui/Marker";
+
 /**
  * A tinted box with a mono eyebrow and a body: the shape the lesson uses to set
  * something apart from the prose around it.
@@ -38,10 +40,20 @@ export default function Callout({
   tone,
   label,
   className = "",
+  icon,
   children,
 }: {
   tone: Tone;
   label: string;
+  /**
+   * A decorative marker from `lib/lessonIcons.ts`, before the eyebrow.
+   *
+   * The eyebrow already carries the tone's colour, and the marker is the second
+   * half of the same job on a screen where four of these can be stacked: the
+   * takeaway, the hint and the arrival notice are three different kinds of aside
+   * and the tone alone distinguishes only three of the four.
+   */
+  icon?: string;
   /** Layout that belongs to the surrounding flow, not the callout — e.g. `mt-1`. */
   className?: string;
   children: React.ReactNode;
@@ -49,10 +61,13 @@ export default function Callout({
   const t = TONE[tone];
   return (
     <div className={`flex flex-col gap-1.5 rounded-card border px-4 py-3 ${t.box} ${className}`}>
-      <span
-        className={`font-mono text-micro uppercase tracking-[0.14em] ${t.label}`}
-      >
-        {label}
+      <span className="flex items-center gap-2">
+        <Marker glyph={icon} />
+        <span
+          className={`font-mono text-micro uppercase tracking-[0.14em] ${t.label}`}
+        >
+          {label}
+        </span>
       </span>
       {children}
     </div>

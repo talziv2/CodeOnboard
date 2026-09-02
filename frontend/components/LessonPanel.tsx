@@ -33,6 +33,7 @@ import TracePath from "@/components/lesson/TracePath";
 import SpentPrompt from "@/components/lesson/SpentPrompt";
 import VerificationBlock from "@/components/lesson/VerificationBlock";
 import PracticeSurface from "@/components/ui/PracticeSurface";
+import { BLOCK_ICON, LESSON_ICON } from "@/lib/lessonIcons";
 import Prose, { InlineProse } from "@/components/ui/Prose";
 import Button from "@/components/ui/Button";
 import { isSplitSurfaces, lessonUi } from "@/lib/flags";
@@ -739,6 +740,15 @@ export default function LessonPanel({
     : result
       ? t.lesson.feedback
       : t.lesson.checkUnderstanding;
+  // The marker follows the eyebrow through the same three states, from the same
+  // branch, so the two cannot get out of step. `BLOCK_ICON.feedback` rather than
+  // the verdict's glyph: the verdict is spoken inside the card, and repeating it
+  // on the frame would say the same thing twice a centimetre apart.
+  const practiceIcon = verification
+    ? LESSON_ICON.verification
+    : result
+      ? BLOCK_ICON.feedback
+      : LESSON_ICON.question;
 
   const anchors: Anchor[] = node.anchors ?? [];
   /**
@@ -1033,7 +1043,11 @@ export default function LessonPanel({
           )}
 
           {rewritten && (
-            <Callout tone="signal" label={t.lesson.newMaterialLabel}>
+            <Callout
+              tone="signal"
+              label={t.lesson.newMaterialLabel}
+              icon={LESSON_ICON.rewritten}
+            >
               <div className="flex flex-col gap-1.5">
                 <p className="text-meta text-chalk">{t.lesson.newMaterialBody}</p>
                 {/* WHAT changed, not only that something did. There is no diff to
@@ -1065,7 +1079,7 @@ export default function LessonPanel({
           )}
 
           {recovered && drawing !== "lesson" && (
-            <Callout tone="jade" label={t.lesson.recoveredLabel}>
+            <Callout tone="jade" label={t.lesson.recoveredLabel} icon={LESSON_ICON.recovered}>
               <p className="text-meta text-paper">
                 {t.lesson.recoveredBody}{" "}
                 <span className="text-chalk">“{warmUpTitle}”</span>
@@ -1192,7 +1206,7 @@ export default function LessonPanel({
               </div>
             }
             question={
-              <PracticeSurface label={practiceLabel}>
+              <PracticeSurface label={practiceLabel} icon={practiceIcon}>
                 {verification ? (
                   <VerificationBlock
                     onStuck={onStuck}
@@ -1236,7 +1250,7 @@ export default function LessonPanel({
             }
             feedback={
               result && (
-                <PracticeSurface label={practiceLabel}>
+                <PracticeSurface label={practiceLabel} icon={practiceIcon}>
                   <FeedbackCardNext
                     result={result}
                     isCheck={isCheck}

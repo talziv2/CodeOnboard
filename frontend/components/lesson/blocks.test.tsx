@@ -11,6 +11,7 @@ import RevealBlock from "@/components/lesson/RevealBlock";
 import SetupProse from "@/components/lesson/SetupProse";
 import TracePath from "@/components/lesson/TracePath";
 import VerificationBlock from "@/components/lesson/VerificationBlock";
+import { LESSON_ICON } from "@/lib/lessonIcons";
 import { t } from "@/lib/strings";
 
 /**
@@ -163,6 +164,42 @@ describe("the state blocks", () => {
     expect(screen.getByText(t.lesson.gapsTally(0, 1))).toBeTruthy();
     expect(screen.getByRole("button", { name: t.lesson.gapSolve })).toBeTruthy();
     expect(screen.queryByRole("button", { name: t.lesson.waiveOne })).toBeNull();
+  });
+
+  /**
+   * The glyph channel must not contradict the other three.
+   *
+   * `Settled` covers `verified` AND `waived`, so it carried a ✅ over a section
+   * that can hold nothing but ignored gaps: `✅ Settled` above a tally reading
+   * "0 of 1 resolved" and a row reading "Still unresolved — you chose not to work
+   * on it now". The tick is the fastest-read thing in that stack and it said the
+   * opposite of the two channels under it — and it made a learner DECISION look
+   * like a change in status, which waiving must never do.
+   *
+   * So the section heading carries no marker and the ROWS carry theirs, which is
+   * the level at which the distinction is actually true. Asserted by the absence
+   * of the resolved glyph anywhere in a ledger that has resolved nothing.
+   */
+  test("an ignored-only ledger shows no resolved marker anywhere", () => {
+    const waived: NodeGap = { ...GAP, status: "waived" };
+    const { container } = render(
+      <GapList gaps={[waived]} onSolve={vi.fn()} onWaive={vi.fn()} />
+    );
+
+    expect(screen.getByText(t.lesson.gapSettledHeading)).toBeTruthy();
+    expect(screen.getByText(t.lesson.gapsTally(0, 1))).toBeTruthy();
+    expect(container.textContent).not.toContain(LESSON_ICON.gapResolved);
+    expect(container.textContent).toContain(LESSON_ICON.gapWaived);
+  });
+
+  test("a resolved gap does get the resolved marker, on its own row", () => {
+    const resolved: NodeGap = { ...GAP, id: "g2", claim: "Retries are free.", status: "verified" };
+    const { container } = render(
+      <GapList gaps={[resolved]} onSolve={vi.fn()} onWaive={vi.fn()} />
+    );
+
+    expect(container.textContent).toContain(LESSON_ICON.gapResolved);
+    expect(container.textContent).not.toContain(LESSON_ICON.gapWaived);
   });
 
   test("the history counts what it was given and opens to the answer", async () => {

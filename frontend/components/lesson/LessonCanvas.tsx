@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import Disclosure from "@/components/ui/Disclosure";
 import type { BlockState, LessonBlocks } from "@/lib/lessonView";
 import { surfaceBlocks, type Surface } from "@/lib/lessonSurfaces";
+import { BLOCK_ICON } from "@/lib/lessonIcons";
 
 /**
  * The canvas, placed by phase rather than by accumulation — and, under `surfaces`,
@@ -109,7 +110,18 @@ export default function LessonCanvas({
     return value === "open" ? (
       node
     ) : (
-      <Disclosure label={label} count={count} tour={tour} initiallyOpen={initiallyOpen}>
+      // The marker comes from the block NAME, not from the caller. `labels` is
+      // per-surface prose and the glyph is not: a collapsed setup wears the same
+      // mark as an expanded one, on either surface, which is what makes the row a
+      // folded block rather than a differently named one. Nothing to thread
+      // through, and nothing that can be threaded through wrongly.
+      <Disclosure
+        label={label}
+        count={count}
+        icon={BLOCK_ICON[block]}
+        tour={tour}
+        initiallyOpen={initiallyOpen}
+      >
         {node}
       </Disclosure>
     );
@@ -168,7 +180,9 @@ export default function LessonCanvas({
           what the verdict is about. */}
       {at("question") === "open" && question}
       {at("question") === "collapsed" && questionEcho && (
-        <Disclosure label={labels.question ?? ""}>{questionEcho}</Disclosure>
+        <Disclosure label={labels.question ?? ""} icon={BLOCK_ICON.question}>
+          {questionEcho}
+        </Disclosure>
       )}
       {at("feedback") !== "absent" && feedback}
 

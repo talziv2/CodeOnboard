@@ -3,7 +3,9 @@
 import type { NodeGap } from "@/lib/api";
 import Button from "@/components/ui/Button";
 import { InlineProse } from "@/components/ui/Prose";
-import SectionLabel from "@/components/ui/SectionLabel";
+import Marker from "@/components/ui/Marker";
+import SectionLabel, { BlockTitle } from "@/components/ui/SectionLabel";
+import { BLOCK_ICON, LESSON_ICON } from "@/lib/lessonIcons";
 import { t } from "@/lib/strings";
 
 /**
@@ -49,22 +51,36 @@ import { t } from "@/lib/strings";
 
 const isOpen = (gap: NodeGap) => (gap.status ?? "open") === "open";
 
+/**
+ * THREE STATES, THREE MARKERS, and the third one is the reason this is worth
+ * doing at all. `Resolved` and `Ignored for now` are already distinguished by
+ * their wording, their colour and the note under them, because a learner reading
+ * `Ignored` as `Resolved` would be reading the ledger backwards. The glyph is a
+ * fourth channel saying the same thing, and it is deliberately NOT a second
+ * tick — see `gapWaived` in `lessonIcons`.
+ */
 function StatusChip({ gap }: { gap: NodeGap }) {
   if (isOpen(gap)) {
     return (
-      <span className="text-micro uppercase tracking-wide text-graphite">
-        {gap.blocking ? t.lesson.gapBlocking : t.lesson.gapNonBlocking}
+      <span className="flex items-center gap-1.5">
+        <Marker glyph={LESSON_ICON.gapOpen} />
+        <span className="text-micro uppercase tracking-wide text-graphite">
+          {gap.blocking ? t.lesson.gapBlocking : t.lesson.gapNonBlocking}
+        </span>
       </span>
     );
   }
   const verified = gap.status === "verified";
   return (
-    <span
-      className={`text-micro uppercase tracking-wide ${
-        verified ? "text-jade" : "text-muted"
-      }`}
-    >
-      {verified ? t.lesson.gapStatusVerified : t.lesson.gapStatusWaived}
+    <span className="flex items-center gap-1.5">
+      <Marker glyph={verified ? LESSON_ICON.gapResolved : LESSON_ICON.gapWaived} />
+      <span
+        className={`text-micro uppercase tracking-wide ${
+          verified ? "text-jade" : "text-muted"
+        }`}
+      >
+        {verified ? t.lesson.gapStatusVerified : t.lesson.gapStatusWaived}
+      </span>
     </span>
   );
 }
@@ -221,9 +237,22 @@ export default function GapList({
         {/* The heading takes the accent's colour so the mark is not carried by
             the border alone — the same pairing `Callout` uses, where the tinted
             eyebrow is what names the box. */}
-        <SectionLabel tone={marked ? "raised" : "quiet"}>
+        {/* The block's own title, so it disappears when the collapsed row above
+            has already said it. `Settled` below stays a `SectionLabel`: nothing
+            has named that, and it divides the ledger's two halves.
+
+            THE MARKER IS STATE-BLIND ON PURPOSE. `⚠️` marks the LEDGER, not the
+            current state — "what you got wrong here" is past tense, and it is a
+            record that keeps its rows after they close. Two things follow. The
+            live state is reported by the tally beside it and by the count on the
+            collapsed row, which are the channels that can move; and the marker
+            stays identical on the collapsed row and on this heading, which is
+            the agreement `BLOCK_ICON` exists to guarantee — a row that warns
+            opening onto a heading that does not is the disagreement, not the
+            fix. */}
+        <BlockTitle tone={marked ? "raised" : "quiet"} icon={BLOCK_ICON.gaps}>
           <span className={marked?.label}>{t.lesson.gapsHeading}</span>
-        </SectionLabel>
+        </BlockTitle>
         {/* Resolved over total, not a count of what is wrong. The denominator is
             the whole ledger, which is the only reason the numerator can move. */}
         {gaps.length > 0 && (
@@ -244,6 +273,23 @@ export default function GapList({
 
       {settled.length > 0 && (
         <div className="flex flex-col gap-2">
+          {/* NO MARKER, AND THAT IS THE DECISION.
+   
+              `settled` is `verified` OR `waived`, and the heading is worded
+              neutrally precisely because it covers both — so any single glyph
+              here picks one of two opposite states and asserts it about the
+              other. A ✅ was the first attempt and it was the worst possible
+              choice: ignore your only gap and the section read `✅ Settled`
+              above a tally saying `0 of 1 resolved` and a row saying `Still
+              unresolved — you chose not to work on it now`. The tick is the
+              largest, fastest-read thing in that stack, and it said the
+              opposite of the two channels under it.
+   
+              A state-aware glyph was the other option and is worse: it would
+              make a learner DECISION render as a change in status, which is
+              exactly what waiving must never do. The rows carry their own
+              markers — ✅ against 💤 — and that is where the distinction
+              belongs, one per row, because it is per row that it is true. */}
           <SectionLabel>{t.lesson.gapSettledHeading}</SectionLabel>
           <ul className="flex flex-col gap-2">{settled.map(row)}</ul>
         </div>
