@@ -281,7 +281,7 @@ a list.
 |---|---|---|
 | Learning graph | `nodes` + `edges` + `sessions` | Rewritten wholesale on every `save_graph` |
 | Attempts | `nodes.attempts_json` | Append-only; a re-answer adds to the record |
-| Gaps + remediation counters + pending questions | `nodes.gaps_json` | Written **unconditionally** — `CODEONBOARD_GAPS` gates behaviour, never storage |
+| Gaps + remediation counters + pending questions | `nodes.gaps_json` | Written **unconditionally**; `store.py` reads no feature flag at all (D19) |
 | Areas, journey events, briefing, arrival | `sessions.*_json` | Session-scoped, so they get columns rather than living on a node |
 | Objective, kind, priority, area_id, anchors, origin, `scope_locked` | inside `nodes.lesson_brief_json` | No column, because nothing queries by them |
 | Rendered lesson | `nodes.cached_lesson_json` | A revisit is free; a re-teach replaces it |

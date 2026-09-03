@@ -271,12 +271,16 @@ _ADDITIVE_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("sessions", "areas_json", "TEXT"),
     # Outstanding gaps and the per-node remediation counter (gap-model.md M1).
     #
-    # Written and read UNCONDITIONALLY. `CODEONBOARD_GAPS` gates behaviour, never
-    # storage (gap-model.md §3.8): a flag-off save that loads a gap-bearing
-    # graph, changes something unrelated and writes it back must not destroy the
-    # gaps. Making persistence conditional is the one way to break that, so this
-    # path does not read the flag at all — and a test asserts that structurally,
-    # so the contract cannot rot.
+    # Written and read UNCONDITIONALLY, and this module reads no feature flag at
+    # all. The rule is gap-model.md §3.8 — a flag gates behaviour, never storage
+    # — and it was earned here: a save that loads a gap-bearing graph, changes
+    # something unrelated and writes it back must not destroy the gaps, and
+    # making persistence conditional is the one way to break that.
+    #
+    # `CODEONBOARD_GAPS` has since been removed, so gaps cannot be switched off
+    # at all. The rule still binds this module, because `CODEONBOARD_TUTOR` is
+    # still a flag and `tutor_json` below is still a payload it must not reach.
+    # `tests/test_tutor_store.py` asserts that structurally.
     ("nodes", "gaps_json", "TEXT"),
     # PLAN-SCOPED history — prune-ahead, scope changes, remediation insertions
     # (learning-graph.md M2). A column for exactly the reason `areas_json` got

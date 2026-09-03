@@ -1,4 +1,4 @@
-"""M1 — the gap model, its persistence, and the flag contract.
+"""M1 — the gap model and its persistence.
 
 gap-model.md M1. What M1 had to prove is that the data exists, survives, and —
 at the time — changed nothing: gaps were deliberately INERT, because blocking
@@ -8,6 +8,14 @@ could not land until M6 made closure possible.
 to say so rather than deleted, so the sequencing rule's history stays readable.
 Everything else in this file is about the model and its persistence, which M7
 did not touch.
+
+`CODEONBOARD_GAPS` used to be the third subject here, with four tests toggling
+it across a save and a load. The flag is gone — gap recording is unconditional —
+so what those tests were really protecting is stated once, without it: the
+persistence path reads no environment at all, and a gap survives a round trip
+byte for byte. The structural test is the one that still earns its place, and it
+now covers `CODEONBOARD_TUTOR` too, since it asserts the absence of the
+mechanism rather than of one name.
 
 Run with: uv run pytest tests/test_gap_model.py -v
 """
@@ -21,7 +29,6 @@ import pytest
 from tests.conftest import TEST_USER_ID
 
 from backend.learning import store as learning_store
-from backend.learning.flags import gaps_enabled
 from backend.learning.gaps import (
     BLOCKING_KINDS,
     GAP_KINDS,
@@ -199,14 +206,20 @@ def test_schema_version_moves_only_deliberately():
     assert learning_store.SCHEMA_VERSION == 3
 
 
-# ── the flag contract (gap-model.md §3.8) ────────────────────────────────────
+# ── the storage contract (gap-model.md §3.8) ──────────────────────────────────
 
 
-def test_the_persistence_path_never_reads_the_flag():
+def test_the_persistence_path_reads_no_feature_flag():
     """Structural, so the contract cannot rot.
 
-    The flag gates behaviour, never storage. If persistence ever consults it,
-    every round-trip guarantee below becomes conditional.
+    A flag gates behaviour, never storage. If persistence ever consults one,
+    every round-trip guarantee below becomes conditional on how the process was
+    launched — and turning a flag off once becomes silent, permanent data loss.
+
+    Asserted as "reads no environment and imports no flags module" rather than
+    as a list of flag names, which is why it outlived the flag it was written
+    for: `CODEONBOARD_GAPS` no longer exists, `CODEONBOARD_TUTOR` still does,
+    and the next one is covered before it is added.
 
     Parsed as an AST rather than grepped, so that the module may *explain* the
     contract in a comment — which it does — without the explanation tripping the
@@ -221,8 +234,6 @@ def test_the_persistence_path_never_reads_the_flag():
         node.value for node in ast.walk(tree)
         if isinstance(node, ast.Constant) and isinstance(node.value, str)
     }
-    assert "CODEONBOARD_GAPS" not in names
-    assert "gaps_enabled" not in names
     assert "getenv" not in names and "environ" not in names
 
     imported = {
@@ -238,47 +249,19 @@ def test_the_persistence_path_never_reads_the_flag():
     assert not any("flags" in name for name in imported)
 
 
-def test_gaps_written_flag_on_load_intact_with_the_flag_off(tmp_path, monkeypatch):
-    db = tmp_path / "s.db"
-    monkeypatch.setenv("CODEONBOARD_GAPS", "1")
-    graph, node = _graph_with_two_gaps()
-    learning_store.save_graph(graph, db, user_id=TEST_USER_ID)
-    expected = node.gap_state.to_dict()
+def test_gap_state_survives_a_save_load_change_resave_round_trip(tmp_path):
+    """The trap worth naming: a save that touches something else entirely.
 
-    monkeypatch.setenv("CODEONBOARD_GAPS", "0")
-    assert not gaps_enabled()
-    reloaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
-    assert reloaded.nodes[node.id].gap_state.to_dict() == expected
+    Load a gap-bearing graph, change an unrelated field, write it back. The gap
+    state must come back byte for byte — status, `resolved_by`, the remediation
+    counter, all of it. Anything that reads a gap on the way in and rebuilds it
+    on the way out will fail here, which is the point: this is what makes
+    "storage is unconditional" a checked claim rather than a comment.
 
-
-def test_a_flag_off_resave_does_not_destroy_gaps(tmp_path, monkeypatch):
-    """The trap worth naming: a flag-off session that touches something else.
-
-    Load a gap-bearing graph with the flag off, change an unrelated field, save
-    it back. The gaps must survive — otherwise turning the flag off once is
-    silent, permanent data loss.
+    This was four tests, each toggling `CODEONBOARD_GAPS` across a step. With no
+    flag left to toggle, the round trip itself is the whole of what they proved.
     """
     db = tmp_path / "s.db"
-    monkeypatch.setenv("CODEONBOARD_GAPS", "1")
-    graph, node = _graph_with_two_gaps()
-    learning_store.save_graph(graph, db, user_id=TEST_USER_ID)
-    expected = node.gap_state.to_dict()
-
-    monkeypatch.setenv("CODEONBOARD_GAPS", "0")
-    reloaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
-    reloaded.nodes[node.id].title = "changed while the flag was off"
-    reloaded.mark_visited(node.id)
-    learning_store.save_graph(reloaded, db, user_id=TEST_USER_ID)
-
-    monkeypatch.setenv("CODEONBOARD_GAPS", "1")
-    again = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
-    assert again.nodes[node.id].gap_state.to_dict() == expected
-    assert again.nodes[node.id].title == "changed while the flag was off"
-
-
-def test_re_enabling_the_flag_restores_exactly_the_persisted_state(tmp_path, monkeypatch):
-    db = tmp_path / "s.db"
-    monkeypatch.setenv("CODEONBOARD_GAPS", "1")
     graph, node = _graph_with_two_gaps()
     node.gap_state.gaps[0].status = "verified"
     node.gap_state.gaps[0].resolved_by = 3
@@ -286,16 +269,20 @@ def test_re_enabling_the_flag_restores_exactly_the_persisted_state(tmp_path, mon
     learning_store.save_graph(graph, db, user_id=TEST_USER_ID)
     expected = json.dumps(node.gap_state.to_dict(), sort_keys=True)
 
-    for setting in ("0", "1", "0", "1"):
-        monkeypatch.setenv("CODEONBOARD_GAPS", setting)
-        reloaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
-        got = json.dumps(reloaded.nodes[node.id].gap_state.to_dict(), sort_keys=True)
-        assert got == expected, f"gap state changed with the flag at {setting}"
+    reloaded = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
+    assert json.dumps(
+        reloaded.nodes[node.id].gap_state.to_dict(), sort_keys=True
+    ) == expected
 
+    reloaded.nodes[node.id].title = "changed for an unrelated reason"
+    reloaded.mark_visited(node.id)
+    learning_store.save_graph(reloaded, db, user_id=TEST_USER_ID)
 
-def test_the_flag_defaults_to_off(monkeypatch):
-    monkeypatch.delenv("CODEONBOARD_GAPS", raising=False)
-    assert not gaps_enabled()
+    again = learning_store.load_graph(graph.session_id, TEST_USER_ID, db)
+    assert json.dumps(
+        again.nodes[node.id].gap_state.to_dict(), sort_keys=True
+    ) == expected
+    assert again.nodes[node.id].title == "changed for an unrelated reason"
 
 
 # ── M1 is inert ──────────────────────────────────────────────────────────────

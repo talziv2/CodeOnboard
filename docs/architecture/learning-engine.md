@@ -88,8 +88,8 @@ one member of `anchors`.
 
 ## 3. Planning: propose, then cut
 
-Under `CODEONBOARD_CURRICULUM=1` the planner
-(`backend/agents/mentor/curriculum.py`) splits one job across two owners:
+The planner (`backend/agents/mentor/curriculum.py`) splits one job across two
+owners:
 
 - **Propose** — the model, once. It reads the Dossier and enumerates everything
   worth learning for this goal, each with a `kind`, a `priority`, its
@@ -121,10 +121,13 @@ it, and the rail collapses it — but it stays in the graph and in `path_order()
 and teaches and grades normally when reached from the rail. A unit with **no**
 `priority` at all is *not* optional and stays on the walk.
 
-Setting `CODEONBOARD_CURRICULUM=0` (the default) selects the pre-B3 planner in
-`mentor/dossier.py`, which plans nodes directly and emits no areas, priorities or
-`depends_on`. Both write a `LearningGraph`, so graphs from either path load under
-either setting.
+**This is the only planner.** `CODEONBOARD_CURRICULUM=0` used to select a pre-B3
+planner in `mentor/dossier.py` that planned nodes directly and emitted no areas,
+priorities or `depends_on`; the flag and that planner have both been removed.
+`mentor/dossier.py` remains, holding the dossier rendering both planners always
+shared. Graphs planned before the change still load — the fields this planner
+adds were always optional keys — and a node with no `priority` is treated as
+non-optional, which is what makes those graphs walk correctly.
 
 ---
 
@@ -273,16 +276,22 @@ out of ideas. A learner who names an exhausted gap themselves (`POST /verify
 {gap_id}` from the ledger) still gets a question: asking is a different act from
 being nagged.
 
-### The gaps flag
+### Gaps are not a data-collection side-channel
 
-`CODEONBOARD_GAPS=1` is **not data-collection-only**. As well as recording
-misconceptions, it makes the Grader *derive* the scalar `gap_kind` from them —
-and that scalar is what `adaptation.decide()` uses. A flag-on session can
-therefore receive a different response than the same session flag-off.
+Recording a misconception **changes what happens next**. The Grader derives the
+scalar `gap_kind` from the gaps it found, and that scalar is what
+`adaptation.decide()` reads — so the gap list is upstream of the intervention,
+not a log beside it.
 
-**The flag gates behaviour; it never gates storage.** Nothing in
-`backend/learning/store.py` reads it, and a test asserts that structurally — which
-is what makes the round-trip guarantee true by construction rather than by care.
+This was `CODEONBOARD_GAPS`, default off, and the sentence above is why turning
+it on was never "start collecting data": the same answer could earn a different
+response either side of the flag. The flag has been removed and gap recording is
+unconditional.
+
+**A flag gates behaviour; it never gates storage** (D19). Gap payloads were
+always written and read unconditionally, so nothing about stored gaps changed
+when the flag went away — and `backend/learning/store.py` still reads no
+environment at all, because `CODEONBOARD_TUTOR` needs the same guarantee.
 
 ---
 

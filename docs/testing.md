@@ -58,17 +58,24 @@ beyond pytest itself.
 
 ### Two suite-wide fixtures, both in `tests/conftest.py`
 
-**Ambient flags are neutralised for every test.** `CODEONBOARD_CURRICULUM` and
-`CODEONBOARD_GAPS` are deleted from the environment by an autouse fixture, so a
-test that depends on one has to say which and how.
+**Ambient flags are neutralised for every test.** `CODEONBOARD_TUTOR` — the only
+behaviour flag left — is deleted from the environment by an autouse fixture, so a
+test that depends on it has to say so. *Neutralised* means **unset**, not off, so
+it falls to its shipped default of `1` and the suite exercises the configuration
+a fresh clone actually runs.
 
 This exists because of a real failure: `test_mentor_dossier.py` failed 14 tests on
 any full-suite run and passed all of them in isolation. `backend/api.py` loaded
-`.env` at import time with `override=True`; the developer's `.env` carries
+`.env` at import time with `override=True`; the developer's `.env` carried
 `CODEONBOARD_CURRICULUM=1`; so any test file importing the API silently switched
 the Mentor's planner for every test that ran afterwards. The fix was not to pin
 the flag in the one file that broke — the failure was that *an ambient value
 decided which code path ran, and nothing in the suite said so.*
+
+Neither that flag nor that file exists now (the planner it selected was deleted
+and the rendering tests that survived it are in `test_dossier_rendering.py`), but
+the fixture is not vestigial: the *shape* of the failure is what it guards, and
+the tuple of one is there so the next flag has to be added on purpose.
 
 **Every test runs as one fixed user by default.** Sixteen test files drive session
 routes, and every one of those routes now requires a signed-in caller. Teaching
@@ -86,7 +93,7 @@ itself — `test_auth.py` and `test_ownership.py` both do.
 | Area | Files |
 |---|---|
 | Repository understanding | `test_chunker`, `test_skeleton`, `test_anchors`, `test_tools`, `test_explore`, `test_survey`, `test_investigation`, `test_structure`, `test_cloner`, `test_repo_identity`, `test_repo_layout_migration` |
-| Agents | `test_goal_agent`, `test_documentation_agent`, `test_reviewer_agent`, `test_mentor_dossier`, `test_curriculum_planner`, `test_curriculum`, `test_briefing`, `test_teaching_agent`, `test_teaching_forms`, `test_grader_agent`, `test_grader_gaps`, `test_mutator`, `test_prerequisite_diagnosis` |
+| Agents | `test_goal_agent`, `test_documentation_agent`, `test_reviewer_agent`, `test_dossier_rendering`, `test_curriculum_planner`, `test_curriculum`, `test_briefing`, `test_teaching_agent`, `test_teaching_forms`, `test_grader_agent`, `test_grader_gaps`, `test_mutator`, `test_prerequisite_diagnosis` |
 | Orchestration | `test_explorer_pipeline`, `test_pipeline_progress` |
 | Learning model | `test_learning_graph`, `test_progress`, `test_understanding`, `test_history`, `test_patterns`, `test_gap_insight`, `test_scope`, `test_decision_is_not_evidence`, `test_attempt_history`, `test_question_traceability` |
 | Gap model | `test_gap_model`, `test_gap_adaptation`, `test_gap_verification`, `test_gap_understanding`, `test_gap_remediation`, `test_gap_remediation_rounds`, `test_gap_intents`, `test_gap_api` |
@@ -100,9 +107,11 @@ itself — `test_auth.py` and `test_ownership.py` both do.
 - **`test_route_authz_coverage.py`** fails the build when a route declares neither
   an auth dependency nor membership of `PUBLIC_PATHS`. It is the layer that
   catches the route somebody adds without reading the ownership rules.
-- **`test_gap_model.py::test_the_persistence_path_never_reads_the_flag`** asserts
+- **`test_gap_model.py::test_the_persistence_path_reads_no_feature_flag`** asserts
   *structurally* — by inspecting the module — that nothing in the persistence path
-  consults `CODEONBOARD_GAPS`, so the flag/storage contract cannot rot silently.
+  reads the environment or imports the flags module, so the flag/storage contract
+  (D19) cannot rot silently. Written for `CODEONBOARD_GAPS`, and name-agnostic, so
+  it kept working when that flag was removed and now covers `CODEONBOARD_TUTOR`.
 - **`test_gap_understanding.py`** contains an AST check that nothing re-derives
   the understanding state outside `graph.understanding_of()`.
 

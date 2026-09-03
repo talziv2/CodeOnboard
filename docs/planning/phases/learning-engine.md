@@ -4,6 +4,16 @@
 > **Depends on:** [`repo-understanding.md`](repo-understanding.md). This phase starts
 > after that migration reaches at least Stage 3. See [§1](#1-context-and-dependency-on-repo-understanding).
 > **Last updated:** 2026-08-13
+>
+> **Since this was written — `CODEONBOARD_CURRICULUM` no longer exists
+> (2026-09-03).** B3's objective-first planner shipped behind it, defaulting to
+> `0`, with the pre-B3 planner as the other side; the flag and that planner have
+> both been removed, and `mentor/curriculum.py` is the only planner. Where this
+> document reasons about the two coexisting, about four loadable flag
+> combinations, or about the flag as a revert path, read it as the argument that
+> made the migration safe rather than as current behaviour. The measured cost of
+> flipping it (+$0.037 per session, 2026-08-15) is what justified the removal and
+> stands as evidence; it is no longer a choice anyone makes.
 
 This document is the source of truth for **what CodeOnboard decides a specific human
 should learn from a repository, how it teaches that, how it verifies understanding,

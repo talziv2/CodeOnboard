@@ -25,11 +25,14 @@ Write down, in one sentence each:
   offer or whether an objective is met, the browser is a witness and never the
   authority.
 - What actually happened — the exact number, label, state or error slug.
-- Whether it reproduces, and under **which flags**. `CODEONBOARD_CURRICULUM` and
-  `CODEONBOARD_GAPS` are `1` in the developer's `.env` and deleted by
-  `tests/conftest.py`, so "works in tests, wrong in the app" is a flag difference
-  until proven otherwise. Check this **first** — it is cheap and it has been the
-  answer before.
+- Whether it reproduces, and under **which flags**. This used to be the first
+  thing to check and the answer surprisingly often: `CODEONBOARD_CURRICULUM` and
+  `CODEONBOARD_GAPS` were `1` in the developer's `.env` and deleted by
+  `tests/conftest.py`, so the app and the suite ran different code. **Both flags
+  are gone**, which closes that gap — `CODEONBOARD_TUTOR` is the only one left and
+  it defaults on in both. Still worth one look, because it is cheap: an `.env`
+  that sets `CODEONBOARD_TUTOR=0` and a bundle built without
+  `NEXT_PUBLIC_CODEONBOARD_TUTOR` disagree in a way nothing on screen explains.
 
 ## 2. Bisect the five layers, outermost first
 

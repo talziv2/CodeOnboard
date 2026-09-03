@@ -169,13 +169,20 @@ def decide_all(
     Everything not addressed stays `open`. Nothing here decays, resolves or
     reclassifies a gap; this function reads and returns, and mutates nothing.
 
-    **`gap_kind` is a fallback for when there are no gap OBJECTS at all**, which
-    is the flag-off world: `CODEONBOARD_GAPS=0` records no gaps, but the base
-    Grader prompt still returns the scalar and it still means something. Without
-    it, moving a call site from `decide` to `decide_all` would silently downgrade
-    every flag-off `reteach` and `followup` to `none`. It is consulted **only**
-    when `gaps` is empty, so wherever gap objects exist they remain the single
-    source of truth and the scalar cannot override them.
+    **`gap_kind` is a fallback for when there are no gap OBJECTS at all.** That
+    is not a rare case and it is not only history: an `off-topic` answer opens no
+    gaps by rule, a shortfall the model could not pin to a false statement opens
+    none either, and a node planned before gap recording existed carries none.
+    In every one of those the Grader still returns the scalar and it still means
+    something. Without this fallback, moving a call site from `decide` to
+    `decide_all` would silently downgrade each of those to `none`.
+
+    It was also what kept `CODEONBOARD_GAPS=0` coherent while that flag existed.
+    The flag is gone and gap recording is unconditional; the fallback stayed,
+    because the cases above were never about the flag.
+
+    It is consulted **only** when `gaps` is empty, so wherever gap objects exist
+    they remain the single source of truth and the scalar cannot override them.
     """
     # Deduplicated by id. `_record_gaps` cannot produce a repeat — matching an
     # existing gap creates nothing — but two reports naming one id are a shape

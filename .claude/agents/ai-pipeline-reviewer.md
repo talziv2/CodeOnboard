@@ -68,9 +68,8 @@ no agent calls another; one job, one prompt, one `MODEL` constant. `OnboardState
 is the only channel between agents — a new direct call or a shared module-level
 mutable is a finding.
 
-**6. Model selection.** `claude-sonnet-4-6` in exactly four modules
-(`mentor/agent.py`, `curriculum.py`, `dossier.py`, `mutator.py`), all one-shot
-synthesis. `claude-haiku-4-5` everywhere else, **including every loop**. A Sonnet
+**6. Model selection.** `claude-sonnet-4-6` in exactly two modules
+(`mentor/curriculum.py`, `mentor/mutator.py`), both one-shot synthesis. `claude-haiku-4-5` everywhere else, **including every loop**. A Sonnet
 call added inside a loop, or a Haiku call promoted without a stated reason, is a
 finding. Opus is never used.
 

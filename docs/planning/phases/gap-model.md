@@ -6,6 +6,18 @@ re-grades, arbitrated into one plan, remediated by name, closed only by a fresh
 question, and they gate `understood` — and the learner can move past them
 without being sent back or granted mastery they did not earn.
 
+> **Since this phase closed — `CODEONBOARD_GAPS` no longer exists (2026-09-03).**
+> Everything below is written as though the gap model ships behind a flag that
+> defaults to `0`, because that is what shipped and that is the argument the
+> document holds. The flag was removed once the model had won: gap detection is
+> unconditional, and the flag-off Grader prompt it selected has been deleted.
+> Read §3.8 and the flag-compatibility work as **why the rollout was safe**, not
+> as current configuration. The one claim in it that is still live is the
+> contract, restated flag-agnostically as D19: a flag gates behaviour, never
+> storage — `backend/learning/store.py` reads no environment at all, and
+> `tests/test_gap_model.py::test_the_persistence_path_reads_no_feature_flag`
+> still asserts it, now on `CODEONBOARD_TUTOR`'s behalf.
+
 **PHASE CLOSED 2026-08-18**, after M10 and one follow-up: the
 `wrong_model` / `right_idea_wrong_altitude` boundary, investigated as a general
 Grader question and corrected — leakage 3/10 → 0/10, gate 47/48 on both axes,

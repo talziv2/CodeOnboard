@@ -119,10 +119,12 @@ class LearningNode:
     # forbids (§18.4). `attempts` stays the append-only evidence; this is the
     # current truth, on the same side of the line as `understanding_state`.
     #
-    # M1 is INERT: nothing reads this yet. It does not block, does not appear in
-    # `to_dict`, and does not reach the API. Persistence is unconditional and
-    # never consults `CODEONBOARD_GAPS` — the flag gates behaviour, never
-    # storage, which is what makes the round-trip contract true by construction.
+    # Persistence is unconditional: no code path between here and the database
+    # asks whether gap behaviour is switched on. That began as the
+    # `CODEONBOARD_GAPS` contract — the flag gated behaviour, never storage — and
+    # survives the flag's removal for free, because there is nothing left to
+    # consult. `CODEONBOARD_TUTOR` still owes the same guarantee, and
+    # `tutor_state` below is held to it the same way.
     gap_state: GapState = field(default_factory=GapState)
     # What the Tutor has done on this stop: how many hints were written for the
     # question in front of the learner, whether they asked to see the answer, and

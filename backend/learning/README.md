@@ -25,7 +25,7 @@ is what lets the whole policy be tested without an API key.
 | `reset.py` | `Start over` — restore the plan, discard the walk | ✔ |
 | `patterns.py` | L2 observations over answers | ✔ |
 | `gap_insight.py` | L2 observations over gap objects | ✔ |
-| `flags.py` | `CODEONBOARD_GAPS`. **Nothing in `store.py` may import this** | ✔ |
+| `flags.py` | `CODEONBOARD_TUTOR`. **Nothing in `store.py` may import this** | ✔ |
 | `store.py` | SQLite persistence — and the ownership boundary | ✖ |
 
 ---
@@ -72,11 +72,17 @@ mutation against this rule.
 
 ## The flag contract
 
-`CODEONBOARD_GAPS` gates **behaviour**, never **storage**. Nothing in `store.py`
-calls `flags.py`, and
-`tests/test_gap_model.py::test_the_persistence_path_never_reads_the_flag` asserts
+A flag gates **behaviour**, never **storage**. Nothing in `store.py` calls
+`flags.py` or reads the environment, and
+`tests/test_gap_model.py::test_the_persistence_path_reads_no_feature_flag` asserts
 that structurally — which is what makes the round-trip guarantee true by
 construction rather than by care.
+
+`CODEONBOARD_TUTOR` is the flag this currently protects. It was written for
+`CODEONBOARD_GAPS`, which has been removed: gap recording is unconditional, so
+gap data cannot be switched off at all. The assertion is name-agnostic — it
+checks for the *mechanism*, not for a list of variables — which is why it
+survived the removal and why it will cover the next flag before it is added.
 
 ---
 

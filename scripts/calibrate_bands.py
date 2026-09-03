@@ -433,7 +433,6 @@ def main() -> int:
         )
         return 3
 
-    os.environ["CODEONBOARD_CURRICULUM"] = "1"
     client = anthropic.Anthropic(
         api_key=os.environ["ANTHROPIC_API_KEY"],
         timeout=CALL_TIMEOUT_SECONDS,

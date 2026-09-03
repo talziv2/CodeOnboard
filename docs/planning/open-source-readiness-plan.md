@@ -10,6 +10,12 @@ hardening. Where an audit item touches one of those areas it is named and
 explicitly left out. The one code change proposed (§C-1) is a functional bug on
 the first-run path, not hardening.
 
+> **One item has since been overtaken (2026-09-03).** `CODEONBOARD_CURRICULUM`
+> and `CODEONBOARD_GAPS` have been removed from the codebase entirely, so the
+> environment-variable inventory in §A lists two variables that no longer exist,
+> and the `run-dev.bat` remediation in §A.9 is moot — that launcher already
+> forces no flags. The rest of the audit stands as written.
+
 Everything below was verified against the repository as it stands on branch
 `improve-welcome-window` at commit `3dc579e` (2026-08-30), not inferred. Where a
 claim came from running something, the probe is described in the appendix.

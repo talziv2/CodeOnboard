@@ -24,11 +24,11 @@ the precedence every other tool in the stack uses: a variable set where the
 process was launched was silently discarded, so
 
 ```bash
-CODEONBOARD_GAPS=0 uv run uvicorn backend.api:app --reload
+CODEONBOARD_TUTOR=0 uv run uvicorn backend.api:app --reload
 ```
 
-ran with gaps **on** if `.env` said `1` — the opposite of what the person typing it
-asked for, with nothing on screen to say so.
+ran with the Tutor **on** if `.env` said `1` — the opposite of what the person
+typing it asked for, with nothing on screen to say so.
 
 Default precedence is what makes both usable for what each is for: the file for
 values that never change on this machine, the environment for the ones being
@@ -66,42 +66,11 @@ In production, `0` is a **refusal to start**.
 
 ## 3. Behaviour flags
 
-Three of them, and **they do not all default the same way**: the two planner/gap
-flags default `0`, and `CODEONBOARD_TUTOR` defaults `1`. Read each one's heading
-rather than assuming.
+**One of them**, and it defaults **on**.
 
-`tests/conftest.py` neutralises all three for every test — *neutralised* meaning
-**unset**, so each falls to its shipped default rather than to off. A test that
+`tests/conftest.py` neutralises it for every test — *neutralised* meaning
+**unset**, so it falls to its shipped default rather than to off. A test that
 depends on a flag has to say which and how.
-
-The first two are also set to `1` in the developer's own `.env`, which is the
-flag trap worth knowing: the app as it is actually run uses the objective-first
-planner and the gap model, while the suite tests neither unless a test says so.
-
-### `CODEONBOARD_CURRICULUM` — default `0`
-
-`1` selects the **objective-first planner** (`backend/agents/mentor/curriculum.py`):
-the model enumerates everything worth learning with no target number, and
-`select()` cuts deterministically by required-set closure, dependency closure, area
-coverage and a guard band. It produces `areas`, `priority`, `depends_on` and
-`kind`, which is what the chapters, the optional bucket and scope control all read.
-
-`0` selects the pre-B3 planner (`mentor/dossier.py`), which plans nodes directly
-and emits none of that. Both paths write a `LearningGraph`, and a graph from
-either loads under either setting.
-
-### `CODEONBOARD_GAPS` — default `0`
-
-**Not data-collection-only.** As well as recording the misconceptions an answer
-contains, it makes the Grader *derive* the scalar `gap_kind` from those gaps — and
-that scalar is what `adaptation.decide()` uses to choose the intervention, and what
-the Mutator's `Diagnosis` carries. A flag-on session can therefore receive a
-different response than the same session flag-off.
-
-**The flag gates behaviour; it never gates storage.** Nothing in
-`backend/learning/store.py` reads it, so gap data written under the flag survives a
-flag-off load, a flag-off re-save, and is restored exactly when the flag comes back
-on. A test asserts that structurally.
 
 ### `CODEONBOARD_TUTOR` — default `1`
 
@@ -229,3 +198,29 @@ Worth stating, because their absence is sometimes mistaken for a missing setting
 - **No model configuration.** Model ids are constants in each agent, because which
   model does which job is an architectural decision.
 - **No port configuration for the backend** beyond uvicorn's own `--port`.
+
+### Two variables that used to be here
+
+`CODEONBOARD_CURRICULUM` and `CODEONBOARD_GAPS` were removed. **An `.env` that
+still sets them is not an error and not a warning — the values are simply
+ignored**, which is the one thing worth knowing here, because a stale `.env` line
+reads like a setting that is doing something.
+
+Both were migration flags, default `0`, each keeping a superseded implementation
+reachable while its replacement was measured:
+
+| Was | `1` selected | `0` selected |
+|---|---|---|
+| `CODEONBOARD_CURRICULUM` | the objective-first planner, `mentor/curriculum.py` | the pre-B3 node planner, `mentor/dossier.py` |
+| `CODEONBOARD_GAPS` | gap recording, and `gap_kind` derived from the gaps found | the scalar `gap_kind` alone, no gaps recorded |
+
+Both replacements won, so both are now simply how the system works — and the
+code each flag switched *away* from was deleted rather than left in the tree
+where nothing could reach it. `mentor/dossier.py` still exists, holding the
+dossier rendering both planners always shared; the planner half is gone.
+
+What did **not** change is the rule those flags were held to: **a flag gates
+behaviour, never storage.** `CODEONBOARD_TUTOR` still owes it, and
+`backend/learning/store.py` still reads no environment at all —
+`tests/test_gap_model.py::test_the_persistence_path_reads_no_feature_flag`
+asserts that structurally. Gap data written under the old flag loads unchanged.

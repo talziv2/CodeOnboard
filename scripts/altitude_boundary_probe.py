@@ -1,7 +1,7 @@
 """Is `right_idea_wrong_altitude` ever used for a claim that is false at EVERY level?
 
     uv run python scripts/altitude_boundary_probe.py --dry-run
-    CODEONBOARD_GAPS=1 uv run python scripts/altitude_boundary_probe.py
+    uv run python scripts/altitude_boundary_probe.py
 
 THE PRINCIPLE UNDER TEST
     A claim that is false regardless of abstraction level should never be
@@ -61,7 +61,6 @@ import anthropic  # noqa: E402
 
 from backend.agents.grader import run as run_grader  # noqa: E402
 from backend.learning import store as learning_store  # noqa: E402
-from backend.learning.flags import gaps_enabled  # noqa: E402
 from backend.learning.graph import LearningGraph  # noqa: E402
 from backend.pipeline.state import OnboardState  # noqa: E402
 
@@ -203,10 +202,6 @@ def main() -> int:
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("ANTHROPIC_API_KEY missing", file=sys.stderr)
         return 2
-    if not gaps_enabled():
-        print("CODEONBOARD_GAPS=1 required", file=sys.stderr)
-        return 2
-
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"], timeout=180.0)
     rows = [grade(c, client) for c in CASES]
 

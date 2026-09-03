@@ -76,12 +76,16 @@ A version-2 session loads and resumes with its state exactly as it is, and
 not 404, and attempts no reconstruction. A plan rebuilt from a half-walked graph is
 not the plan; it is wherever the learner had got to, relabelled. Absent is honest.
 
-## 6. The flag gates behaviour, never storage
+## 6. A flag gates behaviour, never storage
 
-Nothing in `store.py` may read `CODEONBOARD_GAPS`. Gap data written flag-on must
-survive a flag-off load, a flag-off re-save, and be restored exactly when the flag
-returns. `tests/test_gap_model.py::test_the_persistence_path_never_reads_the_flag`
-asserts this by inspecting the module, so the contract cannot rot quietly.
+Nothing in `store.py` may read a feature flag, or the environment at all. A
+payload written flag-on must survive a flag-off load, a flag-off re-save, and be
+restored exactly when the flag returns.
+`tests/test_gap_model.py::test_the_persistence_path_reads_no_feature_flag` asserts
+this by inspecting the module, so the contract cannot rot quietly. It checks for
+the *mechanism* rather than for named variables, which is why it still holds now
+that `CODEONBOARD_GAPS` — the flag it was written for — has been removed, and why
+it covers `CODEONBOARD_TUTOR` without being told about it.
 
 ## 7. Ownership stays a required parameter
 

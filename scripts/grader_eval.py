@@ -64,10 +64,10 @@ def grade(graph: LearningGraph, node, answer: str, client) -> dict:
     """One real grading call against a one-node copy of the real graph.
 
     Returns `last_grade` plus the gaps the call opened on the isolated node.
-    Under `CODEONBOARD_GAPS=1` that list is the only place multiplicity is
-    visible: the scalar `gap_kind` reports the highest-precedence gap and says
-    nothing about how many there were, which is precisely the loss the gap model
-    exists to end. Measurement only — the isolated node is discarded.
+    That list is the only place multiplicity is visible: the scalar `gap_kind`
+    reports the highest-precedence gap and says nothing about how many there
+    were, which is precisely the loss the gap model exists to end. Measurement
+    only — the isolated node is discarded.
     """
     import copy
 
@@ -180,9 +180,7 @@ def main() -> int:
                   f"{r['actual_classification']}/{r['actual_gap']}")
             print(f"       {str(r['rationale'])[:150]}")
 
-    # Inert flag-off (no gaps are recorded), so this section reports nothing
-    # rather than being conditional on the environment.
-    print(f"\n{line}\nGAP MULTIPLICITY (CODEONBOARD_GAPS)\n{line}")
+    print(f"\n{line}\nGAP MULTIPLICITY\n{line}")
     with_gaps = [r for r in rows if r["gap_count"] > 0]
     multi = [r for r in rows if r["gap_count"] > 1]
     print(f"  cases with >=1 gap    {len(with_gaps)}/{total}")

@@ -34,8 +34,8 @@ Only what is left — judgement and language — is a model's job.
 
 ## 2. Model selection
 
-`claude-sonnet-4-6` in four modules only: `mentor/agent.py`, `curriculum.py`,
-`dossier.py`, `mutator.py` — all one-shot synthesis over a large body of evidence.
+`claude-sonnet-4-6` in two modules only: `mentor/curriculum.py` and
+`mentor/mutator.py` — both one-shot synthesis over a large body of evidence.
 `claude-haiku-4-5` everywhere else, **including every loop** (`repo/explore.py`
 says so in its header). Never Sonnet in a loop. Never Opus.
 
@@ -91,7 +91,7 @@ Then:
 ## 6. Verify — and be honest about what verification proves
 
 ```bash
-uv run pytest tests/test_teaching_agent.py tests/test_grader_agent.py tests/test_mentor_dossier.py tests/test_curriculum_planner.py tests/test_explorer_pipeline.py tests/test_anchors.py -q
+uv run pytest tests/test_teaching_agent.py tests/test_grader_agent.py tests/test_dossier_rendering.py tests/test_curriculum_planner.py tests/test_explorer_pipeline.py tests/test_anchors.py -q
 ```
 
 Then the full gate via `verify-change`.
@@ -102,10 +102,12 @@ that would show it, say what it costs, and **ask before running it** — see the
 `measure-and-record` skill. A prompt change shipped on a green unit suite is
 shipped unmeasured, and should be described that way.
 
-If a flag selects between implementations (`CODEONBOARD_CURRICULUM` picks
-`curriculum.py` over `dossier.py`), pin it explicitly in the test —
-`tests/conftest.py` deletes both flags, and the developer's `.env` sets both to
-`1`.
+If a flag selects between implementations, pin it explicitly in the test —
+`tests/conftest.py` deletes every flag it knows about, so an unpinned test runs
+the shipped default. `CODEONBOARD_TUTOR` is the only such flag now.
+`CODEONBOARD_CURRICULUM`, which picked `curriculum.py` over a second planner in
+`dossier.py`, was removed along with that planner; `curriculum.py` is the only
+planner and `dossier.py` holds the rendering it reasons over.
 
 For a substantial change, ask the **ai-pipeline-reviewer** agent to review the
 diff.

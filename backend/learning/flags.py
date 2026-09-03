@@ -1,34 +1,32 @@
-# Feature flags for the gap model and the Tutor.
+# The Tutor's feature flag — the only one the backend reads.
 #
-# `CODEONBOARD_GAPS` follows the pattern `CODEONBOARD_CURRICULUM` established:
-# default off, the two models coexist rather than one replacing the other
-# mid-phase, and a session written under either setting stays loadable under
-# both.
+# There were three. `CODEONBOARD_CURRICULUM` and `CODEONBOARD_GAPS` were
+# migration flags, default off, each keeping a superseded implementation
+# reachable while the replacement was measured. Both replacements won and both
+# flags are gone: the objective-first planner and the gap model are simply how
+# the system works, and the code they switched away from has been deleted
+# rather than left unreachable.
 #
-# `CODEONBOARD_TUTOR` no longer follows it. It is DEFAULT ON, and it is read
-# `!= "0"` rather than `== "1"` — see `tutor_enabled` for why the direction of
-# the comparison is the whole point.
+# `CODEONBOARD_TUTOR` never followed that pattern. It is DEFAULT ON, and it is
+# read `!= "0"` rather than `== "1"` — see `tutor_enabled` for why the direction
+# of the comparison is the whole point.
 #
-# THE CONTRACT (gap-model.md §3.8), unchanged by any default:
+# THE CONTRACT (gap-model.md §3.8), which outlived the two flags that had it:
 #
 #   The flag gates BEHAVIOUR. It never gates STORAGE.
 #
 # Nothing in `backend/learning/store.py` may call this module. That is what
-# makes the round-trip guarantees true by construction rather than by care:
-# gap data written under the flag survives a flag-off load, a flag-off re-save,
-# and is restored exactly when the flag comes back on — because no code path
-# between the graph and the database ever asks whether the flag is set.
+# makes the round-trip guarantees true by construction rather than by care: a
+# conversation written under the flag survives a flag-off load, a flag-off
+# re-save, and is restored exactly when the flag comes back on — because no
+# code path between the graph and the database ever asks whether it is set.
 #
-# `tests/test_gap_model.py::test_the_persistence_path_never_reads_the_flag` and
 # `tests/test_tutor_store.py::test_the_persistence_path_never_reads_the_tutor_flag`
-# assert this structurally, so the contract cannot rot silently.
+# asserts this structurally, so the contract cannot rot silently. Gap data
+# earned the same guarantee under `CODEONBOARD_GAPS` and keeps it for free:
+# with no flag to consult, there is nothing left to get wrong.
 
 import os
-
-
-def gaps_enabled() -> bool:
-    """Is gap-model BEHAVIOUR active? Never consult this when persisting."""
-    return os.environ.get("CODEONBOARD_GAPS", "0") == "1"
 
 
 def tutor_enabled() -> bool:

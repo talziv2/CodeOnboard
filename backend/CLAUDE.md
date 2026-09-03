@@ -50,8 +50,8 @@ because forgetting is the failure mode, and
 restore the plan rather than a contaminated copy of the walk, and why
 anything not in the plan is gone by construction. Prefer an additive nullable
 column in `_ADDITIVE_COLUMNS` to a `SCHEMA_VERSION` bump: a bump makes earlier
-sessions **invisible**, not migrated. Nothing in `store.py` may read
-`CODEONBOARD_GAPS` — the flag gates behaviour, never storage.
+sessions **invisible**, not migrated. Nothing in `store.py` may read a feature
+flag, or the environment at all — a flag gates behaviour, never storage (D19).
 
 ## Errors
 
