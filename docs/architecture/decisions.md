@@ -293,14 +293,20 @@ must be revisited.
 
 ---
 
-## D19 — The flag gates behaviour, never storage
+## D19 — A flag gates behaviour, never storage
 
-**Rule.** Nothing in `backend/learning/store.py` reads `CODEONBOARD_GAPS`. Gap
-data written under the flag survives a flag-off load, a flag-off re-save, and is
-restored exactly when the flag comes back on.
+**Rule.** Nothing in `backend/learning/store.py` reads a feature flag, or the
+environment at all. A payload written with a flag on survives a flag-off load, a
+flag-off re-save, and is restored exactly when the flag comes back on.
 
-**Prevents.** Silent data loss on a setting change. A test asserts this
-structurally, so the contract cannot rot.
+**Prevents.** Silent data loss on a setting change. Asserted structurally — as
+"reads no environment and imports no flags module" rather than as a list of flag
+names, which is why it outlived the flag it was written for.
+
+**Written for `CODEONBOARD_GAPS`, now held by `CODEONBOARD_TUTOR`.** The gaps
+flag has been removed and gap recording is unconditional, so gap data cannot be
+switched off at all; `tutor_json` is the payload the rule currently protects.
+The name-agnostic form means the next flag is covered before it is added.
 
 ---
 

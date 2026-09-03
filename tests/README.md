@@ -28,17 +28,22 @@ is committed to `docs/planning/phases/evidence/`.
 
 ## 2. `conftest.py` — two suite-wide fixtures
 
-**Ambient flags are neutralised for every test.** `CODEONBOARD_CURRICULUM` and
-`CODEONBOARD_GAPS` are deleted from the environment, so a test that depends on one
-has to say which and how.
+**Ambient flags are neutralised for every test.** `CODEONBOARD_TUTOR`, the only
+behaviour flag left, is deleted from the environment, so a test that depends on it
+has to say how. *Neutralised* means **unset**, so it falls to its shipped default
+of `1` rather than to off.
 
 This exists because of a real failure that is worth knowing: `test_mentor_dossier.py`
 failed 14 tests on any full-suite run and passed all of them in isolation.
 `backend/api.py` loaded `.env` at import time with `override=True`; the developer's
-`.env` carries `CODEONBOARD_CURRICULUM=1`; so any test file importing the API
+`.env` carried `CODEONBOARD_CURRICULUM=1`; so any test file importing the API
 silently switched the planner for every test that ran afterwards. The fix was not
 to pin the flag in the one file that broke — the failure was that **an ambient
 value decided which code path ran, and nothing in the suite said so.**
+
+That flag has since been removed, and so has the planner it selected; the
+rendering tests that survived that file are in `test_dossier_rendering.py`. The
+fixture is not vestigial — the shape of the failure is what it guards.
 
 **Every test runs as one fixed user by default.** Sixteen files drive session
 routes, and every one now requires a signed-in caller. This is a **real user id
@@ -81,7 +86,7 @@ uv run pytest tests/ --deselect "tests/test_gap_understanding.py::test_every_sto
 | Test | Guards |
 |---|---|
 | `test_route_authz_coverage.py` | Fails the build when a route declares neither an auth dependency nor membership of `PUBLIC_PATHS`. It catches the route somebody adds without reading the ownership rules |
-| `test_gap_model.py::test_the_persistence_path_never_reads_the_flag` | Asserts **structurally** that nothing in the persistence path consults `CODEONBOARD_GAPS`, so the flag/storage contract cannot rot silently |
+| `test_gap_model.py::test_the_persistence_path_reads_no_feature_flag` | Asserts **structurally** that nothing in the persistence path reads the environment or imports `flags.py`, so the flag/storage contract (D19) cannot rot silently. Name-agnostic, which is why it outlived `CODEONBOARD_GAPS` |
 | `test_gap_understanding.py` (AST check) | Asserts nothing re-derives the understanding state outside `graph.understanding_of()` |
 
 `test_progress.py` is the other one worth reading before changing anything nearby:
@@ -95,7 +100,7 @@ when evidence changes.
 | Area | Files |
 |---|---|
 | Repository understanding | `test_chunker`, `test_skeleton`, `test_anchors`, `test_tools`, `test_explore`, `test_survey`, `test_investigation`, `test_structure`, `test_cloner`, `test_repo_identity`, `test_repo_layout_migration` |
-| Agents | `test_goal_agent`, `test_documentation_agent`, `test_reviewer_agent`, `test_mentor_dossier`, `test_curriculum_planner`, `test_curriculum`, `test_briefing`, `test_teaching_agent`, `test_teaching_forms`, `test_grader_agent`, `test_grader_gaps`, `test_mutator`, `test_prerequisite_diagnosis` |
+| Agents | `test_goal_agent`, `test_documentation_agent`, `test_reviewer_agent`, `test_dossier_rendering`, `test_curriculum_planner`, `test_curriculum`, `test_briefing`, `test_teaching_agent`, `test_teaching_forms`, `test_grader_agent`, `test_grader_gaps`, `test_mutator`, `test_prerequisite_diagnosis` |
 | Orchestration | `test_explorer_pipeline`, `test_pipeline_progress` |
 | Learning model | `test_learning_graph`, `test_progress`, `test_understanding`, `test_history`, `test_patterns`, `test_gap_insight`, `test_scope`, `test_decision_is_not_evidence`, `test_attempt_history`, `test_question_traceability` |
 | Gap model | `test_gap_model`, `test_gap_adaptation`, `test_gap_verification`, `test_gap_understanding`, `test_gap_remediation`, `test_gap_remediation_rounds`, `test_gap_intents`, `test_gap_api` |

@@ -31,9 +31,15 @@ Plus the pieces that respond to a graded answer:
 | `teaching/reassess.py` | A fresh question aimed at the **objective**. Ships no answer |
 | `grader/verification.py` | Grades a verification answer. The **only** producer of `verified` |
 
-Inside `mentor/`, `curriculum.py` is the objective-first planner
-(`CODEONBOARD_CURRICULUM=1`) and `dossier.py` is the pre-B3 planner (the default).
-`agent.py` owns the wire format, graph construction and the dispatch between them.
+Inside `mentor/`, `curriculum.py` is the planner — the only one. `dossier.py`
+turns an Investigation Dossier into the prompt text it reasons over and computes
+the evidence ranges grounding checks against. `agent.py` owns the wire format,
+graph construction and the delegation.
+
+`dossier.py` used to hold a second, pre-B3 planner as well, selected by
+`CODEONBOARD_CURRICULUM=0`. That flag and that planner were both removed once the
+objective-first planner won: a planner nothing could reach was a choice the
+package advertised and could not honour.
 
 ---
 

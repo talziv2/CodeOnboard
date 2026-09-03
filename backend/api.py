@@ -101,11 +101,17 @@ from backend.repo.cloner import (
 # gaps ON if `.env` said `1` — the opposite of what the person typing it asked for,
 # with nothing to indicate it.
 #
-# It also cost fourteen test failures. `.env` carries `CODEONBOARD_CURRICULUM=1` for
+# It also cost fourteen test failures. `.env` carried `CODEONBOARD_CURRICULUM=1` for
 # manual E2E runs, and this line runs at IMPORT time, so any test file that imported
 # the API switched the Mentor's planner for every test after it (see
 # `tests/conftest.py`). The suite is isolated from that now, but the isolation was
 # treating a symptom of this line.
+#
+# Both of those flags have since been removed — the planner and the gap model they
+# selected are now simply how the system works. `CODEONBOARD_TUTOR` is the only
+# behaviour flag left, and it is exactly the kind this line still protects: it
+# defaults ON, so a `.env` that turns it off must not beat a command line that turns
+# it back on.
 #
 # Default precedence — real environment first, file second — is what makes both the
 # command line and the file usable for what each is for: the file for the values

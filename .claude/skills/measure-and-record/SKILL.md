@@ -49,10 +49,13 @@ before spending anything.
 ## 3. Run it correctly
 
 - **State the cost and get agreement** before the live run.
-- **Pin the flags explicitly.** `CODEONBOARD_CURRICULUM` and `CODEONBOARD_GAPS`
-  are `1` in the developer's `.env`; a measurement that does not say which
-  configuration it ran under is not evidence. Note that `.env` **fills gaps and
-  does not win**, so a variable set on the command line takes precedence.
+- **Say which configuration it ran under**, or it is not evidence. There is far
+  less to pin than there was: `CODEONBOARD_CURRICULUM` and `CODEONBOARD_GAPS` have
+  been removed, so the planner and the gap model are no longer variables — every
+  run gets both. `CODEONBOARD_TUTOR` is the only flag left, and it defaults on.
+  Note that `.env` **fills gaps and does not win**, so a variable set on the
+  command line takes precedence. Evidence already on file that names the old flags
+  is still valid for the configuration it names; do not restate it as current.
 - **Never point one at `data/sessions.db`.** `smoke_multiuser.py` and
   `seed_ux_fixture.py` refuse it; anything new should too.
 - Run the backend **without `--reload`** for anything that drives

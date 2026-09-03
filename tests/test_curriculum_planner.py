@@ -6,8 +6,9 @@ The deterministic half lives in test_curriculum.py. What must hold here: every
 anchor on every unit is verified — not just the displayed one — and the display
 columns always equal one member of `anchors`; a multi-anchor `flow` unit is
 expressible at all (impossible before B3); planned prerequisite edges exist on a
-fresh graph; areas reach the graph and survive SQLite; and the two flags are
-orthogonal, with `CODEONBOARD_CURRICULUM=0` still running the old planner.
+fresh graph; areas reach the graph and survive SQLite; and `mentor.run` routes
+here, which it now does unconditionally — `CODEONBOARD_CURRICULUM` and the
+pre-B3 planner it selected are both gone.
 
 No network: scripted fake client, real temporary checkout.
 """
@@ -25,7 +26,9 @@ from backend.learning import store as learning_store
 from backend.pipeline.state import OnboardState
 from backend.repo.skeleton import build_skeleton
 
-from tests.test_mentor_dossier import DOSSIER, FILES, GOAL
+# Shared with the rendering tests: one dossier and one temporary checkout, so a
+# planner test and a rendering test cannot silently disagree about the evidence.
+from tests.test_dossier_rendering import DOSSIER, FILES, GOAL
 
 
 @pytest.fixture
@@ -36,11 +39,6 @@ def repo(tmp_path: Path) -> str:
         path.write_text(body, encoding="utf-8")
     build_skeleton.cache_clear()
     return str(tmp_path)
-
-
-@pytest.fixture(autouse=True)
-def _curriculum_on(monkeypatch):
-    monkeypatch.setenv("CODEONBOARD_CURRICULUM", "1")
 
 
 class FakeClient:
@@ -359,32 +357,16 @@ def test_a_planner_admitting_incomplete_coverage_caps_confidence(repo):
     assert any("incomplete coverage" in e for e in state.errors)
 
 
-# ── the flag ──────────────────────────────────────────────────────────────────
+# ── routing ───────────────────────────────────────────────────────────────────
 
-def test_the_flag_defaults_to_the_old_planner(monkeypatch):
-    monkeypatch.delenv("CODEONBOARD_CURRICULUM", raising=False)
-    assert mentor_agent.curriculum_enabled() is False
+def test_mentor_run_routes_here(repo):
+    """There is one planner, and `mentor.run` reaches it with no flag set.
 
-
-def test_flag_off_runs_the_pre_b3_planner(repo, monkeypatch):
-    monkeypatch.setenv("CODEONBOARD_CURRICULUM", "0")
-    state = make_state(repo)
-    # The old planner's wire shape, which the new one would reject outright.
-    old_wire = json.dumps({
-        "nodes": [{
-            "id": "n1", "title": "Old planner node", "file": "src/app/auth.py",
-            "symbol": "sign", "line_start": None, "line_end": None,
-            "why": "w", "understand": "u", "concept_tags": ["component"],
-        }],
-        "edges": [],
-        "confidence": "high",
-    })
-    mentor_agent.run(state, FakeClient(old_wire))
-    assert [n.title for n in state.graph.nodes.values()] == ["Old planner node"]
-    assert state.graph.areas == []
-
-
-def test_flag_on_routes_through_the_curriculum_planner(repo):
+    This used to be a pair — one test for each side of `CODEONBOARD_CURRICULUM`,
+    plus a third asserting the flag defaulted off. The flag is gone and so is the
+    planner it defaulted to, so what is left to pin is that the delegation still
+    happens: a graph with `areas` on it can only have come from this planner.
+    """
     state = make_state(repo)
     mentor_agent.run(state, FakeClient(response(DEFAULT)))
     assert state.graph.areas != []

@@ -7,8 +7,9 @@ gap-model.md M2. What M2 must prove is narrower than it looks:
   2. The scalar `gap_kind` still says exactly what the single-gap Grader said —
      because everything downstream (`/respond`, the attempt record, the
      Mutator's `Diagnosis`, `adaptation.decide`) still reads it.
-  3. Flag-off, nothing changed at all. Not "changed compatibly" — the prompt is
-     byte-identical and no gap is recorded.
+  3. The gap addendum is exactly an addendum — the prompt is the base text plus
+     that block and nothing else, which is what makes the recorded 48-case
+     evaluation of the base prompt still readable against today's.
 
 Arbitration order is asserted here too (§18.12 test 2), because it is a pure
 function of the vocabulary and this is where it first has a consumer.
@@ -17,8 +18,6 @@ Run with: uv run pytest tests/test_grader_gaps.py -v
 """
 import json
 from unittest.mock import MagicMock
-
-import pytest
 
 from tests.conftest import TEST_USER_ID
 
@@ -51,21 +50,6 @@ OBJECTIVE = "Explain what data a Node holds and what solution() reconstructs fro
 # one response, two independent false claims, both `wrong_model`.
 CLAIM_A = "child path_cost and depth are filled in later by the search algorithm"
 CLAIM_B = "solution() returns both the states and the actions"
-
-
-@pytest.fixture(autouse=True)
-def _flag_off(monkeypatch):
-    """Default every test to flag-off, so a test that wants gaps says so.
-
-    The env var leaks between tests otherwise, and a gap test that passes only
-    because a previous test set the flag is worse than no test.
-    """
-    monkeypatch.delenv("CODEONBOARD_GAPS", raising=False)
-
-
-@pytest.fixture
-def flag_on(monkeypatch):
-    monkeypatch.setenv("CODEONBOARD_GAPS", "1")
 
 
 def _state() -> tuple[OnboardState, str]:
@@ -204,48 +188,26 @@ def test_gap_out_can_reference_an_id_but_never_mint_one():
     assert GapOut(kind="wrong_model", claim="x").refers_to == "new"
 
 
-# ── the flag: off changes nothing ────────────────────────────────────────────
+# ── the addendum is exactly an addendum ──────────────────────────────────────
 
 
-def test_flag_off_adds_nothing_to_the_prompt():
-    """Flag-off, the Grader sends the base prompt and not one byte more.
+def test_the_prompt_is_the_base_text_plus_the_addendum():
+    """Gap detection is *additive*, and the seam is load-bearing evidence.
 
-    This is the flag contract at the prompt layer: gap detection is *additive*,
-    so anything flag-off sees is the base prompt's own behaviour and can be
-    reasoned about without reference to this phase. (The base prompt is not
-    frozen — the `no_attempt` / `missing_prerequisite` boundary was corrected as
-    a standalone defect, which is why this asserts "adds nothing" rather than
-    "equals the pre-M2 text".)
+    `CODEONBOARD_GAPS` used to make this a pair — one test per side, proving the
+    flag-off prompt was the base text and not one byte more. The flag is gone and
+    gap detection is unconditional, but the concatenation is still asserted here
+    because the recorded 48-case grader evaluation was run against exactly this
+    seam: keep the two halves separable and the old numbers stay comparable to
+    the current prompt.
     """
-    assert _system_prompt() == _SYSTEM_PROMPT
-    assert _GAPS_ADDENDUM not in _system_prompt()
-
-
-def test_flag_on_appends_the_addendum_and_nothing_else(flag_on):
     assert _system_prompt() == _SYSTEM_PROMPT + _GAPS_ADDENDUM
-
-
-def test_flag_off_records_no_gaps_even_if_the_model_volunteers_them():
-    state, node_id = _state()
-    run(state, "wrong", client=_client(
-        "confused", gaps=[_gap("wrong_model", CLAIM_A)], gap_kind="wrong_model",
-    ))
-    assert state.graph.nodes[node_id].gaps == []
-    # And the scalar is untouched — the pre-M2 path exactly.
-    assert state.last_grade["gap_kind"] == "wrong_model"
-
-
-def test_flag_off_the_grader_still_grades():
-    """The classification path is unaffected by any of this."""
-    state, node_id = _state()
-    run(state, "right", client=_client("understood", gap_kind="none"))
-    assert state.graph.nodes[node_id].understanding_state == "understood"
 
 
 # ── detection: several gaps from one answer ──────────────────────────────────
 
 
-def test_two_misconceptions_of_the_same_kind_become_two_gaps(flag_on):
+def test_two_misconceptions_of_the_same_kind_become_two_gaps():
     """The traced case. Under the scalar field one of these had nowhere to live."""
     state, node_id = _state()
     run(state, "…", client=_client("confused", gaps=[
@@ -259,7 +221,7 @@ def test_two_misconceptions_of_the_same_kind_become_two_gaps(flag_on):
     assert all(g.status == "open" for g in gaps)
 
 
-def test_recorded_gaps_carry_our_id_and_the_objective_key(flag_on):
+def test_recorded_gaps_carry_our_id_and_the_objective_key():
     state, node_id = _state()
     run(state, "…", client=_client("confused", gaps=[_gap("wrong_model", CLAIM_A)]))
     gap = state.graph.nodes[node_id].gaps[0]
@@ -268,7 +230,7 @@ def test_recorded_gaps_carry_our_id_and_the_objective_key(flag_on):
     assert gap.opened_at
 
 
-def test_foundational_is_recorded_as_observed(flag_on):
+def test_foundational_is_recorded_as_observed():
     """Observed by the model; `blocking` is still computed from `kind`."""
     state, node_id = _state()
     run(state, "…", client=_client("confused", gaps=[
@@ -279,7 +241,7 @@ def test_foundational_is_recorded_as_observed(flag_on):
     assert gap.is_blocking is True  # derived from kind, not from foundational
 
 
-def test_a_non_blocking_kind_is_still_recorded(flag_on):
+def test_a_non_blocking_kind_is_still_recorded():
     """`right_idea_wrong_altitude` is a real gap that does not block."""
     state, node_id = _state()
     run(state, "…", client=_client("partial", gaps=[
@@ -290,7 +252,7 @@ def test_a_non_blocking_kind_is_still_recorded(flag_on):
     assert gap.is_open is True
 
 
-def test_gaps_are_recorded_even_when_the_answer_is_understood(flag_on):
+def test_gaps_are_recorded_even_when_the_answer_is_understood():
     """The loss-point-5 precondition.
 
     M7 makes an open blocking gap prevent `understood`; it can only do that if
@@ -305,7 +267,7 @@ def test_gaps_are_recorded_even_when_the_answer_is_understood(flag_on):
 # ── the derived scalar ───────────────────────────────────────────────────────
 
 
-def test_one_gap_derives_exactly_the_single_gap_graders_answer(flag_on):
+def test_one_gap_derives_exactly_the_single_gap_graders_answer():
     """The M2 compatibility invariant, stated as directly as it can be."""
     for kind in ("missing_prerequisite", "wrong_model", "right_idea_wrong_altitude"):
         state, _ = _state()
@@ -313,7 +275,7 @@ def test_one_gap_derives_exactly_the_single_gap_graders_answer(flag_on):
         assert state.last_grade["gap_kind"] == kind
 
 
-def test_the_scalar_is_the_highest_precedence_gap_not_the_first(flag_on):
+def test_the_scalar_is_the_highest_precedence_gap_not_the_first():
     state, _ = _state()
     run(state, "…", client=_client("confused", gaps=[
         _gap("right_idea_wrong_altitude", "too low"),
@@ -322,7 +284,7 @@ def test_the_scalar_is_the_highest_precedence_gap_not_the_first(flag_on):
     assert state.last_grade["gap_kind"] == "missing_prerequisite"
 
 
-def test_the_derived_scalar_overrides_what_the_model_claimed(flag_on):
+def test_the_derived_scalar_overrides_what_the_model_claimed():
     """Models observe, code decides — including about its own scalar."""
     state, _ = _state()
     run(state, "…", client=_client(
@@ -333,7 +295,7 @@ def test_the_derived_scalar_overrides_what_the_model_claimed(flag_on):
     assert state.last_grade["gap_kind"] == "missing_prerequisite"
 
 
-def test_the_scalar_describes_this_answer_not_the_accumulated_node(flag_on):
+def test_the_scalar_describes_this_answer_not_the_accumulated_node():
     """A gap left by an earlier attempt must not relabel a later answer.
 
     The scalar is carried into the attempt record and the Mutator's `Diagnosis`,
@@ -353,7 +315,7 @@ def test_the_scalar_describes_this_answer_not_the_accumulated_node(flag_on):
     assert len(state.graph.nodes[node_id].gaps) == 2  # both still open
 
 
-def test_origin_attempt_points_at_the_attempt_about_to_be_recorded(flag_on):
+def test_origin_attempt_points_at_the_attempt_about_to_be_recorded():
     """The audit link between a gap and the answer that opened it."""
     state, node_id = _state()
     node = state.graph.nodes[node_id]
@@ -366,7 +328,7 @@ def test_origin_attempt_points_at_the_attempt_about_to_be_recorded(flag_on):
 # ── what must never become a gap ─────────────────────────────────────────────
 
 
-def test_off_topic_opens_no_gaps_whatever_the_model_listed(flag_on):
+def test_off_topic_opens_no_gaps_whatever_the_model_listed():
     """F2 one layer up: declining to guess must not earn a sticky penalty."""
     state, node_id = _state()
     run(state, "no idea", client=_client("off-topic", gap_kind="no_attempt", gaps=[
@@ -376,7 +338,7 @@ def test_off_topic_opens_no_gaps_whatever_the_model_listed(flag_on):
     assert state.last_grade["gap_kind"] == "no_attempt"
 
 
-def test_no_attempt_and_none_are_dropped_as_gap_kinds(flag_on):
+def test_no_attempt_and_none_are_dropped_as_gap_kinds():
     state, node_id = _state()
     run(state, "…", client=_client("partial", gap_kind="no_attempt", gaps=[
         _gap("no_attempt", "did not try"), _gap("none", "nothing"),
@@ -386,7 +348,7 @@ def test_no_attempt_and_none_are_dropped_as_gap_kinds(flag_on):
     assert state.last_grade["gap_kind"] == "no_attempt"
 
 
-def test_an_unknown_kind_is_dropped_without_losing_the_others(flag_on):
+def test_an_unknown_kind_is_dropped_without_losing_the_others():
     state, node_id = _state()
     run(state, "…", client=_client("confused", gaps=[
         _gap("severity_9", "invented"), _gap("wrong_model", CLAIM_A),
@@ -396,7 +358,7 @@ def test_an_unknown_kind_is_dropped_without_losing_the_others(flag_on):
     assert state.last_grade["gap_kind"] == "wrong_model"
 
 
-def test_an_empty_claim_is_dropped(flag_on):
+def test_an_empty_claim_is_dropped():
     """A gap with no claim is not a misconception, it is a blank."""
     state, node_id = _state()
     run(state, "…", client=_client("confused", gaps=[
@@ -405,7 +367,7 @@ def test_an_empty_claim_is_dropped(flag_on):
     assert [g.claim for g in state.graph.nodes[node_id].gaps] == [CLAIM_B]
 
 
-def test_a_grading_failure_records_no_gaps(flag_on):
+def test_a_grading_failure_records_no_gaps():
     """The fallback verdict is `partial` with no diagnosis — and no gap."""
     state, node_id = _state()
     client = MagicMock()
@@ -430,7 +392,7 @@ def _with_two_open_gaps() -> tuple[OnboardState, str, Gap, Gap]:
     return state, node_id, a, b
 
 
-def test_a_first_detection_shows_no_open_gaps_section(flag_on):
+def test_a_first_detection_shows_no_open_gaps_section():
     """No section, no ids: a first detection is recognisably not a re-grade."""
     state, _ = _state()
     client = _client("confused", gaps=[_gap("wrong_model", CLAIM_A)])
@@ -438,7 +400,7 @@ def test_a_first_detection_shows_no_open_gaps_section(flag_on):
     assert "OPEN GAPS" not in _sent_user_content(client)
 
 
-def test_a_re_grade_shows_every_open_gap_with_its_id(flag_on):
+def test_a_re_grade_shows_every_open_gap_with_its_id():
     state, _, a, b = _with_two_open_gaps()
     client = _client("partial")
     run(state, "another go", client=client)
@@ -449,7 +411,7 @@ def test_a_re_grade_shows_every_open_gap_with_its_id(flag_on):
         assert gap.claim in sent
 
 
-def test_settled_gaps_are_never_offered_for_matching(flag_on):
+def test_settled_gaps_are_never_offered_for_matching():
     """A verified gap is closed and a waived one is set aside; neither is a
     candidate for 'the developer said this again'."""
     state, node_id, a, b = _with_two_open_gaps()
@@ -462,15 +424,7 @@ def test_settled_gaps_are_never_offered_for_matching(flag_on):
     assert a.id not in sent and b.id not in sent
 
 
-def test_flag_off_never_shows_open_gaps(monkeypatch):
-    """The flag contract holds on the user message too, not just the system prompt."""
-    state, node_id, a, _ = _with_two_open_gaps()
-    client = _client("partial")
-    run(state, "…", client=client)
-    assert a.id not in _sent_user_content(client)
-
-
-def test_a_matched_id_does_not_duplicate_the_gap(flag_on):
+def test_a_matched_id_does_not_duplicate_the_gap():
     """The point of identity: one misconception stays one gap across attempts."""
     state, node_id, a, b = _with_two_open_gaps()
     run(state, "same mistake again", client=_client("confused", gaps=[
@@ -481,7 +435,7 @@ def test_a_matched_id_does_not_duplicate_the_gap(flag_on):
     assert state.last_grade["gap_report"] == {"matched": 1, "new": 0, "rejected": 0}
 
 
-def test_a_matched_gap_keeps_its_id_and_its_original_claim(flag_on):
+def test_a_matched_gap_keeps_its_id_and_its_original_claim():
     """A gap id never changes, and a re-report does not rewrite the record."""
     state, node_id, a, _ = _with_two_open_gaps()
     run(state, "…", client=_client("confused", gaps=[
@@ -492,7 +446,7 @@ def test_a_matched_gap_keeps_its_id_and_its_original_claim(flag_on):
     assert same.status == "open"
 
 
-def test_a_new_declaration_mints_alongside_the_open_ones(flag_on):
+def test_a_new_declaration_mints_alongside_the_open_ones():
     state, node_id, a, b = _with_two_open_gaps()
     run(state, "…", client=_client("confused", gaps=[
         _gap("wrong_model", "a third, different false claim", refers_to="new"),
@@ -502,7 +456,7 @@ def test_a_new_declaration_mints_alongside_the_open_ones(flag_on):
     assert state.last_grade["gap_report"] == {"matched": 0, "new": 1, "rejected": 0}
 
 
-def test_matched_and_new_in_one_answer(flag_on):
+def test_matched_and_new_in_one_answer():
     state, node_id, a, b = _with_two_open_gaps()
     run(state, "…", client=_client("confused", gaps=[
         _gap("wrong_model", "still wrong about the same thing", refers_to=b.id),
@@ -512,7 +466,7 @@ def test_matched_and_new_in_one_answer(flag_on):
     assert state.last_grade["gap_report"] == {"matched": 1, "new": 1, "rejected": 0}
 
 
-def test_an_invented_id_is_rejected_and_changes_nothing(flag_on):
+def test_an_invented_id_is_rejected_and_changes_nothing():
     """§18.12 test 12. Not minted as new either: an entry claiming to be an
     existing gap is a claim we cannot verify, and guessing is worse than losing
     it."""
@@ -526,7 +480,7 @@ def test_an_invented_id_is_rejected_and_changes_nothing(flag_on):
     assert state.last_grade["gap_report"] == {"matched": 0, "new": 0, "rejected": 1}
 
 
-def test_one_rejected_entry_does_not_cost_the_others(flag_on):
+def test_one_rejected_entry_does_not_cost_the_others():
     state, node_id, a, _ = _with_two_open_gaps()
     run(state, "…", client=_client("confused", gaps=[
         _gap("wrong_model", "bogus reference", refers_to="not-an-id"),
@@ -537,7 +491,7 @@ def test_one_rejected_entry_does_not_cost_the_others(flag_on):
     assert state.last_grade["classification"] == "confused"
 
 
-def test_an_id_is_ignored_when_no_list_was_offered(flag_on):
+def test_an_id_is_ignored_when_no_list_was_offered():
     """First detection: we showed no ids, so none can be legitimately named.
 
     Rejecting here would lose a real first detection over a field the model was
@@ -551,7 +505,7 @@ def test_an_id_is_ignored_when_no_list_was_offered(flag_on):
     assert state.last_grade["gap_report"] == {"matched": 0, "new": 1, "rejected": 0}
 
 
-def test_the_scalar_reflects_a_matched_gap_with_nothing_new(flag_on):
+def test_the_scalar_reflects_a_matched_gap_with_nothing_new():
     """Repeating an old misconception is still why THIS answer fell short."""
     state, node_id = _state()
     node = state.graph.nodes[node_id]
@@ -563,7 +517,7 @@ def test_the_scalar_reflects_a_matched_gap_with_nothing_new(flag_on):
     assert state.last_grade["gap_kind"] == "missing_prerequisite"
 
 
-def test_an_unreported_open_gap_is_left_open_and_untouched(flag_on):
+def test_an_unreported_open_gap_is_left_open_and_untouched():
     """§18.5: 'What happens to the rest. Nothing.' Silence is not resolution."""
     state, node_id, a, b = _with_two_open_gaps()
     run(state, "…", client=_client("partial", gaps=[
@@ -574,13 +528,19 @@ def test_an_unreported_open_gap_is_left_open_and_untouched(flag_on):
     assert untouched.resolved_by is None
 
 
-def test_gap_report_is_absent_flag_off():
+def test_gap_report_is_always_present():
+    """It used to be absent flag-off, which is why the key was optional.
+
+    Nothing reads it — it exists so the re-grade duplication rate is observable
+    in a harness. With recording unconditional it is unconditional too, and a
+    harness can stop asking whether the key is there.
+    """
     state, _ = _state()
     run(state, "…", client=_client("confused", gaps=[_gap("wrong_model", CLAIM_A)]))
-    assert "gap_report" not in state.last_grade
+    assert state.last_grade["gap_report"]["new"]
 
 
-def test_two_same_kind_gaps_survive_save_load_and_a_re_grade(flag_on, tmp_path):
+def test_two_same_kind_gaps_survive_save_load_and_a_re_grade(tmp_path):
     """§18.12 test 11, end to end through the store.
 
     Two `wrong_model` gaps go in, a round trip happens, the reloaded graph is
@@ -614,7 +574,7 @@ def test_two_same_kind_gaps_survive_save_load_and_a_re_grade(flag_on, tmp_path):
 # ── persistence, end to end through the store ────────────────────────────────
 
 
-def test_detected_gaps_survive_a_save_and_load(flag_on, tmp_path):
+def test_detected_gaps_survive_a_save_and_load(tmp_path):
     """Detection is only useful if it lands in the database intact."""
     from backend.learning import store as learning_store
 

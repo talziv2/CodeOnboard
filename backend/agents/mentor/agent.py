@@ -7,8 +7,9 @@
 #   - flattening the graph back to the Phase-1 `learning_path` list, which the
 #     /onboard response still returns.
 #
-# The planning itself lives in `dossier.py`, which reasons over the Investigation
-# Dossier. `run()` here is the single entry point every caller keeps using.
+# The planning itself lives in `curriculum.py`, which reasons over the
+# Investigation Dossier objectives-first. `run()` here is the single entry point
+# every caller keeps using.
 #
 # Mirrors every other agent: client injected, errors appended to state.errors,
 # never raises.
@@ -26,27 +27,6 @@ from backend.learning.graph import (
 )
 from backend.pipeline.state import OnboardState
 from backend.repo.skeleton import normalize_path
-
-
-MODEL = "claude-sonnet-4-6"
-MAX_TOKENS = 4096
-
-
-def curriculum_enabled() -> bool:
-    """Whether to plan objectives-first (B3) or with the pre-B3 node planner.
-
-    `0` is the old planner, byte-identical — the migration discipline this
-    codebase already used for the repository-understanding rewrite. Both paths
-    produce a `LearningGraph` whose new fields are optional keys in JSON that
-    already existed, so a graph from either path loads under either setting, and
-    Teaching and the Grader have one implementation each (§12).
-
-    Read per call rather than cached at import so tests can flip it with
-    monkeypatch, which is the only place it changes mid-process.
-    """
-    import os
-
-    return os.environ.get("CODEONBOARD_CURRICULUM", "0") == "1"
 
 
 # ── Wire-format Pydantic models ────────────────────────────────────────────────
@@ -231,11 +211,6 @@ def run(
         state.errors.append("mentor_agent: no investigation to plan from")
         return state
 
-    if curriculum_enabled():
-        from backend.agents.mentor import curriculum
+    from backend.agents.mentor import curriculum
 
-        return curriculum.run(state, client)
-
-    from backend.agents.mentor import dossier as dossier_path
-
-    return dossier_path.run_native(state, client)
+    return curriculum.run(state, client)

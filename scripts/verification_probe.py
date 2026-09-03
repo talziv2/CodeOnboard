@@ -1,7 +1,7 @@
 """M6 / AC2 — is the verification question actually a new application?
 
     uv run python scripts/verification_probe.py --dry-run
-    CODEONBOARD_GAPS=1 uv run python scripts/verification_probe.py
+    uv run python scripts/verification_probe.py
 
 gap-model.md AC2 requires two things and says the second cannot be asserted:
 
@@ -58,7 +58,6 @@ from backend.agents.grader import verification  # noqa: E402
 from backend.agents.teaching import verify as teaching_verify  # noqa: E402
 from backend.agents.teaching.agent import _read_node_source  # noqa: E402
 from backend.learning import store as learning_store  # noqa: E402
-from backend.learning.flags import gaps_enabled  # noqa: E402
 from backend.learning.gaps import Gap  # noqa: E402
 from backend.learning.graph import LearningGraph  # noqa: E402
 from backend.pipeline.state import OnboardState  # noqa: E402
@@ -193,10 +192,6 @@ def main() -> int:
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("ANTHROPIC_API_KEY missing", file=sys.stderr)
         return 2
-    if not gaps_enabled():
-        print("CODEONBOARD_GAPS=1 required", file=sys.stderr)
-        return 2
-
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"], timeout=180.0)
     line = "─" * 78
     rows = []

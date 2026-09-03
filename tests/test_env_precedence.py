@@ -9,9 +9,16 @@ variable set where the process was launched was silently discarded.
 nothing to indicate it.
 
 And because that call runs at IMPORT time, the same line cost fourteen test
-failures in `test_mentor_dossier.py` — a file that imports the API turned the
-Mentor's planner on for every test after it. `tests/conftest.py` isolates the suite
-from ambient flags, but that isolation was treating a symptom of this.
+failures in what is now `test_dossier_rendering.py` — a file that imports the API
+turned the Mentor's planner on for every test after it. `tests/conftest.py`
+isolates the suite from ambient flags, but that isolation was treating a symptom
+of this.
+
+Both flags in that story have since been removed. These tests moved to
+`CODEONBOARD_TUTOR`, which is the only behaviour flag left and the one with the
+most to lose: it defaults ON and is read `!= "0"`, so the only way to disable the
+Tutor is to say `0` out loud — and a `.env` that beat the command line would make
+saying it out loud do nothing.
 
 Run with: uv run pytest tests/test_env_precedence.py -v
 """
@@ -48,19 +55,25 @@ def test_a_flag_set_in_the_environment_survives_the_import():
     """The footgun, stated as the person typing the command would see it."""
     code = (
         "import backend.api, os;"
-        "print(os.environ.get('CODEONBOARD_GAPS'))"
+        "print(os.environ.get('CODEONBOARD_TUTOR'))"
     )
-    assert _in_subprocess(code, {"CODEONBOARD_GAPS": "0"}) == "0"
+    assert _in_subprocess(code, {"CODEONBOARD_TUTOR": "0"}) == "0"
 
 
-def test_the_curriculum_flag_survives_too():
-    """The one that broke the suite. `.env` sets it to `1` on this machine."""
+def test_the_value_the_backend_actually_reads_survives_too():
+    """Not just the raw variable — the answer the code gives when it asks.
+
+    `CODEONBOARD_TUTOR` defaults ON, so this is the direction that matters: a
+    deployment turning the Tutor off on the command line must not be overruled by
+    a stale `.env`, or the routes stay live and the only symptom is a feature
+    that was supposed to be gone.
+    """
     code = (
         "import backend.api;"
-        "from backend.agents.mentor.agent import curriculum_enabled;"
-        "print(curriculum_enabled())"
+        "from backend.learning.flags import tutor_enabled;"
+        "print(tutor_enabled())"
     )
-    assert _in_subprocess(code, {"CODEONBOARD_CURRICULUM": "0"}) == "False"
+    assert _in_subprocess(code, {"CODEONBOARD_TUTOR": "0"}) == "False"
 
 
 def test_dotenv_still_fills_a_gap():
@@ -85,26 +98,24 @@ def test_dotenv_still_fills_a_gap():
     assert _in_subprocess(code, {}) == "True"
 
 
-def test_importing_the_api_does_not_turn_flags_on_for_everyone_else():
+def test_importing_the_api_does_not_rewrite_a_flag_for_everyone_else():
     """The suite-level version of the same claim.
 
     `tests/conftest.py` guarantees this per test; this guarantees it of the import
     itself, so the conftest stays a convenience rather than the only thing standing
     between the suite and fourteen anonymous AttributeErrors.
+
+    Set before the import and read after it: whatever `.env` says, the import must
+    leave the value the process was launched with exactly where it found it.
     """
     code = (
         "import os;"
-        "os.environ.pop('CODEONBOARD_CURRICULUM', None);"
-        "os.environ.pop('CODEONBOARD_GAPS', None);"
+        "os.environ['CODEONBOARD_TUTOR'] = '0';"
         "import backend.api;"
-        "from backend.agents.mentor.agent import curriculum_enabled;"
-        "print(curriculum_enabled())"
+        "from backend.learning.flags import tutor_enabled;"
+        "print(os.environ['CODEONBOARD_TUTOR'], tutor_enabled())"
     )
-    # Unset before the import, so only `.env` could turn it on. It may — that is
-    # what the file is for — but the value must come from the file rather than from
-    # an override, which the first two tests establish.
-    result = _in_subprocess(code, {})
-    assert result in {"True", "False"}
+    assert _in_subprocess(code, {}) == "0 False"
 
 
 def test_the_module_does_not_call_load_dotenv_with_override():

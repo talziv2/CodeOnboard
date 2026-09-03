@@ -44,8 +44,10 @@ What is left — judgement and language — is a model's job.
 
 ## Models
 
-`claude-sonnet-4-6` in four modules only — `mentor/agent.py`, `curriculum.py`,
-`dossier.py`, `mutator.py` — all one-shot synthesis over a large body of evidence.
+`claude-sonnet-4-6` in two modules only — `mentor/curriculum.py` and
+`mentor/mutator.py` — both one-shot synthesis over a large body of evidence. It
+was four: `dossier.py` lost its call when the pre-B3 planner was deleted, and
+`mentor/agent.py` only ever declared the constant while delegating the call.
 `claude-haiku-4-5` everywhere else, **including every loop**. Never Sonnet in a
 loop; never Opus.
 
@@ -90,9 +92,11 @@ they spend real money, and they are run deliberately — see the `measure-and-re
 skill. A prompt change shipped on a green unit suite is shipped unmeasured, and
 should be described that way rather than as verified.
 
-If a flag selects between implementations (`CODEONBOARD_CURRICULUM` picks
-`curriculum.py` over `dossier.py`), pin it in the test: `tests/conftest.py`
-deletes both flags and the developer's `.env` sets both to `1`.
+If a flag selects between implementations, pin it in the test — `tests/conftest.py`
+deletes every flag it knows about, so an unpinned test runs the shipped default.
+`CODEONBOARD_TUTOR` is the only such flag now; `CODEONBOARD_CURRICULUM`, which
+picked `curriculum.py` over a second planner in `dossier.py`, was removed along
+with that planner.
 
 ---
 

@@ -18,21 +18,26 @@ not fix it as part of unrelated work.
 
 Both live in `conftest.py`, and both exist because of a real failure.
 
-**Ambient flags are deleted for every test.** `CODEONBOARD_CURRICULUM`,
-`CODEONBOARD_GAPS` and `CODEONBOARD_TUTOR` are removed from the environment, so
-**a test that depends on one must set it explicitly**.
+**Ambient flags are deleted for every test.** `CODEONBOARD_TUTOR` — the only one
+left — is removed from the environment, so **a test that depends on it must set it
+explicitly**.
 
-*Deleted means unset, not off.* Each flag then reads the default the repository
-ships — `0` for the first two and **`1` for `CODEONBOARD_TUTOR`, which defaults
-on** — so the suite exercises the configuration a fresh clone actually runs rather
-than a fourth one that exists only in tests. A test wanting the Tutor absent sets
-`CODEONBOARD_TUTOR=0` and says so.
+*Deleted means unset, not off.* It then reads the default the repository ships,
+which is **`1`: the Tutor is on** — so the suite exercises the configuration a
+fresh clone actually runs rather than a third one that exists only in tests. A
+test wanting the Tutor absent sets `CODEONBOARD_TUTOR=0` and says so.
 
-This exists because `test_mentor_dossier.py` failed
-14 tests on any full run and passed all of them alone: importing `backend.api`
-loaded the developer's `.env`, which switched the planner for everything that ran
-afterwards. The lesson was not "pin the flag in that file" — it was that an
-ambient value decided which code path ran and nothing in the suite said so.
+This exists because `test_mentor_dossier.py` failed 14 tests on any full run and
+passed all of them alone: importing `backend.api` loaded the developer's `.env`,
+which switched the planner for everything that ran afterwards. The lesson was not
+"pin the flag in that file" — it was that an ambient value decided which code path
+ran and nothing in the suite said so.
+
+`CODEONBOARD_CURRICULUM` and `CODEONBOARD_GAPS` have since been removed with the
+implementations they switched away from, and so has that file — the rendering
+tests that survived it are in `test_dossier_rendering.py`. The tuple of one stays,
+because the shape of the failure is what it guards and the next flag should have
+to be added here on purpose.
 
 **Every test runs as one fixed signed-in user.** This is a **real user id threaded
 through the real ownership checks**, not a bypass: `load_graph` still filters on
@@ -67,7 +72,7 @@ edits one to pass.
 | Test | Guards |
 |---|---|
 | `test_route_authz_coverage.py` | A route that declares neither an auth dependency nor `PUBLIC_PATHS` membership fails the build |
-| `test_gap_model.py::test_the_persistence_path_never_reads_the_flag` | Structurally: nothing in the persistence path reads `CODEONBOARD_GAPS` |
+| `test_gap_model.py::test_the_persistence_path_reads_no_feature_flag` | Structurally: nothing in the persistence path reads the environment or imports `flags.py` (D19) |
 | `test_gap_understanding.py` (AST check) | Nothing re-derives the understanding state outside `graph.understanding_of()` |
 | `test_progress.py` | Every plan mutation, against the rule that goal readiness may fall only when evidence changes |
 | `test_tutor_context.py` | Structurally, three ways: the scaffold context has no field that could hold the answer, its rendered prompt contains none, and its builder never reads the keys |

@@ -74,7 +74,7 @@ the file you are about to open.
 | `backend/repo/anchors.py` · `explore.py` · `investigation.py` | D1 one exploration loop · D2 grounding is against the repository, not the evidence shown · D25 exhaustion is a result, not an exception |
 | `backend/agents/teaching/` | D3 no source, no lesson · D4 the objective contract · D10 a retry question never ships its own answer |
 | `backend/agents/grader/` | D4 mark against the objective, not `expected_answer` · D11 silence never closes a gap · D14 grading and policy are separate |
-| `backend/agents/mentor/curriculum.py` · `dossier.py` | D5 the planner over-generates and code cuts · D6 `optional` |
+| `backend/agents/mentor/curriculum.py` | D5 the planner over-generates and code cuts · D6 `optional` |
 | `backend/agents/mentor/mutator.py` | D15 one structural mutation per graded answer |
 | `backend/learning/progress.py` | **D7** readiness may fall only when evidence changes — never because the plan changed |
 | `backend/learning/understanding.py` | D8 a learner decision is never evidence of understanding |
@@ -145,15 +145,21 @@ HTTP and exits non-zero unless both answer), or two terminals:
 `uv run uvicorn backend.api:app --reload` and `cd frontend && npm run dev`.
 Open `http://localhost:3000` only; the browser never calls port 8000.
 
-**The flags trap.** `CODEONBOARD_CURRICULUM` and `CODEONBOARD_GAPS` both default
-to `0`, `tests/conftest.py` unsets all three flags for every test — and the
-developer's local `.env` sets **both of these to `1`**. So the app as it is
-actually run uses the objective-first planner and the gap model, while the suite
-tests neither unless a test says so. "Works in tests, wrong in the app" is a flag
-difference until proven otherwise. When behaviour depends on a flag, pin it in the
-test and say which.
+**There is one behaviour flag left, and the trap that used to be here is gone.**
+`CODEONBOARD_CURRICULUM` and `CODEONBOARD_GAPS` have been removed: the
+objective-first planner and the gap model are simply how the system works, and the
+implementations they switched away from were deleted rather than left unreachable.
+An `.env` that still sets either is ignored, silently — that is the one residue
+worth knowing, because a stale line reads like a setting that is doing something.
 
-`CODEONBOARD_TUTOR` is the third and **it does not follow the other two**: it is
+What they cost while they existed is worth remembering, because it is the argument
+against the next one: both defaulted to `0`, `tests/conftest.py` unset them, and
+the developer's `.env` set **both to `1`** — so the app as it was actually run used
+one planner and the suite tested another, and "works in tests, wrong in the app"
+was a flag difference until proven otherwise. When behaviour depends on a flag,
+pin it in the test and say which.
+
+`CODEONBOARD_TUTOR` is the survivor, and **it never followed the other two**: it is
 default **`1`**, and it is read `!= "0"`, so unset means on and only a literal `0`
 turns it off. Do not "fix" that comparison into `== "1"` for symmetry — the
 direction *is* the default. It has a build-time twin,
@@ -174,8 +180,10 @@ run needs the old guarantee, set both halves to `0`.
 
 ## Model policy
 
-`claude-sonnet-4-6` in four modules only — `agents/mentor/agent.py`,
-`curriculum.py`, `dossier.py`, `mutator.py` — all one-shot synthesis.
+`claude-sonnet-4-6` in two modules only — `agents/mentor/curriculum.py` and
+`mutator.py` — both one-shot synthesis. (It was four. `dossier.py` lost its model
+call with the pre-B3 planner; `mentor/agent.py` only ever declared the constant
+and delegated.)
 `claude-haiku-4-5` everywhere else, **including every loop**. Never Sonnet in a
 loop. Never Opus. Details and the reasoning live in
 [`backend/agents/CLAUDE.md`](backend/agents/CLAUDE.md), which loads when you work

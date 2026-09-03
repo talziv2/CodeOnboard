@@ -52,7 +52,6 @@ CLAIM_C = "expand() returns nodes already scored by the heuristic"
 @pytest.fixture(autouse=True)
 def _env_and_db(tmp_path, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setenv("CODEONBOARD_GAPS", "1")
     monkeypatch.setattr(api, "SESSIONS_DB_PATH", tmp_path / "sessions.db")
     monkeypatch.setattr(api.anthropic, "Anthropic", lambda **kw: MagicMock())
 
