@@ -131,10 +131,24 @@ export default function LessonWorkspace({
     // landing back on. A trackpad emits sub-pixel deltas, and one that hovers on
     // the line toggles the fold on every event. Collapsed stays collapsed until
     // the learner is most of the way back to the top.
-    const read = () =>
-      setCollapsed((was) =>
-        was ? scroller.scrollTop > EXPAND_BELOW : scroller.scrollTop > COLLAPSE_ABOVE
-      );
+    // SUPPRESSION WINDOW — prevents the flicker loop that occurs when the brief
+    // collapses and its in-flow height shrinks, causing `scrollHeight` to drop
+    // and the browser to clamp `scrollTop` below `EXPAND_BELOW`. Without this,
+    // the clamped position immediately re-triggers expansion, which re-triggers
+    // collapse, and so on. `overflow-anchor: none` stops the anchoring
+    // adjustment but does not stop the clamp, so a time gate on state changes
+    // is what actually breaks the cycle. 250ms covers the CSS transition
+    // (`--motion-layout`) with a small margin; any clamping-driven event that
+    // arrives during that window is discarded.
+    let suppressUntil = 0;
+    const read = () => {
+      if (Date.now() < suppressUntil) return;
+      setCollapsed((was) => {
+        const next = was ? scroller.scrollTop > EXPAND_BELOW : scroller.scrollTop > COLLAPSE_ABOVE;
+        if (next !== was) suppressUntil = Date.now() + 250;
+        return next;
+      });
+    };
     read();
     scroller.addEventListener("scroll", read, { passive: true });
     return () => scroller.removeEventListener("scroll", read);
