@@ -1192,6 +1192,13 @@ export const t = {
     submit: "Submit",
     skipStop: "Skip this stop",
     submitHint: "⌘↵ to submit",
+    /**
+     * The two ways to answer a question that ships options. The learner picks
+     * the input, not the marking: an option and a typed sentence are graded the
+     * same way, against the objective.
+     */
+    writeOwnAnswer: "Write my own answer instead",
+    chooseFromOptions: "Choose from the options instead",
     loadingShort: "Loading…",
     nextStop: "Next stop →",
     /**

@@ -666,6 +666,9 @@ def _render_current_lesson(graph, client, owner: str) -> dict:
             "prompt": _FALLBACK_PROMPT,
             "expected_answer": "",
             "prompt_kind": "predict-then-reveal",
+            # A degraded lesson has no options — the composer falls back to the
+            # text box, which is exactly what a fallback prompt wants.
+            "choices": [],
         }
         # Save fallback as cached_lesson so the grader can run against it.
         if node:

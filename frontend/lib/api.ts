@@ -808,6 +808,15 @@ export interface LessonBody {
   takeaway?: string;
   /** What to hold yourself here versus what you can safely delegate. */
   ownership?: string;
+  /**
+   * An optional four-option rendering of `prompt`. Present only when the
+   * question's form has a single statable answer; `[]` or absent everywhere
+   * else, including every lesson taught before choices existed, and on a
+   * degraded fallback lesson. The learner chooses at answer time whether to
+   * pick an option or write their own — either way the text posted back is
+   * graded against the objective, so no option is flagged here as the right one.
+   */
+  choices?: string[];
 }
 
 /**

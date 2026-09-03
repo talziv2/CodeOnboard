@@ -89,6 +89,17 @@ def _lesson(title: str) -> dict:
         "why_now": "This is the object every later stop hangs off.",
         "prompt": f"What does {title.lower()} own that a bare call does not?",
         "prompt_kind": "explain",
+        # Four options, so the live-composer stop shows the multiple-choice
+        # rendering beside the text box. Composition is one correct, one
+        # partial, two wrong — the same shape the prompt asks a real lesson for.
+        # The learner picks the input; either way the text is graded against the
+        # objective, and no option is stored as the "answer".
+        "choices": [
+            "Per-call state — a connection pool, a cookie jar, default config",
+            "A cookie jar it carries across calls",  # partial: one piece, not all
+            "Nothing; it is a thin wrapper with no state of its own",
+            "A retry-and-backoff policy applied to every request",
+        ],
         "reveal": "**The explanation.** It owns the connection pool, the cookie "
                   "jar and the default configuration — so sending through it "
                   "changes behaviour in three ways a bare call cannot.",

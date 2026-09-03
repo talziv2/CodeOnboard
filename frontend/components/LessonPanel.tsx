@@ -1222,6 +1222,7 @@ export default function LessonPanel({
                   <AnswerComposer
                     onStuck={onStuck}
                     prompt={lesson.lesson.prompt}
+                    choices={lesson.lesson.choices}
                     answer={answer}
                     onAnswerChange={setAnswer}
                     onSubmit={submitAnswer}
