@@ -51,6 +51,11 @@ describe("without choices", () => {
     expect(screen.queryByText(t.lesson.chooseFromOptions)).toBeNull();
     expect(screen.queryByText(t.lesson.writeOwnAnswer)).toBeNull();
   });
+
+  test("says the question is text-only", () => {
+    setup();
+    expect(screen.queryByText(t.lesson.textOnlyQuestion)).not.toBeNull();
+  });
 });
 
 describe("with choices", () => {
@@ -58,6 +63,11 @@ describe("with choices", () => {
     setup({ choices: CHOICES });
     expect(screen.getAllByRole("radio")).toHaveLength(4);
     expect(screen.queryByPlaceholderText(t.lesson.answerPlaceholder)).toBeNull();
+  });
+
+  test("does not show the text-only note", () => {
+    setup({ choices: CHOICES });
+    expect(screen.queryByText(t.lesson.textOnlyQuestion)).toBeNull();
   });
 
   test("selecting an option reports that option's text as the answer", async () => {

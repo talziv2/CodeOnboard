@@ -855,6 +855,13 @@ export interface RetryOffer {
 export interface PendingQuestion {
   kind: "verification" | "reassessment";
   question: string;
+  /**
+   * Four options for a re-assessment question, or `[]`. A verification question
+   * is always `[]`; absent from a backend older than this. Not an answer key — a
+   * pick is graded against the objective like typed text; see `LessonBody.choices`
+   * and D10.
+   */
+  choices?: string[];
 }
 
 export interface Lesson {
@@ -956,7 +963,7 @@ export const requestVerification = (
  * charged on issue.
  */
 export const requestReassessment = (session_id: string, node_id?: string) =>
-  post<{ node_id: string; question: string; retry: RetryOffer }>(
+  post<{ node_id: string; question: string; choices?: string[]; retry: RetryOffer }>(
     `/session/${session_id}/reassess`,
     { node_id },
   );

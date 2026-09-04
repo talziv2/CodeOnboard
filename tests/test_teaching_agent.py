@@ -418,6 +418,15 @@ def test_parse_output_defaults_prompt_kind():
 # one-phrase answer never keeps them.
 
 _FOUR = ["Returns the request", "Returns None", "Raises", "Returns a new Session"]
+# One correct / one partial / two wrong — the verdict map the model must return
+# alongside `choices`. Without a clean map `run` drops the options.
+_VERDICTS = {
+    "Returns the request": "correct",
+    "Returns a new Session": "partial",
+    "Returns None": "wrong",
+    "Raises": "wrong",
+}
+_CHOICE_LESSON = {**FAKE_LESSON_OUTPUT, "choices": _FOUR, "choice_verdicts": _VERDICTS}
 
 
 def test_parse_output_keeps_four_clean_choices():
@@ -453,21 +462,33 @@ def test_choices_survive_for_a_choice_form(mock_read):
     # The default node's kind is unmapped, so it falls to `predict-then-reveal`,
     # which is a choice form. Order is shuffled, so compare as a set.
     state, node = _make_state_with_current_node()
-    client = _make_mock_client(json.dumps({**FAKE_LESSON_OUTPUT, "choices": _FOUR}))
+    client = _make_mock_client(json.dumps(_CHOICE_LESSON))
     result = run(state, client=client)
     assert result.current_lesson["prompt_kind"] == "predict-then-reveal"
     assert set(result.current_lesson["choices"]) == set(_FOUR)
     assert len(result.current_lesson["choices"]) == 4
+    assert result.current_lesson["choice_verdicts"] == _VERDICTS
+
+
+@patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
+def test_choices_dropped_when_the_verdict_map_is_malformed(mock_read):
+    # Four clean options, but no clean one-correct/one-partial/two-wrong map →
+    # a pick could not be graded deterministically, so the options go too.
+    state, node = _make_state_with_current_node()
+    bad = {**FAKE_LESSON_OUTPUT, "choices": _FOUR,
+           "choice_verdicts": {c: "correct" for c in _FOUR}}
+    client = _make_sequenced_client(json.dumps(bad), "ALIGNED", "SOUND")
+    result = run(state, client=client)
+    assert result.current_lesson["choices"] == []
+    assert result.current_lesson["choice_verdicts"] == {}
+    assert any("verdicts missing or malformed" in e for e in state.errors)
 
 
 @patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
 def test_a_drifted_question_drops_the_choices_and_keeps_text(mock_read):
     # Gate says DRIFTED → options gone, prompt still there, error recorded.
     state, node = _make_state_with_current_node()
-    client = _make_sequenced_client(
-        json.dumps({**FAKE_LESSON_OUTPUT, "choices": _FOUR}),
-        "DRIFTED",
-    )
+    client = _make_sequenced_client(json.dumps(_CHOICE_LESSON), "DRIFTED")
     result = run(state, client=client)
     assert result.current_lesson["choices"] == []
     assert result.current_lesson["prompt"]
@@ -475,15 +496,30 @@ def test_a_drifted_question_drops_the_choices_and_keeps_text(mock_read):
 
 
 @patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
-def test_an_aligned_question_keeps_the_choices(mock_read):
+def test_an_aligned_and_sound_question_keeps_the_choices(mock_read):
     state, node = _make_state_with_current_node()
-    client = _make_sequenced_client(
-        json.dumps({**FAKE_LESSON_OUTPUT, "choices": _FOUR}),
-        "ALIGNED",
-    )
+    client = _make_sequenced_client(json.dumps(_CHOICE_LESSON), "ALIGNED", "SOUND")
     result = run(state, client=client)
     assert set(result.current_lesson["choices"]) == set(_FOUR)
-    assert not any("drifted" in e for e in state.errors)
+    assert result.current_lesson["choice_verdicts"] == _VERDICTS
+    assert not any("drifted" in e or "no single correct" in e for e in state.errors)
+
+
+@patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
+def test_an_unsound_option_set_drops_the_choices(mock_read):
+    # Question is on-objective, but the option the model marked correct is not a
+    # complete answer → options gone, text prompt kept. A first-attempt lesson
+    # does not regenerate (too expensive); that is `reassess.py`'s job.
+    state, node = _make_state_with_current_node()
+    client = _make_sequenced_client(
+        json.dumps(_CHOICE_LESSON),
+        "ALIGNED",
+        "UNSOUND",
+    )
+    result = run(state, client=client)
+    assert result.current_lesson["choices"] == []
+    assert result.current_lesson["prompt"]
+    assert any("marked-correct option" in e for e in state.errors)
 
 
 @patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
@@ -501,8 +537,12 @@ def test_choice_order_is_shuffled_and_stable_per_node(mock_read):
     # Position must not leak the answer, and a re-render of the same stop must
     # not reshuffle under the learner — the node id seeds it.
     ordered = ["alpha one", "beta two", "gamma three", "delta four"]
+    verdicts = {"alpha one": "correct", "beta two": "partial",
+                "gamma three": "wrong", "delta four": "wrong"}
     state, node = _make_state_with_current_node()
-    client = _make_mock_client(json.dumps({**FAKE_LESSON_OUTPUT, "choices": ordered}))
+    client = _make_mock_client(
+        json.dumps({**FAKE_LESSON_OUTPUT, "choices": ordered, "choice_verdicts": verdicts})
+    )
     run(state, client=client)
     first = list(node.cached_lesson["choices"])
     assert set(first) == set(ordered)

@@ -51,6 +51,7 @@ from backend.agents.goal import (
 )
 from backend.agents.briefing import build_briefing
 from backend.agents.grader import run as run_grader
+from backend.agents.grader.agent import _apply_grade as _apply_classification
 from backend.agents.grader.verification import grade_verification
 from backend.agents.mentor.mutator import Diagnosis, mutate as mutate_graph
 from backend.agents.teaching import run as run_teaching
@@ -63,6 +64,7 @@ from backend.agents.tutor import mode as tutor_mode
 from backend.agents.tutor import scaffold as tutor_scaffold
 from backend.agents.tutor import suggest as tutor_suggest
 from backend.learning import adaptation
+from backend.learning import choices as choice_policy
 from backend.learning import history
 from backend.learning import progress
 from backend.learning import retry as retry_model
@@ -620,11 +622,27 @@ def _load_session_or_404(session_id: str, user_id: str):
     return graph
 
 
+def _lesson_wire(lesson: dict | None) -> dict | None:
+    """A lesson as the browser may see it — WITHOUT `choice_verdicts`.
+
+    The verdict map (which option is correct / partial / wrong) is stored on the
+    node and in the plan so `/respond` can grade a pick from it, but it is an
+    answer key and must never reach the client. Stripped here, at the one place a
+    lesson dict enters an HTTP response, rather than trusted to every call site.
+    """
+    if not lesson:
+        return lesson
+    return {k: v for k, v in lesson.items() if k != "choice_verdicts"}
+
+
 def _render_current_lesson(graph, client, owner: str) -> dict:
     """Run the Teaching Agent on the graph's current node, persist, return the lesson.
 
     repo_path is re-derived via clone_repo (no-op when already cloned) since the
     persisted graph doesn't carry it — Teaching needs it to read source.
+
+    Returns the WIRE lesson (no `choice_verdicts`); the full dict with the verdict
+    map is what gets persisted on the node and in the plan.
     """
     repo_path = clone_repo(graph.repo_url)
     state = OnboardState(repo_url=graph.repo_url, goal=graph.goal, client=client)
@@ -680,8 +698,8 @@ def _render_current_lesson(graph, client, owner: str) -> dict:
         if node:
             node.cached_lesson = fallback
             learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=owner)
-        return fallback
-    return state.current_lesson
+        return _lesson_wire(fallback)
+    return _lesson_wire(state.current_lesson)
 
 
 # ── one generation at a time, per learner ────────────────────────────────────
@@ -1039,7 +1057,7 @@ def session_lesson(session_id: str, user: CurrentUser = Depends(current_user)) -
 
     return {
         "node_id": graph.current_node_id,
-        "lesson": node.cached_lesson,
+        "lesson": _lesson_wire(node.cached_lesson),
         # WHAT TO DO HERE, on the one call every arrival and every reload makes.
         # Without it the offer existed only in a grading reply, so a refresh lost
         # it — and "the learner refreshed" is not a decision about their
@@ -1064,11 +1082,18 @@ def _pending_question(node) -> dict | None:
         return {
             "kind": history.VERIFICATION,
             "question": state.pending_verification.get("question", ""),
+            # A verification question is always text-only; the key is present so
+            # the client reads one shape for both.
+            "choices": [],
         }
     if state.pending_reassessment:
         return {
             "kind": history.SOURCE_REASSESSMENT,
             "question": state.pending_reassessment.get("question", ""),
+            # A fresh objective question MAY carry four options — see
+            # teaching/reassess.py and D10. Absent on questions stored before
+            # this, which read back as [].
+            "choices": state.pending_reassessment.get("choices") or [],
         }
     return None
 
@@ -1380,8 +1405,11 @@ def session_reassess(session_id: str, body: dict | None = None, user: CurrentUse
     learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
     return {
         "node_id": current,
-        # No reveal and no expected answer — the whole point.
+        # No reveal and no expected answer — the whole point. `choices` MAY be
+        # four options for this new question (D10, revised); it is not an answer
+        # key, the pick is graded against the objective like typed text.
         "question": stored["question"],
+        "choices": stored["choices"],
         "retry": retry_model.to_wire(node),
         "errors": state.errors,
     }
@@ -1514,13 +1542,43 @@ def session_respond(session_id: str, body: RespondRequest, user: CurrentUser = D
             else history.SOURCE_LESSON
         )
 
+    # DETERMINISTIC MULTIPLE-CHOICE GRADING (learning/choices.py). When the
+    # submitted text is EXACTLY one of the options this question shipped, the
+    # option's own verdict — set by the question's author at generation time —
+    # decides the classification. Re-grading a one-phrase option against the
+    # objective is what produced "picked the correct option, still marked
+    # partial": the Grader is calibrated for a written paragraph. A TYPED answer
+    # never matches an option verbatim, so it falls through to the Grader
+    # unchanged. The verdict map is read from the question that was actually
+    # answered — the pending re-assessment, or the node's cached lesson.
+    _verdicts = (
+        reassessment.get("choice_verdicts")
+        if reassessment is not None
+        else (graph.nodes[current].cached_lesson or {}).get("choice_verdicts")
+    ) or {}
+    _picked_verdict = _verdicts.get((body.response or "").strip())
+
     # Which gaps this ANSWER opened, as a fact rather than a count. Taken as a
     # before/after delta because the Grader mints ids internally; asking it to
     # report them too would be a second source of the same truth.
     before_gaps = {g.id for g in graph.nodes[current].gaps}
-    run_grader(state, body.response, client=client)
+    if _picked_verdict:
+        classification = (
+            choice_policy.classification_for_choice(_picked_verdict) or "partial"
+        )
+        # The one writer of understanding state, reused — not a second derivation.
+        _apply_classification(state, current, classification)
+        state.last_grade = {
+            "classification": classification,
+            "gap_kind": "none",
+            "rationale": choice_policy.RATIONALE.get(_picked_verdict, ""),
+            "graded": True,
+            "gap_report": {},
+        }
+    else:
+        run_grader(state, body.response, client=client)
     opened = [g.id for g in graph.nodes[current].gaps if g.id not in before_gaps]
-    # The Grader updated the node's understanding_state / weak_spot in place.
+    # The Grader (or the block above) updated understanding_state / weak_spot.
 
     grade = state.last_grade or {}
     classification = grade.get("classification") or "partial"
@@ -1641,7 +1699,9 @@ def session_respond(session_id: str, body: RespondRequest, user: CurrentUser = D
             )
             adapted["retaught"] = lesson is not None
             if lesson is not None:
-                superseded = previous_lesson
+                # Stripped of `choice_verdicts` — it lands in the persisted
+                # response record and is served back with the whole graph.
+                superseded = _lesson_wire(previous_lesson)
         except Exception as exc:
             state.errors.append(f"re-teach failed: {exc}")
             adapted["retaught"] = False

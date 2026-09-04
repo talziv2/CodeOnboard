@@ -189,6 +189,31 @@ def _normalize_choices(raw: object) -> list[str]:
     return cleaned
 
 
+def _normalize_verdicts(choices: list[str], raw: object) -> dict[str, str]:
+    """One verdict per option — exactly one `correct`, one `partial`, two `wrong`.
+
+    The learner's PICK is graded by this, not re-graded against the objective
+    (`learning/choices.py`), so it must be exactly one clean correct answer or
+    nothing: a map that does not cover all four options, or has zero / two
+    `correct`, is discarded, and the caller then drops the options. Without a
+    trustworthy verdict map a multiple choice is back to "any pick might be
+    partial", which is the whole thing this feature exists to stop.
+    """
+    if not choices or not isinstance(raw, dict):
+        return {}
+    cleaned = {
+        str(k).strip(): str(v).strip().lower()
+        for k, v in raw.items()
+        if str(k).strip() in choices and str(v).strip().lower() in {"correct", "partial", "wrong"}
+    }
+    if set(cleaned) != set(choices):
+        return {}
+    counts = sorted(cleaned.values())
+    if counts != ["correct", "partial", "wrong", "wrong"]:
+        return {}
+    return cleaned
+
+
 class LessonOutput(BaseModel):
     # The active-learning halves. `setup` frames the code WITHOUT answering the
     # prompt; `reveal` is the explanation, shown only after the developer has
@@ -224,6 +249,16 @@ class LessonOutput(BaseModel):
     # four clean, distinct strings, because one bad field must cost only the
     # options and never the lesson.
     choices: list[str] = []
+    # One verdict per option: `correct` / `partial` / `wrong`. Server-side ONLY —
+    # `api.py` strips it before any lesson reaches the browser. When the learner
+    # PICKS an option, `learning/choices.py` maps its verdict straight to a
+    # classification instead of re-grading a one-phrase option against the
+    # objective (which is what made a correct pick land at `partial`). A TYPED
+    # answer is unaffected — it still goes to the Grader. Empty when the model
+    # did not return a clean one-correct/one-partial/two-wrong map, and `run`
+    # then drops `choices` too: a multiple choice with no known-correct option
+    # is worse than a text box.
+    choice_verdicts: dict[str, str] = {}
     # Kept, and synthesized from setup + reveal when the model did not write one.
     # Every pre-B4 cached lesson has this and nothing else, and the current UI
     # renders only this — so it stays the compatibility surface until B6 teaches
@@ -339,6 +374,12 @@ Produce a JSON object with exactly these keys:
                        from `setup`.
                      - [] — an empty array, when the line says this form has no
                        one-phrase answer. Do not invent options in that case.
+  choice_verdicts: an object mapping EACH of the four option strings (verbatim)
+                   to one of "correct", "partial", "wrong" — exactly one
+                   "correct", exactly one "partial", two "wrong". This is what
+                   marks the learner's pick, so the "correct" one must be a
+                   COMPLETE answer to the objective, not merely the best of four.
+                   Return {} when `choices` is [].
 
 Do NOT emit a "walkthrough" key and do NOT emit "prompt_kind" — the first is
 assembled from your setup and reveal, and the second is decided for you.
@@ -774,6 +815,12 @@ def _parse_output(raw: str) -> LessonOutput:
         raise ValueError("no JSON object found in response")
     decoded, _ = json.JSONDecoder().raw_decode(raw[start:])
     output = LessonOutput(**decoded)
+    # Verdicts are keyed by option text and validated against the normalised
+    # `choices`; a map that is not exactly one correct / one partial / two wrong
+    # becomes {}, and `run` then drops the options.
+    output.choice_verdicts = _normalize_verdicts(
+        output.choices, decoded.get("choice_verdicts")
+    )
     if not output.setup and not output.walkthrough:
         # Neither half of the lesson body arrived. Caught here rather than by
         # Pydantic, because either field alone is legitimate: a pre-B4 cached
@@ -923,23 +970,50 @@ def run(
         # prompt and drops any options the model offered.
         if output.prompt_kind not in _CHOICE_FORMS:
             output.choices = []
-        # DRIFT GATE. Options are only safe when the question actually tests the
-        # objective — the pick is graded against the objective, and a learner
-        # picking from options written for a drifted question is graded wrong no
-        # matter what. A misaligned question keeps its text prompt (no worse than
-        # before) but loses the options.
+        # OPTION GATES. Options are only safe when the question actually tests the
+        # objective (the pick is graded against the objective, so options written
+        # for a drifted question grade wrong no matter what) AND exactly one of
+        # the four is a complete correct answer. Either miss drops the options and
+        # the stop keeps its text prompt — no worse than the pre-choice
+        # behaviour. Unlike `reassess.py` this does not regenerate: a full lesson
+        # re-render is far more expensive than a fresh re-assessment question.
+        objective = node.objective() or ""
+        # No trustworthy verdict map → a pick could not be graded from it, so the
+        # options would be back to "any choice might mark partial". Checked first,
+        # before the paid gates, because it needs no model call.
+        if output.choices and not output.choice_verdicts:
+            state.errors.append(
+                "teaching_agent: option verdicts missing or malformed — "
+                "multiple-choice dropped, text answer only"
+            )
+            output.choices = []
         if output.choices and not _question_serves_objective(
-            client, node.objective() or "", output.prompt, output.expected_answer
+            client, objective, output.prompt, output.expected_answer
         ):
             state.errors.append(
                 "teaching_agent: question drifted from objective — "
                 "multiple-choice dropped, text answer only"
             )
             output.choices = []
+        # Verify the model's OWN claimed-correct option really is the complete
+        # answer — the label is what grades a pick, so a mislabelled "correct"
+        # would pass a wrong answer.
+        if output.choices and not _choices_are_sound(
+            client, objective, output.prompt, output.choices,
+            _correct_option(output.choice_verdicts),
+        ):
+            state.errors.append(
+                "teaching_agent: marked-correct option was not a complete answer — "
+                "multiple-choice dropped, text answer only"
+            )
+            output.choices = []
+        if not output.choices:
+            output.choice_verdicts = {}
         # Order is not a signal. The prompt asks for a random order, but a model
         # that drifts back to "correct one first" would leak the answer by
         # position — so shuffle it here regardless. Seeded by the node id so a
-        # re-render of the same stop shows the same order.
+        # re-render of the same stop shows the same order. Verdicts are keyed by
+        # option text, so the shuffle does not touch them.
         if output.choices:
             random.Random(node.id).shuffle(output.choices)
         lesson = output.model_dump()
@@ -1030,6 +1104,79 @@ def _question_serves_objective(
         return True
     verdict = _text_of(resp).strip().upper()
     return "DRIFT" not in verdict
+
+
+def _choices_are_sound(
+    client: anthropic.Anthropic,
+    objective: str,
+    prompt: str,
+    choices: list[str],
+    correct_option: str = "",
+) -> bool:
+    """One cheap check: is EXACTLY ONE option a complete correct answer — and,
+    when `correct_option` is given, is it THAT one?
+
+    The composition rule (one correct, one partial, two wrong) is an instruction
+    the model follows unreliably on a nuanced topic — it tends to ship one
+    partial and three wrong, or two options a careful reader could defend. And
+    the model's OWN verdict label can be wrong: it marks option A "correct" when
+    the real answer is C. Since a learner's pick is graded straight from that
+    label (`learning/choices.py`), an unverified label lets a wrong option pass.
+
+    So the set is verified after generation against the model's claimed-correct
+    option. Anything else is rejected; the caller regenerates once and then falls
+    back to a text box. An unreadable verdict trusts the set — a flaky judge must
+    not delete a good multiple choice.
+    """
+    if not objective.strip() or len(choices) != 4:
+        return True
+    numbered = "\n".join(f"{i}. {c}" for i, c in enumerate(choices, 1))
+    if correct_option:
+        system = (
+            "You check whether the MARKED option is the one correct answer. "
+            "Reply with exactly one word: SOUND or UNSOUND. SOUND means the "
+            "marked option is a COMPLETE, correct answer to the objective and no "
+            "other option is also fully correct. UNSOUND means the marked option "
+            "is incomplete or wrong, or another option is equally defensible."
+        )
+        body = (
+            f"OBJECTIVE:\n{objective}\n\n"
+            f"QUESTION:\n{prompt}\n\n"
+            f"OPTIONS:\n{numbered}\n\n"
+            f"MARKED CORRECT:\n{correct_option}\n\n"
+            "One word — SOUND or UNSOUND."
+        )
+    else:
+        system = (
+            "You check a multiple-choice set. Reply with exactly one word: "
+            "SOUND or UNSOUND. SOUND means EXACTLY ONE option is a complete, "
+            "correct answer to the objective, and the other three are not (one "
+            "may be partially right, but only one is fully correct). UNSOUND "
+            "means zero options are fully correct, or more than one could be "
+            "defended as correct."
+        )
+        body = (
+            f"OBJECTIVE:\n{objective}\n\n"
+            f"QUESTION:\n{prompt}\n\n"
+            f"OPTIONS:\n{numbered}\n\n"
+            "One word — SOUND or UNSOUND."
+        )
+    try:
+        resp = client.messages.create(
+            model=MODEL, max_tokens=8, system=system,
+            messages=[{"role": "user", "content": body}],
+        )
+    except Exception:
+        return True
+    return "UNSOUND" not in _text_of(resp).strip().upper()
+
+
+def _correct_option(verdicts: dict[str, str]) -> str:
+    """The option the verdict map marks `correct`, or "" if the map is empty."""
+    for option, verdict in verdicts.items():
+        if verdict == "correct":
+            return option
+    return ""
 
 
 def _text_of(response) -> str:

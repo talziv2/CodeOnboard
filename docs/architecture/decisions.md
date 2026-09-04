@@ -169,11 +169,38 @@ lesson's own question can match or open gaps, never close one.
 **Prevents.** A memory check passing as understanding: the reveal has already
 given the reasoning away by then.
 
-**And the general form of it:** *a retry question never ships its own answer.* The
-unit's own prompt is answerable exactly **once**, before its reveal has ever been
-shown. Every later assessment comes from `/verify` or `/reassess`. A re-teach does
-not escape this — it regenerates the whole lesson, so its better new prompt
-arrives with a new `reveal` that answers it.
+**And the general form of it (revised 2026-09-03):** *a retry question never
+re-asks the unit's prompt and never ships the unit's `reveal`.* The unit's own
+prompt is answerable exactly **once**, before its reveal has ever been shown.
+Every later assessment comes from `/verify` or `/reassess`. A re-teach does not
+escape this — it regenerates the whole lesson, so its better new prompt arrives
+with a new `reveal` that answers it.
+
+**What changed, and why.** The rule used to read *"a retry question never ships
+its own answer"*, which also barred a multiple choice on a re-assessment, since
+one of its four options is correct. That is now permitted. A re-assessment is a
+genuinely **new** question in a **new** concrete situation — not the prompt whose
+reveal is on screen — and its options are one correct, one partial, two wrong,
+in random order. Recognising the right one among a plausible partial and two real
+misconceptions requires applying the claim, not recalling a sentence from the
+explanation. `ReassessmentPrompt` still has no `reveal` and no `expected_answer`
+field — the part of D10 that stops a memory check is intact. `teaching/reassess.py`
+reuses the first-attempt lesson's form gate, drift gate and composition rules
+unchanged.
+
+**A PICK is graded from the option, not against the objective (revised
+2026-09-03).** The question's author assigns each option a verdict — `correct` /
+`partial` / `wrong` — and `learning/choices.py` maps the picked option's verdict
+straight to a classification. Re-grading a one-phrase option against the
+objective is what made "picked the correct option, still marked partial": the
+Grader is calibrated for a written paragraph, and a canned phrase is
+structurally thinner whatever it says. A **typed** answer never matches an
+option verbatim, so it still goes to the Grader against the objective — the
+prose path is unchanged. The verdict map is stored on the node / plan and
+**stripped by `api.py` before any lesson reaches the browser** (`_lesson_wire`);
+it is an answer key, and a coherent multiple choice inherently has one. Options
+ship only when a clean one-correct / one-partial / two-wrong map exists —
+without it, the stop falls back to a text box.
 
 ---
 

@@ -286,11 +286,18 @@ def test_running_out_does_not_settle_the_node():
 # ── /reassess ────────────────────────────────────────────────────────────────
 
 
-def _reassess_ok(question="A FRESH OBJECTIVE QUESTION"):
+def _reassess_ok(question="A FRESH OBJECTIVE QUESTION", choices=None, verdicts=None):
     from backend.agents.teaching.reassess import ReassessmentPrompt
-    return lambda state, node, source, client=None: ReassessmentPrompt(
-        question=question, probes="the boundary clause"
-    )
+    def _run(state, node, source, client=None):
+        p = ReassessmentPrompt(
+            question=question, probes="the boundary clause", choices=choices or []
+        )
+        p.choice_verdicts = verdicts or {}
+        return p
+    return _run
+
+
+_FOUR = ["The full claim", "Half the claim", "A wrong claim", "Another wrong claim"]
 
 
 def test_reassess_issues_a_question_and_charges_it(client):
@@ -326,6 +333,135 @@ def test_a_question_we_could_not_generate_is_not_charged(client):
     assert resp.status_code == 503
     stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
     assert stored.nodes[node_id].gap_state.reassessments == 0
+
+
+def test_a_reassessment_may_carry_four_options(client):
+    """D10 (revised): a re-assessment is a NEW question, so it MAY ship a
+    multiple choice. The options reach the client, are stored on the pending
+    question, and come back on `/lesson` so a refresh keeps them."""
+    graph = _chain(_node())
+    node_id = graph.path_order()[0]
+    _answered(graph, graph.nodes[node_id], "off-topic")
+    session_id = _start(client, graph)
+
+    with patch("backend.api._node_source", return_value="def send(): ..."), \
+         patch("backend.api.teaching_reassess.reassess", side_effect=_reassess_ok(choices=_FOUR)):
+        body = client.post(f"/session/{session_id}/reassess", json={}).json()
+
+    assert body["choices"] == _FOUR
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
+    assert stored.nodes[node_id].gap_state.pending_reassessment["choices"] == _FOUR
+
+    # A refresh restores them via the `pending` block of GET /lesson.
+    with patch("backend.api._render_current_lesson", return_value={"prompt": "p"}):
+        lesson = client.get(f"/session/{session_id}/lesson").json()
+    assert lesson["pending"]["kind"] == history.SOURCE_REASSESSMENT
+    assert lesson["pending"]["choices"] == _FOUR
+
+
+def test_a_text_only_reassessment_reports_empty_choices(client):
+    graph = _chain(_node())
+    node_id = graph.path_order()[0]
+    _answered(graph, graph.nodes[node_id], "off-topic")
+    session_id = _start(client, graph)
+
+    with patch("backend.api._node_source", return_value="def send(): ..."), \
+         patch("backend.api.teaching_reassess.reassess", side_effect=_reassess_ok()):
+        body = client.post(f"/session/{session_id}/reassess", json={}).json()
+
+    assert body["choices"] == []
+
+
+_VERDICTS = {
+    _FOUR[0]: "correct", _FOUR[1]: "partial", _FOUR[2]: "wrong", _FOUR[3]: "wrong",
+}
+
+
+def test_the_verdict_map_never_reaches_the_client(client):
+    graph = _chain(_node())
+    node_id = graph.path_order()[0]
+    _answered(graph, graph.nodes[node_id], "off-topic")
+    session_id = _start(client, graph)
+
+    with patch("backend.api._node_source", return_value="def send(): ..."), \
+         patch("backend.api.teaching_reassess.reassess",
+               side_effect=_reassess_ok(choices=_FOUR, verdicts=_VERDICTS)):
+        body = client.post(f"/session/{session_id}/reassess", json={}).json()
+    assert "choice_verdicts" not in body
+
+    with patch("backend.api._render_current_lesson", return_value={"prompt": "p"}):
+        lesson = client.get(f"/session/{session_id}/lesson").json()
+    assert "choice_verdicts" not in lesson["pending"]
+
+
+def test_picking_the_correct_option_grades_understood_without_the_grader(client):
+    from backend.learning import understanding
+
+    graph = _chain(_node())
+    node_id = graph.path_order()[0]
+    _answered(graph, graph.nodes[node_id], "confused")
+    graph.nodes[node_id].gap_state.pending_reassessment = {
+        "question": "A FRESH OBJECTIVE QUESTION", "probes": "x",
+        "choices": _FOUR, "choice_verdicts": _VERDICTS, "at": "now",
+    }
+    session_id = _start(client, graph)
+
+    with patch("backend.api.run_grader") as grader, \
+         patch("backend.api.clone_repo", return_value="data/repos/requests"), \
+         patch("backend.api.run_teaching", side_effect=_teaching_side_effect):
+        client.post(
+            f"/session/{session_id}/respond",
+            json={"response": _FOUR[0], "kind": history.SOURCE_REASSESSMENT},
+        )
+
+    grader.assert_not_called()
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
+    assert understanding.classify(stored.nodes[node_id]) == understanding.RECOVERED
+
+
+def test_picking_a_wrong_option_grades_confused_without_the_grader(client):
+    graph = _chain(_node())
+    node_id = graph.path_order()[0]
+    _answered(graph, graph.nodes[node_id], "confused")
+    graph.nodes[node_id].gap_state.pending_reassessment = {
+        "question": "Q", "probes": "x",
+        "choices": _FOUR, "choice_verdicts": _VERDICTS, "at": "now",
+    }
+    session_id = _start(client, graph)
+
+    with patch("backend.api.run_grader") as grader, \
+         patch("backend.api.clone_repo", return_value="data/repos/requests"), \
+         patch("backend.api.run_teaching", side_effect=_teaching_side_effect):
+        client.post(
+            f"/session/{session_id}/respond",
+            json={"response": _FOUR[2], "kind": history.SOURCE_REASSESSMENT},
+        )
+
+    grader.assert_not_called()
+    stored = learning_store.load_graph(session_id, TEST_USER_ID, api.SESSIONS_DB_PATH)
+    last = stored.nodes[node_id].attempts[-1]
+    assert last["classification"] == "confused"
+
+
+def test_a_typed_reassessment_answer_still_goes_to_the_grader(client):
+    graph = _chain(_node())
+    node_id = graph.path_order()[0]
+    _answered(graph, graph.nodes[node_id], "confused")
+    graph.nodes[node_id].gap_state.pending_reassessment = {
+        "question": "Q", "probes": "x",
+        "choices": _FOUR, "choice_verdicts": _VERDICTS, "at": "now",
+    }
+    session_id = _start(client, graph)
+
+    with patch("backend.api.run_grader", side_effect=_grader_side_effect("partial")) as grader, \
+         patch("backend.api.clone_repo", return_value="data/repos/requests"), \
+         patch("backend.api.run_teaching", side_effect=_teaching_side_effect):
+        client.post(
+            f"/session/{session_id}/respond",
+            json={"response": "my own words, not an option", "kind": history.SOURCE_REASSESSMENT},
+        )
+
+    grader.assert_called_once()
 
 
 def test_reassess_refuses_without_source(client):

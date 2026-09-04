@@ -234,6 +234,27 @@ describe("revealing is a disclosed trade", () => {
     expect(await screen.findByText(/It returns a Response\./)).toBeTruthy();
     expect(await screen.findByText(/this question is done/i)).toBeTruthy();
   });
+
+  test("a fresh check offers no reveal — there is no answer to show", async () => {
+    // question_source is a verification / re-assessment question: can_reveal is
+    // false, so neither the control nor its "stops counting" warning appears.
+    api.getTutor.mockResolvedValue({
+      ...state({
+        mode: {
+          ...MODE_SCAFFOLD,
+          question_source: "reassessment",
+          can_reveal: false,
+        },
+      }),
+      turns: [],
+    });
+    panel();
+    // The hint control still renders, so the ladder itself is on screen…
+    expect(await screen.findByRole("button", { name: /hint/i })).toBeTruthy();
+    // …but the reveal is absent.
+    expect(screen.queryByRole("button", { name: /show answer & get a new question/i })).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
 });
 
 describe("the transcript", () => {

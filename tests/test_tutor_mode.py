@@ -78,6 +78,9 @@ def test_a_pending_verification_is_scaffold_and_wins():
     assert mode.reason == ASKING_VERIFICATION
     assert mode.question == "Where does the pool live?"
     assert mode.question_source == history.SOURCE_VERIFICATION
+    # No stored answer for a fresh check — `/tutor/reveal` refuses one, so the
+    # flag that renders the reveal control must say so too.
+    assert mode.can_reveal is False
 
 
 def test_a_pending_reassessment_is_scaffold():
@@ -87,6 +90,7 @@ def test_a_pending_reassessment_is_scaffold():
     assert mode.mode == SCAFFOLD
     assert mode.reason == ASKING_REASSESSMENT
     assert mode.question_source == history.SOURCE_REASSESSMENT
+    assert mode.can_reveal is False
 
 
 def test_a_re_taught_prompt_reports_its_real_source():
@@ -266,6 +270,25 @@ def test_reveal_is_not_offered_twice():
     node = _node()
     node.tutor_state.revealed = True
     assert mode_for(node).can_reveal is False
+
+
+def test_reveal_is_not_offered_for_a_fresh_check():
+    """A verification / re-assessment question ships no answer — there is no
+    stored reveal to show, and `/tutor/reveal` refuses one. `can_reveal` agrees
+    so the frontend never renders the control and its "stops counting" warning
+    for a question that cannot be revealed."""
+    node = _graded(_node())
+    node.gap_state.pending_verification = {"question": "Where does the pool live?"}
+    assert mode_for(node).can_reveal is False
+
+    node.gap_state.pending_verification = None
+    node.gap_state.pending_reassessment = {"question": "Again, differently."}
+    assert mode_for(node).can_reveal is False
+
+    # The unit's own live prompt is still revealable — the fix is scoped to
+    # fresh checks, not to scaffolds in general.
+    node.gap_state.pending_reassessment = None
+    assert mode_for(_node()).can_reveal is True
 
 
 def test_new_question_clears_the_ladder_but_keeps_the_stop_turn_count():

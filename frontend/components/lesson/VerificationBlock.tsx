@@ -1,17 +1,21 @@
 "use client";
 
 import Button from "@/components/ui/Button";
+import ChoiceOrText from "@/components/lesson/ChoiceOrText";
 import Prose from "@/components/ui/Prose";
 import { t } from "@/lib/strings";
 
 /**
- * A check on a named belief, asked instead of the lesson's own question.
+ * A check on a named belief, or a fresh question about the objective — asked
+ * instead of the lesson's own question.
  *
  * Two things here are load-bearing and were both bugs before they were rules.
  *
- * NO MODEL ANSWER AND NO REVEAL. Nothing is sent and nothing is rendered, because
- * showing the answer beside the question is what made re-asking meaningless
- * (§18.7).
+ * NO MODEL ANSWER AND NO REVEAL. The unit's explanation answers a different
+ * question and is never shown here (§18.7). A re-assessment MAY still offer four
+ * options (D10, revised): those are a fresh multiple choice for the NEW question,
+ * graded against the objective like typed text, with no option flagged correct.
+ * A verification question is always text-only — it passes `choices={[]}`.
  *
  * `Not now` CLEARS THE VERIFICATION, which is what brings the lesson's own
  * composer back — see the invariant in `AnswerComposer`. It is not a cancel that
@@ -23,6 +27,7 @@ import { t } from "@/lib/strings";
  */
 export default function VerificationBlock({
   question,
+  choices = [],
   answer,
   onAnswerChange,
   onSubmit,
@@ -32,6 +37,8 @@ export default function VerificationBlock({
   onStuck,
 }: {
   question: string;
+  /** Four options for a re-assessment question, or `[]` (always `[]` for a check). */
+  choices?: string[];
   answer: string;
   onAnswerChange: (value: string) => void;
   onSubmit: () => void;
@@ -50,13 +57,15 @@ export default function VerificationBlock({
     <div className="flex flex-col gap-3">
       <Prose text={question} size="lede" tone="chalk" />
       <p className="text-meta text-graphite">{t.lesson.verificationHelp}</p>
-      <textarea
-        value={answer}
-        onChange={(e) => onAnswerChange(e.target.value)}
-        placeholder={t.lesson.answerPlaceholder}
-        rows={4}
-        className="w-full resize-none rounded-field border border-rule bg-trench p-3 text-start text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
+
+      <ChoiceOrText
+        choices={choices}
+        answer={answer}
+        onAnswerChange={onAnswerChange}
+        onSubmit={onSubmit}
+        loading={loading}
       />
+
       {error && <p className="measure text-aside text-rust">{error}</p>}
       <div className="flex gap-2">
         <Button variant="primary" size="md" onClick={onSubmit} disabled={loading || !answer.trim()}>
