@@ -808,6 +808,15 @@ export interface LessonBody {
   takeaway?: string;
   /** What to hold yourself here versus what you can safely delegate. */
   ownership?: string;
+  /**
+   * An optional four-option rendering of `prompt`. Present only when the
+   * question's form has a single statable answer; `[]` or absent everywhere
+   * else, including every lesson taught before choices existed, and on a
+   * degraded fallback lesson. The learner chooses at answer time whether to
+   * pick an option or write their own — either way the text posted back is
+   * graded against the objective, so no option is flagged here as the right one.
+   */
+  choices?: string[];
 }
 
 /**
@@ -846,6 +855,13 @@ export interface RetryOffer {
 export interface PendingQuestion {
   kind: "verification" | "reassessment";
   question: string;
+  /**
+   * Four options for a re-assessment question, or `[]`. A verification question
+   * is always `[]`; absent from a backend older than this. Not an answer key — a
+   * pick is graded against the objective like typed text; see `LessonBody.choices`
+   * and D10.
+   */
+  choices?: string[];
 }
 
 export interface Lesson {
@@ -947,7 +963,7 @@ export const requestVerification = (
  * charged on issue.
  */
 export const requestReassessment = (session_id: string, node_id?: string) =>
-  post<{ node_id: string; question: string; retry: RetryOffer }>(
+  post<{ node_id: string; question: string; choices?: string[]; retry: RetryOffer }>(
     `/session/${session_id}/reassess`,
     { node_id },
   );

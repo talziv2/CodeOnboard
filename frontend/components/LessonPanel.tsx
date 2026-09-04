@@ -183,7 +183,15 @@ export default function LessonPanel({
    * closed is by definition absent from it.
    */
   const [verification, setVerification] = useState<
-    { kind: "verification" | "reassessment"; question: string; gaps?: NodeGap[] } | null
+    {
+      kind: "verification" | "reassessment";
+      question: string;
+      gaps?: NodeGap[];
+      // Four options for a re-assessment question, or `[]` (always `[]` for a
+      // check). Rendered by `VerificationBlock` via `ChoiceOrText`; a pick is
+      // graded against the objective like typed text (D10).
+      choices?: string[];
+    } | null
   >(null);
   const [verifying, setVerifying] = useState(false);
 
@@ -329,7 +337,11 @@ export default function LessonPanel({
         // got to take — and would leave the composer offering a prompt that is
         // spent. Restored from the server, which is the only thing that knows.
         if (got.pending) {
-          setVerification({ kind: got.pending.kind, question: got.pending.question });
+          setVerification({
+            kind: got.pending.kind,
+            question: got.pending.question,
+            choices: got.pending.choices ?? [],
+          });
         }
       })
       .catch((e) => setError(errorText(e.message)))
@@ -563,7 +575,11 @@ export default function LessonPanel({
     setError(null);
     try {
       const prompt = await requestReassessment(sessionId, nodeId);
-      setVerification({ kind: "reassessment", question: prompt.question });
+      setVerification({
+        kind: "reassessment",
+        question: prompt.question,
+        choices: prompt.choices ?? [],
+      });
       onSurfaceChanged?.("understanding");
       setAnswer("");
       setResult(null);
@@ -1211,6 +1227,7 @@ export default function LessonPanel({
                   <VerificationBlock
                     onStuck={onStuck}
                     question={verification.question}
+                    choices={verification.choices ?? []}
                     answer={answer}
                     onAnswerChange={setAnswer}
                     onSubmit={onSubmitPending}
@@ -1222,6 +1239,7 @@ export default function LessonPanel({
                   <AnswerComposer
                     onStuck={onStuck}
                     prompt={lesson.lesson.prompt}
+                    choices={lesson.lesson.choices}
                     answer={answer}
                     onAnswerChange={setAnswer}
                     onSubmit={submitAnswer}

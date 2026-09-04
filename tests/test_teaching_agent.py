@@ -15,6 +15,7 @@ from backend.agents.teaching.agent import (
     _SYSTEM_PROMPT,
     _build_prior_context,
     _build_user_content,
+    _choices_directive,
     _format_doc_context,
     _parse_output,
     _read_node_source,
@@ -73,6 +74,18 @@ def _make_mock_client(content: str) -> MagicMock:
     message.content = [MagicMock(text=content)]
     client = MagicMock()
     client.messages.create.return_value = message
+    return client
+
+
+def _make_sequenced_client(*contents: str) -> MagicMock:
+    """A client that returns each `contents` string on successive create() calls.
+
+    For the choice path, which makes two: the lesson, then the drift-gate check.
+    """
+    client = MagicMock()
+    client.messages.create.side_effect = [
+        MagicMock(content=[MagicMock(text=c)]) for c in contents
+    ]
     return client
 
 
@@ -394,6 +407,194 @@ def test_parse_output_defaults_prompt_kind():
     payload = {k: v for k, v in FAKE_LESSON_OUTPUT.items() if k != "prompt_kind"}
     output = _parse_output(json.dumps(payload))
     assert output.prompt_kind == "predict-then-reveal"
+
+
+# ── multiple-choice options ──────────────────────────────────────────────────
+#
+# `choices` is an OPTIONAL four-option rendering of the prompt. It carries no
+# correct answer — a selected option is graded against the objective exactly as
+# typed text is — so these tests are about shape, not marking: four clean
+# distinct strings survive, anything else is dropped, and a form with no
+# one-phrase answer never keeps them.
+
+_FOUR = ["Returns the request", "Returns None", "Raises", "Returns a new Session"]
+# One correct / one partial / two wrong — the verdict map the model must return
+# alongside `choices`. Without a clean map `run` drops the options.
+_VERDICTS = {
+    "Returns the request": "correct",
+    "Returns a new Session": "partial",
+    "Returns None": "wrong",
+    "Raises": "wrong",
+}
+_CHOICE_LESSON = {**FAKE_LESSON_OUTPUT, "choices": _FOUR, "choice_verdicts": _VERDICTS}
+
+
+def test_parse_output_keeps_four_clean_choices():
+    output = _parse_output(json.dumps({**FAKE_LESSON_OUTPUT, "choices": _FOUR}))
+    assert output.choices == _FOUR
+
+
+def test_parse_output_defaults_choices_to_empty():
+    output = _parse_output(json.dumps(FAKE_LESSON_OUTPUT))
+    assert output.choices == []
+
+
+def test_parse_output_drops_choices_that_are_not_four():
+    output = _parse_output(json.dumps({**FAKE_LESSON_OUTPUT, "choices": _FOUR[:3]}))
+    assert output.choices == []
+
+
+def test_parse_output_drops_choices_with_a_duplicate():
+    dupe = ["A", "B", "C", "A"]
+    output = _parse_output(json.dumps({**FAKE_LESSON_OUTPUT, "choices": dupe}))
+    assert output.choices == []
+
+
+def test_parse_output_drops_choices_with_a_blank_or_non_string():
+    output = _parse_output(json.dumps({**FAKE_LESSON_OUTPUT, "choices": ["A", "B", "  ", "D"]}))
+    assert output.choices == []
+    output = _parse_output(json.dumps({**FAKE_LESSON_OUTPUT, "choices": "not a list"}))
+    assert output.choices == []
+
+
+@patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
+def test_choices_survive_for_a_choice_form(mock_read):
+    # The default node's kind is unmapped, so it falls to `predict-then-reveal`,
+    # which is a choice form. Order is shuffled, so compare as a set.
+    state, node = _make_state_with_current_node()
+    client = _make_mock_client(json.dumps(_CHOICE_LESSON))
+    result = run(state, client=client)
+    assert result.current_lesson["prompt_kind"] == "predict-then-reveal"
+    assert set(result.current_lesson["choices"]) == set(_FOUR)
+    assert len(result.current_lesson["choices"]) == 4
+    assert result.current_lesson["choice_verdicts"] == _VERDICTS
+
+
+@patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
+def test_choices_dropped_when_the_verdict_map_is_malformed(mock_read):
+    # Four clean options, but no clean one-correct/one-partial/two-wrong map →
+    # a pick could not be graded deterministically, so the options go too.
+    state, node = _make_state_with_current_node()
+    bad = {**FAKE_LESSON_OUTPUT, "choices": _FOUR,
+           "choice_verdicts": {c: "correct" for c in _FOUR}}
+    client = _make_sequenced_client(json.dumps(bad), "ALIGNED", "SOUND")
+    result = run(state, client=client)
+    assert result.current_lesson["choices"] == []
+    assert result.current_lesson["choice_verdicts"] == {}
+    assert any("verdicts missing or malformed" in e for e in state.errors)
+
+
+@patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
+def test_a_drifted_question_drops_the_choices_and_keeps_text(mock_read):
+    # Gate says DRIFTED → options gone, prompt still there, error recorded.
+    state, node = _make_state_with_current_node()
+    client = _make_sequenced_client(json.dumps(_CHOICE_LESSON), "DRIFTED")
+    result = run(state, client=client)
+    assert result.current_lesson["choices"] == []
+    assert result.current_lesson["prompt"]
+    assert any("drifted from objective" in e for e in state.errors)
+
+
+@patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
+def test_an_aligned_and_sound_question_keeps_the_choices(mock_read):
+    state, node = _make_state_with_current_node()
+    client = _make_sequenced_client(json.dumps(_CHOICE_LESSON), "ALIGNED", "SOUND")
+    result = run(state, client=client)
+    assert set(result.current_lesson["choices"]) == set(_FOUR)
+    assert result.current_lesson["choice_verdicts"] == _VERDICTS
+    assert not any("drifted" in e or "no single correct" in e for e in state.errors)
+
+
+@patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
+def test_an_unsound_option_set_drops_the_choices(mock_read):
+    # Question is on-objective, but the option the model marked correct is not a
+    # complete answer → options gone, text prompt kept. A first-attempt lesson
+    # does not regenerate (too expensive); that is `reassess.py`'s job.
+    state, node = _make_state_with_current_node()
+    client = _make_sequenced_client(
+        json.dumps(_CHOICE_LESSON),
+        "ALIGNED",
+        "UNSOUND",
+    )
+    result = run(state, client=client)
+    assert result.current_lesson["choices"] == []
+    assert result.current_lesson["prompt"]
+    assert any("marked-correct option" in e for e in state.errors)
+
+
+@patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
+def test_the_drift_gate_is_skipped_when_there_are_no_choices(mock_read):
+    # A non-choice form never makes the second call.
+    state, node = _make_state_with_current_node()
+    node.lesson_brief = {"kind": "risk"}  # → critique, no choices
+    client = _make_mock_client(json.dumps({**FAKE_LESSON_OUTPUT, "choices": _FOUR}))
+    run(state, client=client)
+    assert client.messages.create.call_count == 1
+
+
+@patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
+def test_choice_order_is_shuffled_and_stable_per_node(mock_read):
+    # Position must not leak the answer, and a re-render of the same stop must
+    # not reshuffle under the learner — the node id seeds it.
+    ordered = ["alpha one", "beta two", "gamma three", "delta four"]
+    verdicts = {"alpha one": "correct", "beta two": "partial",
+                "gamma three": "wrong", "delta four": "wrong"}
+    state, node = _make_state_with_current_node()
+    client = _make_mock_client(
+        json.dumps({**FAKE_LESSON_OUTPUT, "choices": ordered, "choice_verdicts": verdicts})
+    )
+    run(state, client=client)
+    first = list(node.cached_lesson["choices"])
+    assert set(first) == set(ordered)
+    # Cache hit path returns the same order.
+    state.current_lesson = None
+    run(state, client=client)
+    assert node.cached_lesson["choices"] == first
+
+
+@patch("backend.agents.teaching.agent._read_source_lines", return_value=FAKE_SOURCE)
+def test_choices_are_dropped_for_a_form_with_no_one_phrase_answer(mock_read):
+    # A `risk` unit teaches the `critique` form — "what does this change break?"
+    # — which a four-option menu cannot express, so the options are dropped even
+    # though the model returned four clean ones.
+    state, node = _make_state_with_current_node()
+    node.lesson_brief = {"kind": "risk"}
+    client = _make_mock_client(json.dumps({**FAKE_LESSON_OUTPUT, "choices": _FOUR}))
+    result = run(state, client=client)
+    assert result.current_lesson["prompt_kind"] == "critique"
+    assert result.current_lesson["choices"] == []
+
+
+def test_system_prompt_documents_the_choice_composition():
+    assert "choices:" in _SYSTEM_PROMPT
+    assert "EXACTLY FOUR" in _SYSTEM_PROMPT
+    # ONE correct / ONE partial / TWO wrong, and the anti-shape-tell rule.
+    assert "ONE correct, ONE partial, TWO wrong" in _SYSTEM_PROMPT
+    assert "PARTIAL" in _SYSTEM_PROMPT
+    assert "RANDOM order" in _SYSTEM_PROMPT
+
+
+def test_choices_directive_requires_four_for_a_choice_form():
+    # The default node falls to `predict-then-reveal`, a choice form.
+    _, node = _make_state_with_current_node()
+    directive = _choices_directive(node)
+    assert "EXACTLY FOUR" in directive
+    assert "multiple-choice" in directive
+
+
+def test_choices_directive_asks_for_empty_on_a_non_choice_form():
+    _, node = _make_state_with_current_node()
+    node.lesson_brief = {"kind": "risk"}  # → critique
+    directive = _choices_directive(node)
+    assert "Return []" in directive
+    assert "text only" in directive
+
+
+def test_choices_directive_reaches_the_user_content():
+    _, node = _make_state_with_current_node()
+    content = _build_user_content(FAKE_GOAL, node, FAKE_SOURCE, "")
+    assert "CHOICES —" in content
+    assert "EXACTLY FOUR" in content
 
 
 # ── docs/ pairing (F4) ────────────────────────────────────────────────────────

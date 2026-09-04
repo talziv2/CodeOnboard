@@ -20,7 +20,6 @@ from typing import Literal
 import anthropic
 from pydantic import BaseModel
 
-from backend.learning.flags import gaps_enabled
 from backend.learning.gaps import (
     GAP_KINDS,
     Gap,
@@ -217,13 +216,14 @@ fences, no preamble.
 """
 
 
-# APPENDED to `_SYSTEM_PROMPT` when CODEONBOARD_GAPS=1, never woven into it.
+# APPENDED to `_SYSTEM_PROMPT`, never woven into it.
 #
-# Two reasons it is a separate block rather than an edit. First, the flag-off
-# prompt stays BYTE-IDENTICAL to the pre-M2 one, so "flag off changes nothing"
-# is true by construction rather than by review. Second, the calibration gate
-# (the 48-case evaluation, re-run flag-on) is then measuring exactly one
-# difference.
+# It stayed a separate block when `CODEONBOARD_GAPS` could switch it off, so
+# that "flag off changes nothing" was true by construction and the calibration
+# gate measured exactly one difference. The flag is gone — gaps are the only
+# grading behaviour — and the block stays separate anyway, because the recorded
+# 48-case evaluation was run against exactly this concatenation and the
+# boundary is what makes the two halves comparable to the evidence on file.
 #
 # It amends the key list above deliberately: `classification`, `gap_kind` and
 # `rationale` keep their meaning, and `gaps` is added alongside them.
@@ -335,8 +335,8 @@ re-grade, and every entry in `gaps` must then also carry:
 
 
 def _system_prompt() -> str:
-    """The prompt for this call. Flag-off it is the pre-M2 prompt, unchanged."""
-    return _SYSTEM_PROMPT + _GAPS_ADDENDUM if gaps_enabled() else _SYSTEM_PROMPT
+    """The prompt for this call."""
+    return _SYSTEM_PROMPT + _GAPS_ADDENDUM
 
 
 def _open_gaps_section(node: LearningNode) -> str:
@@ -368,9 +368,9 @@ def _build_user_content(node: LearningNode, user_response: str) -> str:
     lesson = node.cached_lesson or {}
     tags = ", ".join(node.concept_tags) if node.concept_tags else "(none)"
     objective = node.objective() or "(none stated — mark against the question)"
-    # Flag-off this is empty, so the user message is unchanged too — the flag
-    # contract holds on both halves of the call, not just the system prompt.
-    open_gaps = _open_gaps_section(node) if gaps_enabled() else ""
+    # Empty on a first detection, which is what makes a re-grade recognisably
+    # different: no section, no ids, and `refers_to` is moot.
+    open_gaps = _open_gaps_section(node)
     return (
         f"LEARNING OBJECTIVE (the marking standard):\n{objective}\n\n"
         f"Node title:\n{node.title}\n\n"
@@ -442,10 +442,7 @@ def run(
         output = GraderOutput(classification="partial", rationale=_GRADING_FAILED)
         graded = False
 
-    # Flag-off, the model was never asked for gaps and anything it volunteered is
-    # ignored: the whole path below is skipped, so the pre-M2 behaviour is exact
-    # rather than merely equivalent.
-    gap_report = _record_gaps(node, output) if gaps_enabled() else None
+    gap_report = _record_gaps(node, output)
 
     _apply_grade(state, current_id, output.classification)
     state.last_grade = {
@@ -453,12 +450,12 @@ def run(
         "gap_kind": output.gap_kind,
         "rationale": output.rationale,
         "graded": graded,
-    }
-    if gap_report is not None:
         # Matched / new / rejected for this answer. Nothing reads it — it exists
         # so the re-grade duplication rate is observable in a harness rather
-        # than a hypothesis (gap-model.md §3.2). Absent entirely flag-off.
-        state.last_grade["gap_report"] = gap_report
+        # than a hypothesis (gap-model.md §3.2). Always present now that gap
+        # recording is unconditional; it used to be absent flag-off.
+        "gap_report": gap_report,
+    }
     return state
 
 

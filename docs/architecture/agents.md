@@ -39,7 +39,7 @@ names a responsibility in the pipeline, not the presence of an LLM call.
 | **Mentor / Planner** | `agents/mentor/` | Sonnet ×1 | Pipeline node 5 | The Dossier (+ the review, when there is one) | `state.graph` — the `LearningGraph`; `state.learning_path`; `state.confidence`; `state.plan_report` |
 | **Briefing** | `agents/briefing/` | Haiku ×1 | Lazily, on the first `GET /session/{id}/welcome` | The Layer B survey, the README, the learner's profile | The welcome paragraph, cached on the session |
 | **Teaching** | `agents/teaching/` | Haiku ×1 (+≤1 retry) | On the first visit to a unit | The unit's objective, the anchored source **read at lesson time**, the Dossier slice or structural neighbourhood, `doc_context`, the learner profile | The lesson, cached on the node |
-| **Grader** | `agents/grader/` | Haiku ×1 | On every answer | The objective, the question, the reference answer, the learner's text | A classification, a rationale, and (flag-on) the named false claims |
+| **Grader** | `agents/grader/` | Haiku ×1 | On every answer | The objective, the question, the reference answer, the learner's text | A classification, a rationale, and the named false claims |
 | **Mutator** | `agents/mentor/mutator.py` | Sonnet ×1 | When a graded answer earns a structural change | The diagnosed gap + candidate evidence from the Dossier, then the Skeleton | A warm-up node spliced into the graph |
 
 Three more model calls sit in `agents/teaching/` and are lesson-writing rather
@@ -50,7 +50,7 @@ the objective). `agents/grader/verification.py` grades the first of those.
 ### Model policy
 
 `claude-sonnet-4-6` is used in exactly two places — the **planner**
-(`mentor/curriculum.py` or `mentor/dossier.py`) and the **Mutator** — because
+(`mentor/curriculum.py`) and the **Mutator** (`mentor/mutator.py`) — because
 both are one-shot synthesis over a large body of evidence. Everything else,
 including every loop, is `claude-haiku-4-5`. The exploration loop
 (`repo/explore.py`) is Haiku for that reason and states it in the module.
@@ -177,7 +177,7 @@ The recurring pattern is: *the model observes, our code decides.*
 | Goal dialogue and synthesis | `tests/test_goal_agent.py`, `tests/test_goal_api.py` |
 | Documentation | `tests/test_documentation_agent.py` |
 | Reviewer | `tests/test_reviewer_agent.py` |
-| Planner (both) | `tests/test_mentor_dossier.py`, `tests/test_curriculum_planner.py`, `tests/test_curriculum.py` |
+| Planner | `tests/test_curriculum_planner.py`, `tests/test_curriculum.py`, `tests/test_dossier_rendering.py` |
 | Briefing | `tests/test_briefing.py` |
 | Teaching | `tests/test_teaching_agent.py`, `tests/test_teaching_forms.py` |
 | Grader | `tests/test_grader_agent.py`, `tests/test_grader_gaps.py` |

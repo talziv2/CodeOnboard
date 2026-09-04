@@ -640,9 +640,9 @@ export const t = {
         cue: "Open it.",
       },
       composer: {
-        title: "How a stop counts",
+        title: "How you answer",
         body:
-          "Answer in your own words and submit — ⌘↵ works too. It's marked against the objective still pinned above, and the verdict is what moves your progress. Skipping is allowed; it just doesn't count as demonstrated.",
+          "Two ways to answer, and you choose. Some questions give you four options — pick the one that's right, and only one is. Every question also takes a written answer: type it and submit (⌘↵ works). Either way it's marked against the objective pinned above, and that verdict is what moves your progress. Skipping is allowed; it just doesn't count as demonstrated.",
       },
       route: {
         title: "Stepping back",
@@ -1192,6 +1192,19 @@ export const t = {
     submit: "Submit",
     skipStop: "Skip this stop",
     submitHint: "⌘↵ to submit",
+    /**
+     * The two ways to answer a question that ships options. The learner picks
+     * the input, not the marking: an option and a typed sentence are graded the
+     * same way, against the objective.
+     */
+    writeOwnAnswer: "Write my own answer instead",
+    chooseFromOptions: "Choose from the options instead",
+    /**
+     * Shown under a question that ships no options — so the absence of a
+     * multiple choice reads as a property of this question, not a page that
+     * failed to load one.
+     */
+    textOnlyQuestion: "No multiple choice for this question — type your answer.",
     loadingShort: "Loading…",
     nextStop: "Next stop →",
     /**

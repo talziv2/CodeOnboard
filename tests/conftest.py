@@ -6,24 +6,29 @@
 passed every one of them in isolation. The cause was three steps long:
 
 1. `backend/api.py` calls `load_dotenv(override=True)` **at import time**;
-2. the developer's `.env` carries `CODEONBOARD_CURRICULUM=1` for manual E2E runs;
+2. the developer's `.env` carried `CODEONBOARD_CURRICULUM=1` for manual E2E runs;
 3. so importing `backend.api` — which eleven test files do, directly or through
    `tests.test_session_api` — silently switched the Mentor to the objective-first
    planner for every test that ran afterwards.
 
-`test_mentor_dossier.py` exercises the *pre-B3* planner and pinned nothing, so it
-got the curriculum planner, its scripted wire failed validation, `state.graph`
-came back `None`, and fourteen assertions died on `NoneType has no attribute
-'nodes'`. Its sibling `test_curriculum_planner.py` had always pinned the flag
-explicitly, which is why only one of the pair broke.
+That file exercised the *pre-B3* planner and pinned nothing, so it got the
+curriculum planner, its scripted wire failed validation, `state.graph` came back
+`None`, and fourteen assertions died on `NoneType has no attribute 'nodes'`. Its
+sibling `test_curriculum_planner.py` had always pinned the flag explicitly, which
+is why only one of the pair broke.
+
+Neither the flag nor the pre-B3 planner exists any more — the objective-first
+planner is the only one, so there is nothing left for that particular ambient
+value to switch. The history is kept because the *shape* of the failure is what
+this file is for, and the shape outlives any one flag.
 
 ## Why this is the fix, rather than one more fixture in one more file
 
 The failure was not really about that flag or that file. It was that **an ambient
 value decided which code path ran**, and nothing in the suite said so. Pinning the
-flag in `test_mentor_dossier.py` would have fixed those fourteen tests and left the
-next flag, and the next file, to be discovered the same way — by a full run
-disagreeing with a single-file run, which is the most expensive way to learn it.
+flag in that one file would have fixed those fourteen tests and left the next flag,
+and the next file, to be discovered the same way — by a full run disagreeing with a
+single-file run, which is the most expensive way to learn it.
 
 So flags are neutralised for **every** test here. A test that depends on one has to
 say which and how, and the ones that already do keep working untouched: an autouse
@@ -33,10 +38,9 @@ want over a known-empty starting point rather than over whatever the machine had
 
 This does not touch `load_dotenv(override=True)` itself. That is a separate and
 real footgun — with `override=True` a stale `.env` beats a variable set on the
-command line, so `CODEONBOARD_GAPS=0 uv run uvicorn …` can silently run with gaps
-on — but changing environment precedence changes how the app is *run*, not how it
-is tested, and it is the developer's call rather than a side effect of a test fix.
-Recorded rather than done.
+command line — but changing environment precedence changes how the app is *run*,
+not how it is tested, and it is the developer's call rather than a side effect of
+a test fix. Recorded rather than done.
 """
 import pytest
 
@@ -45,20 +49,23 @@ import pytest
 # matched, so adding one is a decision someone makes here on purpose.
 #
 # Note what "neutralised" means here, because it is not "off". It means UNSET, so
-# each flag falls to the default the repository ships — `0` for the first two, and
-# `1` for `CODEONBOARD_TUTOR`, which defaults ON. That is deliberate: the suite
-# should exercise the configuration a fresh clone actually runs, not a fourth
+# the flag falls to the default the repository ships — `1` for
+# `CODEONBOARD_TUTOR`, which defaults ON. That is deliberate: the suite should
+# exercise the configuration a fresh clone actually runs, not a third
 # configuration that exists only in tests.
 #
 # `CODEONBOARD_TUTOR` was added to this tuple when its default flipped. Before
 # that it was absent, which was a latent version of the very bug this file exists
 # to prevent: a developer `.env` carrying `CODEONBOARD_TUTOR=1` turned the Tutor
 # routes on for every test that imported `backend.api`, and nothing in the suite
-# said so. It is now pinned like the others, so the flag's value in a test is
-# either the shipped default or something the test asked for out loud.
+# said so. It is now pinned, so the flag's value in a test is either the shipped
+# default or something the test asked for out loud.
+#
+# It is the only entry because it is the only flag left. `CODEONBOARD_CURRICULUM`
+# and `CODEONBOARD_GAPS` were removed with the implementations they switched away
+# from; a tuple of one is still the right shape, because the next flag someone
+# adds should have to be added here on purpose.
 AMBIENT_FLAGS = (
-    "CODEONBOARD_CURRICULUM",
-    "CODEONBOARD_GAPS",
     "CODEONBOARD_TUTOR",
 )
 

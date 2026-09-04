@@ -50,18 +50,6 @@ def cell(name: str, repeats: int = 3, ok: bool = True) -> dict:
     }
 
 
-@pytest.fixture(autouse=True)
-def _contain_the_flag(monkeypatch):
-    """`main()` sets CODEONBOARD_CURRICULUM with a raw assignment.
-
-    Without this the flag leaks out of these tests and into every later one in
-    the same process — which is how running the harness tests turned fourteen
-    unrelated planner tests red. monkeypatch restores whatever was there before,
-    whoever changed it in between.
-    """
-    monkeypatch.setenv("CODEONBOARD_CURRICULUM", "0")
-
-
 @pytest.fixture
 def evidence(tmp_path, monkeypatch):
     """A calibration file holding four completed cells."""

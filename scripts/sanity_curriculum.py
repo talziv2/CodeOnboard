@@ -333,14 +333,12 @@ def main() -> int:
         print("cells:", ", ".join(cells))
         print("checks:", ", ".join(list(CHECKS) + ["GROUNDED"]))
         print("bands:", _SCOPE_BANDS)
-        print("flag CODEONBOARD_CURRICULUM will be set to 1")
         return 0
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("ANTHROPIC_API_KEY missing", file=sys.stderr)
         return 2
 
-    os.environ["CODEONBOARD_CURRICULUM"] = "1"
     # The pipeline's nodes receive only state, so the client rides on it and is
     # never constructed for them — api.py injects one and so must this.
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])

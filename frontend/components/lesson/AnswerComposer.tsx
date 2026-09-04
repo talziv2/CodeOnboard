@@ -1,6 +1,9 @@
 "use client";
 
+import { useState } from "react";
+
 import Button from "@/components/ui/Button";
+import ChoiceOrText from "@/components/lesson/ChoiceOrText";
 import Prose from "@/components/ui/Prose";
 import { t } from "@/lib/strings";
 
@@ -13,12 +16,15 @@ import { t } from "@/lib/strings";
  * "Submit" that did different things. That was D2. The panel decides which of the
  * two is on screen; neither component may be made to render alongside the other.
  *
- * Moved out unchanged, including `⌘↵` / `Ctrl↵` as a submit shortcut — the hint
- * beside the button is the only place it is advertised, so removing one without
- * the other would strand it.
+ * WHEN THE LESSON SHIPS `choices` the learner picks the INPUT, not the marking —
+ * `ChoiceOrText` holds that logic, shared with `VerificationBlock`. A selected
+ * option and a typed sentence leave through the same `onAnswerChange` / `onSubmit`
+ * and are graded against the objective identically; there is no "correct" option.
+ * A text-only question (no `choices`) renders exactly as it always did.
  */
 export default function AnswerComposer({
   prompt,
+  choices = [],
   answer,
   onAnswerChange,
   onSubmit,
@@ -28,6 +34,8 @@ export default function AnswerComposer({
   onStuck,
 }: {
   prompt: string;
+  /** Four options, or empty for a text-only question — see `LessonBody.choices`. */
+  choices?: string[];
   answer: string;
   onAnswerChange: (value: string) => void;
   onSubmit: () => void;
@@ -39,15 +47,15 @@ export default function AnswerComposer({
    *
    * A LINK, never a second textarea — the single-composer invariant this file
    * documents is exactly what a second input here would break. The label names
-   * the INTENT rather than the tool ("I'm stuck", not "Chat"), which is what
-   * keeps it from reading as an unrestricted assistant parked beside a graded
-   * question.
+   * the INTENT rather than the tool ("I'm stuck", not "Chat").
    *
    * Absent when the Tutor is not built into the bundle, so this file has no
    * opinion about the flag.
    */
   onStuck?: () => void;
 }) {
+  const [choosing, setChoosing] = useState(choices.length > 0);
+
   return (
     <div data-tour="composer" className="flex flex-col gap-3">
       {/* The question is markdown too — Teaching writes `**Anchor 1:**` and
@@ -55,20 +63,22 @@ export default function AnswerComposer({
           learner has to parse to answer at all was the worst place to print
           syntax. */}
       <Prose text={prompt} size="lede" tone="chalk" />
-      <textarea
-        rows={4}
-        className="w-full resize-none rounded-field border border-rule bg-trench p-3 text-start text-aside text-chalk placeholder:text-graphite focus:border-signal-dim"
-        placeholder={t.lesson.answerPlaceholder}
-        value={answer}
-        onChange={(e) => onAnswerChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault();
-            onSubmit();
-          }
-        }}
-        disabled={loading}
+
+      {/* Says the missing multiple choice is a property of THIS question, not a
+          page that failed to load one. Absent once options are present. */}
+      {choices.length === 0 && (
+        <p className="font-mono text-micro text-graphite">{t.lesson.textOnlyQuestion}</p>
+      )}
+
+      <ChoiceOrText
+        choices={choices}
+        answer={answer}
+        onAnswerChange={onAnswerChange}
+        onSubmit={onSubmit}
+        loading={loading}
+        onChoosingChange={setChoosing}
       />
+
       {error && <p className="text-aside text-rust">{error}</p>}
       <div className="flex items-center gap-3">
         <Button variant="primary" size="md" onClick={onSubmit} disabled={loading || !answer.trim()}>
@@ -86,9 +96,11 @@ export default function AnswerComposer({
             {t.tutor.stuck}
           </button>
         )}
-        <span className="ms-auto font-mono text-micro text-graphite">
-          {t.lesson.submitHint}
-        </span>
+        {!choosing && (
+          <span className="ms-auto font-mono text-micro text-graphite">
+            {t.lesson.submitHint}
+          </span>
+        )}
       </div>
     </div>
   );

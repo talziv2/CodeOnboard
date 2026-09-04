@@ -99,8 +99,20 @@ class TutorMode:
 
         False once already revealed — the prompt is spent and there is nothing
         left to spend.
+
+        False on a VERIFICATION or RE-ASSESSMENT question, because those ship no
+        answer by design and there is no stored reveal to give — `/tutor/reveal`
+        already refuses one with `no_explanation_for_this_question`. Without this,
+        the frontend renders the reveal control and its "this stops counting"
+        warning for a fresh check, and the learner who presses it gets the
+        refusal instead — the offer and its denial on screen at once.
         """
-        return self.is_scaffold and not self.revealed
+        return (
+            self.is_scaffold
+            and not self.revealed
+            and self.question_source
+            not in (history.SOURCE_VERIFICATION, history.SOURCE_REASSESSMENT)
+        )
 
     def to_wire(self) -> dict:
         return {

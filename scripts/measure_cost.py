@@ -64,7 +64,6 @@ from backend.agents.teaching import run as run_teaching  # noqa: E402
 from backend.agents.teaching import verify as teaching_verify  # noqa: E402
 from backend.agents.teaching.agent import _read_node_source  # noqa: E402
 from backend.learning import store as learning_store  # noqa: E402
-from backend.learning.flags import gaps_enabled  # noqa: E402
 from backend.learning.gaps import Gap  # noqa: E402
 from backend.pipeline.runner import (  # noqa: E402
     run_documentation,
@@ -213,21 +212,16 @@ def measure_planning(recorder: RecordingClient) -> tuple[OnboardState, dict]:
     ):
         record(label, fn)
 
-    # BOTH planners, against the SAME dossier. The flag still defaults to 0, so
-    # measuring only the objective-first planner would price something nobody
-    # runs today, and measuring only the old one would price something this
-    # phase exists to replace. One call each makes the comparison nearly free —
-    # and it is exactly the number needed to decide what flipping the default
-    # costs.
-    os.environ["CODEONBOARD_CURRICULUM"] = "0"
-    legacy = OnboardState(repo_url=REPO, goal=dict(GOAL), client=recorder)
-    legacy.repo_path = state.repo_path
-    legacy.investigation = state.investigation
-    legacy.doc_context = state.doc_context
-    record("mentor (flag=0, pre-B3)", lambda: run_mentor(legacy, client=recorder))
-
-    os.environ["CODEONBOARD_CURRICULUM"] = "1"
-    record("mentor (flag=1, B3)", lambda: run_mentor(state, client=recorder))
+    # ONE planner. This used to price both sides of `CODEONBOARD_CURRICULUM`,
+    # because the flag defaulted to the pre-B3 planner and the question the
+    # measurement answered was what flipping that default would cost. The
+    # default flipped, then the flag and the old planner were both removed, so
+    # the second call would now price code that no longer exists.
+    #
+    # The two-planner figures stay on file in
+    # `docs/planning/phases/evidence/` — they are what justified the removal,
+    # and a rerun of this harness is not the place to re-derive them.
+    record("mentor (objective-first)", lambda: run_mentor(state, client=recorder))
 
     return state, stages
 
@@ -395,7 +389,7 @@ def report_verification(verifications: list[dict], journey: int) -> None:
     line = "=" * 78
     print(f"\n{line}\nVERIFICATION (M6) — per gap closed, NOT per unit\n{line}")
     if not verifications:
-        print("  not measured (CODEONBOARD_GAPS=0)")
+        print("  not measured")
         return
     print(f"  {'cycle':<24}{'calls':>6}{'in':>10}{'out':>9}{'cost':>10}  outcome")
     per_cycle = None
@@ -504,13 +498,8 @@ def main() -> int:
         print("scenarios:", ", ".join(n for n, _, _ in SCENARIOS))
         print("projected journey length:", args.journey)
         print("pricing (USD/Mtok):", PRICING)
-        print("CODEONBOARD_CURRICULUM:", os.environ.get("CODEONBOARD_CURRICULUM", "0"))
-        print("CODEONBOARD_GAPS:", os.environ.get("CODEONBOARD_GAPS", "0"))
-        if gaps_enabled():
-            print("verification cycles: 1 open gap, 3 open gaps"
-                  " (2 calls each: question + grading)")
-        else:
-            print("verification cycles: SKIPPED — set CODEONBOARD_GAPS=1 to measure M6")
+        print("verification cycles: 1 open gap, 3 open gaps"
+              " (2 calls each: question + grading)")
         return 0
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
@@ -522,9 +511,6 @@ def main() -> int:
     )
 
     if args.verification_only:
-        if not gaps_enabled():
-            print("CODEONBOARD_GAPS=1 required", file=sys.stderr)
-            return 2
         graph = learning_store.load_graph(args.verification_only, learning_store.DEFAULT_DB_PATH)
         if graph is None:
             print(f"session {args.verification_only} not found", file=sys.stderr)
@@ -569,22 +555,17 @@ def main() -> int:
         )
 
     verifications = []
-    if gaps_enabled():
-        for open_gaps in (1, 3):
-            print(f"verification {open_gaps} open gap(s) ...", flush=True)
-            verifications.append(
-                measure_verification(open_gaps, planned, recorder, repo_path)
-            )
-    else:
-        print("skipping verification (CODEONBOARD_GAPS=0) — set it to 1 to measure M6",
-              flush=True)
+    for open_gaps in (1, 3):
+        print(f"verification {open_gaps} open gap(s) ...", flush=True)
+        verifications.append(
+            measure_verification(open_gaps, planned, recorder, repo_path)
+        )
 
     report(planning, scenarios, args.journey, verifications)
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     payload = {
-        "curriculum_flag": os.environ.get("CODEONBOARD_CURRICULUM", "0"),
         "repo": REPO,
         "goal": GOAL,
         "units_planned": len(planned.graph.nodes),
@@ -592,7 +573,6 @@ def main() -> int:
         "planning": planning,
         "scenarios": scenarios,
         "verifications": verifications,
-        "gaps_flag": os.environ.get("CODEONBOARD_GAPS", "0"),
         "projected_journey_units": args.journey,
     }
     (out / "cost-measurement.json").write_text(

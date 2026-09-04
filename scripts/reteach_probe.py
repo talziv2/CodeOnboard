@@ -1,7 +1,7 @@
 """M5 — is a multi-gap re-teach still a good LESSON?
 
     uv run python scripts/reteach_probe.py --dry-run
-    CODEONBOARD_GAPS=1 uv run python scripts/reteach_probe.py
+    uv run python scripts/reteach_probe.py
 
 gap-model.md M5 names the risk this measures and says no test asserts it:
 "re-teach quality with 3 gaps at once — a prompt property no test asserts
@@ -46,7 +46,6 @@ import anthropic  # noqa: E402
 from backend.agents.teaching import respond as teaching_respond  # noqa: E402
 from backend.agents.teaching.agent import _read_node_source  # noqa: E402
 from backend.learning import store as learning_store  # noqa: E402
-from backend.learning.flags import gaps_enabled  # noqa: E402
 from backend.learning.gaps import Gap  # noqa: E402
 from backend.learning.graph import LearningGraph  # noqa: E402
 from backend.pipeline.state import OnboardState  # noqa: E402
@@ -176,10 +175,6 @@ def main() -> int:
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("ANTHROPIC_API_KEY missing", file=sys.stderr)
         return 2
-    if not gaps_enabled():
-        print("CODEONBOARD_GAPS=1 required", file=sys.stderr)
-        return 2
-
     graph, node = load_node()
     if node is None:
         print(f"node {NODE_PREFIX} not found in session {SESSION}", file=sys.stderr)

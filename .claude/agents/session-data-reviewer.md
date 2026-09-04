@@ -72,9 +72,11 @@ no_plan_snapshot`, not 404, and no reconstruction. A plan rebuilt from a
 half-walked graph is not the plan; it is wherever the learner had got to,
 relabelled.
 
-**8. The flag gates behaviour, never storage (D19).** Nothing in `store.py` may
-read `CODEONBOARD_GAPS`. Gap data written flag-on survives a flag-off load, a
-flag-off re-save, and returns intact when the flag comes back.
+**8. A flag gates behaviour, never storage (D19).** Nothing in `store.py` may
+read a feature flag, or the environment at all. A payload written flag-on survives
+a flag-off load, a flag-off re-save, and returns intact when the flag comes back.
+`CODEONBOARD_TUTOR` is the flag this currently protects — `CODEONBOARD_GAPS`, the
+one it was written for, has been removed.
 
 **9. Migrations are idempotent, and dry by default.** `IF NOT EXISTS`,
 lookup-then-insert, or `UPDATE … WHERE column IS NULL`. The first run is the one

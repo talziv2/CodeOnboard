@@ -234,6 +234,32 @@ describe("Ask me again", () => {
     expect(api.requestVerification).not.toHaveBeenCalled();
   });
 
+  test("a re-assessment that ships four options renders them, with a way to type instead", async () => {
+    // D10 (revised): a retry MAY be a multiple choice. The learner still chooses
+    // the input — picking an option and typing both post as a re-assessment.
+    const OPTS = ["the full claim", "half of it", "a wrong claim", "another wrong one"];
+    api.requestReassessment.mockResolvedValue({
+      node_id: "n1", question: "A FRESH OBJECTIVE QUESTION", choices: OPTS, retry: PENDING,
+    });
+    api.respondToReassessment.mockResolvedValue({ ...GRADED, retry: PENDING });
+    const user = await grade();
+
+    await user.click(screen.getByRole("button", { name: t.lesson.askAgain }));
+    await screen.findByText("A FRESH OBJECTIVE QUESTION");
+
+    // Four options, plus a toggle down to a textarea.
+    expect(screen.getAllByRole("radio")).toHaveLength(4);
+    await user.click(screen.getByText(t.lesson.writeOwnAnswer));
+    expect(screen.queryByRole("radio")).toBeNull();
+    expect(screen.getByPlaceholderText(t.lesson.answerPlaceholder)).toBeTruthy();
+
+    // Back to options, pick one, and it posts as a re-assessment.
+    await user.click(screen.getByText(t.lesson.chooseFromOptions));
+    await user.click(screen.getByText(OPTS[0]));
+    await user.click(screen.getByRole("button", { name: t.lesson.submit }));
+    expect(api.respondToReassessment).toHaveBeenCalledWith("s1", OPTS[0], "n1");
+  });
+
   test("runs a verification when the server says verify, aimed at its gap", async () => {
     api.respond.mockResolvedValue({ ...GRADED, retry: CAN_VERIFY });
     api.requestVerification.mockResolvedValue({

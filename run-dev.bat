@@ -29,8 +29,13 @@ rem
 rem NO FLAGS ARE SET HERE, deliberately. This used to force
 rem CODEONBOARD_CURRICULUM=1 and CODEONBOARD_GAPS=1, so anyone who launched the
 rem project this way got a different planner and a different remediation path
-rem than the documented commands give, with nothing on screen to say so. Put
-rem either in `.env` if you want it; see `.env.example`.
+rem than the documented commands give, with nothing on screen to say so.
+rem
+rem Both of those flags have since been removed - the planner and the gap model
+rem they selected are simply how the system works now - which settles that
+rem divergence rather than papering over it. The rule stands for whatever comes
+rem next: a launcher that quietly sets a flag makes the app it starts different
+rem from the app the documentation describes.
 rem
 rem THE TUTOR NEEDS NOTHING SET, and that is the point of its default rather
 rem than an accident. CODEONBOARD_TUTOR and NEXT_PUBLIC_CODEONBOARD_TUTOR both

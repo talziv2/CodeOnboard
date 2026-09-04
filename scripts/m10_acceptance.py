@@ -1,7 +1,7 @@
 """M10 — the Gap Model's acceptance cases, run live.
 
     uv run python scripts/m10_acceptance.py --dry-run
-    CODEONBOARD_GAPS=1 uv run python scripts/m10_acceptance.py
+    uv run python scripts/m10_acceptance.py
 
 gap-model.md §4 states two acceptance cases and says plainly that neither may be
 satisfied by a unit test. This runs both, end to end, with real model calls
@@ -57,7 +57,6 @@ from backend.agents.teaching.agent import _read_node_source  # noqa: E402
 from backend.learning import adaptation, history  # noqa: E402
 from backend.learning import store as learning_store  # noqa: E402
 from backend.learning import understanding  # noqa: E402
-from backend.learning.flags import gaps_enabled  # noqa: E402
 from backend.learning.gaps import Gap  # noqa: E402
 from backend.learning.graph import LearningGraph, understanding_of  # noqa: E402
 from backend.pipeline.state import OnboardState  # noqa: E402
@@ -407,10 +406,6 @@ def main() -> int:
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("ANTHROPIC_API_KEY missing", file=sys.stderr)
         return 2
-    if not gaps_enabled():
-        print("CODEONBOARD_GAPS=1 required", file=sys.stderr)
-        return 2
-
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"], timeout=180.0)
     ac1 = [run_case(c, client) for c in cases]
     ac2 = [run_ac2(c, prior, client) for c, prior in zip(cases, ac1)]

@@ -140,7 +140,7 @@ bounded and evaluable, and that a rule which *could* be stated and tested is.
 How often does it run, per what, and against which measurement? Baseline ≈$0.405
 warm for a 12-unit session (`docs/planning/phases/cost-optimization.md`). A
 per-answer call costs very differently from a per-session one. Sonnet is currently
-used only for one-shot synthesis over a large body of evidence — four modules;
+used only for one-shot synthesis over a large body of evidence — two modules;
 Haiku everywhere else including every loop. Cost is a metric, not a design
 constraint (D26): do not optimise a number nobody has measured, and do not add one
 without saying what it will cost.
