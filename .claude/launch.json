@@ -26,6 +26,41 @@
       "cwd": "frontend",
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "demo-app",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "python",
+        "-m",
+        "uvicorn",
+        "scripts.ux_fixture_app:app",
+        "--port",
+        "8124"
+      ],
+      "port": 8124,
+      "env": {
+        "CODEONBOARD_UX_DB": "data/demo.db",
+        "PYTHONIOENCODING": "utf-8"
+      }
+    },
+    {
+      "name": "demo-ui",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3124"
+      ],
+      "cwd": "frontend",
+      "port": 3124,
+      "env": {
+        "API_ORIGIN": "http://localhost:8124",
+        "NEXT_DIST_DIR": ".next-demo"
+      }
     }
   ]
 }
