@@ -17,6 +17,7 @@ uv run uvicorn backend.api:app --reload    # http://localhost:8000
 | Package | Owns | README |
 |---|---|---|
 | `api.py` | The HTTP surface. Routing, status codes, request parsing, and orchestration of pieces written elsewhere. Nothing in it decides learning policy | — |
+| `mcp_server.py` | The contribution handoff bridge — a **read-only** stdio MCP server the learner's coding agent spawns, exposing two tools. Identity from the environment; it writes no row | — |
 | [`agents/`](agents/README.md) | Eight agents, each with one job and one prompt. Two of them call no model | ✔ |
 | [`repo/`](repo/README.md) | Cloning, the tree-sitter index, the grounding oracle, the six tools, the exploration loop, the survey and the Dossier | ✔ |
 | [`learning/`](learning/README.md) | The learning graph, gaps, understanding, progress, adaptation policy, retry dispatch, scope, reset — and the SQLite store | ✔ |

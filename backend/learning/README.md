@@ -23,6 +23,9 @@ is what lets the whole policy be tested without an API key.
 | `retry.py` | Which retry *Ask me again* offers, and why not when it does not | ✔ |
 | `scope.py` | `shorter` / `deeper` — moving units between priority buckets | ✔ |
 | `reset.py` | `Start over` — restore the plan, discard the walk | ✔ |
+| `contribution.py` | The `contribute_code` stage's state, and the deterministic checks on a change. `check_scope` is **path scope only**; `check_paths` is the same claim from paths alone and names what it did not look at | ✔ |
+| `handoff.py` | What leaves for a coding agent: repository knowledge and learner state, in two namespaces that are never mixed | ✔ |
+| `coverage.py` | Which survey subsystems the curriculum never touched — what the journey did *not* cover | ✔ |
 | `patterns.py` | L2 observations over answers | ✔ |
 | `gap_insight.py` | L2 observations over gap objects | ✔ |
 | `flags.py` | `CODEONBOARD_TUTOR`. **Nothing in `store.py` may import this** | ✔ |

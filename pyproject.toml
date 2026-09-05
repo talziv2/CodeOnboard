@@ -28,6 +28,12 @@ dependencies = [
     # audience, expiry and nonce against Google's published keys.
     "authlib>=1.3.0",
     "httpx>=0.27.0",
+    # The handoff bridge (`backend/mcp_server.py`) — the official Model Context
+    # Protocol SDK, so the wire format is not hand-rolled. Measured before it was
+    # added: 16 packages in, 0 out, and exactly one existing pin moved (`idna`
+    # 3.17 -> 3.19). fastapi, starlette, pydantic, anthropic and langgraph are
+    # untouched, which is why this is a dependency and not 110 lines of JSON-RPC.
+    "mcp>=2.1.1",
 ]
 
 # Stage 5 removed the embedding/vector stack with the retrieval layer it served:

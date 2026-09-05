@@ -2,6 +2,12 @@
 .DS_Store
 .venv/
 data/repos/
+# The learner's WRITABLE working copy, which `Continue in Claude Code` opens and
+# a coding agent edits. Deliberately NOT `data/repos/`: that is one shared,
+# pinned checkout the grounding oracle resolves every anchor against, and an
+# agent editing it would move the ground under every lesson in every session.
+# Prepared per machine by `tools/prepare_workspace.py`; never committed.
+/workspace/
 data/*.db
 # Hand-made copies of a database, kept beside it while something is being
 # compared or rolled back — `sessions.db.post-f2`, `sessions.db.<date>-backup`.
@@ -21,6 +27,7 @@ __pycache__/
 .idea/
 _tmp_compare/
 frontend/.next/
+frontend/.next-*/
 frontend/node_modules/
 node_modules/
 data/quarantine/

@@ -14,8 +14,21 @@ import SessionHeader from "@/components/SessionHeader";
 import SessionTour from "@/components/tour/SessionTour";
 import RebuildingOverlay from "@/components/RebuildingOverlay";
 import SurfaceTabs from "@/components/lesson/SurfaceTabs";
-import { getSession, jump, resetSession, sessionStart, setScope } from "@/lib/api";
-import type { GraphNode, SessionGraph, TutorSuggestion, TutorTurn } from "@/lib/api";
+import ImplementationBar from "@/components/contribution/ImplementationBar";
+import ContributionStage from "@/components/contribution/ContributionStage";
+import ReadyGate from "@/components/contribution/ReadyGate";
+import {
+  contributionPlan, contributionProceed, generatePr, getContribution, getSession,
+  jump, resetSession, reviewPatch, savePatch, sessionStart, setScope, validatePatch,
+} from "@/lib/api";
+import type {
+  Contribution, ContributionStage as Stage, GraphNode, PatchFile, SessionGraph,
+  TutorSuggestion, TutorTurn,
+} from "@/lib/api";
+import {
+  canResumeContribution, centreSurface, implementationRail, overrideAvailable,
+  type StepView,
+} from "@/lib/contribution";
 import { buildRoute, spineLength } from "@/lib/graph-layout";
 import { arrivalIntro, splitJourney } from "@/lib/route-sections";
 import { useSourcePane } from "@/lib/source-pane";
@@ -245,6 +258,65 @@ export default function SessionPage() {
    */
   const [finishedBy, setFinishedBy] = useState<"walk" | "choice" | null>(null);
   const finished = finishedBy !== null;
+
+  /**
+   * THE CONTRIBUTION JOURNEY, when this session is one.
+   *
+   * `null` for every other session, and `available: false` for a contribution
+   * whose task was never recorded — both render the ordinary session page. The
+   * payload carries the readiness gate and the change boundary, so nothing about
+   * either is computed here (D22).
+   */
+  const [contribution, setContribution] = useState<Contribution | null>(null);
+  const [contributionBusy, setContributionBusy] = useState(false);
+  /**
+   * WHICH CENTRE SURFACE THE LEARNER LAST ASKED FOR. `null` follows the session.
+   *
+   * Not "am I in the stage" — that was the bug. Deriving the surface from the
+   * session alone made the route rail inert the moment the stage began: every
+   * stop the learner clicked still rendered Locate, because `handleJump` changed
+   * the current node and nothing changed the surface.
+   *
+   * Selecting a stop IS a request to see that stop, and pressing *Start
+   * implementing* is a request to see the stage. `centreSurface` puts the
+   * request above the session's own phase; this holds the request.
+   */
+  const [requestedSurface, setRequestedSurface] =
+    useState<"journey" | "contribution" | null>(null);
+  /**
+   * Which implementation stage is on screen — `null` follows the server's.
+   *
+   * Here rather than inside `ContributionStage` because the route rail draws the
+   * same five stages beside it, and both have to point at the same one. Lifting
+   * it also means the stage the learner left is the stage they come back to.
+   */
+  const [viewedStage, setViewedStage] = useState<StepView | null>(null);
+
+  const loadContribution = useCallback(async () => {
+    try {
+      setContribution(await getContribution(id));
+    } catch {
+      // Not a contribution session, or the boundary could not be loaded. The
+      // journey is unaffected either way — this is an addition to the page, not
+      // a precondition for it.
+      setContribution(null);
+    }
+  }, [id]);
+
+  /** Every contribution action returns the whole payload, so one setter serves. */
+  const runContribution = useCallback(
+    async (action: () => Promise<Contribution>) => {
+      setContributionBusy(true);
+      try {
+        setContribution(await action());
+      } catch (e: unknown) {
+        setError(e instanceof Error ? errorText(e.message) : t.session.loadFailed);
+      } finally {
+        setContributionBusy(false);
+      }
+    },
+    [],
+  );
   const [scoping, setScoping] = useState(false);
   // Going back to the route. Its own flag rather than reusing a jump spinner: the
   // notice's button is the only thing that shows it, and it must not be disabled
@@ -405,7 +477,11 @@ export default function SessionPage() {
     } catch (e: unknown) {
       setError(e instanceof Error ? errorText(e.message) : t.session.loadFailed);
     }
-  }, [id]);
+    // The readiness gate moves when evidence does, so it is refetched with the
+    // graph rather than once on mount: answering the last required question is
+    // what unlocks the stage, and the learner should see that where it happens.
+    await loadContribution();
+  }, [id, loadContribution]);
 
   useEffect(() => {
     loadGraph();
@@ -533,6 +609,7 @@ export default function SessionPage() {
 
   // Moving to another stop is also a request for a location — often in the file
   // already open, where nothing else would tell the pane to scroll.
+  // Advancing is journey navigation, like a jump — see `requestedSurface`.
   const handleAdvance = async () => {
     setViewingFile(null);
     setViewingRange(null);
@@ -545,6 +622,9 @@ export default function SessionPage() {
   // way in rather than a table of contents.
   const handleJump = async (node: GraphNode) => {
     picked.current = node.id;
+    // NAVIGATING TO A STOP IS ASKING TO SEE IT. Without this line the rail is
+    // decorative once the contribution stage has started.
+    setRequestedSurface("journey");
     setOverviewAreaId(null);
     setViewingFile(null);
     setViewingRange(null);
@@ -636,6 +716,38 @@ export default function SessionPage() {
       </main>
     );
   }
+
+  // WHICH SURFACE OWNS THE CENTRE COLUMN. One decision, one place, derived by
+  // `centreSurface` from the session's phase and what the learner last asked
+  // for — the request winning is what keeps the route rail live once the
+  // contribution stage has begun.
+  const surface = centreSurface(contribution, requestedSurface);
+  const resumable = canResumeContribution(contribution, surface);
+  // The implementation phase as the rail draws it — `null` on every session that
+  // is not a contribution. Derived from the same two inputs the centre uses, so
+  // the rail and the stage cannot disagree about which stage is on screen.
+  const implementation = implementationRail(contribution, viewedStage);
+  /**
+   * May Source and Chat be on screen?
+   *
+   * `mode` is the LEARNING phase's activity switch, so gating the panes on it
+   * alone made Locate's "open this file" silently do nothing for anyone who had
+   * last been in Route mode — the pane was set open and had nothing to render it.
+   * The implementation phase has no mode switch, and it opens real source.
+   */
+  const panesOpen = mode === "learn" || surface === "contribution";
+
+  /** Open one implementation stage from the rail. */
+  const enterStage = (stage: StepView) => {
+    setRequestedSurface("contribution");
+    setViewedStage(stage);
+  };
+  /**
+   * Back to the readiness gate. `null` rather than a third request value: the
+   * gate is what the session's own phase resolves to, so "stop asking for a
+   * surface" IS the way there.
+   */
+  const openGate = () => setRequestedSurface(null);
 
   const currentNodeId = graph.current_node_id;
   const currentNode = graph.nodes.find((n) => n.id === currentNodeId);
@@ -819,7 +931,7 @@ export default function SessionPage() {
             // so a learner who sized this column keeps that size whichever pane
             // is in it. A floating pane is `fixed` and claims no track, which is
             // what lets Source and Chat be on screen together.
-            mode === "learn" && dockedHere ? "var(--source-width)" : null,
+            panesOpen && dockedHere ? "var(--source-width)" : null,
           ]
             .filter(Boolean)
             .join(" "),
@@ -840,10 +952,64 @@ export default function SessionPage() {
             compact={band === "medium"}
             onHide={toggleRail}
             onBriefing={() => router.push(`/session/${id}/welcome`)}
+            implementation={implementation}
+            onEnterStage={enterStage}
+            onOpenGate={openGate}
           />
         )}
 
         <div className="flex min-h-0 flex-col border-e border-rule">
+          {/* ── THE PHASE BOUNDARY, IN THE CHROME ────────────────────────────
+              One bar or the other, never both and never one hidden with CSS.
+              `Learn / Route` and `Lesson / Understanding` choose which view of a
+              STOP you are reading; during Plan -> Locate -> Continue in Claude
+              there is no stop on screen, so they name views that do not exist —
+              and pressing `Understanding` there showed the understanding surface
+              of whichever node happened to be current, which is the learning
+              phase appearing under implementation chrome.
+
+              Both branches read `surface`, the same decision that chooses the
+              column beneath, so the chrome and the content cannot describe
+              different phases. */}
+          {surface === "contribution" && implementation ? (
+            <ImplementationBar
+              rail={implementation}
+              onStep={enterStage}
+              trailing={
+                <>
+                  {/* The one labelled door back. Not a mode switch: the phases
+                      are sequential, not two views of one thing. */}
+                  <Button
+                    variant="chrome"
+                    size="sm"
+                    onClick={() => setRequestedSurface("journey")}
+                  >
+                    {t.contribution.backToJourney}
+                  </Button>
+                  {/* Locate opens real source, so the pane control belongs here
+                      too — it is chrome for the column, not learning navigation. */}
+                  {!showCode && openFile && (
+                    <Button variant="chrome" size="sm" onClick={() => setShowCode(true)}>
+                      {t.session.showSource}
+                    </Button>
+                  )}
+                  {band !== "narrow" && railHidden && (
+                    <Button variant="chrome" size="sm" onClick={toggleRail}>
+                      {t.session.showRail}
+                    </Button>
+                  )}
+                  {band === "narrow" && (
+                    <button
+                      onClick={() => setRailOpen(true)}
+                      className="font-mono text-micro uppercase tracking-[0.13em] text-graphite transition hover:text-signal"
+                    >
+                      {t.rail.title}
+                    </button>
+                  )}
+                </>
+              }
+            />
+          ) : (
           <SurfaceTabs
             tabs={tabs}
             active={tab}
@@ -870,6 +1036,26 @@ export default function SessionPage() {
                 <span className="font-mono text-micro text-graphite">
                   {t.session.mapHint(graph.nodes.length)}
                 </span>
+              )}
+              {/* THE ONE DOOR BACK INTO THE IMPLEMENTATION STAGE.
+                  
+                  It exists because the fix to the rail cuts both ways: now that
+                  selecting a stop returns to the lesson, a learner who does that
+                  mid-implementation needs a way back, and the stage's own
+                  stepper is not on screen to offer one.
+                  
+                  Shown only when there IS a stage to return to — `phaseOf` is
+                  `stage`, and it is not what is already on screen. One control,
+                  not a second navigation system: the rail moves you around the
+                  journey, this moves you between the two surfaces. */}
+              {resumable && (
+                <Button
+                  variant="chrome"
+                  size="sm"
+                  onClick={() => setRequestedSurface("contribution")}
+                >
+                  {t.contribution.resume}
+                </Button>
               )}
               {/* Opening the source is not session management, so it does not
                   belong behind the overflow menu with Start over and Finish.
@@ -927,6 +1113,7 @@ export default function SessionPage() {
               </>
             }
           />
+          )}
 
           {/* THE MODE decides which column this is, not the tab. Learn mode's two
               tabs are two views of the SAME column — S3 splits its contents across
@@ -943,6 +1130,62 @@ export default function SessionPage() {
                   currentNodeId={currentNodeId}
                   onJump={handleJump}
                   onClose={() => setOverviewAreaId(null)}
+                />
+              ) : surface === "contribution" && contribution?.available ? (
+                /* THE CONTRIBUTION STAGE, in the slot `CompletionScreen` uses.
+                
+                   Not a route, not a tab and not a set of graph nodes: a phase
+                   of this page. The rail stays beside it, which is what makes
+                   the implementation read as the end of the same journey rather
+                   than as a different product — and what keeps the five stages
+                   out of `journey_progress` and `goal_readiness` (D7). */
+                <ContributionStage
+                  contribution={contribution}
+                  sessionId={id}
+                  busy={contributionBusy}
+                  viewing={viewedStage}
+                  onView={setViewedStage}
+                  onPlan={() => runContribution(() => contributionPlan(id))}
+                  onSavePatch={(files: PatchFile[]) =>
+                    runContribution(() => savePatch(id, files))
+                  }
+                  onValidate={() => runContribution(() => validatePatch(id))}
+                  onReview={() => runContribution(() => reviewPatch(id))}
+                  onPr={() => runContribution(() => generatePr(id))}
+                  onOpenFile={(path) => {
+                    setViewingFile(path);
+                    setViewingRange(null);
+                    setShowCode(true);
+                    setFocusKey((k) => k + 1);
+                  }}
+                  onStuck={tutorUi() ? () => setPaneOpen("tutor", true) : undefined}
+                  onBack={() => setRequestedSurface("journey")}
+                />
+              ) : surface === "ready" && contribution?.available ? (
+                /* The door. Shown when the gate is open, or when the learner has
+                   recorded the decision to go on without it. */
+                <ReadyGate
+                  contribution={contribution}
+                  overrideOffered={overrideAvailable(contribution, graph)}
+                  busy={contributionBusy}
+                  onStart={async () => {
+                    setRequestedSurface("contribution");
+                    // Entering for the first time lands on the server's stage.
+                    // `viewedStage` persists across surface changes so that the
+                    // way back returns you where you were; starting is the one
+                    // case where there is no "where you were".
+                    setViewedStage(null);
+                    // Writing the plan is what MOVES THE SERVER'S STAGE off
+                    // `plan`, and that is what `phaseOf` reads — so the stage
+                    // stays on screen across a reload without this component
+                    // remembering anything.
+                    if (!contribution.state?.plan) {
+                      await runContribution(() => contributionPlan(id));
+                    }
+                  }}
+                  onProceedUnready={() =>
+                    runContribution(() => contributionProceed(id))
+                  }
                 />
               ) : currentNodeId && currentNode ? (
                 <LessonPanel
@@ -1085,7 +1328,7 @@ export default function SessionPage() {
             `fixed`, so where it sits in the tree does not place it — but a docked
             one is placed by document order, and rendering Chat before a docked
             Source would put Chat in the track Source reserved. */}
-        {mode === "learn" && companions.map((pane) => pane.node)}
+        {panesOpen && companions.map((pane) => pane.node)}
 
         {/* THE TOUR, over everything. Mounted inside the grid rather than beside
             it only because that is where the page's other overlays live; it is
@@ -1139,6 +1382,17 @@ export default function SessionPage() {
                 onBriefing={() => {
                   setRailOpen(false);
                   router.push(`/session/${id}/welcome`);
+                }}
+                implementation={implementation}
+                // Closes the sheet first, like every other navigation out of it:
+                // what these open is underneath it.
+                onEnterStage={(stage) => {
+                  setRailOpen(false);
+                  enterStage(stage);
+                }}
+                onOpenGate={() => {
+                  setRailOpen(false);
+                  openGate();
                 }}
               />
             </div>

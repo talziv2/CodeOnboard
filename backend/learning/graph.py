@@ -43,6 +43,7 @@ from datetime import datetime, timezone
 from typing import Literal
 
 from backend.learning import history
+from backend.learning.contribution import ContributionState
 from backend.learning.gaps import Gap, GapState
 from backend.learning.tutor import TutorState
 
@@ -353,6 +354,20 @@ class LearningGraph:
     # LEARNER-PRODUCED, so `Start over` clears it — see `reset.py`, and
     # `reset.learner_state`, which is the enumeration this has to appear in.
     tutor: list[dict] = field(default_factory=list)
+    # THE CONTRIBUTION STAGE — plan, patch, scope check, review, PR summary.
+    #
+    # Session-scoped for the same reason `tutor` is, and ABSENT from `to_dict()`
+    # for the same reason too: it is served by its own endpoint, and a payload
+    # that carried a patch on every session poll would grow the one request every
+    # surface makes for a stage most sessions never enter.
+    #
+    # NOT part of the journey. These stages are deliberately not `LearningNode`s
+    # — see `contribution.py`'s header for the three reasons, of which the first
+    # is that five extra nodes in the walk would move `journey_progress` and
+    # `goal_readiness` (D7). Nothing in the learning engine reads this field.
+    #
+    # LEARNER-PRODUCED, so `Start over` clears it.
+    contribution: ContributionState | None = None
 
     # --- construction helpers ---
 

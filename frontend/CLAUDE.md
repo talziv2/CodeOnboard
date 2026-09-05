@@ -56,6 +56,12 @@ with the header) · `lessonPhase` / `lessonView` / `lessonSurfaces` / `surfaceTa
 · `feedbackActions` · `standing` · `arrival` · `sessionLog` · `layout-bands` ·
 `markdown` · `strings` · `lessonIcons`.
 
+`contribution` is one of them: it decides which of three surfaces owns the centre
+column, and the page mounts `SurfaceTabs` or `ImplementationBar` from the same
+answer — so the chrome and the content cannot describe different phases. Which
+surface is showing is a fact about **navigation**, not about the session; see
+`docs/architecture/frontend.md` §5 for the defect that rule prevents.
+
 `lessonSurfaces` is a **total `Record`**: adding a block without placing it on a
 surface is a type error, and that is deliberate. `lessonIcons` is keyed the same
 way for the same reason — a block with no marker beside eight that have one reads
@@ -114,7 +120,7 @@ as a rendering fault with nothing on screen to notice it by.
 ## Verifying
 
 ```bash
-npm test          # Vitest — 54 files, 861 tests, ~14s
+npm test          # Vitest — 57 files, 962 tests, ~14s
 npm run build     # this IS the type check; there is no linter
 ```
 

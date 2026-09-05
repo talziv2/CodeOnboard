@@ -80,6 +80,24 @@ CODE_DEPTH_MAP: dict[str, str] = {
 
 CODE_DEPTH_OPTIONS: list[str] = list(CODE_DEPTH_MAP)
 
+# Display string → the `contribution_scope` value the investigation is told.
+#
+# Its only consumer is `investigation._CONTRIBUTION_BRIEF`, as one line of
+# context about how much code the developer expects to touch. Deliberately NOT a
+# size control: nothing in the planner or the band reads it, because the size of
+# the curriculum is decided by what the change genuinely requires, not by what
+# the learner guessed it would require (contribution-journey.md A6.1).
+CONTRIBUTION_SCOPE_MAP: dict[str, str] = {
+    "A small addition — a new method or helper, nothing existing changes":
+        "a small addition; existing behaviour is untouched",
+    "A change to existing behaviour — something that already works, works differently":
+        "a change to existing behaviour, so existing callers are affected",
+    "A bug fix with a test that reproduces it":
+        "a bug fix, with a test that reproduces the failure first",
+}
+
+CONTRIBUTION_SCOPE_OPTIONS: list[str] = list(CONTRIBUTION_SCOPE_MAP)
+
 
 # --- questions ---------------------------------------------------------------
 
@@ -131,11 +149,27 @@ FOLLOWUP_QUESTIONS: dict[str, list[Question]] = {
     "understand_system": [_UNDERSTAND_FOLLOWUP],
     "understand_component": [_UNDERSTAND_FOLLOWUP],
     "understand_architecture": [_ARCHITECTURE_FOLLOWUP],
+    # TWO questions, not one, and the second is the reason the first got sharper.
+    #
+    # A contribution journey is planned around ONE concrete change: the task now
+    # reaches the investigation itself (`investigation._CONTRIBUTION_BRIEF`), so
+    # a vague answer here costs a vague dossier rather than merely a vague
+    # sentence in the planner's prompt. The wording asks for the behaviour and the
+    # place, because those are what the investigator goes looking for.
     "contribute_code": [
         Question(
             key="contribution_context",
-            text="Is there a specific issue or feature you're working on? (paste a GitHub issue link or describe it)",
-        )
+            text=(
+                "What change do you want to make? Be specific — name the "
+                "behaviour, and the file or component if you know it. "
+                "(You can paste a GitHub issue instead.)"
+            ),
+        ),
+        Question(
+            key="contribution_scope",
+            text="Roughly how big is this change?",
+            options=CONTRIBUTION_SCOPE_OPTIONS,
+        ),
     ],
     "improve_existing_system": [
         Question(

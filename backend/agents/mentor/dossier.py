@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import json
 
-from backend.repo import anchors
+from backend.repo import anchors, investigation
 from backend.repo.investigation import _entries
 from backend.repo.skeleton import Skeleton
 
@@ -68,6 +68,78 @@ def _render_anchor_code(
     )
 
 
+def _render_change_boundary(
+    skeleton: Skeleton, dossier: dict, seen: set[tuple[str, int, int]]
+) -> str:
+    """The change boundary as prompt text, with the target's source attached.
+
+    Empty string when the dossier has no boundary — every goal type that is not
+    making a change, and every session planned before the section existed. The
+    caller appends nothing in that case, so the prompt is byte-identical to what
+    it has always been.
+
+    Only the TARGETS carry rendered source. The other four lists are claims about
+    where NOT to go and what to imitate; attaching a hundred lines of a test file
+    to each would crowd out the components the curriculum is actually built from.
+    """
+    target = investigation.boundary_entries(dossier, "target")
+    forbidden = investigation.boundary_entries(dossier, "must_not_change")
+    conventions = investigation.boundary_entries(dossier, "conventions")
+    tests = investigation.boundary_entries(dossier, "existing_tests")
+    edge_cases = investigation.boundary_entries(dossier, "edge_cases")
+    if not any((target, forbidden, conventions, tests, edge_cases)):
+        return ""
+
+    section = [
+        "## THE CHANGE BOUNDARY — this developer is making one specific change",
+        "",
+        "The investigation established this by reading the code. It is the shape "
+        "of what they need: where the change goes, what it must not disturb, what "
+        "already tests it, and what it has to survive.",
+    ]
+    if target:
+        section.append("\nWhere the change belongs:")
+        for entry in target:
+            section.append(
+                f"- {entry.get('file')}:{entry.get('symbol')} — {entry.get('why_here')}"
+            )
+            code = _render_anchor_code(
+                skeleton, entry.get("file"), entry.get("symbol"), seen
+            )
+            if code:
+                section.append(code)
+    if forbidden:
+        section.append("\nWhat the change must NOT touch:")
+        for entry in forbidden:
+            section.append(
+                f"- {entry.get('file')}:{entry.get('symbol')} — {entry.get('why_not')}"
+            )
+    if edge_cases:
+        section.append("\nEdge cases the change has to respect:")
+        for entry in edge_cases:
+            where = (
+                f" [{entry.get('file')}:{entry.get('symbol')}]"
+                if entry.get("file") and entry.get("symbol") else ""
+            )
+            section.append(
+                f"- {entry.get('case')}{where} — {entry.get('why_it_bites')}"
+            )
+    if tests:
+        section.append("\nTests that already guard this behaviour:")
+        for entry in tests:
+            section.append(
+                f"- {entry.get('file')}:{entry.get('symbol')} — "
+                f"{entry.get('what_it_guards')}"
+            )
+    if conventions:
+        section.append("\nConventions this repository follows for code like this:")
+        for entry in conventions:
+            section.append(
+                f"- {entry.get('convention')} (see {entry.get('evidence_file')})"
+            )
+    return "\n".join(section)
+
+
 def render_dossier(
     skeleton: Skeleton, dossier: dict, goal: dict,
     system_review: dict | None = None,
@@ -87,6 +159,14 @@ def render_dossier(
     if understanding:
         parts.append("## What the investigation established (its own summary)\n"
                      + understanding)
+
+    # FIRST, and above the components, when there is one. For a contribution the
+    # boundary is the shape of the whole curriculum — what the change touches,
+    # what it must not, what already tests it — so the planner has to meet it
+    # before the component list, or it plans a tour and mentions the change.
+    boundary = _render_change_boundary(skeleton, dossier, seen)
+    if boundary:
+        parts.append(boundary)
 
     components = _entries(dossier, "components")[0]
     if components:

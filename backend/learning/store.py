@@ -44,6 +44,7 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
+from backend.learning.contribution import ContributionState
 from backend.learning.gaps import GapState
 from backend.learning.tutor import TutorState
 from backend.learning.graph import (
@@ -302,6 +303,19 @@ _ADDITIVE_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # that loads a tutor-bearing graph must not destroy the conversation.
     ("sessions", "tutor_json", "TEXT"),
     ("nodes", "tutor_json", "TEXT"),
+
+    # ── the contribution stage (contribution-journey.md A5) ───────────────────
+    #
+    # Plan, patch, scope check, review and PR summary for a `contribute_code`
+    # session. SESSION-scoped, because none of it belongs to any one unit — and
+    # a column rather than a SCHEMA_VERSION bump for the reason every column
+    # above is: a bump makes earlier sessions invisible, not migrated. Every
+    # stored session loads with `contribution = None`.
+    #
+    # NEVER MIRRORED INTO A PLAN TABLE. It is learner-produced from end to end,
+    # so `Start over` must discard it, and the plan tables' column list is what
+    # says which side of that line a field is on.
+    ("sessions", "contribution_json", "TEXT"),
 
     # ── the account layer (multi-user M1) ─────────────────────────────────────
     #
@@ -567,10 +581,11 @@ def _write_graph(
         INSERT INTO sessions
             (session_id, repo_url, goal_json, current_node_id,
              doc_context_json, areas_json, journey_events_json, briefing_json,
-             arrival_json, tutor_json, schema_version, user_id, repo_id,
+             arrival_json, tutor_json, contribution_json,
+             schema_version, user_id, repo_id,
              last_active_at,
              readiness_cached, stops_settled_cached, stops_total_cached)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 strftime('%Y-%m-%dT%H:%M:%S', 'now'), ?, ?, ?)
         ON CONFLICT(session_id) DO UPDATE SET
             repo_url            = excluded.repo_url,
@@ -582,6 +597,7 @@ def _write_graph(
             briefing_json       = excluded.briefing_json,
             arrival_json        = excluded.arrival_json,
             tutor_json          = excluded.tutor_json,
+            contribution_json   = excluded.contribution_json,
             -- SCHEMA_VERSION IS NOT REWRITTEN BY A SAVE.
             --
             -- `excluded.schema_version` here would relabel a version-2 session
@@ -617,6 +633,10 @@ def _write_graph(
             json.dumps(graph.briefing) if graph.briefing is not None else None,
             json.dumps(graph.arrival) if graph.arrival is not None else None,
             json.dumps(graph.tutor) if graph.tutor else None,
+            (
+                json.dumps(graph.contribution.to_dict())
+                if graph.contribution is not None else None
+            ),
             SCHEMA_VERSION,
             owner,
             repo_id,
@@ -917,6 +937,9 @@ def _load_graph_rows(
             briefing=_json_or_default(session_row, "briefing_json", None),
             arrival=_json_or_default(session_row, "arrival_json", None),
             tutor=_json_or_default(session_row, "tutor_json", []),
+            contribution=ContributionState.from_dict(
+                _json_or_default(session_row, "contribution_json", None)
+            ),
         )
         # Can this session be started over? One row's existence answers it, and
         # asking here means every consumer of a loaded graph gets the answer

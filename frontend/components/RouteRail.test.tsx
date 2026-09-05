@@ -6,6 +6,7 @@ import { splitJourney } from "@/lib/route-sections";
 import { node } from "@/test/factories";
 import { t } from "@/lib/strings";
 import type { Area, GraphEdge, GraphNode, NodeGap } from "@/lib/api";
+import type { ImplementationRail } from "@/lib/contribution";
 
 /**
  * The rail, after the six notes that came out of walking a real session.
@@ -499,5 +500,119 @@ describe("a stop says whether it was attempted and whether it was set aside", ()
     railOf({ understanding: "recovered", disposition: "waived", attempted: true });
     expect(screen.queryByText(t.rail.setAside)).toBeNull();
     expect(screen.queryByText(t.rail.attempted)).toBeNull();
+  });
+});
+
+/**
+ * THE IMPLEMENTATION PHASE IN THE RAIL.
+ *
+ * The learning route and the implementation stages are two phases of one journey
+ * in one column — so the section is asserted for the two things a second
+ * navigation system would get wrong: a stage that cannot be entered must not
+ * offer itself as a control, and the route above it must go on working exactly
+ * as it did.
+ */
+describe("the implementation phase, below the route", () => {
+  const railModel = (over: Partial<ImplementationRail> = {}): ImplementationRail => ({
+    status: "active",
+    demonstrated: 11,
+    required: 11,
+    stages: [
+      { stage: "plan", state: "done", enterable: true },
+      { stage: "locate", state: "done", enterable: true },
+      { stage: "implement", state: "current", enterable: true },
+      { stage: "validate", state: "ahead", enterable: false },
+      { stage: "review", state: "ahead", enterable: false },
+    ],
+    ...over,
+  });
+
+  const stageButton = (label: string) =>
+    screen.queryByRole("button", { name: new RegExp(`^${label}`) });
+
+  test("is absent entirely from a session that is not a contribution", () => {
+    rail();
+    expect(screen.queryByText(t.contribution.railTitle)).toBeNull();
+  });
+
+  test("is present but says what opens it while the learner is still learning", () => {
+    railWith({
+      implementation: railModel({
+        status: "locked", demonstrated: 4,
+        stages: railModel().stages.map((r) => ({ ...r, state: "ahead" as const, enterable: false })),
+      }),
+      onEnterStage: vi.fn(),
+    });
+    expect(screen.getByText(t.contribution.railTitle)).toBeTruthy();
+    // The destination is on screen from the first stop — that is the point of
+    // showing it locked — but the counter has to say why it is not open.
+    expect(screen.getByText(t.contribution.railLocked(4, 11))).toBeTruthy();
+    expect(screen.getByText(t.contribution.stages.plan)).toBeTruthy();
+  });
+
+  test("a stage that cannot be entered is not a control", () => {
+    // NOT a disabled button. A disabled control reads as one that failed; a
+    // plain row reads as a step not yet reached, which is what it is.
+    const onEnterStage = vi.fn();
+    railWith({ implementation: railModel(), onEnterStage });
+
+    expect(stageButton(t.contribution.stages.review)).toBeNull();
+    expect(stageButton(t.contribution.stages.implement)).toBeTruthy();
+  });
+
+  test("nothing is a control at all while it is locked", () => {
+    railWith({
+      implementation: railModel({
+        status: "locked",
+        stages: railModel().stages.map((r) => ({ ...r, state: "ahead" as const, enterable: false })),
+      }),
+      onEnterStage: vi.fn(),
+    });
+    expect(stageButton(t.contribution.stages.plan)).toBeNull();
+  });
+
+  test("clicking a reached stage opens it", () => {
+    const onEnterStage = vi.fn();
+    railWith({ implementation: railModel(), onEnterStage });
+
+    fireEvent.click(stageButton(t.contribution.stages.locate)!);
+    expect(onEnterStage).toHaveBeenCalledWith("locate");
+  });
+
+  test("the current stage is marked as the position in this phase", () => {
+    railWith({ implementation: railModel(), onEnterStage: vi.fn() });
+    expect(stageButton(t.contribution.stages.implement)!.getAttribute("aria-current"))
+      .toBe("step");
+    expect(stageButton(t.contribution.stages.plan)!.getAttribute("aria-current"))
+      .toBeNull();
+  });
+
+  test("the middle phase is named, and is a way back to the gate", () => {
+    // journey -> READY TO IMPLEMENT -> implementation. Without this row the
+    // middle phase exists only on a screen the learner may have left.
+    const onOpenGate = vi.fn();
+    railWith({
+      implementation: railModel({
+        status: "ready",
+        stages: railModel().stages.map((r) => ({ ...r, state: "ahead" as const, enterable: false })),
+      }),
+      onOpenGate,
+    });
+    fireEvent.click(screen.getByRole("button", { name: t.contribution.readyLabel }));
+    expect(onOpenGate).toHaveBeenCalled();
+  });
+
+  test("the route above it still works", () => {
+    // The two phases share a column; they do not compete for it.
+    const onJump = vi.fn();
+    railWith({ implementation: railModel(), onEnterStage: vi.fn(), onJump });
+    fireEvent.click(screen.getByText(NODES[0].title));
+    expect(onJump).toHaveBeenCalledWith(expect.objectContaining({ id: "n1" }));
+  });
+
+  test("at strip density it becomes one mark rather than five labels", () => {
+    railWith({ implementation: railModel(), onEnterStage: vi.fn(), compact: true });
+    expect(screen.queryByText(t.contribution.stages.implement)).toBeNull();
+    expect(screen.getByRole("button", { name: t.contribution.railCompact })).toBeTruthy();
   });
 });

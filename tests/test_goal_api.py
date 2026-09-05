@@ -109,7 +109,8 @@ def _finish_debug_interview(client, monkeypatch) -> tuple[str, str]:
     monkeypatch.setattr(
         goal_agent,
         "_synthesize_goal",
-        lambda repo_url, qa_pairs, client, code_depth: goal_agent.GoalOutput(
+        lambda repo_url, qa_pairs, client, code_depth, contribution_scope=None:
+        goal_agent.GoalOutput(
             primary_goal="find why the timeout never raises",
             goal_type="debug_issue",
             focus_area="the adapter layer",

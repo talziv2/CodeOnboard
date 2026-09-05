@@ -19,6 +19,7 @@
 | `backend.api:app` | The ASGI application. `uv run uvicorn backend.api:app --reload` |
 | `backend.pipeline.runner.run_pipeline(...)` | The planning pipeline, callable without HTTP — this is what the measurement scripts drive |
 | `python -m backend.migrations.001_multi_user` | The one migration, idempotent, with a dry-run mode |
+| `python -m backend.mcp_server` | The contribution handoff bridge — an MCP server over **stdio**, spawned by the learner's coding agent, not by us. Read-only: it writes no row and returns no verdict that becomes state. See [overview.md §5](overview.md) |
 
 `backend/api.py` is a single module rather than a router package. Everything in
 it is HTTP concern — routing, status codes, request parsing, orchestration of
@@ -142,6 +143,41 @@ Everything except the five public paths requires the session cookie.
 | `POST /session/{id}/reset` | Restore the plan. 409 `no_plan_snapshot` where there is none |
 | `GET /session/{id}/evidence/{node_id}` | The full evidence chain for one unit — its own endpoint because the timeline carries full answer text and superseded lesson bodies |
 | `GET /session/{id}/file?path=` | Source for the code pane. Containment decided by `resolve_within`, which compares path **ancestry**, and the resolved path is the one opened |
+
+### The contribution journey — `contribute_code` only
+
+Every route below answers `_contribution_payload(graph)`, and `GET /contribution`
+answers for **every** session: `available` is `false` and the rest is empty. A 404
+there would make the frontend branch on goal type before it is allowed to ask a
+question, which is a learning decision in the client (D22).
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /session/{id}/contribution` | The stage's state, the change boundary, and the readiness gate |
+| `POST /session/{id}/contribution/proceed` | *"Start implementing anyway"* — the learner's recorded decision. Writes one boolean and one journey event; touches no understanding, no gap, no readiness number |
+| `POST /session/{id}/contribution/plan` | Writes the approach from the task, the boundary and what was demonstrated. **It writes no code** |
+| `GET /session/{id}/contribution/handoff` | What leaves for a coding agent, plus the `.mcp.json` that points one at this session |
+| `POST /session/{id}/contribution/{patch,validate,review,pr}` | The older in-app implementation steps, kept reachable as a fallback while the handoff is verified |
+
+`409` is the interesting status here, and it is the product claim rather than an
+error: `not_a_contribution_session`, `not_ready_to_implement`,
+`no_change_boundary`. **The gate refuses at the boundary too** — an unready
+session gets no handoff, because blocking required knowledge genuinely stops
+implementation.
+
+`/contribution/handoff` calls `learning/handoff.py::build_context`, which is
+**the same pure function the MCP tool calls**, so the summary the learner reads on
+screen and the payload the agent receives cannot disagree (DI-1). It refuses
+rather than emitting a hollow document (DI-8): a confident schema wrapped around
+an empty boundary is worse than an error, because the schema is what makes a
+reader trust it.
+
+Its `setup.deep_link` is a `claude-cli://open?cwd=<absolute path>` URL, derived
+from the project root and the session's repository URL as
+`workspace/<owner>/<name>`, or `null` when no working copy has been prepared —
+never a guess. `repo=<owner>/<name>` was tried first and abandoned: Claude Code
+resolves a slug only against clones it has already opened, and when it cannot it
+opens **somewhere else** rather than failing.
 
 ### Legacy
 

@@ -27,6 +27,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import dataclass, field
 
@@ -35,6 +36,89 @@ from backend.repo.skeleton import Skeleton
 
 MODEL = "claude-haiku-4-5"
 MAX_TOKENS = 4096
+
+
+# ── the tool-input transport repair ───────────────────────────────────────────
+#
+# THE MOST COMMON FAILURE IN THIS HARNESS, and it is a transport artifact rather
+# than a mistake about the repository.
+#
+# The model sometimes emits tool-call markup INSIDE a JSON tool input: a field
+# that should be an array arrives as a string beginning `<parameter name="…">`.
+# Measured across seven instrumented runs — three goal types — it was the FIRST
+# submission's fate in six of them, and the one run that escaped it is the one
+# that was accepted. On the architecture goal it fired sixteen times in a row.
+#
+# It is expensive out of all proportion to what it is, because a report that
+# cannot be read yields NO information about the contract: the validator can
+# only say "re-emit", so a submission — roughly a third of a run's feedback — is
+# spent learning nothing about what the investigation still lacks.
+#
+# THE SHAPE IS RECOVERABLE, AND ONLY WHEN IT PROVABLY IS. Observed values:
+#
+#     <parameter name="components">\n[\n  {\n …      valid JSON in a wrapper
+#     <invoke name="propose_anchor">\n<paramete…     a whole tool call
+#     <item>\n<parameter name="file">src/reque…      items serialised as XML
+#
+# Only the first is repaired, and the repair is self-verifying: strip the
+# wrapper, and if what remains parses as JSON, that is what the model meant. If
+# it does not parse, nothing is changed and the payload stays corrupt. The other
+# two are left alone deliberately — there is no components data in a tool call,
+# and hand-rolling an XML-to-JSON reader for an undefined format is exactly how a
+# mis-parse would become "evidence".
+#
+# NOTHING HERE BYPASSES GROUNDING. What is recovered is a list of dicts that then
+# goes through the same anchor resolution as any other claim. This fixes an
+# encoding, never a fact.
+
+_WRAPPER_START = re.compile(r'^\s*<parameter\b[^>]*>\s*', re.IGNORECASE)
+_WRAPPER_END = re.compile(r'\s*</parameter\s*>\s*$', re.IGNORECASE)
+
+
+def unwrap_tool_markup(value):
+    """A `<parameter>`-wrapped JSON value, unwrapped. Anything else, unchanged.
+
+    Pure and total: returns `value` itself whenever the repair does not provably
+    apply, so a caller can pass every field through it without thinking about
+    which ones might be affected.
+    """
+    if not isinstance(value, str):
+        return value
+    if not _WRAPPER_START.match(value):
+        return value
+    inner = _WRAPPER_END.sub("", _WRAPPER_START.sub("", value, count=1))
+    if not inner:
+        return value
+    try:
+        # `raw_decode` rather than `loads`: the wrapper is sometimes unclosed and
+        # sometimes trailed by the next tag, and a decoder that stops at the end
+        # of the first complete value recovers both.
+        decoded, _ = json.JSONDecoder().raw_decode(inner)
+    except ValueError:
+        return value
+    # Only a container is worth recovering. A bare string or number that happened
+    # to parse tells us nothing and risks changing a scalar field's meaning.
+    return decoded if isinstance(decoded, (list, dict)) else value
+
+
+def repair_tool_input(arguments: dict) -> tuple[dict, list[str]]:
+    """Undo the transport artifact on every top-level field.
+
+    Returns the repaired arguments and the names of the fields that were
+    recovered, so a caller can say so rather than silently differing from what
+    the model sent.
+    """
+    if not isinstance(arguments, dict):
+        return arguments, []
+    repaired: dict = {}
+    recovered: list[str] = []
+    for key, value in arguments.items():
+        fixed = unwrap_tool_markup(value)
+        if fixed is not value:
+            recovered.append(key)
+        repaired[key] = fixed
+    return repaired, recovered
+
 
 # USD per million tokens, for M9. Kept here rather than computed elsewhere so a
 # run reports its own cost without a second source of truth.
@@ -770,7 +854,15 @@ def explore(
         blocks: list[dict] = []
         reported = False
         for use in uses:
-            arguments = dict(use.input or {})
+            # THE TRANSPORT REPAIR, at the single point every tool input passes
+            # through — so every tool and every ReportSpec is covered by it,
+            # rather than each caller learning about the artifact separately.
+            arguments, recovered = repair_tool_input(dict(use.input or {}))
+            if recovered:
+                result.errors.append(
+                    f"{use.name}: recovered {', '.join(recovered)} from "
+                    f"`<parameter>` tool markup"
+                )
             if report and use.name == report.name:
                 # A submission cut off at max_tokens arrives as mangled JSON.
                 # Validating the wreckage produces feedback about the wrong

@@ -21,6 +21,7 @@
 | HTTP concerns — routing, status codes, request parsing | `api.py` | skill `api-endpoint` |
 | Reading or writing a row | `learning/store.py` or `auth/schema.py` | skill `persistence-change` |
 | What the Tutor may see, say, or propose | `agents/tutor/` — and never a writer | skill `change-the-tutor` |
+| What leaves for a coding agent | `learning/handoff.py` (**pure**), surfaced by `api.py` and `mcp_server.py` | — |
 
 Two mistakes this table exists to stop: putting policy in a prompt where nothing
 can test it, and putting IO in a module whose header promises purity.
@@ -52,6 +53,18 @@ anything not in the plan is gone by construction. Prefer an additive nullable
 column in `_ADDITIVE_COLUMNS` to a `SCHEMA_VERSION` bump: a bump makes earlier
 sessions **invisible**, not migrated. Nothing in `store.py` may read a feature
 flag, or the environment at all — a flag gates behaviour, never storage (D19).
+
+## The MCP bridge, in one paragraph
+
+`backend/mcp_server.py` is a second entry point into the same core, like
+`api.py` — a stdio MCP server the learner's coding agent spawns, exposing two
+tools and nothing else. It is **read-only**: it writes no row, and it returns no
+verdict that becomes state, because a coding agent's success is never evidence
+about a learner (D8 — the same rule as the Tutor's). Identity arrives in
+`CODEONBOARD_SESSION` / `CODEONBOARD_USER` and goes straight to
+`store.load_graph`, so the ownership model is **used rather than reimplemented**
+and a mismatch is a 404. `tests/test_mcp_server.py` walks its imports with `ast`
+and fails the build if anything there reaches for the learning engine.
 
 ## Errors
 

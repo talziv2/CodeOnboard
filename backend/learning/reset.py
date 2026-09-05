@@ -69,6 +69,10 @@ class ResetSummary:
     # is: the act is irreversible, so the honest thing to show afterwards is what
     # it took. Defaulted, so a caller written before the Tutor still constructs.
     tutor_turns: int = 0
+    # Files the learner had proposed in the contribution stage. Defaulted like
+    # `tutor_turns`, so a caller written before the contribution journey still
+    # constructs.
+    contribution_patch_files: int = 0
 
     def to_dict(self) -> dict:
         return {
@@ -78,6 +82,7 @@ class ResetSummary:
             "remedial_nodes": self.remedial_nodes,
             "lessons_restored": self.lessons_restored,
             "tutor_turns": self.tutor_turns,
+            "contribution_patch_files": self.contribution_patch_files,
         }
 
 
@@ -118,6 +123,14 @@ def learner_state(graph: LearningGraph) -> dict:
         # gone by construction", and it would sit beside a fresh route as a list
         # of stops that had already confused them.
         "tutor_turns": len(graph.tutor),
+        # THE CONTRIBUTION STAGE IS LEARNER STATE TOO, and it has to appear here
+        # for the same reason the transcript does: this enumeration is the only
+        # description of the plan/state boundary the reset can be tested against.
+        # A plan, a patch and a review are all things the learner produced
+        # against a route they have since asked to restart.
+        "contribution_patch_files": (
+            len(graph.contribution.patch) if graph.contribution else 0
+        ),
     }
 
 
@@ -164,6 +177,13 @@ def reset_to_plan(live: LearningGraph, plan: LearningGraph) -> ResetSummary:
     # dataclass default. That is the property this module is built on, and the
     # Tutor is the first feature added since that gets it for free.
     live.tutor = []
+    # The contribution goes with the walk, and it is not the free case the Tutor's
+    # node counters were: this is SESSION-scoped, so replacing `live.nodes` does
+    # nothing for it and it needs its own line. The task itself survives — it is
+    # `goal["contribution_context"]`, which is plan-side and untouched — so
+    # starting over re-runs the same contribution against a fresh route rather
+    # than losing what the learner came to do.
+    live.contribution = None
     live.current_node_id = live.path_head()
 
     # The single boundary marker, on the now-empty list. Written after the clear,
@@ -184,4 +204,5 @@ def reset_to_plan(live: LearningGraph, plan: LearningGraph) -> ResetSummary:
             1 for n in plan.nodes.values() if n.cached_lesson is not None
         ),
         tutor_turns=before["tutor_turns"],
+        contribution_patch_files=before["contribution_patch_files"],
     )

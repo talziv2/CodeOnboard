@@ -49,6 +49,7 @@ argument. Say which class you are appealing to.
 | "Change the map behaviour" · surfaces, rail, feedback states, copy | `frontend/CLAUDE.md` (auto-loads) | **frontend-flow-reviewer** + skill **verify-in-browser** |
 | "Add a field to a session" · schema, migration, `Start over`, resume | skill **persistence-change** | **session-data-reviewer** |
 | "Add / change an endpoint" | skill **api-endpoint** | **session-data-reviewer** |
+| "Change the contribution handoff" · the MCP bridge · what leaves for a coding agent | `docs/planning/phases/contribution-handoff.md`, then skill **api-endpoint** | **session-data-reviewer** |
 | "Why is readiness wrong?" · a bug whose layer is unknown · a failing test with an unclear cause | skill **investigate-behaviour** | — |
 | "Why was it built this way?" · is this objection right? · is this simplification safe? · defense prep | agent **architecture-historian** | — |
 | "Review this PR" | command **/review-changes** | — |
@@ -84,6 +85,8 @@ the file you are about to open.
 | `backend/learning/store.py` | **D16** `save_graph` never writes a plan table · D18 the two schema-version questions · D19 the flag gates behaviour, never storage · D20 ownership |
 | `backend/learning/reset.py` | D17 nothing is ever synthesised for a session that has no plan |
 | `backend/api.py` · `backend/auth/` | D20 ownership at the persistence boundary, **404 never 403** · D21 nothing about a learner is inferred from an email |
+| `backend/mcp_server.py` · `backend/learning/handoff.py` | D8 a coding agent's success is never evidence about a learner · D20 identity comes from the environment and goes to `load_graph` · DI-6 the agent reports paths, our code decides scope · DI-8 refuse rather than emit a hollow document |
+| `backend/learning/contribution.py` | `check_scope` is **path scope only**; `check_paths` says what it did not look at, because silence reads as a pass |
 | `backend/agents/tutor/` · `backend/learning/tutor.py` | skill `change-the-tutor` — a turn is not evidence · `ScaffoldContext` is a type with no field for the answer · revealing spends the prompt through `retry.py` |
 | `frontend/lib/` · `frontend/components/` | D22 the frontend renders learning decisions; it does not compute them |
 | `frontend/lib/markdown.ts` · `strings.ts` | D23 learner-written text is never markdown · D24 fixed keys are parsed; only labels are chosen |
@@ -112,6 +115,11 @@ not apply.
   reason one changed. Structural: nothing under `backend/agents/tutor/`
   imports `run_grader`, `mutate_graph`, `adaptation` or `record_attempt`.
 - **The frontend renders learning decisions; it does not compute them.**
+- **CodeOnboard stops at the handoff.** It has no writable working tree, does not
+  execute anything, and opens no pull request. `data/repos/<owner>/<name>` is ONE
+  shared, pinned checkout that `anchors.resolve` reads for every session; the
+  learner's own copy is `workspace/<owner>/<name>`, gitignored and prepared by
+  `tools/prepare_workspace.py`. Never let one become the other.
 - **Python only, structurally.** Another language is a sibling adapter, not a
   rewrite — designed in `docs/planning/phases/multi-language.md`, **not built**.
 
@@ -120,8 +128,8 @@ not apply.
 ## Commands
 
 ```bash
-uv run pytest tests/                      # backend — ~76s, 1945 pass, 1 skip
-cd frontend && npm test                   # frontend — ~14s, 54 files, 861 tests
+uv run pytest tests/                      # backend — ~90s, 2226 pass, 1 skip
+cd frontend && npm test                   # frontend — ~14s, 57 files, 962 tests
 cd frontend && npm run build              # frontend — this IS the type check
 ```
 

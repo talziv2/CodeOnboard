@@ -29,6 +29,8 @@
 
 import logging
 import os
+from pathlib import Path
+from urllib.parse import quote
 import threading
 import uuid
 from contextlib import asynccontextmanager
@@ -63,8 +65,12 @@ from backend.agents.tutor import explain as tutor_explain
 from backend.agents.tutor import mode as tutor_mode
 from backend.agents.tutor import scaffold as tutor_scaffold
 from backend.agents.tutor import suggest as tutor_suggest
+from backend.agents.contribution import agent as contribution_agent
 from backend.learning import adaptation
 from backend.learning import choices as choice_policy
+from backend.learning import contribution as contribution_model
+from backend.learning import coverage
+from backend.learning import handoff as handoff_model
 from backend.learning import history
 from backend.learning import progress
 from backend.learning import retry as retry_model
@@ -86,6 +92,7 @@ from backend.learning.reset import reset_to_plan
 from backend.pipeline import progress as pipeline_progress
 from backend.pipeline.runner import run_pipeline
 from backend.repo import dossier_store, survey_store
+from backend.repo import investigation as investigation_module
 from backend.pipeline.state import OnboardState
 from backend.repo.cloner import (
     check_repo_reachable,
@@ -293,6 +300,66 @@ async def _refuse_undeclared_routes(request, call_next):
 #
 # Indirection so tests can point persistence at a temp DB.
 SESSIONS_DB_PATH = learning_store.DEFAULT_DB_PATH
+
+#: Where this install lives, for the `.mcp.json` the handoff hands out. The same
+#: one-line derivation `backend/mcp_server.py` makes; it is the location of a
+#: file on disk, not a policy, so two readings of it cannot disagree.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+#: Where the learner's WRITABLE working copies live: `workspace/<owner>/<name>`,
+#: relative to the project root. Prepared by `tools/prepare_workspace.py`.
+#:
+#: PROJECT-LOCAL AND DERIVED, never configured. The path falls out of the project
+#: root and the session's own repository URL, so a second machine reproduces it
+#: by cloning CodeOnboard and preparing the same relative directory — there is no
+#: absolute path written down anywhere to go stale.
+#:
+#: The shape deliberately mirrors `data/repos/<owner>/<name>`, and the difference
+#: between them is the whole point:
+#:
+#:   data/repos/<owner>/<name>   ONE shared checkout, pinned, READ-ONLY.
+#:                               `anchors.resolve` resolves every anchor in every
+#:                               session against it.
+#:   workspace/<owner>/<name>    the learner's own copy, WRITABLE, edited by a
+#:                               coding agent.
+#:
+#: A coding agent editing the first would move the ground under every lesson in
+#: every session, which is why these are two directories and not one.
+WORKSPACE_DIR = "workspace"
+
+
+def claude_workspace(repo_url: str) -> Path | None:
+    """The prepared working copy for this repository, or `None` if absent.
+
+    Absent is a supported state and produces no launch link at all. A control
+    that opens an arbitrary directory is worse than one that is not offered:
+    that is exactly how the first attempt failed — a slug that resolved to
+    nothing opened the home directory, and the MCP server was simply missing.
+    """
+    try:
+        owner, name = parse_repo_url(repo_url)
+    except ValueError:
+        return None
+    path = PROJECT_ROOT / WORKSPACE_DIR / owner / name
+    return path if path.is_dir() else None
+
+
+def _claude_deep_link(workspace: Path | None) -> str | None:
+    """The `claude-cli://` URL, or `None` when no working copy is prepared."""
+    if workspace is None:
+        return None
+    return (
+        "claude-cli://open?cwd="
+        # `:` and `/` are legal unencoded in a query value, and keeping them
+        # readable makes the link inspectable on screen — which is the point of
+        # showing the destination at all.
+        + quote(workspace.as_posix(), safe="/:")
+        + "&q=" + quote(
+            "I'm ready to implement my CodeOnboard contribution. Call "
+            "get_contribution_context first and check the commit matches, then "
+            "help me write it - I'm the one implementing."
+        )
+    )
 
 
 def _new_client() -> anthropic.Anthropic:
@@ -1015,8 +1082,6 @@ def session_welcome(session_id: str, user: CurrentUser = Depends(current_user)) 
     prose about code that is no longer there.
     """
     graph = _load_session_or_404(session_id, user.user_id)
-    if graph.briefing is not None:
-        return {"briefing": graph.briefing}
 
     survey = None
     repo_path = None
@@ -1033,6 +1098,17 @@ def session_welcome(session_id: str, user: CurrentUser = Depends(current_user)) 
         # README and the profile are still there to write from.
         logger.warning("welcome: survey unavailable for %s: %s", session_id, e)
 
+    # WHAT THIS PLAN DELIBERATELY LEFT OUT — computed, never generated.
+    #
+    # Loaded ahead of the briefing's cache check rather than after it, because a
+    # session whose briefing is already written still has to be able to answer
+    # this. It costs the same survey read the briefing needed anyway, and it is
+    # a pure function over it, so a second visit computes rather than remembers.
+    skipped = coverage.skipped_areas(survey, graph)
+
+    if graph.briefing is not None:
+        return {"briefing": graph.briefing, "skipped_areas": skipped}
+
     briefing = build_briefing(
         repo_url=graph.repo_url,
         goal=graph.goal,
@@ -1043,7 +1119,7 @@ def session_welcome(session_id: str, user: CurrentUser = Depends(current_user)) 
     )
     graph.briefing = briefing
     learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
-    return {"briefing": briefing}
+    return {"briefing": briefing, "skipped_areas": skipped}
 
 
 @app.get("/session/{session_id}/lesson")
@@ -2479,3 +2555,433 @@ def tutor_pin(
             learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
             return {"turn": turn}
     raise HTTPException(status_code=404, detail="turn_not_found")
+
+
+# ── the contribution journey (docs/planning/phases/contribution-journey.md) ──
+#
+# Six routes, and the same law the Tutor's five have, stated for what this stage
+# does rather than what it says:
+#
+#     THE PATCH IS THE LEARNER'S, IT NEVER REACHES DISK, AND NOTHING HERE RUNS.
+#
+# `data/repos/<owner>/<name>` is ONE checkout shared by every user and every
+# session of that repository, so applying a patch there would corrupt other
+# people's sessions. The patch lives in `contribution_json` and is only ever read
+# back out of it. No route in this block writes a file, spawns a process, or
+# executes repository code — `tests/test_contribution_boundary.py` asserts both
+# halves structurally.
+#
+# The gate is READINESS, not completion. `/plan` refuses until every required
+# unit has been demonstrated, or until the learner has explicitly said to go on
+# without it — which is recorded as a decision and never as evidence.
+#
+# Ownership follows the same four layers as every other session route:
+# `Depends(current_user)` in the signature, `_load_session_or_404` naming the
+# owner, 404 rather than 403, and the coverage test failing the build if either
+# is forgotten.
+
+
+class ContributionPatchRequest(BaseModel):
+    files: list[dict]
+
+
+class ContributionStageRequest(BaseModel):
+    stage: str | None = None
+
+
+def _contribution_boundary(graph) -> dict:
+    """This session's change boundary, from the stored dossier. `{}` when absent.
+
+    Absent is a SUPPORTED state, not an error: a session planned before the
+    section existed, a dossier whose commit has moved, or any goal type that is
+    not making a change. Every surface degrades to the ordinary journey rather
+    than claiming a boundary that was never drawn.
+    """
+    try:
+        repo_path = clone_repo(graph.repo_url)
+        commit_sha = get_commit_sha(repo_path)
+    except Exception:
+        commit_sha = None
+    try:
+        stored = dossier_store.load_investigation(
+            graph.session_id, commit_sha, db_path=SESSIONS_DB_PATH
+        )
+    except Exception as e:                                        # noqa: BLE001
+        logger.warning("contribution: dossier unavailable for %s: %s",
+                       graph.session_id, e)
+        return {}
+    if not stored:
+        return {}
+    return investigation_module.boundary(stored.get("dossier") or {})
+
+
+def _contribution_task(graph) -> str:
+    """The change the learner set out to make. ONE authority: the goal."""
+    return str((graph.goal or {}).get("contribution_context") or "").strip()
+
+
+def _demonstrated_objectives(graph) -> list[str]:
+    """The objectives this learner has actually shown they can make.
+
+    Not the curriculum — what they demonstrated. The plan is written in this
+    vocabulary, which is what makes the contribution stage read as the end of
+    the journey rather than the start of a different product.
+    """
+    return [
+        n.objective()
+        for n in progress.core_nodes(graph)
+        if progress.is_demonstrated(n) and n.objective()
+    ]
+
+
+def _contribution_state(graph):
+    """The session's contribution state, created on first touch."""
+    if graph.contribution is None:
+        graph.contribution = contribution_model.ContributionState()
+    return graph.contribution
+
+
+def _contribution_payload(graph) -> dict:
+    """Everything the contribution surfaces render from, computed once.
+
+    `ready` and `boundary` ride along because the client must not derive either
+    (D22) — the gate is a learning decision and the boundary is a finding.
+    """
+    boundary = _contribution_boundary(graph)
+    state = graph.contribution
+    return {
+        "available": bool(_contribution_task(graph)),
+        "task": _contribution_task(graph),
+        "boundary": boundary,
+        "ready": progress.ready_to_implement(graph),
+        "state": state.to_dict() if state else None,
+        # RECOMMENDED, never executed. Empty when the investigation named no
+        # tests — the surface then says so rather than inventing a command.
+        "validation_command": contribution_model.validation_command(boundary),
+    }
+
+
+def _require_contribution(graph) -> dict:
+    """The boundary, or 409. Used by every route that acts on the stage."""
+    if not _contribution_task(graph):
+        raise HTTPException(status_code=409, detail="not_a_contribution_session")
+    return _contribution_boundary(graph)
+
+
+def _require_ready(graph) -> None:
+    """Refuse to open the implementation stage on undemonstrated knowledge.
+
+    The one exception is an explicit `proceeded_unready`, which is the learner's
+    own recorded decision — the `continue_past` shape. It unblocks the road and
+    is never evidence about what they understand.
+    """
+    state = graph.contribution
+    if state is not None and state.proceeded_unready:
+        return
+    if not progress.ready_to_implement(graph)["ready"]:
+        raise HTTPException(status_code=409, detail="not_ready_to_implement")
+
+
+@app.get("/session/{session_id}/contribution")
+def contribution_get(
+    session_id: str, user: CurrentUser = Depends(current_user)
+) -> dict:
+    """The contribution stage's state, the boundary, and the readiness gate.
+
+    Answers for EVERY session, contribution or not: `available` is false and the
+    rest is empty. A 404 here would make the frontend branch on goal type before
+    it is allowed to ask a question, which is a learning decision in the client.
+    """
+    graph = _load_session_or_404(session_id, user.user_id)
+    return _contribution_payload(graph)
+
+
+@app.get("/session/{session_id}/contribution/handoff")
+def contribution_handoff(
+    session_id: str, user: CurrentUser = Depends(current_user)
+) -> dict:
+    """What leaves CodeOnboard for the learner's coding agent.
+
+    THE SAME PAYLOAD THE MCP TOOL RETURNS — `handoff.build_context` is called
+    from both, so the summary the learner reads on screen and the context the
+    agent receives cannot disagree (DI-1). This route exists so the transition is
+    inspectable before anything is handed over; the agent never uses it.
+
+    `setup` is the other half: the `.mcp.json` that points a coding agent at this
+    session. It is assembled HERE rather than in the client because it carries
+    the server's own filesystem path and this session's identity — the client
+    should render it, not derive it (D22). Local by construction: the MCP server
+    reads this machine's database, so it runs on this machine.
+
+    Refuses rather than fabricating (DI-8): a confident schema wrapped around an
+    empty boundary is worse than an error.
+    """
+    graph = _load_session_or_404(session_id, user.user_id)
+    try:
+        repo_path = clone_repo(graph.repo_url)
+        commit_sha = get_commit_sha(repo_path)
+    except Exception as e:                                        # noqa: BLE001
+        logger.warning("handoff: no checkout for %s: %s", session_id, e)
+        raise HTTPException(status_code=409, detail="no_repository_checkout")
+
+    stored = dossier_store.load_investigation(
+        session_id, commit_sha, db_path=SESSIONS_DB_PATH
+    )
+    dossier = (stored or {}).get("dossier") or None
+
+    reason = handoff_model.unusable_reason(graph, dossier)
+    if reason:
+        raise HTTPException(status_code=409, detail=reason)
+
+    # The slug is needed for the launch link whether or not a survey exists, so
+    # it is resolved first and separately.
+    try:
+        owner, repo = parse_repo_url(graph.repo_url)
+        owner_repo = f"{owner}/{repo}"
+    except ValueError:
+        owner_repo = ""
+    workspace = claude_workspace(graph.repo_url)
+
+    survey = None
+    if owner_repo:
+        try:
+            survey = survey_store.load_survey(
+                owner_repo, commit_sha, db_path=SESSIONS_DB_PATH
+            )
+        except Exception:                                         # noqa: BLE001
+            # The survey feeds `not_taught` alone. Its absence loses one field;
+            # it is not a reason to withhold the boundary.
+            survey = None
+
+    return {
+        "context": handoff_model.build_context(graph, dossier, survey, commit_sha),
+        "setup": {
+            "server_name": "codeonboard",
+            # ONE CLICK — and it points at an ABSOLUTE PATH, not a repository
+            # slug.
+            #
+            # `repo=<owner>/<name>` was tried first and is not reliable: Claude
+            # Code resolves a slug only against clones it has already opened, and
+            # when it cannot it does not fail — it opens somewhere else. Measured
+            # on this machine: no `psf/requests` clone existed in any of the 48
+            # directories it knew, so the link opened the HOME directory, which
+            # has no `.mcp.json`, and the server was simply absent. A control that
+            # silently opens the wrong place is worse than one that is not there.
+            #
+            # `cwd` is deterministic, so the workspace is configuration rather
+            # than a guess. `None` when it is unset: DI-8, refuse rather than
+            # fabricate — the surface then shows the setup path instead of a
+            # button that cannot work.
+            #
+            # The prompt is short on purpose. The context does NOT travel in the
+            # link; it travels through `get_contribution_context`, which is the
+            # whole reason the MCP server exists.
+            "deep_link": _claude_deep_link(workspace),
+            "workspace": workspace.as_posix() if workspace else None,
+            "repo_slug": owner_repo,
+            "mcp_json": {
+                "mcpServers": {
+                    "codeonboard": {
+                        "type": "stdio",
+                        "command": "uv",
+                        # `--directory` rather than a `cwd` key: `.mcp.json` does
+                        # not honour one, and without it `-m backend.mcp_server`
+                        # cannot find the package. Measured, not assumed.
+                        "args": [
+                            "run", "--directory", str(PROJECT_ROOT),
+                            "python", "-m", "backend.mcp_server",
+                        ],
+                        "env": {
+                            "CODEONBOARD_SESSION": session_id,
+                            "CODEONBOARD_USER": user.user_id,
+                            "CODEONBOARD_DB": str(SESSIONS_DB_PATH),
+                            "PYTHONIOENCODING": "utf-8",
+                        },
+                    }
+                }
+            },
+        },
+    }
+
+
+@app.post("/session/{session_id}/contribution/proceed")
+def contribution_proceed(
+    session_id: str, user: CurrentUser = Depends(current_user)
+) -> dict:
+    """"Start implementing anyway" — the learner's explicit decision.
+
+    RECORDED, NEVER EVIDENCE. It writes one boolean on the contribution state and
+    one journey event, and it touches no `understanding_state`, no gap, no
+    attempt and no readiness number: `ready_to_implement` still reports exactly
+    what it reported before, blockers and all, and every surface keeps saying so.
+    What this buys is that `/plan` stops refusing — the same anti-stranding
+    bargain `continue_past` strikes on a single stop.
+    """
+    graph = _load_session_or_404(session_id, user.user_id)
+    _require_contribution(graph)
+    state = _contribution_state(graph)
+    if not state.proceeded_unready:
+        state.proceeded_unready = True
+        blockers = progress.ready_to_implement(graph)["blockers"]
+        graph.record_journey_event(
+            "contribution_proceeded_unready",
+            blocked_on=[b["node_id"] for b in blockers],
+        )
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
+    return _contribution_payload(graph)
+
+
+@app.post("/session/{session_id}/contribution/plan")
+def contribution_plan(
+    session_id: str, user: CurrentUser = Depends(current_user)
+) -> dict:
+    """Write (or rewrite) the implementation plan. One Haiku call.
+
+    Refuses on undemonstrated required knowledge — this is the gate, and it is
+    the whole product claim: blocking knowledge genuinely stops implementation.
+    """
+    graph = _load_session_or_404(session_id, user.user_id)
+    boundary = _require_contribution(graph)
+    _require_ready(graph)
+    state = _contribution_state(graph)
+
+    plan = contribution_agent.build_plan(
+        task=_contribution_task(graph),
+        boundary=boundary,
+        demonstrated=_demonstrated_objectives(graph),
+        client=_new_client(),
+    )
+    if plan is None:
+        raise HTTPException(status_code=502, detail="plan_unavailable")
+    state.plan = plan
+    state.validation_command = contribution_model.validation_command(boundary)
+    if state.stage == "plan":
+        state.stage = "locate"
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
+    return _contribution_payload(graph)
+
+
+@app.post("/session/{session_id}/contribution/patch")
+def contribution_patch(
+    session_id: str, body: ContributionPatchRequest,
+    user: CurrentUser = Depends(current_user),
+) -> dict:
+    """Store the learner's proposed files. **Nothing is written to the checkout.**
+
+    The bounds are enforced before anything parses the contents, because they
+    exist to keep `ast.parse` inside the envelope it is safe in.
+    """
+    graph = _load_session_or_404(session_id, user.user_id)
+    _require_contribution(graph)
+    _require_ready(graph)
+    state = _contribution_state(graph)
+
+    files = [
+        contribution_model.PatchFile.from_dict(f)
+        for f in body.files if isinstance(f, dict)
+    ]
+    faults = contribution_model.patch_faults(files)
+    if faults:
+        raise HTTPException(status_code=400, detail="patch_too_large")
+    state.patch = files
+    # A patch that changed invalidates the findings about the previous one. Left
+    # in place they would be read as findings about what is on screen now, which
+    # is the one way a scope check could report something that is not true.
+    state.scope_check = None
+    state.review = None
+    state.pr = None
+    if state.stage in ("plan", "locate"):
+        state.stage = "implement"
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
+    return _contribution_payload(graph)
+
+
+@app.post("/session/{session_id}/contribution/validate")
+def contribution_validate(
+    session_id: str, user: CurrentUser = Depends(current_user)
+) -> dict:
+    """The deterministic checks. No model, no execution, no repository write.
+
+    Everything this returns is decided by a set comparison and `ast.parse` over
+    text the learner typed. It answers SCOPE — did anything land outside the
+    plan — and it does not answer correctness, and it does not answer whether
+    the repository's tests pass, because nothing here runs them.
+    """
+    graph = _load_session_or_404(session_id, user.user_id)
+    boundary = _require_contribution(graph)
+    state = _contribution_state(graph)
+    if not state.patch:
+        raise HTTPException(status_code=409, detail="no_patch_to_validate")
+
+    state.scope_check = contribution_model.check_scope(state.patch, boundary)
+    state.validation_command = contribution_model.validation_command(boundary)
+    if state.stage in ("plan", "locate", "implement"):
+        state.stage = "validate"
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
+    return _contribution_payload(graph)
+
+
+@app.post("/session/{session_id}/contribution/review")
+def contribution_review(
+    session_id: str, user: CurrentUser = Depends(current_user)
+) -> dict:
+    """A reading of the change against the task. An OPINION, and labelled as one.
+
+    Deliberately separate from `/validate`: one is a fact our code decided and the
+    other is a model's judgement, and a single endpoint returning both would be a
+    single result the surface has to split back apart.
+    """
+    graph = _load_session_or_404(session_id, user.user_id)
+    boundary = _require_contribution(graph)
+    state = _contribution_state(graph)
+    if not state.patch:
+        raise HTTPException(status_code=409, detail="no_patch_to_validate")
+
+    review = contribution_agent.review_patch(
+        task=_contribution_task(graph),
+        boundary=boundary,
+        patch=state.patch,
+        client=_new_client(),
+    )
+    if review is None:
+        raise HTTPException(status_code=502, detail="review_unavailable")
+    state.review = review
+    if state.stage != "done":
+        state.stage = "review"
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
+    return _contribution_payload(graph)
+
+
+@app.post("/session/{session_id}/contribution/pr")
+def contribution_pr(
+    session_id: str, user: CurrentUser = Depends(current_user)
+) -> dict:
+    """The PR-ready summary. Text for the learner to use; nothing is published.
+
+    No GitHub call, no token, no network. The deliverable is a description a
+    human opens a pull request with, which is what "PR-ready" means here.
+    """
+    graph = _load_session_or_404(session_id, user.user_id)
+    _require_contribution(graph)
+    state = _contribution_state(graph)
+    if not state.patch:
+        raise HTTPException(status_code=409, detail="no_patch_to_validate")
+
+    pr = contribution_agent.build_pr(
+        task=_contribution_task(graph),
+        patch=state.patch,
+        review=state.review,
+        validation_command=state.validation_command,
+        # The deterministic findings, so the summary can distinguish what was
+        # CHECKED from what is merely RECOMMENDED from what nobody ran. `None`
+        # when the learner skipped Validate, and the notes then say no automatic
+        # checks were run rather than implying some were.
+        scope_check=state.scope_check,
+        client=_new_client(),
+    )
+    if pr is None:
+        raise HTTPException(status_code=502, detail="pr_unavailable")
+    state.pr = pr
+    state.stage = "done"
+    learning_store.save_graph(graph, SESSIONS_DB_PATH, user_id=user.user_id)
+    return _contribution_payload(graph)

@@ -21,6 +21,7 @@ from pydantic import BaseModel
 
 from backend.agents.goal.questions import (
     CODE_DEPTH_MAP,
+    CONTRIBUTION_SCOPE_MAP,
     CORE_QUESTIONS,
     FOLLOWUP_QUESTIONS,
     GOAL_TYPE_MAP,
@@ -69,6 +70,11 @@ class GoalOutput(BaseModel):
     background: str
     # Populated only for the relevant goal_type
     contribution_context: str | None = None
+    # How much code the developer expects to touch. Read by the investigation's
+    # contribution brief and by nothing else — in particular not by the planner,
+    # which sizes the curriculum from what the change requires rather than from
+    # what the learner predicted.
+    contribution_scope: str | None = None
     change_target: str | None = None
     risk_tolerance: str | None = None
     error_description: str | None = None
@@ -152,6 +158,12 @@ def process_answer(
     if current_q.key == "code_depth" and answer not in CODE_DEPTH_MAP:
         raise ValueError(f"invalid_code_depth_option: {answer!r}")
 
+    if (
+        current_q.key == "contribution_scope"
+        and answer not in CONTRIBUTION_SCOPE_MAP
+    ):
+        raise ValueError(f"invalid_contribution_scope_option: {answer!r}")
+
     updated_sequence = _get_question_sequence(session)
     next_index = len(session.answers)
 
@@ -168,6 +180,9 @@ def process_answer(
         qa_pairs,
         client=client,
         code_depth=CODE_DEPTH_MAP[session.answers["code_depth"]],
+        contribution_scope=CONTRIBUTION_SCOPE_MAP.get(
+            session.answers.get("contribution_scope", "")
+        ),
     )
     return None, goal
 
@@ -207,6 +222,10 @@ Rules:
 - For improve_existing_system, copy the user's `change_target` answer into
   change_target verbatim (or paraphrase if very long), and the user's
   `risk_tolerance` answer into risk_tolerance verbatim.
+- For contribute_code, copy the user's description of the change into
+  contribution_context VERBATIM. It is the brief a later stage investigates the
+  repository against, so a summary of it loses the detail that stage needs. Do
+  not write `contribution_scope`; it is set from the user's own answer.
 - Return ONLY the JSON object — no markdown fences, no explanation.
 """
 
@@ -216,6 +235,7 @@ def _synthesize_goal(
     qa_pairs: list[tuple[str, str]],
     client: anthropic.Anthropic,
     code_depth: str,
+    contribution_scope: str | None = None,
 ) -> GoalOutput:
     # Build the user message from all Q&A pairs and call Haiku once.
     user_content = f"Target repository: {repo_url}\n\n"
@@ -247,4 +267,11 @@ def _synthesize_goal(
     # deep this developer's lessons go.
     data["code_depth"] = code_depth
     data["depth"] = _DEPTH_BY_CODE_DEPTH[code_depth]
+    # Ours for the same reason, and it matters more here than it looks: this line
+    # is the one the investigation reads to size its expectation of the change.
+    # `None` when the question was never asked — every non-contribution goal.
+    if contribution_scope is not None:
+        data["contribution_scope"] = contribution_scope
+    else:
+        data.pop("contribution_scope", None)
     return GoalOutput(**data)

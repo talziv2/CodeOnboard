@@ -152,6 +152,26 @@ Planning is described in [session-lifecycle.md](session-lifecycle.md) and
 [repository-understanding.md](repository-understanding.md); the learning loop in
 [learning-engine.md](learning-engine.md).
 
+### A third phase, for one goal type
+
+A `contribute_code` session has a **contribution phase** after the learning one:
+`Plan → Locate → Continue in Claude Code`. It is reached only when
+`progress.ready_to_implement(graph)` says every required unit has been
+demonstrated — a derived fact, never a button — or when the learner explicitly
+recorded a decision to go on without it.
+
+**CodeOnboard stops at the handoff, and the reason is structural rather than a
+scoping choice.** `data/repos/<owner>/<name>` is ONE checkout, shared by every
+user and every session, pinned by `clone_repo`, and it is what `anchors.resolve`
+resolves every anchor in every lesson against (D2/D3). A coding agent editing it
+would move the ground under the whole product. So CodeOnboard has no writable
+working tree, cannot execute, and cannot open a pull request — and everything
+past *"write the change"* belongs to a tool that genuinely has those
+capabilities.
+
+What it hands over is the thing nothing else has: what this repository requires
+for this task, and what this learner has demonstrated. See §5.
+
 ---
 
 ## 5. External integrations
@@ -161,6 +181,33 @@ Planning is described in [session-lifecycle.md](session-lifecycle.md) and
 | **Anthropic API** | every agent, injected as an `anthropic.Anthropic` client | Planning (Sonnet), everything else (Haiku) | The process **refuses to start** without `ANTHROPIC_API_KEY`. A per-call failure appends to `OnboardState.errors`; no agent raises at its caller |
 | **`git`** (subprocess, via GitPython) | `backend/repo/cloner.py` | `git ls-remote` to validate, `git clone --depth 1` to check out | A scheme and host allow-list refuses anything but a public `github.com` URL **before** the outbound request, which is what stops `POST /repo/check` being a server-side request forgery primitive |
 | **Google OIDC** (Authlib) | `backend/auth/google.py` | Optional sign-in provider | Unconfigured means the button is hidden and `/auth/google/start` answers `503` — absent rather than half-working |
+| **Claude Code** (MCP, stdio) | `backend/mcp_server.py` | The contribution handoff: a coding agent reads this session's grounded context and asks whether the files it is changing are still inside the boundary | Entirely optional and entirely outbound-free. CodeOnboard never calls it; the agent spawns the server, which is **read-only** and writes no row. No prepared working copy means no launch link at all, rather than one pointing somewhere arbitrary |
+
+### The MCP bridge, and why it is two tools
+
+`backend/mcp_server.py` is a stdio MCP server the learner's coding agent spawns.
+It exposes exactly two tools and no more:
+
+| Tool | Answers |
+|---|---|
+| `get_contribution_context()` | What CodeOnboard learned for this task, and what this learner demonstrated |
+| `check_scope(changed_files)` | Are the files being changed inside the boundary CodeOnboard taught? |
+
+`check_scope` is why this is a live bridge rather than a file. Context could
+travel as a document; *"is what I am doing right now still in scope"* is a
+question about a working tree that changes under the agent's hands, and only a
+call can answer it. It is also the boundary a model's output crosses before
+CodeOnboard makes any claim about it (DI-6): the agent reports paths, **our**
+deterministic code decides scope.
+
+**Identity comes from the environment, never from the model.** Neither tool takes
+a `session_id` — the server reads `CODEONBOARD_SESSION` and `CODEONBOARD_USER`
+exactly as `api.py` reads them from a cookie, and hands both to
+`store.load_graph`, whose `user_id` argument *is* the security model. A mismatch
+returns `None`, answered as *"session not found"*: **404, never 403** (D20), for
+free. There is no `report_outcome` tool, because **a coding agent's success is
+never evidence about a learner** — the same rule that makes a Tutor conversation
+not evidence (D8).
 
 There is **no retrieval layer, no embedding model and no vector store.** They
 were removed outright rather than flagged off; the migration record is in

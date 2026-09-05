@@ -399,6 +399,36 @@ export interface Progress {
   skipped: number;
   optional_total: number;
   optional_completed: number;
+  /**
+   * The contribution gate, on every session's payload rather than only a
+   * contribution one — it is a fact about the required set, and a key that
+   * appears and disappears by goal type is a key every consumer has to guard.
+   */
+  ready_to_implement: ReadyToImplement;
+}
+
+/**
+ * Has this learner demonstrated everything the change requires?
+ *
+ * SERVER-OWNED, like every other learning decision. The count in
+ * "2 of 4 concepts demonstrated" is `demonstrated` / `required`, never a filter
+ * the client runs over `nodes` — a second definition of the required set is
+ * exactly how the header and the map came to disagree (D22).
+ */
+export interface ReadyToImplement {
+  ready: boolean;
+  required: number;
+  demonstrated: number;
+  blockers: ReadinessBlocker[];
+}
+
+export interface ReadinessBlocker {
+  node_id: string;
+  title: string;
+  objective: string;
+  /** `gap` when a misconception is named here; `unverified` when nothing was shown. */
+  reason: "gap" | "unverified";
+  gaps: { id: string; kind: string; claim: string }[];
 }
 
 /**
@@ -783,8 +813,21 @@ export interface Briefing {
 }
 
 /** First call writes the briefing (one Haiku call); later calls read it back. */
+/**
+ * `skipped_areas` is COMPUTED server-side, not written by a model: survey
+ * subsystems no curriculum anchor touches. Empty when there is no survey to
+ * reason from, and the card renders nothing at all in that case — "we skipped
+ * nothing" and "we cannot say what we skipped" are different claims.
+ */
+export interface SkippedArea {
+  name: string;
+  reason: string;
+}
+
 export const getWelcome = (session_id: string) =>
-  get<{ briefing: Briefing }>(`/session/${session_id}/welcome`);
+  get<{ briefing: Briefing; skipped_areas?: SkippedArea[] }>(
+    `/session/${session_id}/welcome`,
+  );
 
 // --- Lesson ---
 
@@ -1324,3 +1367,176 @@ export const tutorReveal = (session_id: string, node_id?: string) =>
 
 export const tutorPin = (session_id: string, turn_id: string, pinned: boolean) =>
   post<{ turn: TutorTurn }>(`/session/${session_id}/tutor/pin`, { turn_id, pinned });
+
+
+// ── the contribution journey ────────────────────────────────────────────────
+//
+// One payload for every contribution surface, and every route returns it, so a
+// stage change and the state it produced arrive together rather than as a POST
+// followed by a refetch that could disagree with it.
+
+export type ContributionStage =
+  | "plan" | "locate" | "implement" | "validate" | "review" | "done";
+
+export interface BoundaryEntry {
+  file?: string;
+  symbol?: string;
+  why_here?: string;
+  why_not?: string;
+  what_it_guards?: string;
+  case?: string;
+  why_it_bites?: string;
+  convention?: string;
+  evidence_file?: string;
+}
+
+/**
+ * Where the change belongs and what it must not disturb — established by the
+ * investigation, from code it actually read. A FINDING, not a verdict: the scope
+ * check compares against this, which is why nothing derived from it may be
+ * worded as a claim about correctness.
+ */
+export interface ChangeBoundary {
+  target?: BoundaryEntry[];
+  must_not_change?: BoundaryEntry[];
+  conventions?: BoundaryEntry[];
+  existing_tests?: BoundaryEntry[];
+  edge_cases?: BoundaryEntry[];
+}
+
+export interface PatchFile {
+  path: string;
+  contents: string;
+  intent: "modify" | "add";
+}
+
+/**
+ * What the backend decided about a proposed patch WITHOUT running anything.
+ *
+ * `passed` is PATH SCOPE ONLY — no files outside the planned boundary. It is
+ * not correctness, not a test result, and not the protected symbols, and
+ * `strings.ts` carries the wording that keeps those apart on screen.
+ */
+export interface ScopeCheck {
+  in_boundary: string[];
+  outside_boundary: string[];
+  forbidden: string[];
+  unparseable: string[];
+  symbols_defined: string[];
+  test_files: string[];
+  misnamed_tests: string[];
+  /**
+   * Symbol-level `must_not_change` constraints in files this patch touches —
+   * the things the check was asked about and CANNOT answer.
+   *
+   * Not findings and never failures. They exist because silence reads as a
+   * pass: "do not change cookies.py:get" beside a green scope result invites
+   * the reading that `get` was checked. Nothing parsed the original file.
+   */
+  unchecked_symbols: string[];
+  /** "" when the boundary named no target symbol — the row is then not rendered. */
+  symbol_expected: string;
+  symbol_found: boolean;
+  passed: boolean;
+}
+
+export interface ContributionState {
+  stage: ContributionStage;
+  plan: { steps: { title: string; detail: string }[] } | null;
+  patch: PatchFile[];
+  scope_check: ScopeCheck | null;
+  review: { meets_task: boolean; observations: string[]; concerns: string[] } | null;
+  pr: { title: string; body: string; testing_notes: string } | null;
+  /** The learner's recorded decision to go on without full readiness. Never evidence. */
+  proceeded_unready: boolean;
+  validation_command: string;
+}
+
+export interface Contribution {
+  /** False for every session that is not a contribution — the surfaces render nothing. */
+  available: boolean;
+  task: string;
+  boundary: ChangeBoundary;
+  ready: ReadyToImplement;
+  state: ContributionState | null;
+  /** RECOMMENDED. CodeOnboard never runs it. "" when no tests were identified. */
+  validation_command: string;
+}
+
+/**
+ * THE GROUNDED HANDOFF — what leaves CodeOnboard for the learner's coding agent.
+ *
+ * Two namespaces that are never mixed. `change_boundary` and `contracts` are
+ * facts about the CODE; `learner` is a fact about the PERSON. Reading either as
+ * the other is the claim D8 exists to prevent, which is why `means` travels with
+ * the number rather than being a caption somewhere.
+ *
+ * Anchors are `file` + `symbol` and never a line range: this is read against a
+ * working tree we cannot see, and a range goes stale the moment anything above
+ * it is edited.
+ */
+export interface HandoffContext {
+  repository: { url: string; commit: string; verify: string };
+  task: string;
+  change_boundary: ChangeBoundary;
+  contracts: { file?: string; symbol?: string; contract: string }[];
+  /** RECOMMENDED. Nothing on either side of the handoff has run it. */
+  recommended_validation: string;
+  learner: {
+    ready: boolean;
+    required: number;
+    demonstrated: number;
+    demonstrated_concepts: string[];
+    /** What the journey deliberately did not cover. Part of the trust map. */
+    not_taught: { name: string; reason: string }[];
+    started_unready: boolean;
+    means: string;
+  };
+}
+
+export interface Handoff {
+  context: HandoffContext;
+  setup: {
+    server_name: string;
+    /**
+     * ONE CLICK — `claude-cli://open?cwd=<absolute path>`, or `null`.
+     *
+     * An absolute path, not a repository slug. `repo=<owner>/<name>` resolves
+     * only against clones Claude Code has already opened, and when it cannot it
+     * opens somewhere else rather than failing — measured: it landed in the home
+     * directory, where there is no server to find. `null` when no workspace is
+     * configured, so the surface can say so instead of offering a control that
+     * silently opens the wrong place.
+     */
+    deep_link: string | null;
+    /** The configured workspace, shown so the destination is inspectable. */
+    workspace: string | null;
+    repo_slug: string;
+    /** The `.mcp.json` that points the agent at this session. Setup detail. */
+    mcp_json: unknown;
+  };
+}
+
+export const getHandoff = (session_id: string) =>
+  get<Handoff>(`/session/${session_id}/contribution/handoff`);
+
+export const getContribution = (session_id: string) =>
+  get<Contribution>(`/session/${session_id}/contribution`);
+
+export const contributionProceed = (session_id: string) =>
+  post<Contribution>(`/session/${session_id}/contribution/proceed`, {});
+
+export const contributionPlan = (session_id: string) =>
+  post<Contribution>(`/session/${session_id}/contribution/plan`, {});
+
+export const savePatch = (session_id: string, files: PatchFile[]) =>
+  post<Contribution>(`/session/${session_id}/contribution/patch`, { files });
+
+export const validatePatch = (session_id: string) =>
+  post<Contribution>(`/session/${session_id}/contribution/validate`, {});
+
+export const reviewPatch = (session_id: string) =>
+  post<Contribution>(`/session/${session_id}/contribution/review`, {});
+
+export const generatePr = (session_id: string) =>
+  post<Contribution>(`/session/${session_id}/contribution/pr`, {});
