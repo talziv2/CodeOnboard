@@ -30,9 +30,14 @@ formatter or type checker.
 
 | Suite | Result | Wall clock |
 |---|---|---|
-| `pytest tests/` | 1945 passed, 1 skipped, **1 failed** — see §5 | ~76s |
-| `npm test` | 48 files, 783 tests, all passing | ~14s |
+| `pytest tests/` | 2226 passed, 1 skipped, **1 failed** — see §5 | ~90s |
+| `npm test` | 57 files, 962 tests, all passing | ~14s |
 | `npm run build` | succeeds, 11 routes | ~30s |
+
+`npm run build` writes into `.next`, which a running dev server is also using.
+Give the type check its own directory when one is up — `NEXT_DIST_DIR=.next-typecheck
+npm run build` — or the dev server serves corrupted chunks and the page that comes
+back is the wrong one, with nothing announcing it.
 
 ---
 

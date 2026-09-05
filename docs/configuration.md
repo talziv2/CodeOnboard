@@ -186,7 +186,33 @@ deployment fails loudly rather than quietly, not because a deployment path ships
 
 ---
 
-## 9. Not configuration
+## 9. The MCP bridge's environment
+
+Read by `backend/mcp_server.py` **only**, and set in the `.mcp.json` that
+`tools/prepare_workspace.py` writes into the learner's working copy — not in
+`.env`, and never by the web application.
+
+| Variable | Purpose |
+|---|---|
+| `CODEONBOARD_SESSION` | Which session this server answers for |
+| `CODEONBOARD_USER` | Its owner — handed to `store.load_graph`, whose `user_id` argument **is** the security model |
+| `CODEONBOARD_DB` | Which database to read. Relative paths resolve against the project root; defaults to `data/sessions.db` |
+
+**This is identity, not configuration of behaviour.** The server reads these
+exactly as `api.py` reads them from a cookie, which is why neither MCP tool takes
+a `session_id`: there is no id for a model to mistype, guess, or be talked into
+changing. A session/user mismatch makes `load_graph` return `None`, answered as
+*"session not found"* — **404, never 403** (D20).
+
+There is no variable for the learner's working copy. Its path is **derived** —
+`workspace/<owner>/<name>` under the project root, from the session's own
+repository URL — so a second machine reproduces a demo by cloning CodeOnboard and
+running `tools/prepare_workspace.py`, with no absolute path written down anywhere
+to go stale. An unprepared workspace yields no launch link at all.
+
+---
+
+## 10. Not configuration
 
 Worth stating, because their absence is sometimes mistaken for a missing setting:
 

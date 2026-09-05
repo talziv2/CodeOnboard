@@ -238,6 +238,110 @@ INVESTIGATION_SPEC = ReportSpec(
                     "required": ["question", "why_it_matters"],
                 },
             },
+            # ── the change boundary (contribution-journey.md A6.2) ────────────
+            #
+            # For a goal that is MAKING a specific change rather than reading the
+            # code: where that change belongs, and what it must not disturb.
+            #
+            # DELIBERATELY OUT OF `required`. It is offered to every goal type and
+            # DEMANDED only by `contribute_code`'s exit criteria, which is what
+            # lets a new section arrive without bricking the other six goal types
+            # — a required key they have no reason to fill would fail every one of
+            # their dossiers on a contract that is not about them.
+            "change_boundary": {
+                "type": "object",
+                "description": (
+                    "Only for a goal that makes a specific change. Where the "
+                    "change belongs and what it must not disturb. Every file and "
+                    "symbol here is checked against the repository exactly like "
+                    "every other citation in this dossier."
+                ),
+                "properties": {
+                    "target": {
+                        "type": "array",
+                        "description": (
+                            "Where the change belongs — the symbol it would be "
+                            "added to or altered, verified by reading it."
+                        ),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                **_ANCHOR,
+                                "why_here": {
+                                    "type": "string",
+                                    "description": "Why this is the right place for it.",
+                                },
+                            },
+                            "required": ["file", "symbol", "why_here"],
+                        },
+                    },
+                    "must_not_change": {
+                        "type": "array",
+                        "description": (
+                            "Neighbouring code that looks related and is not, or "
+                            "that would be unsafe to alter while making this change."
+                        ),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                **_ANCHOR,
+                                "why_not": {"type": "string"},
+                            },
+                            "required": ["file", "symbol", "why_not"],
+                        },
+                    },
+                    "conventions": {
+                        "type": "array",
+                        "description": (
+                            "How this repository writes code of this kind, each "
+                            "with a file it can be seen in."
+                        ),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "convention": {"type": "string"},
+                                "evidence_file": {"type": "string"},
+                            },
+                            "required": ["convention", "evidence_file"],
+                        },
+                    },
+                    "existing_tests": {
+                        "type": "array",
+                        "description": (
+                            "The tests that already guard this behaviour. Read "
+                            "them: how this repository tests this kind of code is "
+                            "part of what the developer needs."
+                        ),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                **_ANCHOR,
+                                "what_it_guards": {"type": "string"},
+                            },
+                            "required": ["file", "symbol", "what_it_guards"],
+                        },
+                    },
+                    "edge_cases": {
+                        "type": "array",
+                        "description": (
+                            "What the change has to respect. Give `file` and "
+                            "`symbol` for the code the case lives in wherever you "
+                            "can — an anchored edge case is worth five you "
+                            "reasoned your way to."
+                        ),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "case": {"type": "string"},
+                                "why_it_bites": {"type": "string"},
+                                "file": {"type": "string"},
+                                "symbol": {"type": "string"},
+                            },
+                            "required": ["case", "why_it_bites"],
+                        },
+                    },
+                },
+            },
         },
         "required": ["understanding", "components", "entry_points", "flows",
                      "relationships", "contracts", "prerequisites",
@@ -348,7 +452,21 @@ class ExitCriteria:
     min_entry_points: int = 1
     min_flows: int = 1
     min_flow_steps: int = 3      # the longest flow must cross at least this many steps
-    min_flow_files: int = 2      # ...spanning at least this many distinct files
+    # ...spanning at least this many distinct files, or `None` for a goal type
+    # where the number is NOT EVIDENCE OF ANYTHING.
+    #
+    # THE DISTINCTION IS DELIBERATE AND IS NOT A LOW FLOOR. A floor of 1 would
+    # say "one file is barely enough"; `None` says "how many files the behaviour
+    # touches tells us nothing about whether this investigation is finished".
+    # For a contribution correctly scoped to one production file the second is
+    # the true statement, and setting 1 instead would leave an arbitrary number
+    # in place that happens to pass — which is the thing this project keeps
+    # having to remove.
+    #
+    # Every other criterion here is a floor because more genuinely is better
+    # evidence for it. This one is a SHAPE claim: it asserts that the goal's
+    # behaviour spans files, and that assertion is simply false for some goals.
+    min_flow_files: int | None = 2
     min_relationships: int = 2
     min_contracts: int = 0
     min_prerequisites: int = 1
@@ -361,6 +479,26 @@ class ExitCriteria:
     # runtime entry points alone. That is the right answer for most goals and the
     # wrong one for a caller who has to know what to type.
     min_public_api_entry_points: int = 0
+
+    # ── the change boundary, for a goal that MAKES a change ───────────────────
+    #
+    # Zero by default, so the six goal types that are not making a change are
+    # untouched by the section's existence. Only `contribute_code` sets them, and
+    # what they demand is the three things a contributor cannot start without:
+    # somewhere to write, a test to imitate, and a case the change has to survive.
+    min_boundary_targets: int = 0
+    min_boundary_tests: int = 0
+    # Counted over ANCHORED edge cases only — see `anchored_edge_cases`.
+    min_boundary_edge_cases: int = 0
+    # Must the boundary be USABLE — not merely present, and not merely large?
+    #
+    # This is the structural half, and it exists because the counts above are
+    # not it. `Locate`, the implementation plan, the scope check and the review
+    # all read the boundary, so for a contribution an investigation that did not
+    # establish one has not established the thing the rest of the product is
+    # built on — however many components and flows it found. See
+    # `boundary_usable` for what the word means and why it is deliberately small.
+    requires_change_boundary: bool = False
 
 
 BASE_CRITERIA = ExitCriteria()
@@ -384,7 +522,28 @@ CRITERIA_BY_GOAL_TYPE: dict[str, ExitCriteria] = {
         min_components=4, min_flows=2, min_flow_files=3, min_relationships=3,
     ),
     # Changing code: the seams and contracts around the change are the point.
-    "contribute_code": ExitCriteria(min_contracts=2, min_relationships=3),
+    #
+    # The base floors are UNCHANGED and deliberately so. A contribution journey
+    # is meant to come out shorter than an architecture one because the
+    # curriculum's REQUIRED SET is smaller, never because the investigation was
+    # allowed to establish less (contribution-journey.md A6.3). Lowering a floor
+    # here would be exactly the artificial cap this design refuses.
+    #
+    # `min_flow_files=None` is an EXEMPTION, not a reduction. A contribution may
+    # be correctly scoped to a single production file, and how many files its
+    # behaviour spans is not evidence about whether the investigation is
+    # finished. What IS evidence for this goal type is the boundary: where the
+    # change belongs, the contract in force, the cases it must survive, and the
+    # tests that already cover it — and those are the criteria below.
+    "contribute_code": ExitCriteria(
+        min_contracts=2,
+        min_relationships=3,
+        min_flow_files=None,
+        min_boundary_targets=1,
+        min_boundary_tests=1,
+        min_boundary_edge_cases=2,
+        requires_change_boundary=True,
+    ),
     "improve_existing_system": ExitCriteria(min_contracts=1, min_relationships=3),
     # Debugging: precision over breadth — fewer components, a precise path.
     "debug_issue": ExitCriteria(min_components=2, min_flow_steps=4),
@@ -418,6 +577,17 @@ class DossierCheck:
     # the repair is neither "explore more" nor "re-emit" — it is one specific
     # relationship to follow and record.
     surface: list[str] = field(default_factory=list)
+    # Citations of THE SYMBOL THE CONTRIBUTION IS BEING ASKED TO CREATE.
+    #
+    # A fifth family, and the one that cost the most measured turns. It is a
+    # subset of `unresolved` by construction — the symbol is not there, because
+    # it has not been written yet — but the repair is the opposite of the
+    # generic one. "Verify with `symbols`, then correct or drop it" sends the
+    # investigator to look for something that cannot be found; twice in three
+    # runs it looked, failed, and re-emitted the same anchor until the budget
+    # was gone. What it actually needs to hear is that the citation is not a
+    # mistake about the repository at all, and where the intent belongs instead.
+    future_symbols: list[str] = field(default_factory=list)
 
     @property
     def total_anchors(self) -> int:
@@ -460,20 +630,74 @@ class DossierCheck:
         # reporting them tells the model to go exploring when what it needs to do
         # is re-send what it already has. Observed in production: the run spent
         # its remaining turns re-exploring and salvaged the same broken payload.
+        # THE REPAIR LEADS, AND NO LONGER STANDS ALONE.
+        #
+        # It used to `return` here, which was right about the danger and too
+        # broad about the remedy: a report mangled in one field taught the
+        # investigator nothing about the rest of its contract, so a submission —
+        # roughly a third of a run's feedback — bought only "re-emit". Measured
+        # across seven runs, a first submission lost this way predicted refusal
+        # in six of six.
+        #
+        # `validate_dossier` has already dropped the complaints that were mere
+        # artifacts of the corruption, so what remains is real. It follows the
+        # repair rather than replacing it, and is framed so re-emission stays the
+        # first move: the danger the early return guarded against was the model
+        # going exploring instead of re-sending what it already had.
         repair = self.repair_message()
-        if repair:
-            return repair
         parts: list[str] = []
+        if repair:
+            parts.append(repair)
+            still = [
+                m for m in self.unmet_criteria
+                # An empty `understanding` alongside a mangled payload is not a
+                # separate finding; everything else is.
+                if "`understanding` is empty" not in m
+            ]
+            if still:
+                parts.append(
+                    "Once it is readable, the contract still needs: "
+                    + "; ".join(still[:8])
+                    + ". You may already have the evidence for these — include "
+                    "them in the SAME resubmission rather than exploring first."
+                )
+            return " ".join(parts)
         if self.unmet_criteria:
             parts.append(
                 "The investigation is not yet sufficient: "
                 + "; ".join(self.unmet_criteria[:8])
                 + ". Investigate further, or record what blocks you as an open question."
             )
-        if self.unresolved_anchors:
-            shown = "; ".join(self.unresolved_anchors[:10])
+        # THE FUTURE SYMBOL COMES FIRST, AND SUPPRESSES THE GENERIC ADVICE FOR IT.
+        #
+        # "Verify with `symbols`, then correct or drop them" sends the
+        # investigator to look for a method the developer has not written yet.
+        # Measured across three runs: twice it looked, failed, and re-emitted the
+        # same anchor until the turn budget was gone. The citation is not a
+        # mistake about the repository — it is the right idea in the wrong field,
+        # and the repair is to move it, not to check it.
+        if self.future_symbols:
             parts.append(
-                f"{len(self.unresolved_anchors)} citation(s) do not resolve against "
+                f"{len(self.future_symbols)} citation(s) name the symbol this "
+                f"contribution is going to CREATE: "
+                + "; ".join(self.future_symbols[:6])
+                + ". It does not exist yet, so no anchor on it can ever resolve, "
+                "and looking for it will not help. Do not cite it in `flows`, "
+                "`relationships`, `components`, `entry_points` or `contracts` — "
+                "those describe code that runs TODAY. Put what you wanted to say "
+                "about it in prose instead: the intended behaviour belongs in "
+                "`understanding`, and where it goes belongs in "
+                "`change_boundary.target` (with `why_here`) anchored on the "
+                "class or module it will be ADDED TO, which does exist."
+            )
+        other = [
+            entry for entry in self.unresolved_anchors
+            if not any(future in entry for future in self.future_symbols)
+        ]
+        if other:
+            shown = "; ".join(other[:10])
+            parts.append(
+                f"{len(other)} citation(s) do not resolve against "
                 f"the repository: {shown}. Verify with `symbols` or `propose_anchor`, "
                 f"then correct or drop them."
             )
@@ -518,6 +742,113 @@ def _entries(payload: dict, key: str) -> tuple[list[dict], list[str]]:
     return good, bad
 
 
+# ── the change boundary ───────────────────────────────────────────────────────
+#
+# Read through accessors rather than by indexing, for the same reason `_entries`
+# exists: a model that serialises `target` as a string must produce FEEDBACK, not
+# a TypeError halfway through validation. Every accessor here degrades to empty.
+
+BOUNDARY_LISTS = (
+    "target", "must_not_change", "conventions", "existing_tests", "edge_cases",
+)
+
+
+def boundary(payload: dict) -> dict:
+    """The change boundary, or `{}` when there is none (or it arrived malformed)."""
+    raw = payload.get("change_boundary")
+    return raw if isinstance(raw, dict) else {}
+
+
+def boundary_entries(payload: dict, key: str) -> list[dict]:
+    """Dict entries of one change-boundary list; malformed items are dropped."""
+    raw = boundary(payload).get(key)
+    if not isinstance(raw, list):
+        return []
+    return [entry for entry in raw if isinstance(entry, dict)]
+
+
+def boundary_targets(payload: dict) -> list[dict]:
+    """Target entries carrying both a file and a symbol."""
+    return [
+        entry for entry in boundary_entries(payload, "target")
+        if str(entry.get("file") or "").strip()
+        and str(entry.get("symbol") or "").strip()
+    ]
+
+
+def boundary_usable(skeleton: Skeleton, payload: dict) -> bool:
+    """Is there enough here for the contribution stage to stand on?
+
+    **Deliberately the smallest thing that is true**, and stated as a question
+    about USE rather than about completeness: at least one `target` naming a file
+    and a symbol that RESOLVES against the repository.
+
+    Why that and nothing more. `Locate` opens the target's file at its anchor,
+    the implementation plan is written against it, and the scope check compares
+    the learner's paths to it. One resolvable target is what all three need. The
+    other four sections make a boundary *better* and are held to their own
+    counted criteria; requiring them here would be demanding a full schema to
+    prove the section is not empty, which is the opposite of a usability test.
+
+    RESOLUTION IS THE LOAD-BEARING WORD. A target naming a file that is not there
+    would send the learner to write code in a place that does not exist — and it
+    is exactly the failure the anchoring rule in the brief exists to prevent, so
+    it must be caught here rather than trusted to prose.
+    """
+    for entry in boundary_targets(payload):
+        resolution = anchors.resolve(
+            skeleton, str(entry["file"]), symbol=str(entry["symbol"])
+        )
+        if resolution.ok:
+            return True
+    return False
+
+
+def is_future_symbol(skeleton: Skeleton, goal: dict, symbol: str) -> bool:
+    """Is this the symbol the contribution is going to CREATE?
+
+    Three conditions, and the third is what makes it safe:
+
+      1. the goal is a contribution — nothing else is adding a symbol;
+      2. the contribution task NAMES this symbol, since the task is the only
+         place a symbol that does not exist yet is written down;
+      3. the bare name is defined NOWHERE in the repository.
+
+    (3) was learned the hard way. A task reads "add a `get_all` method to `Jar`",
+    so it names the container as well as the addition — and a citation of
+    `__init__.py:Jar` fails to resolve for an entirely different reason (imported
+    there, not defined there, which is the most common citation mistake there
+    is). Conditions 1 and 2 alone called that a future symbol and gave it advice
+    about prose, when what it needed was "you cited the wrong file".
+
+    A symbol defined somewhere is a misplaced or misspelled citation and gets the
+    generic repair. A symbol defined nowhere, that the task names, is the one
+    being written.
+    """
+    if goal.get("goal_type") != "contribute_code":
+        return False
+    bare = str(symbol or "").rsplit(".", 1)[-1].strip()
+    if not bare or bare not in str(goal.get("contribution_context") or ""):
+        return False
+    return not skeleton.find_symbol(bare)
+
+
+def anchored_edge_cases(payload: dict) -> list[dict]:
+    """Edge cases that point at code the investigation actually read.
+
+    Unanchored edge cases are PERMITTED and deliberately do NOT count toward
+    `min_boundary_edge_cases`. That is what turns the brief's "an anchored edge
+    case is worth five you reasoned your way to" into a rule the code enforces
+    rather than a sentence the model may drift from — a dossier can still record
+    a case it could not locate, it just cannot satisfy its contract with one.
+    """
+    return [
+        entry for entry in boundary_entries(payload, "edge_cases")
+        if str(entry.get("file") or "").strip()
+        and str(entry.get("symbol") or "").strip()
+    ]
+
+
 # The dossier's list-valued fields, and the field names that may only ever
 # appear *inside* one of their items. An item key surfacing at the top level of
 # the payload means a nested object was flattened out of its array — the other
@@ -545,12 +876,36 @@ _ITEM_ONLY_KEYS = frozenset({
 }) - _ROOT_KEYS
 
 
-# The observed signature of the fault, measured across four consecutive gate
-# attempts: the value of a list field is not JSON at all but XML-style tool
-# markup — `<component>`, `<parameter name="file">…`. Every occurrence looked
-# the same, and the generic "emit it as a JSON array" wording drew twelve
-# identical resubmissions in one run. Naming the markup names the mechanism.
+# The observed signature of the fault: the value of a list field is not JSON at
+# all but XML-style tool markup — `<component>`, `<parameter name="file">…`.
+# Naming the markup names the mechanism, which the generic "emit it as a JSON
+# array" wording did not: that drew twelve identical resubmissions in one run.
+#
+# The RECOVERABLE half of this shape is undone upstream, at the tool-call
+# boundary (`explore.repair_tool_input`), so anything still matching here is a
+# form no repair can verify — a whole tool call, or items serialised as XML.
 _TOOL_MARKUP = ("<parameter", "</parameter", "<component", "<item", "<step")
+
+
+def corrupted_fields(payload: dict) -> set[str]:
+    """List fields that did not arrive readable, by name.
+
+    THE POINT OF NAMING THEM is that a structural fault used to cost the whole
+    submission: `gap_message` suppressed every other diagnostic, so a report
+    mangled in ONE field taught the investigator nothing about the rest of its
+    contract. With the corrupted fields known, the criteria that are mere
+    artifacts of the corruption can be skipped while every other shortfall is
+    still reported — which is the difference between losing a submission and
+    losing a field.
+    """
+    corrupted: set[str] = set()
+    for key in LIST_FIELDS:
+        raw = payload.get(key)
+        if isinstance(raw, str):
+            corrupted.add(key)
+        elif not isinstance(raw, (list, type(None))):
+            corrupted.add(key)
+    return corrupted
 
 
 def structural_faults(payload: dict) -> list[str]:
@@ -578,6 +933,27 @@ def structural_faults(payload: dict) -> list[str]:
             + " — each belongs inside an object within one of the list fields, so "
             "a nested object was flattened out of its array"
         )
+    # THE SAME FAULT, ONE LEVEL UP, and it went undetected because this function
+    # predates `change_boundary`.
+    #
+    # Observed: a run submitted `existing_tests`, `edge_cases`, `must_not_change`
+    # and `conventions` as TOP-LEVEL keys with `change_boundary` empty. The work
+    # was done — four tests, six edge cases — and the investigator was told "0
+    # entries" for every one of them, which reads as "you did not find any" and
+    # sends it back to look for what it had already written down.
+    #
+    # Reported rather than silently re-nested, like the stranded item keys above:
+    # a re-emission is one turn, and a repair that guesses at intent is how a
+    # mis-parse becomes evidence.
+    unnested = sorted(set(payload) & set(BOUNDARY_LISTS))
+    if unnested:
+        faults.append(
+            "these change-boundary sections arrived at the top level of the "
+            "dossier: " + ", ".join(f"`{k}`" for k in unnested)
+            + " — they belong INSIDE the `change_boundary` object, as "
+            "`change_boundary.target`, `change_boundary.existing_tests` and so "
+            "on. Nest them and resubmit; the findings themselves are fine"
+        )
     return faults
 
 
@@ -604,6 +980,15 @@ def cited_anchors(payload: dict) -> list[tuple[str, str, str]]:
         # Anchors on prerequisites are optional; validate only when offered.
         if entry.get("file") or entry.get("symbol"):
             cited.append(("prerequisite", entry.get("file"), entry.get("symbol")))
+    # The change boundary is held to the SAME grounding as everything else. A
+    # target file that does not resolve is the one error that would send the
+    # learner to write code in a place that is not there, so it must fail the
+    # dossier rather than reach the product as prose (D2, D3).
+    for section in ("target", "must_not_change", "existing_tests"):
+        for entry in boundary_entries(payload, section):
+            cited.append((f"boundary:{section}", entry.get("file"), entry.get("symbol")))
+    for entry in anchored_edge_cases(payload):
+        cited.append(("boundary:edge_case", entry.get("file"), entry.get("symbol")))
     return [(w, str(f or ""), str(s or "")) for w, f, s in cited]
 
 
@@ -662,7 +1047,22 @@ def public_surface_gaps(skeleton: Skeleton, payload: dict) -> list[str]:
             if not resolution.ok:
                 continue          # unresolvable anchors are a separate failure
             cited = resolution.anchor
-            bare = (cited.symbol or symbol).rsplit(".", 1)[-1]
+            qualified = cited.symbol or symbol
+            # A METHOD IS NOT A TWIN OF A MODULE-LEVEL FUNCTION.
+            #
+            # The check compares BARE names, which is right for two module-level
+            # definitions of one name — the fastapi-di case it was written for.
+            # It is wrong for `RequestsCookieJar.get`: stripping the qualifier
+            # leaves `get`, `exports_of("get")` finds `requests.get` in
+            # `api.py`, and the investigator is told its cookie-jar accessor
+            # "is really" the top-level HTTP helper. Measured: it fired on every
+            # contribution run against `psf/requests` and cost turns each time.
+            #
+            # `A.b` and `b` are different names. Only an unqualified citation is
+            # asking the question this check answers.
+            if "." in qualified:
+                continue
+            bare = qualified
             if skeleton.exports_of(bare, file=cited.file):
                 continue          # the cited definition IS the one users reach
             elsewhere = [
@@ -694,6 +1094,7 @@ def validate_dossier(
 ) -> DossierCheck:
     """Deterministic checks: anchors resolve, exit criteria met, nothing vacuous."""
     unresolved: list[str] = []
+    future: list[str] = []
     structural = structural_faults(payload)
     resolved = 0
     for where, file, symbol in cited_anchors(payload):
@@ -703,14 +1104,34 @@ def validate_dossier(
         resolution = anchors.resolve(skeleton, file, symbol=symbol)
         if resolution.ok:
             resolved += 1
-        else:
-            unresolved.append(f"{where}: {file}:{symbol} ({resolution.reason})")
+            continue
+        unresolved.append(f"{where}: {file}:{symbol} ({resolution.reason})")
+        # Still counted as unresolved — it genuinely does not resolve, and
+        # grounding accuracy must not be flattered by it. What changes is the
+        # ADVICE, which is the thing that was costing turns.
+        if (
+            resolution.reason == "unknown_symbol"
+            and is_future_symbol(skeleton, goal, symbol)
+        ):
+            entry = f"{file}:{symbol}"
+            if entry not in future:
+                future.append(entry)
 
     criteria = CRITERIA_BY_GOAL_TYPE.get(str(goal.get("goal_type")), BASE_CRITERIA)
     unmet: list[str] = []
 
+    # WHICH COMPLAINTS WOULD BE ARTIFACTS OF THE CORRUPTION, and only those.
+    #
+    # "0 goal-relevant components established" is not a finding when `components`
+    # arrived as an unreadable string — it is a restatement of the transmission
+    # fault, and reporting it sends the investigator exploring for evidence it
+    # already has. Every OTHER criterion is still a real shortfall and is still
+    # reported: a report mangled in one field must cost that field, not the whole
+    # submission's worth of feedback.
+    broken = corrupted_fields(payload)
+
     components = _entries(payload, "components")[0]
-    if len(components) < criteria.min_components:
+    if "components" not in broken and len(components) < criteria.min_components:
         unmet.append(
             f"{len(components)} goal-relevant component(s) established; at least "
             f"{criteria.min_components} are needed to explain this kind of goal"
@@ -718,7 +1139,7 @@ def validate_dossier(
     entry_points = [
         e for e in (payload.get("entry_points") or []) if isinstance(e, dict)
     ]
-    if len(entry_points) < criteria.min_entry_points:
+    if "entry_points" not in broken and len(entry_points) < criteria.min_entry_points:
         unmet.append(
             f"{len(entry_points)} verified entry point(s) into the goal-relevant "
             f"behaviour; at least {criteria.min_entry_points} needed"
@@ -727,7 +1148,10 @@ def validate_dossier(
         e for e in entry_points
         if str(e.get("perspective") or "") == "public_api"
     ]
-    if len(public_api) < criteria.min_public_api_entry_points:
+    if (
+        "entry_points" not in broken
+        and len(public_api) < criteria.min_public_api_entry_points
+    ):
         # Named separately from the count above because the fix is different:
         # not "find another way in" but "find the name a CALLER types". The
         # `neighbors` tool with `exported_by` gives the dotted import path.
@@ -740,7 +1164,9 @@ def validate_dossier(
         )
 
     flows = _entries(payload, "flows")[0]
-    if len(flows) < criteria.min_flows:
+    if "flows" in broken:
+        pass                      # every flow complaint below would be an artifact
+    elif len(flows) < criteria.min_flows:
         unmet.append(f"{len(flows)} flow(s) traced; at least {criteria.min_flows} needed")
     else:
         def _steps(flow: dict) -> list[dict]:
@@ -756,25 +1182,86 @@ def validate_dossier(
                 f"the longest flow has {best_steps} step(s); a real trace of this "
                 f"goal needs at least {criteria.min_flow_steps}"
             )
-        if best_files < criteria.min_flow_files:
+        # `None` means the criterion does not apply to this goal type at all —
+        # not that its floor is zero. See the field's own note.
+        if (
+            criteria.min_flow_files is not None
+            and best_files < criteria.min_flow_files
+        ):
             unmet.append(
                 f"no flow crosses more than {best_files} file(s); this goal's "
                 f"behaviour spans at least {criteria.min_flow_files}"
             )
-    if len(payload.get("relationships") or []) < criteria.min_relationships:
+    if ("relationships" not in broken
+            and len(payload.get("relationships") or []) < criteria.min_relationships):
         unmet.append(
             f"{len(payload.get('relationships') or [])} confirmed relationship(s); "
             f"at least {criteria.min_relationships} needed"
         )
-    if len(payload.get("contracts") or []) < criteria.min_contracts:
+    if ("contracts" not in broken
+            and len(payload.get("contracts") or []) < criteria.min_contracts):
         unmet.append(
             f"{len(payload.get('contracts') or [])} contract(s)/abstraction(s) "
             f"described; at least {criteria.min_contracts} needed for this goal"
         )
-    if len(payload.get("prerequisites") or []) < criteria.min_prerequisites:
+    if ("prerequisites" not in broken
+            and len(payload.get("prerequisites") or []) < criteria.min_prerequisites):
         unmet.append("no prerequisite concepts identified")
     if not str(payload.get("understanding") or "").strip():
         unmet.append("`understanding` is empty")
+
+    # ── the change boundary ───────────────────────────────────────────────────
+    #
+    # Each message names the LEVER, not the shortfall. "0 targets established" is
+    # a count; "say which symbol the change would be added to" is something the
+    # investigator can go and do, which is the difference between feedback that
+    # moves a run and feedback that repeats it (see `gap_message`).
+    # THE STRUCTURAL REQUIREMENT, checked before the counts.
+    #
+    # Ordered first because it names the lever the counts cannot: an empty
+    # `change_boundary` fails three counted criteria at once, and three messages
+    # about missing entries do not say "this section is the thing the rest of the
+    # product reads". Reported once, in the words of what it blocks.
+    if criteria.requires_change_boundary and not boundary_usable(skeleton, payload):
+        named = len(boundary_targets(payload))
+        unmet.append(
+            "`change_boundary` is not usable: "
+            + (
+                "no `target` entry names both a file and a symbol"
+                if named == 0 else
+                f"none of its {named} `target` entr(ies) resolve against the "
+                f"repository"
+            )
+            + " — this goal is about making a specific change, and the target is "
+            "what says where it belongs. Name the file and the symbol the change "
+            "is added to or alters, and verify it by reading it."
+        )
+
+    targets = boundary_entries(payload, "target")
+    if len(targets) < criteria.min_boundary_targets:
+        unmet.append(
+            f"`change_boundary.target` has {len(targets)} entry(ies); at least "
+            f"{criteria.min_boundary_targets} needed — name the file and symbol "
+            f"the change would be added to or alter, verified by reading it"
+        )
+    boundary_tests = boundary_entries(payload, "existing_tests")
+    if len(boundary_tests) < criteria.min_boundary_tests:
+        unmet.append(
+            f"`change_boundary.existing_tests` has {len(boundary_tests)} "
+            f"entry(ies); at least {criteria.min_boundary_tests} needed — find "
+            f"the tests that already guard this behaviour and read them, so the "
+            f"developer can imitate how this repository tests this kind of code"
+        )
+    anchored = anchored_edge_cases(payload)
+    if len(anchored) < criteria.min_boundary_edge_cases:
+        total = len(boundary_entries(payload, "edge_cases"))
+        unmet.append(
+            f"`change_boundary.edge_cases` has {len(anchored)} case(s) anchored in "
+            f"code (of {total} listed); at least "
+            f"{criteria.min_boundary_edge_cases} must give `file` and `symbol` — "
+            f"a case you can point at (a branch, a raise, a default, a comment "
+            f"explaining a subtlety) is worth five you reasoned your way to"
+        )
 
     vacuous = [
         f"component {entry.get('symbol')}"
@@ -792,6 +1279,7 @@ def validate_dossier(
         # Only meaningful once the payload is readable — a mangled dossier has
         # no claims to contradict, and piling this on would bury the real fault.
         surface=[] if structural else public_surface_gaps(skeleton, payload),
+        future_symbols=future,
     )
 
 
@@ -889,6 +1377,96 @@ class InvestigationRun:
         return self.exploration.contract_met is True
 
 
+# What a contribution goal asks the investigation to establish.
+#
+# THIS IS THE FIX FOR THE ONE DEFECT THE WHOLE CONTRIBUTION JOURNEY RESTS ON.
+# `contribution_context` was collected by the interview, carried through goal
+# synthesis, and then dropped right here — so two learners with different
+# contribution tasks got the SAME investigation of the same repository, and the
+# task first mattered at planning time, by which point the repository
+# understanding was already fixed and could only be filtered.
+#
+# It REDIRECTS, it does not shrink. Nothing below asks for fewer findings, and
+# the paragraph before the last says so outright, because the exit criteria are
+# what stop a thin dossier and a brief that quietly argued against them would
+# just produce rejections. A contribution journey is meant to be shorter because
+# the CURRICULUM'S REQUIRED SET is smaller — that is the only place shortness can
+# honestly be earned (contribution-journey.md A6.1).
+_CONTRIBUTION_BRIEF = """\
+THIS IS A CONTRIBUTION, NOT A TOUR. The developer is going to make ONE specific
+change to this repository, and they are going to write it themselves.
+
+THE CHANGE THEY INTEND TO MAKE:
+{task}
+{scope}
+Investigate for THAT change. Concretely, this redirects the investigation:
+
+  WHERE IT BELONGS. The file and the symbol the change would be added to or
+  alter — verified by reading them, not the subsystem it is vaguely near.
+
+  THE CONTRACT ALREADY IN FORCE. What callers of that code may rely on, what it
+  promises, and what an existing caller would notice if it changed.
+
+  THE EDGE CASES IT MUST RESPECT. Prefer cases you can point at in code — a
+  branch, a raise, a default, a comment explaining a subtlety — over cases you
+  can imagine. An anchored edge case is worth five you reasoned your way to.
+
+  THE TESTS THAT ALREADY GUARD THIS BEHAVIOUR. Read them, and list them in
+  `change_boundary.existing_tests` — that field specifically, not only as an
+  anchor somewhere else in the dossier. How this repository writes a test for
+  this kind of code is part of what the developer needs, and it is the field the
+  contract checks.
+
+  WHAT THE CHANGE MUST NOT TOUCH. The neighbouring code that looks related and
+  is not, or that would be unsafe to alter while making this change.
+
+THE CHANGE DOES NOT EXIST YET, AND THERE IS A PLACE FOR IT
+
+Every citation you make must resolve against the repository AS IT IS NOW. The
+symbol the developer is going to add is not there, so an anchor on it can never
+be verified — and looking for it will not help.
+
+This matters most where it is most tempting. `components`, `entry_points`,
+`flows`, `relationships` and `contracts` describe CODE THAT RUNS TODAY. Do not
+write a flow for the method being added, and do not write a relationship from it
+to the helpers it will call. There is no way to ground either.
+
+THEY ARE STILL REQUIRED, AND THEY ARE STILL MOST OF THE DOSSIER. Filling in the
+change boundary does not replace them — it sits beside them. Populate them with
+THE EXISTING CODE THE CHANGE JOINS: the class it is added to, the sibling methods
+it will resemble, the internal helper it will reuse, the contract its neighbours
+already honour, the flow that runs through them today. That is the code the
+developer has to understand before they can write anything, and a dossier that
+omits it has not investigated the repository at all.
+
+What you wanted to say there is still wanted — it goes somewhere else:
+
+  the intended behaviour, and how it should differ from what exists
+      -> `understanding`, in prose. No anchors, so say it freely.
+  where the new code goes
+      -> `change_boundary.target`, anchored on the CLASS OR MODULE IT IS ADDED
+         TO, with `why_here` naming the sibling it sits beside. That anchor
+         resolves, because the container already exists.
+  what it must survive
+      -> `change_boundary.edge_cases`, anchored on the existing code that shows
+         the case — the branch, the raise, the default.
+  what it must not break
+      -> `change_boundary.must_not_change`.
+
+So: describe the change in prose and in the boundary; anchor only on code you
+can read today.
+
+Breadth for its own sake is now a cost. A subsystem this change does not touch
+does not belong in the dossier, however interesting it is. This is NOT a licence
+to stop early: the exit criteria still apply in full, and an investigation that
+has not established the contract, the edge cases and the guarding tests is not
+finished.
+
+Investigate until you could tell this developer exactly where to start, what they
+must not break, and how to test it. Then submit the dossier, INCLUDING the
+`change_boundary` section."""
+
+
 def _task(goal: dict) -> str:
     """The per-run request. Volatile by nature, so it stays out of the cached seed."""
     parts = [f"The user's goal: {goal.get('primary_goal', '')}"]
@@ -898,10 +1476,21 @@ def _task(goal: dict) -> str:
         parts.append(f"Goal type: {goal['goal_type']}")
     if goal.get("code_depth"):
         parts.append(f"How deep the user asked to go: {goal['code_depth']}")
-    parts.append(
-        "Investigate the repository until you can explain the goal-relevant "
-        "behaviour from verified code, then submit the dossier."
-    )
+
+    task = str(goal.get("contribution_context") or "").strip()
+    if goal.get("goal_type") == "contribute_code" and task:
+        scope = str(goal.get("contribution_scope") or "").strip()
+        parts.append(_CONTRIBUTION_BRIEF.format(
+            task=task,
+            scope=f"\nHOW LARGE THEY EXPECT IT TO BE: {scope}\n" if scope else "",
+        ))
+    else:
+        # Every other goal type, and a contribution session whose task went
+        # unanswered, take the path this function has always taken.
+        parts.append(
+            "Investigate the repository until you can explain the goal-relevant "
+            "behaviour from verified code, then submit the dossier."
+        )
     return "\n".join(parts)
 
 

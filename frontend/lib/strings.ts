@@ -496,6 +496,270 @@ export const t = {
   // halves: what this repository is (written by the Briefing Agent from the
   // survey and the README) and who the system thinks the reader is (derived
   // from the interview answers alone — no model involved).
+
+  /**
+   * THE CONTRIBUTION JOURNEY.
+   *
+   * Three claims are kept apart here on purpose, and the wording is the last
+   * place they could collapse into one:
+   *
+   *   SCOPE        which files were touched      — our code decided it
+   *   CORRECTNESS  does it do what was asked     — a model's opinion, said so
+   *   TESTS        does the repository pass      — nobody. Not run.
+   *
+   * So: no "correct", no "safe", no "valid", no "passing", no "verified", no
+   * "works" anywhere below about a patch. `scopePassed` says exactly what was
+   * checked and `scopeCaveat` says where the boundary came from, because the
+   * boundary was itself derived during the investigation — a path comparison
+   * must never be allowed to read as a judgement about the code.
+   */
+  contribution: {
+    // --- the scope card, on the welcome page ---
+    cardLabel: "Your contribution",
+    cardHeading: "Your contribution plan is ready",
+    taskLabel: "What you're building",
+    requiredHeading: (n: number) =>
+      n === 1
+        ? "You need 1 concept before implementing this safely."
+        : `You need ${n} concepts before implementing this safely.`,
+    requiredLabel: "Required",
+    skippedLabel: "Not required for this contribution",
+    generatedNote: "This path was planned for your task, not for the repository.",
+    begin: "Start focused learning",
+
+    // --- the gate, on the lesson page ---
+    gateProgress: (done: number, total: number) =>
+      `${done} of ${total} concepts demonstrated — implementation unlocks at ${total}.`,
+    gateBlocked: (title: string) => `${title} is still unresolved.`,
+    overrideLink: "Start implementing anyway",
+    overrideHeading: "Start without finishing this?",
+    overrideBody:
+      "You haven't shown these yet, and they're what the change depends on. " +
+      "Nothing about your progress changes if you go on — this only unlocks " +
+      "the implementation stage.",
+    overrideConfirm: "Yes, start implementing",
+    overrideCancel: "Keep working on it",
+    overrideNotice: "Started before every concept was demonstrated.",
+
+    // --- ready ---
+    readyLabel: "Ready to implement",
+    readyHeading: "You're ready to write this",
+    readyBody: (n: number) =>
+      `You've demonstrated all ${n} concepts this change depends on.`,
+    readyBegin: "Start implementing",
+
+    // The door back, from a lesson into the stage the learner has begun.
+    // Named for the destination, not the action: "Implementation" is where
+    // it goes, and a learner mid-journey needs to recognise it, not parse it.
+    resume: "Back to implementation",
+
+    // --- the implementation section of the route rail ---
+    //
+    // The route and the stages are one journey, so the rail names this phase the
+    // way it names a chapter — a heading, not a product name. "Implementation"
+    // rather than "Contribution" because the learner's whole session IS the
+    // contribution; this is the part of it where they write the change.
+    railTitle: "Implementation",
+    /** Why it is locked, in the gate's own numbers rather than a second rule. */
+    railLocked: (done: number, total: number) =>
+      `${done} of ${total} concepts demonstrated`,
+    railLockedHint: "Opens once you've demonstrated what this change depends on",
+    /** Announced to a screen reader on a stage that is behind the learner. */
+    railDone: "completed",
+    railCurrent: "current stage",
+    /** The strip-density rail, where five labels do not fit. */
+    railCompact: "Go to implementation",
+
+    // --- the handoff: where the journey ends and the work begins ---
+    //
+    // NOTHING HERE PROMISES THE CHANGE IS DONE, and nothing claims the coding
+    // agent will refuse to write it. The instruction we send is guidance, not
+    // enforcement, and the copy must not imply otherwise — a learner who reads
+    // "Claude won't implement it for you" and then watches it do so has been
+    // told something false by us, not by Claude.
+    handoffLabel: "Continue in Claude Code",
+    handoffHeading: "Take this to your editor",
+    handoffBody:
+      "CodeOnboard read the repository for this task and checked what you can " +
+      "explain. It doesn't edit files, run tests, or open pull requests — your " +
+      "coding agent does. This is what it hands over.",
+    handoffWhatTravels: "What travels",
+    handoffCodeHalf: "About the code",
+    handoffLearnerHalf: "About you",
+    handoffTask: "Task",
+    handoffRevision: "Pinned revision",
+    handoffRevisionHint:
+      "Every file and symbol below is true at this commit. Check out the same " +
+      "one, or none of it can be relied on.",
+    handoffTargets: "Change these",
+    handoffProtected: "Leave these alone",
+    handoffTests: "Tests that already cover this",
+    handoffEdgeCases: "Edge cases found while reading",
+    handoffContracts: "Contracts to preserve",
+    handoffValidation: "Suggested check",
+    handoffValidationHint: "Recommended. CodeOnboard has not run it.",
+    handoffDemonstrated: (n: number) =>
+      n === 1 ? "1 concept demonstrated" : `${n} concepts demonstrated`,
+    handoffNotTaught: "Not covered by this journey",
+    handoffMeansLabel: "What that means",
+    handoffAgentRole:
+      "Your coding agent is told that you are the implementer, to use this as " +
+      "grounded context, and to ask about the edge cases rather than quietly " +
+      "handling them. That's guidance, not a guarantee.",
+
+    // --- the action ---
+    //
+    // ONE CONTROL. Opening the editor is the product step; wiring the two
+    // together is not, and a flow whose first instruction is "copy this JSON"
+    // has made its plumbing the learner's problem. Everything mechanical lives
+    // behind `handoffSetupLabel` for the person who has to reproduce it.
+    handoffOpen: "Continue in Claude Code",
+    handoffOpenHint:
+      "Opens Claude Code in your working copy with this contribution ready. " +
+      "Your browser may ask for permission the first time.",
+    handoffOpenIn: (path: string) => `Opens in ${path}`,
+    // Shown INSTEAD of the button when no workspace is configured. A control
+    // that silently opens the wrong directory is worse than one that is absent,
+    // and this says which it is.
+    handoffNoWorkspace:
+      "No working copy is configured on this machine, so there's nothing to " +
+      "open. Set CODEONBOARD_WORKSPACE to a clone of this repository, or use " +
+      "the setup details below.",
+    handoffAfter: "It'll read the context below before it does anything else.",
+
+    // --- setup, folded away ---
+    handoffSetupLabel: "Setup details",
+    handoffSetupNote:
+      "Only needed once per repository, and already done if you were given a " +
+      "prepared clone.",
+    handoffStep1: "Save this as .mcp.json in the clone you'll work in.",
+    handoffStep2: "Start Claude Code there and approve the CodeOnboard server.",
+    handoffStep3:
+      "It can then read this contribution's context and check your changed " +
+      "files against the boundary.",
+    handoffCopyConfig: "Copy .mcp.json",
+    handoffCopied: "Copied",
+    handoffClone: "Work in your own clone of the repository — not CodeOnboard's.",
+    handoffUnavailable:
+      "This session has no change boundary recorded, so there's nothing " +
+      "grounded to hand over.",
+    handoffFallback: "Use the in-app implementation steps instead",
+    handoffFallbackLabel: "Fallback",
+    handoffBackFromFallback: "Back to the handoff",
+
+    // --- the stages ---
+    stageLabel: "Contribution",
+    stages: {
+      plan: "Plan",
+      locate: "Locate",
+      implement: "Implement",
+      validate: "Validate",
+      review: "Review",
+      done: "Ready",
+      handoff: "Continue in Claude",
+    } as Record<string, string>,
+
+    planHeading: "The plan",
+    planNote: "Written from your task and what you demonstrated. Yours to ignore.",
+    planRegenerate: "Write it again",
+    planContinue: "Looks right",
+    planWriting: "Writing your plan…",
+
+    locateHeading: "Where the change goes",
+    locateNote:
+      "Established by reading the repository during your investigation.",
+    locateTargets: "Change these",
+    locateForbidden: "Leave these alone",
+    locateTests: "Tests that already cover this",
+    locateContinue: "Start writing",
+    locateEmpty: "The investigation didn't record a change boundary for this task.",
+
+    implementHeading: "Your change",
+    implementNote:
+      "Written by you, kept with this session. CodeOnboard never edits the repository.",
+    implementPath: "File path",
+    implementCode: "Your code",
+    implementAdd: "Add another file",
+    implementRemove: "Remove",
+    implementSave: "Save and check",
+    implementSaving: "Saving…",
+    implementEmpty: "Add a file to start.",
+    implementStuck: "I'm stuck",
+
+    validateHeading: "What we can check",
+    validateNote:
+      "All of this is decided by reading what you wrote. Nothing is run.",
+    checks: {
+      // "Path scope", not "Scope": the name says what was compared, which is
+      // what stops the row standing for the symbol-level rule beneath it.
+      scope: "Path scope",
+      syntax: "Syntax",
+      symbol: "Symbol",
+      protected: "Protected-symbol check",
+      tests: "Test file",
+      execution: "Repository tests",
+    } as Record<string, string>,
+    scopePassed: "Passed — no files outside the planned contribution boundary.",
+    scopeFailed: (n: number) =>
+      n === 1
+        ? "1 file outside the planned boundary"
+        : `${n} files outside the planned boundary`,
+    scopeCaveat: "The boundary was derived from the investigation of your task.",
+    scopeUndrawn: "No boundary was recorded for this task, so there's nothing to compare against.",
+    syntaxPassed: (n: number) =>
+      n === 1 ? "Parses as Python" : `All ${n} files parse as Python`,
+    syntaxFailed: "Couldn't be parsed",
+    symbolFound: (name: string) => `${name} is defined`,
+    symbolMissing: (name: string) => `${name} isn't defined in what you wrote`,
+    testsFound: "Included",
+    testsMissing: "No test file in your change",
+    testsMisnamed: (names: string[]) =>
+      `Won't be collected by pytest: ${names.join(", ")}`,
+    executionNever: "Not executed by CodeOnboard",
+    protectedNotPerformed: "Not performed",
+    // One dash, then a semicolon: the row already opens with "Not performed —",
+    // so a second em-dash here reads as a stutter.
+    protectedDetail: (names: string[]) =>
+      names.length === 1
+        ? `${names[0]} is protected; this check compares file paths, not symbols.`
+        : `${names.length} protected symbols; this check compares file paths, not symbols.`,
+    commandLabel: "Recommended validation command",
+    commandNote: "The tests this repository already uses to guard this behaviour.",
+    commandNone: "The investigation didn't identify tests covering this area.",
+    validateAgain: "Back to editing",
+    validateContinue: "Continue to review",
+    validateRun: "Check my change",
+    validateRunning: "Checking…",
+
+    reviewHeading: "Review",
+    // Labelled as a reading, never as a verdict — this is the block where the
+    // model's opinion sits, and the label is what keeps it from being read as
+    // the scope check's sibling.
+    reviewNote: "One reader's take on your change. Not a test result.",
+    reviewMeets: "Reads as doing what you asked for",
+    reviewMisses: "Doesn't seem to do everything you asked for",
+    reviewObservations: "What it does",
+    reviewConcerns: "What I'd raise in review",
+    reviewNoConcerns: "Nothing raised.",
+    reviewRun: "Review my change",
+    reviewRunning: "Reading it…",
+    reviewContinue: "Write the PR summary",
+
+    doneLabel: "Contribution ready",
+    doneHeading: "Contribution ready",
+    doneFiles: "Files changed",
+    doneScope: "Scope",
+    doneTests: "Repository tests",
+    prHeading: "Pull request",
+    prTitle: "Title",
+    prBody: "Description",
+    prTesting: "Testing notes",
+    prWriting: "Writing the summary…",
+    prRun: "Write the PR summary",
+    copy: "Copy",
+    copied: "Copied",
+    backToJourney: "Back to the journey",
+  },
   welcome: {
     label: "Before you start",
     // In the session header, where it is a way back rather than a first visit.
@@ -1598,6 +1862,16 @@ export const t = {
   // FastAPI raises these as `detail`; they reach the UI verbatim otherwise.
   errors: {
     session_not_found: "That session no longer exists.",
+    // ── the contribution journey ──────────────────────────────────────────
+    not_a_contribution_session:
+      "This session isn't a contribution, so there's nothing to implement here.",
+    not_ready_to_implement:
+      "There's still a concept this change depends on that you haven't shown yet.",
+    no_patch_to_validate: "Write your change first, then check it.",
+    patch_too_large: "That's more than this stage can hold — 10 files, 64 KB each.",
+    plan_unavailable: "Couldn't write the plan just now. Try again.",
+    review_unavailable: "Couldn't review your change just now. Try again.",
+    pr_unavailable: "Couldn't write the summary just now. Try again.",
     // ── auth (multi-user M2) ──────────────────────────────────────────────
     //
     // Both of these are deliberately incurious. The backend returns one refusal

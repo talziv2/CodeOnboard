@@ -251,6 +251,66 @@ def goal_readiness(graph: "LearningGraph") -> float:
     return sum(1 for n in core if is_demonstrated(n)) / len(core)
 
 
+def ready_to_implement(graph: "LearningGraph") -> dict:
+    """Has this learner demonstrated everything the change requires? (A5, A7)
+
+    The gate on the contribution journey's implementation stage — and
+    DELIBERATELY NOT A NEW FACT. It is `goal_readiness == 1.0` restated as a
+    predicate with its blockers named, over the same `core_nodes` set:
+
+        every required unit demonstrated, and no open blocking gap on one.
+
+    Composing the two existing definitions rather than adding a third is what
+    makes this inherit §5.3 for free — readiness to implement can fall only when
+    evidence about the learner changes, never because the plan changed, because
+    both halves already obey that.
+
+    THE SECOND CLAUSE IS NOT REDUNDANT, though it nearly is. `is_demonstrated`
+    already excludes a node carrying an unverified blocking gap — `understanding_of`
+    demotes it to `partial` — so the two agree today. It is stated separately
+    because the two answer different questions for the LEARNER: "you have not
+    shown this yet" and "there is a named misconception open here" are different
+    sentences, and the second is the one that tells them what to go and do.
+
+    **A waived gap does not buy readiness.** A waived gap is unverified forever,
+    so its node is never `understood` and never demonstrated. That is deliberate
+    and it is the same rule `understanding_of` holds; the escape hatch is an
+    explicit decision recorded elsewhere (`proceeded_unready`), never a state
+    this function is talked into.
+
+    Returns the counts as well as the verdict, because the surface that shows
+    "2 of 4 concepts demonstrated" must not compute them a second time (D22).
+    """
+    from backend.learning.graph import has_open_blocking_gaps
+
+    core = core_nodes(graph)
+    blockers: list[dict] = []
+    for node in core:
+        if is_demonstrated(node):
+            continue
+        blockers.append({
+            "node_id": node.id,
+            "title": node.title,
+            "objective": node.objective(),
+            # `gap` outranks `unverified`: when a misconception has been named,
+            # naming it is more useful than reporting that nothing was shown.
+            "reason": "gap" if has_open_blocking_gaps(node) else "unverified",
+            "gaps": [
+                {"id": g.id, "kind": g.kind, "claim": g.claim}
+                for g in node.gaps if g.is_blocking and g.is_open
+            ],
+        })
+    return {
+        # `bool(core)` guards the degenerate graph: a journey with no required
+        # units has demonstrated nothing, and reporting it ready would open the
+        # implementation stage on the strength of an empty denominator.
+        "ready": bool(core) and not blockers,
+        "required": len(core),
+        "demonstrated": len(core) - len(blockers),
+        "blockers": blockers,
+    }
+
+
 def journey_progress(graph: "LearningGraph") -> float:
     """Fraction of the promised journey the learner has dealt with."""
     walk = walk_nodes(graph)
@@ -345,6 +405,11 @@ def summary(graph: "LearningGraph") -> dict:
         # raw `understanding_state`, and rendering it beside the profile's
         # four-state totals put two different counts of one thing side by side
         # (M3a.3 AC4). `understanding.profile()["totals"]` is the one tally.
+        # The contribution gate. Computed for EVERY session, not only
+        # contribution ones: it is a fact about the required set, the frontend
+        # decides whether it is worth showing, and a payload key that appears and
+        # disappears by goal type is a key every consumer has to guard.
+        "ready_to_implement": ready_to_implement(graph),
         "detours": detours(graph),
         "skipped": skipped(graph),
         "optional_total": len(optional),

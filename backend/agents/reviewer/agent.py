@@ -33,7 +33,14 @@ MAX_TOKENS = 2048
 
 # Goal types that need a Reviewer pass. Everything else skips it to save
 # tokens and avoid pulling the Mentor's emphasis off-goal.
-_REVIEWER_GOAL_TYPES = frozenset({"improve_existing_system", "understand_architecture"})
+#
+# `contribute_code` joined them with the contribution journey, and it is the
+# clearest fit of the three: what this agent produces — `risks`, `test_gaps`,
+# `boundaries` — is exactly what somebody about to change one file needs and
+# what a curriculum planned from components alone leaves out. One Haiku call.
+_REVIEWER_GOAL_TYPES = frozenset({
+    "improve_existing_system", "understand_architecture", "contribute_code",
+})
 
 
 # ── Wire format ───────────────────────────────────────────────────────────────
@@ -180,6 +187,10 @@ def _build_user_content(goal: dict, module_map: dict, chunks: list[dict]) -> str
         extras.append(f"Focus area: {goal['focus_area']}")
     if goal.get("change_target"):
         extras.append(f"Planned change: {goal['change_target']}")
+    if goal.get("contribution_context"):
+        # The contribution task, so the review lands on the code the change
+        # touches rather than on whatever is architecturally most interesting.
+        extras.append(f"Contribution the developer will make: {goal['contribution_context']}")
     if goal.get("risk_tolerance"):
         extras.append(f"Risk tolerance: {goal['risk_tolerance']}")
     extra_block = ("\n" + "\n".join(extras)) if extras else ""

@@ -49,7 +49,8 @@ Each lives beside the code it describes.
 | [`backend/auth/`](../backend/auth/README.md) | The account layer |
 | [`frontend/`](../frontend/README.md) | The Next.js application |
 | [`tests/`](../tests/README.md) | The backend suite |
-| [`scripts/`](../scripts/README.md) | Measurement harnesses and admin tools |
+| [`scripts/`](../scripts/README.md) | Measurement harnesses — every one of them spends money |
+| [`tools/`](../tools/README.md) | Local setup that spends none: presentation checkpoints, and the working copy the contribution handoff opens |
 
 ---
 
@@ -72,7 +73,7 @@ was deliberately **not** built.
 | | |
 |---|---|
 | [`planning/`](planning/README.md) | **Start here for the planning corpus** — what each document is, and which describe work that was deliberately not built |
-| [`planning/phases/`](planning/phases/) | One document per workstream: `roadmap`, `repo-understanding`, `learning-engine`, `learning-graph`, `learning-loop`, `gap-model`, `multi-user`, `session-reset`, `reassessment`, `grounding-repair`, `cost-optimization`, `multi-language`, `chat-assistant`, `phase3`, and the `ui-*` series |
+| [`planning/phases/`](planning/phases/) | One document per workstream: `roadmap`, `repo-understanding`, `learning-engine`, `learning-graph`, `learning-loop`, `gap-model`, `multi-user`, `session-reset`, `reassessment`, `grounding-repair`, `cost-optimization`, `multi-language`, `chat-assistant`, `phase3`, `contribution-journey`, `contribution-handoff`, and the `ui-*` series |
 | [`planning/phases/evidence/`](planning/phases/evidence/) | Committed output of the measurement harnesses in `scripts/` — the evaluation of the system as it stands |
 | [`planning/vision/`](planning/vision/) | The original proposal and the evaluation plan |
 | [`planning/open-source-readiness-plan.md`](planning/open-source-readiness-plan.md) | The audit that produced the current setup path. Completed; retained as a record |

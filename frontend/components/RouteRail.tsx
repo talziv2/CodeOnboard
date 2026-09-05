@@ -4,9 +4,11 @@ import { useState } from "react";
 import { openOnly, type GraphNode } from "@/lib/api";
 import type { RouteStop } from "@/lib/graph-layout";
 import { isComplete, isSettled, type RouteSection } from "@/lib/route-sections";
+import type { ImplementationRail, StepView } from "@/lib/contribution";
 import { understandingLabel } from "@/lib/tags";
 import { standingLabel, standingOfNode } from "@/lib/standing";
 import StatePin from "@/components/ui/StatePin";
+import Callout from "@/components/ui/Callout";
 import { t } from "@/lib/strings";
 
 interface Props {
@@ -36,6 +38,17 @@ interface Props {
    * nowhere to send the learner — and a row that goes nowhere is worse than none.
    */
   onBriefing?: () => void;
+  /**
+   * The implementation phase, at the foot of the route. `null` on every session
+   * that is not a contribution, which is why the whole section is one optional
+   * prop rather than four — a rail with no contribution renders exactly what it
+   * rendered before this existed.
+   */
+  implementation?: ImplementationRail | null;
+  /** Open one implementation stage. Called only for a row that is `enterable`. */
+  onEnterStage?: (stage: StepView) => void;
+  /** Open the readiness gate, from the `ready` state's own heading row. */
+  onOpenGate?: () => void;
 }
 
 /**
@@ -323,11 +336,133 @@ function SectionHead({
   );
 }
 
+/**
+ * THE IMPLEMENTATION PHASE, at the foot of the route.
+ *
+ * Below the chapters and below the optional stops, because it is what comes
+ * after them — the rail reads top to bottom as one journey, and the rule above
+ * this box is the same device that separates the briefing from the walk at the
+ * other end. The walk is bracketed by the two things that are not part of it;
+ * this is the third, and it is the destination.
+ *
+ * IT IS NOT A CHAPTER AND ITS ROWS ARE NOT STOPS. A stop is a `StatePin` on a
+ * connector, and the pin encodes an understanding state — so drawing these as
+ * stops would assert that writing a patch is evidence of understanding, which is
+ * the one thing D8 forbids. They are rows in a `Callout`, which is the shape this
+ * product already uses for "set apart from the flow around it", and the container
+ * is what carries the prominence rather than the rows.
+ *
+ * The two tones are the Callout's own, not new ones: `neutral` while locked —
+ * present, subdued, saying what opens it — and `signal` once it is live, which is
+ * already this palette's "something to notice or act on".
+ */
+function ImplementationSection({
+  rail, onEnterStage, onOpenGate,
+}: {
+  rail: ImplementationRail;
+  onEnterStage?: (stage: StepView) => void;
+  onOpenGate?: () => void;
+}) {
+  const live = rail.status !== "locked";
+  return (
+    <div className="mt-6 border-t border-rule pt-4">
+      <Callout
+        tone={live ? "signal" : "neutral"}
+        label={t.contribution.railTitle}
+      >
+        {/* THE MIDDLE PHASE, named. The learner's hierarchy is journey → ready →
+            implementation, and without this row the second one exists only on a
+            screen they may have navigated away from. It is a way back to the
+            gate, so it is drawn only when the gate is what the rail's own state
+            says is next. */}
+        {rail.status === "ready" && onOpenGate && (
+          <button
+            onClick={onOpenGate}
+            className="self-start text-start text-meta font-semibold text-signal underline underline-offset-4 hover:text-chalk"
+          >
+            {t.contribution.readyLabel}
+          </button>
+        )}
+
+        <ol className="flex flex-col">
+          {rail.stages.map((row) => {
+            const label = t.contribution.stages[row.stage];
+            // NOT A BUTTON WHEN IT CANNOT BE ENTERED. Disabling one still reads
+            // as a control that failed; a span reads as a step not yet reached,
+            // which is what it is.
+            const body = (
+              <span className="flex items-center gap-2 py-[calc(3rem/16)]">
+                <span
+                  aria-hidden
+                  className={`flex h-2.5 w-2.5 shrink-0 items-center justify-center ${
+                    row.state === "done" ? "text-jade" : "text-signal"
+                  }`}
+                >
+                  {row.state === "done" ? (
+                    <Check />
+                  ) : row.state === "current" ? (
+                    <span className="h-1.5 w-1.5 rounded-full bg-signal" />
+                  ) : null}
+                </span>
+                <span
+                  className={
+                    row.state === "current"
+                      ? "text-meta font-semibold text-signal"
+                      : row.state === "done"
+                        ? "text-meta font-medium text-graphite group-hover:text-paper"
+                        : "text-meta font-medium text-muted"
+                  }
+                >
+                  {label}
+                </span>
+                {row.state !== "ahead" && (
+                  <span className="sr-only">
+                    {row.state === "done" ? t.contribution.railDone : t.contribution.railCurrent}
+                  </span>
+                )}
+              </span>
+            );
+            return (
+              <li key={row.stage}>
+                {row.enterable && onEnterStage ? (
+                  <button
+                    onClick={() => onEnterStage(row.stage)}
+                    aria-current={row.state === "current" ? "step" : undefined}
+                    className="group flex w-full text-start"
+                  >
+                    {body}
+                  </button>
+                ) : (
+                  <span className="flex w-full">{body}</span>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+
+        {/* The gate's own counter, not a second rule about readiness: a locked
+            section that does not say what unlocks it reads as broken. */}
+        {rail.status === "locked" && (
+          <span
+            className="font-mono text-micro tabular-nums text-graphite"
+            title={t.contribution.railLockedHint}
+          >
+            {t.contribution.railLocked(rail.demonstrated, rail.required)}
+          </span>
+        )}
+      </Callout>
+    </div>
+  );
+}
+
 export default function RouteRail({
   sections, optional, currentNodeId, openSectionId, onJump, onOpenSection, onExpand,
   compact = false,
   onHide,
   onBriefing,
+  implementation = null,
+  onEnterStage,
+  onOpenGate,
 }: Props) {
   const [showOptional, setShowOptional] = useState(false);
   // Only the sections the learner has actually toggled. Everything else follows
@@ -444,6 +579,28 @@ export default function RouteRail({
             ))}
           </div>
         ))}
+        {/* THE SAME PHASE at strip density. Five labels do not fit in 56px, so
+            the section becomes one mark — the briefing's own idiom at the other
+            end of the rail, filled rather than outlined because this one is a
+            destination the learner is heading toward rather than a page they
+            came from. It is drawn only when there is somewhere to go. */}
+        {implementation && implementation.status !== "locked" && (
+          <button
+            onClick={() =>
+              implementation.status === "ready"
+                ? onOpenGate?.()
+                : onEnterStage?.(
+                    (implementation.stages.find((r) => r.state === "current")
+                      ?? implementation.stages[0]).stage,
+                  )
+            }
+            aria-label={t.contribution.railCompact}
+            title={`${t.contribution.railTitle} — ${t.contribution.railCompact}`}
+            className="mt-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-field border border-signal-dim/60 font-mono text-micro text-signal transition hover:border-signal hover:text-chalk"
+          >
+            ◆
+          </button>
+        )}
         <span className="mt-auto flex shrink-0 flex-col items-center gap-2">
           {hideControl}
           <button
@@ -557,6 +714,14 @@ export default function RouteRail({
                 />
               ))}
           </div>
+        )}
+
+        {implementation && (
+          <ImplementationSection
+            rail={implementation}
+            onEnterStage={onEnterStage}
+            onOpenGate={onOpenGate}
+          />
         )}
       </nav>
     </aside>

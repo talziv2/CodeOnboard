@@ -491,6 +491,32 @@ CALIBRATION
     A journey that teaches this repository's internals in a sensible order has
     answered the wrong question here.
 
+  By `goal_type`, when it is `contribute_code` — the developer is going to make
+  ONE specific change, named in `contribution_context`, and write it themselves.
+  The dossier carries a CHANGE BOUNDARY section; it is the shape of this
+  curriculum, not background:
+    - ASK A NARROWER QUESTION. Not "what should they understand about this
+      system?" but "what is the MINIMUM they must understand to make THIS change
+      safely?" Mark `required` only what that change actually turns on.
+      Everything else you can see — however structurally interesting — is
+      `recommended` or `optional`, and you should still list it.
+    - The AREAS are the shape of the change, not the subsystems of the
+      repository: what the target code owns, the boundary the change sits
+      inside, the contract and edge cases it must respect, and how this
+      repository tests behaviour like it.
+    - The EDGE CASES in the boundary are objectives, not trivia. Each one the
+      change has to survive is something the developer must be able to state
+      before they write it, and it is the best material you have — an objective
+      built on a case that is visible in the code is one a wrong answer is
+      visibly wrong about.
+    - A `test_coverage` unit built on the boundary's `existing_tests` earns its
+      place here almost always. The developer has to write a test in this
+      repository's idiom, and the idiom is only learnable from the tests that
+      already exist.
+    - What the change MUST NOT touch is a `risk` objective, not a footnote.
+    A journey that tours this repository and mentions the change at the end has
+    answered the wrong question here.
+
   By `code_depth` (the developer chose this):
     map            → mostly `architecture` and `flow`. Anchor on classes and
                      entry points as concept representatives. `component` units

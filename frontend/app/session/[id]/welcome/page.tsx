@@ -6,8 +6,9 @@ import DashboardLink from "@/components/DashboardLink";
 import ProfileCard from "@/components/ProfileCard";
 import RouteOverview from "@/components/RouteOverview";
 import SettingsMenu from "@/components/SettingsMenu";
-import { getSession, getWelcome } from "@/lib/api";
-import type { Briefing, SessionGraph } from "@/lib/api";
+import ScopeCard from "@/components/contribution/ScopeCard";
+import { getContribution, getSession, getWelcome } from "@/lib/api";
+import type { Briefing, Contribution, SessionGraph, SkippedArea } from "@/lib/api";
 import SectionLabel from "@/components/ui/SectionLabel";
 import Button from "@/components/ui/Button";
 import Prose, { InlineProse } from "@/components/ui/Prose";
@@ -34,6 +35,8 @@ export default function WelcomePage() {
   const [graph, setGraph] = useState<SessionGraph | null>(null);
   const [briefing, setBriefing] = useState<Briefing | null>(null);
   const [briefingFailed, setBriefingFailed] = useState(false);
+  const [skipped, setSkipped] = useState<SkippedArea[]>([]);
+  const [contribution, setContribution] = useState<Contribution | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -44,10 +47,20 @@ export default function WelcomePage() {
       return;
     }
     try {
-      setBriefing((await getWelcome(id)).briefing);
+      const welcome = await getWelcome(id);
+      setBriefing(welcome.briefing);
+      setSkipped(welcome.skipped_areas ?? []);
     } catch {
       // The briefing is the one thing on this page that can fail on its own.
       setBriefingFailed(true);
+    }
+    try {
+      setContribution(await getContribution(id));
+    } catch {
+      // A session that is not a contribution, or a boundary that could not be
+      // loaded. Either way the page is the ordinary welcome page — the card is
+      // an addition to it, never a precondition for it.
+      setContribution(null);
     }
   }, [id]);
 
@@ -136,6 +149,14 @@ export default function WelcomePage() {
     journey.sections.flatMap((section) => section.stops).find(
       (stop) => stop.node.id === graph.current_node_id
     ) ?? journey.sections[0]?.stops[0];
+  // The required units, in WALK ORDER — the same stops the rail is about to
+  // show, taken off the same route. Filtered on the server's own `priority`, so
+  // "required" still has one definition; the count beside them is
+  // `contribution.ready.required`, which is computed from the same set.
+  const requiredNodes = journey.sections
+    .flatMap((section) => section.stops)
+    .map((stop) => stop.node)
+    .filter((node) => node.priority === "required");
 
   return (
     <main className="flex min-h-screen flex-col bg-ink">
@@ -240,6 +261,19 @@ export default function WelcomePage() {
               </div>
             )}
 
+            {/* THE CONTRIBUTION SCOPE CARD, above the route and below the
+                briefing: the task, how many concepts it requires, which ones,
+                and what was left out. Rendered only when the session actually
+                is a contribution with a plan behind it — `ScopeCard` returns
+                null otherwise, so there is nothing to guard here. */}
+            {contribution?.available && (
+              <ScopeCard
+                contribution={contribution}
+                requiredNodes={requiredNodes}
+                skipped={skipped}
+              />
+            )}
+
             {/* The route, before the button that commits to it. A learner asked to
                 start should have seen what they are starting. */}
             {journey.sections.length > 0 && (
@@ -248,7 +282,9 @@ export default function WelcomePage() {
 
             <div>
               <Button variant="primary" size="lg" onClick={begin}>
-                {firstStop ? t.welcome.beginNamed(firstStop.node.title) : t.welcome.begin}
+                {contribution?.available
+                  ? t.contribution.begin
+                  : firstStop ? t.welcome.beginNamed(firstStop.node.title) : t.welcome.begin}
               </Button>
             </div>
           </section>

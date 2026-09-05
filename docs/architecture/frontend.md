@@ -120,6 +120,44 @@ scroll past a dashboard to read.
 
 ---
 
+### The phase boundary
+
+`centreSurface(contribution, requested)` in `lib/contribution.ts` decides which of
+three surfaces owns the centre column — `journey`, `ready`, `contribution` — and
+**one bar or the other is mounted above it**, never both and never one hidden
+with CSS:
+
+| Surface | Chrome |
+|---|---|
+| journey / ready | `SurfaceTabs` — `Learn / Route`, then `Lesson / Understanding` |
+| contribution | `ImplementationBar` — `Plan · Locate · Continue in Claude`, plus one labelled door back |
+
+`Learn / Route` and `Lesson / Understanding` choose which view of a **stop** you
+are reading. During the contribution phase there is no stop on screen, so they
+name views that do not exist — and pressing `Understanding` there rendered the
+understanding surface of whichever node happened to be current, which is the
+learning phase appearing under implementation chrome. Both branches read the same
+`surface`, so the chrome and the content cannot describe different phases.
+
+**Which surface is showing is a fact about NAVIGATION, not about the session**,
+and getting that wrong is the defect the function exists to prevent. The first
+version derived it from `phaseOf(contribution) === "stage"` alone, which put the
+contribution stage above the lesson branch: the moment a learner pressed *Start
+implementing*, the route rail went inert — every stop they clicked still rendered
+Locate. Selecting a stop is a **request** to see that stop, so an explicit request
+outranks the session's own phase in both directions, and the phase is only the
+default for a learner who has not asked for anything yet. `requested` is genuinely
+client state — nothing server-side records which of two surfaces someone is
+looking at, and nothing should. That is the narrow exception D22 already allows:
+it decides what is on screen, never what is true about the learner.
+
+The route rail keeps the whole journey in both phases, with the implementation
+steps drawn below the chapters as a distinct section — the two are phases of one
+journey, not competing navigation. `implementationRail()` feeds both the rail and
+`ImplementationBar`, so the step each marks current is one fact.
+
+---
+
 ## 5. The one fact the client owns
 
 Every learning decision comes from the server — the retry offer, the reason there
@@ -228,6 +266,7 @@ disappears on the light page and one that is mostly near-black disappears on
 | `StartingProgress` · `RebuildingOverlay` | The live planning screen and the re-plan overlay |
 | `SessionCard` · `ProfileCard` | Dashboard and welcome cards |
 | `auth/` | `AuthForm`, `AuthShell` |
+| `contribution/` | The `contribute_code` phase — `ReadyGate` (the derived gate and the quiet override), `ContributionStage` (Plan · Locate, and the fallback steps), `HandoffStep`, `ImplementationBar`, `ScopeCard` |
 | `tour/` | The first-run tour |
 | `ui/` | `Button`, `Callout`, `Prose`, `ProseCode`, `ConceptTag`, `StatePin`, `Disclosure`, `SectionLabel` (+ `BlockTitle`), `PracticeSurface`, `Marker` |
 

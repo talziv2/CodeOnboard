@@ -16,7 +16,11 @@ from backend.agents.goal import (
     step_back,
 )
 from backend.agents.goal.agent import _synthesize_goal
-from backend.agents.goal.questions import CODE_DEPTH_OPTIONS
+from backend.agents.goal.questions import (
+    CODE_DEPTH_OPTIONS,
+    CONTRIBUTION_SCOPE_MAP,
+    CONTRIBUTION_SCOPE_OPTIONS,
+)
 
 REPO_URL = "https://github.com/psf/requests"
 
@@ -222,7 +226,13 @@ def test_debug_flow_6_questions_triggers_synthesis():
     mock_client.messages.create.assert_called_once()
 
 
-def test_contribute_flow_5_questions_triggers_synthesis():
+def test_contribute_flow_7_questions_triggers_synthesis():
+    """Five core questions, then the task and how large it is expected to be.
+
+    The second follow-up arrived with the contribution journey: the task now
+    reaches the INVESTIGATION rather than only the planner, so a vague answer
+    costs a vague dossier — and the size is one line of context beside it.
+    """
     session = start_session(REPO_URL)
     contribute_goal_json = {
         **VALID_GOAL_JSON,
@@ -236,11 +246,27 @@ def test_contribute_flow_5_questions_triggers_synthesis():
     process_answer(session, ANS_PRIMARY_GOAL, client=None)
     process_answer(session, ANS_CODE_DEPTH, client=None)
     process_answer(session, ANS_BACKGROUND, client=None)
-    next_q, goal = process_answer(session, "issue #123", client=mock_client)
+    next_q, goal = process_answer(session, "issue #123", client=None)
+    assert next_q is not None and next_q.key == "contribution_scope"
+
+    next_q, goal = process_answer(
+        session, CONTRIBUTION_SCOPE_OPTIONS[0], client=mock_client,
+    )
 
     assert next_q is None
     assert goal is not None
+    # Ours, not the model's — set in Python from the option the learner picked.
+    assert goal.contribution_scope == CONTRIBUTION_SCOPE_MAP[CONTRIBUTION_SCOPE_OPTIONS[0]]
     mock_client.messages.create.assert_called_once()
+
+
+def test_an_invalid_contribution_scope_is_refused():
+    session = start_session(REPO_URL)
+    for answer in (ANS_FAMILIARITY, ANS_GOAL_CONTRIBUTE, ANS_PRIMARY_GOAL,
+                   ANS_CODE_DEPTH, ANS_BACKGROUND, "issue #123"):
+        process_answer(session, answer, client=None)
+    with pytest.raises(ValueError, match="invalid_contribution_scope_option"):
+        process_answer(session, "whatever I like", client=None)
 
 
 # ── _synthesize_goal ──────────────────────────────────────────────────────────

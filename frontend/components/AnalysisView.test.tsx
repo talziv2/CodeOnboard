@@ -70,6 +70,7 @@ const PROGRESS: Progress = {
   skipped: 0,
   optional_total: 0,
   optional_completed: 0,
+  ready_to_implement: { ready: false, required: 2, demonstrated: 1, blockers: [] },
 };
 
 /** The view takes the session graph, so the fixture is one. */

@@ -135,11 +135,20 @@ def test_should_run_for_review_worthy_goal_types():
         assert should_run({"goal_type": gt}) is True
 
 
+def test_should_run_for_contribute_code():
+    """It joined the Reviewer's goal types with the contribution journey.
+
+    What this agent produces — `risks`, `test_gaps`, `boundaries` — is exactly
+    what somebody about to change one file needs, and what a curriculum planned
+    from components alone leaves out.
+    """
+    assert should_run({"goal_type": "contribute_code"}) is True
+
+
 def test_should_not_run_for_other_goal_types():
     for gt in (
         "understand_system",
         "understand_component",
-        "contribute_code",
         "debug_issue",
     ):
         assert should_run({"goal_type": gt}) is False
